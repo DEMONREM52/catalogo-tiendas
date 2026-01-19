@@ -88,8 +88,8 @@ export default function StoreCatalogPage() {
   const params = useParams<{ slug: string; mode: string }>();
   const searchParams = useSearchParams();
 
-  const slug = params?.slug as string;
-  const mode = (params?.mode as Mode) ?? "detal";
+  const slug = String(params?.slug ?? "");
+  const mode = (String(params?.mode ?? "detal") as Mode) ?? "detal";
   const key = searchParams.get("key");
 
   const [loading, setLoading] = useState(true);
@@ -105,7 +105,7 @@ export default function StoreCatalogPage() {
 
   const theme = useMemo(() => store?.theme ?? "ocean", [store?.theme]);
 
-  // ✅ ya NO traemos open, porque no queremos abrir el carrito al agregar
+  // ✅ NO usamos open() aquí (no queremos abrir el drawer al agregar)
   const { initCart, addItem } = useCart();
 
   useEffect(() => {
@@ -113,110 +113,119 @@ export default function StoreCatalogPage() {
       setMsg(null);
       setLoading(true);
 
-      if (!slug || !mode || (mode !== "detal" && mode !== "mayor")) {
-        setMsg("❌ Ruta inválida.");
-        setLoading(false);
-        return;
-      }
+      try {
+        // ✅ Importante: crear el cliente aquí (ya que supabaseBrowser es función)
+        const sb = supabaseBrowser();
 
-      // 1) Tienda
-      const { data: storeData, error: storeErr } = await supabaseBrowser
-        .from("stores")
-        .select(
-          "id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key",
-        )
-        .eq("slug", slug)
-        .maybeSingle();
-
-      if (storeErr || !storeData) {
-        setMsg("❌ Tienda no encontrada.");
-        setLoading(false);
-        return;
-      }
-
-      // Acceso mayorista por key
-      if (mode === "mayor") {
-        if (!storeData.wholesale_key) {
-          setMsg("❌ Este catálogo mayorista no está disponible.");
+        if (!slug || !mode || (mode !== "detal" && mode !== "mayor")) {
+          setMsg("❌ Ruta inválida.");
           setLoading(false);
           return;
         }
-        if (key !== storeData.wholesale_key) {
-          setMsg(
-            "🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.",
-          );
+
+        // 1) Tienda
+        const { data: storeData, error: storeErr } = await sb
+          .from("stores")
+          .select(
+            "id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key"
+          )
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (storeErr || !storeData) {
+          setMsg("❌ Tienda no encontrada.");
           setLoading(false);
           return;
         }
-      }
 
-      if (!storeData.active) {
-        setMsg("❌ Esta tienda está desactivada.");
+        // Acceso mayorista por key
+        if (mode === "mayor") {
+          if (!storeData.wholesale_key) {
+            setMsg("❌ Este catálogo mayorista no está disponible.");
+            setLoading(false);
+            return;
+          }
+          if (key !== storeData.wholesale_key) {
+            setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!storeData.active) {
+          setMsg("❌ Esta tienda está desactivada.");
+          setLoading(false);
+          return;
+        }
+
+        if (mode === "detal" && !storeData.catalog_retail) {
+          setMsg("❌ Catálogo detal no disponible.");
+          setLoading(false);
+          return;
+        }
+
+        if (mode === "mayor" && !storeData.catalog_wholesale) {
+          setMsg("❌ Catálogo mayor no disponible.");
+          setLoading(false);
+          return;
+        }
+
+        setStore(storeData);
+
+        // Inicializa carrito (localStorage)
+        initCart({
+          storeId: storeData.id,
+          storeSlug: storeData.slug,
+          storeName: storeData.name,
+          whatsapp: storeData.whatsapp,
+          mode,
+        });
+
+        // 2) Perfil
+        const { data: profData } = await sb
+          .from("store_profiles")
+          .select("*")
+          .eq("store_id", storeData.id)
+          .maybeSingle();
+
+        setProfile(profData ?? null);
+
+        // 3) Redes
+        const { data: linksData } = await sb
+          .from("store_links")
+          .select("id,type,label,url,active,sort_order,icon_url")
+          .eq("store_id", storeData.id)
+          .eq("active", true)
+          .order("sort_order", { ascending: true });
+
+        setLinks(linksData ?? []);
+
+        // 4) Categorías
+        const { data: catData } = await sb
+          .from("product_categories")
+          .select("id,name,image_url,sort_order")
+          .eq("store_id", storeData.id)
+          .eq("active", true)
+          .order("sort_order", { ascending: true });
+
+        setCategories(catData ?? []);
+
+        // 5) Productos
+        const { data: prodData } = await sb
+          .from("products")
+          .select(
+            "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id"
+          )
+          .eq("store_id", storeData.id)
+          .eq("active", true)
+          .order("name", { ascending: true });
+
+        setProducts(prodData ?? []);
+      } catch (err: any) {
+        setMsg(err?.message ?? "Error cargando catálogo.");
+      } finally {
         setLoading(false);
-        return;
       }
-
-      if (mode === "detal" && !storeData.catalog_retail) {
-        setMsg("❌ Catálogo detal no disponible.");
-        setLoading(false);
-        return;
-      }
-
-      if (mode === "mayor" && !storeData.catalog_wholesale) {
-        setMsg("❌ Catálogo mayor no disponible.");
-        setLoading(false);
-        return;
-      }
-
-      setStore(storeData);
-
-      // Inicializa carrito (localStorage)
-      initCart({
-        storeId: storeData.id,
-        storeSlug: storeData.slug,
-        storeName: storeData.name,
-        whatsapp: storeData.whatsapp,
-        mode,
-      });
-
-      // 2) Perfil
-      const { data: profData } = await supabaseBrowser
-        .from("store_profiles")
-        .select("*")
-        .eq("store_id", storeData.id)
-        .maybeSingle();
-      setProfile(profData ?? null);
-
-      // 3) Redes
-      const { data: linksData } = await supabaseBrowser
-        .from("store_links")
-        .select("id,type,label,url,active,sort_order,icon_url")
-        .eq("store_id", storeData.id)
-        .eq("active", true)
-        .order("sort_order", { ascending: true });
-      setLinks(linksData ?? []);
-
-      // 4) Categorías
-      const { data: catData } = await supabaseBrowser
-        .from("product_categories")
-        .select("id,name,image_url,sort_order")
-        .eq("store_id", storeData.id)
-        .eq("active", true)
-        .order("sort_order", { ascending: true });
-      setCategories(catData ?? []);
-
-      // 5) Productos
-      const { data: prodData } = await supabaseBrowser
-        .from("products")
-        .select(
-          "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id",
-        )
-        .eq("store_id", storeData.id)
-        .eq("active", true)
-        .order("name", { ascending: true });
-      setProducts(prodData ?? []);
-
-      setLoading(false);
     })();
   }, [slug, mode, key, initCart]);
 
@@ -257,23 +266,35 @@ export default function StoreCatalogPage() {
 
     const qty = Number(res.value ?? min);
 
-    // ✅ NO abre el carrito
-    addItem(
-      {
+    // ✅ agrega y NO abre carrito (esto depende de tu CartProvider actual)
+    // Si tu addItem no acepta 2do parámetro, abajo te dejo alternativa.
+    try {
+      (addItem as any)(
+        {
+          productId: p.id,
+          name: p.name,
+          price: Number(price ?? 0),
+          qty,
+          minWholesale: p.min_wholesale ?? null,
+        },
+        { openDrawer: false }
+      );
+    } catch {
+      // ✅ fallback si tu addItem solo acepta 1 parámetro
+      addItem({
         productId: p.id,
         name: p.name,
         price: Number(price ?? 0),
         qty,
         minWholesale: p.min_wholesale ?? null,
-      },
-      { openDrawer: false },
-    );
+      });
+    }
 
     await Swal.fire({
       icon: "success",
       title: "Agregado",
       text: `Se agregó ${qty} × ${p.name} al carrito.`,
-      timer: 1100,
+      timer: 1000,
       showConfirmButton: false,
       background: "#0b0b0b",
       color: "#fff",
@@ -302,10 +323,7 @@ export default function StoreCatalogPage() {
 
   return (
     <main style={cssVars(theme)} className="min-h-screen">
-      <div
-        className="min-h-screen"
-        style={{ background: "var(--bg)", color: "var(--text)" }}
-      >
+      <div className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
         {/* HEADER */}
         <header className="border-b border-white/10">
           <div className="mx-auto max-w-6xl p-6">
@@ -334,7 +352,7 @@ export default function StoreCatalogPage() {
                   <a
                     className="rounded-xl border border-white/10 px-4 py-2"
                     href={`https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
-                      `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`,
+                      `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -342,19 +360,14 @@ export default function StoreCatalogPage() {
                     Solicitar mayoristas
                   </a>
                 ) : (
-                  <a
-                    className="rounded-xl border border-white/10 px-4 py-2"
-                    href={`/${store.slug}/detal`}
-                  >
+                  <a className="rounded-xl border border-white/10 px-4 py-2" href={`/${store.slug}/detal`}>
                     Ver Detal
                   </a>
                 )}
               </div>
             </div>
 
-            {profile?.headline ? (
-              <p className="mt-4 text-sm opacity-90">{profile.headline}</p>
-            ) : null}
+            {profile?.headline ? <p className="mt-4 text-sm opacity-90">{profile.headline}</p> : null}
 
             {links.length ? (
               <div className="mt-4">
@@ -379,9 +392,7 @@ export default function StoreCatalogPage() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">Productos</h2>
-              <p className="mt-1 text-sm opacity-80">
-                {shownProducts.length} disponibles
-              </p>
+              <p className="mt-1 text-sm opacity-80">{shownProducts.length} disponibles</p>
             </div>
           </div>
 
@@ -400,7 +411,7 @@ export default function StoreCatalogPage() {
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {categories.map((c) => (
                   <button
                     key={c.id}
@@ -420,9 +431,7 @@ export default function StoreCatalogPage() {
                     ) : (
                       <div className="aspect-square w-full rounded-xl border border-white/10 bg-white/5" />
                     )}
-                    <p className="mt-2 text-sm font-semibold line-clamp-2">
-                      {c.name}
-                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold">{c.name}</p>
                   </button>
                 ))}
               </div>
@@ -432,8 +441,7 @@ export default function StoreCatalogPage() {
           {/* PRODUCTOS */}
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {shownProducts.map((p: any) => {
-              const price =
-                mode === "detal" ? p.price_retail : p.price_wholesale;
+              const price = mode === "detal" ? p.price_retail : p.price_wholesale;
 
               return (
                 <div
@@ -463,9 +471,7 @@ export default function StoreCatalogPage() {
                   </div>
 
                   {p.description ? (
-                    <p className="mt-2 text-sm opacity-80 line-clamp-3">
-                      {p.description}
-                    </p>
+                    <p className="mt-2 line-clamp-3 text-sm opacity-80">{p.description}</p>
                   ) : null}
 
                   <div className="mt-4 flex items-end justify-between">
@@ -475,9 +481,7 @@ export default function StoreCatalogPage() {
                         ${Number(price ?? 0).toLocaleString("es-CO")}
                       </p>
                       {mode === "mayor" && p.min_wholesale ? (
-                        <p className="text-xs opacity-70">
-                          Mínimo: {p.min_wholesale}
-                        </p>
+                        <p className="text-xs opacity-70">Mínimo: {p.min_wholesale}</p>
                       ) : null}
                     </div>
 
@@ -516,7 +520,7 @@ export default function StoreCatalogPage() {
         )}
       </div>
 
-      {/* Carrito */}
+      {/* Drawer del carrito (solo se abre con el botón flotante) */}
       <CartDrawer />
     </main>
   );
