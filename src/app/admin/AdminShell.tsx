@@ -6,15 +6,10 @@ import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-function Item({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
+function Item({ href, label }: { href: string; label: string }) {
   const path = usePathname();
   const active = path === href;
+
   return (
     <Link
       href={href}
@@ -34,14 +29,17 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabaseBrowser.auth.getUser();
+      // ✅ supabaseBrowser ahora es FUNCIÓN
+      const sb = supabaseBrowser();
+
+      const { data } = await sb.auth.getUser();
       if (!data.user) {
         router.replace("/login");
         return;
       }
 
       // Validar rol admin
-      const { data: prof, error } = await supabaseBrowser
+      const { data: prof, error } = await sb
         .from("user_profiles")
         .select("role")
         .eq("user_id", data.user.id)
@@ -65,26 +63,36 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }, [router]);
 
   async function logout() {
-    await supabaseBrowser.auth.signOut();
+    const sb = supabaseBrowser();
+    await sb.auth.signOut();
     router.replace("/login");
   }
 
   if (!ready) {
     return (
-      <main className="min-h-screen p-6" style={{ background: "#0b0b0b", color: "#fff" }}>
+      <main
+        className="min-h-screen p-6"
+        style={{ background: "#0b0b0b", color: "#fff" }}
+      >
         <p>Cargando panel admin...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen" style={{ background: "#0b0b0b", color: "#fff" }}>
+    <main
+      className="min-h-screen"
+      style={{ background: "#0b0b0b", color: "#fff" }}
+    >
       <div className="mx-auto max-w-7xl p-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Panel Administrador</h1>
-            <p className="text-sm opacity-80">Control total de tiendas, pedidos y catálogo.</p>
+            <p className="text-sm opacity-80">
+              Control total de tiendas, pedidos y catálogo.
+            </p>
           </div>
+
           <button
             className="rounded-xl border border-white/10 px-4 py-2 text-sm"
             onClick={logout}
