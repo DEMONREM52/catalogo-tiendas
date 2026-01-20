@@ -33,6 +33,9 @@ export default function AdminCategoriasPage() {
     return cats.filter((c) => (c.name ?? "").toLowerCase().includes(s));
   }, [cats, q]);
 
+  // -----------------------------
+  // Cargar tiendas
+  // -----------------------------
   async function loadStores() {
     const sb = supabaseBrowser();
 
@@ -46,12 +49,16 @@ export default function AdminCategoriasPage() {
     const arr = (data as StoreMini[]) ?? [];
     setStores(arr);
 
-    // Si no hay tienda seleccionada, poner la primera
+    // Si no hay tienda seleccionada, ponemos la primera
     if (!storeId && arr[0]) setStoreId(arr[0].id);
   }
 
+  // -----------------------------
+  // Cargar categorías de una tienda
+  // -----------------------------
   async function loadCats(sid: string) {
     setLoading(true);
+
     const sb = supabaseBrowser();
 
     const { data, error } = await sb
@@ -66,6 +73,9 @@ export default function AdminCategoriasPage() {
     setLoading(false);
   }
 
+  // -----------------------------
+  // Inicial: cargar tiendas
+  // -----------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -84,8 +94,12 @@ export default function AdminCategoriasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // -----------------------------
+  // Cuando cambia la tienda: cargar categorías
+  // -----------------------------
   useEffect(() => {
     if (!storeId) return;
+
     (async () => {
       try {
         await loadCats(storeId);
@@ -102,12 +116,19 @@ export default function AdminCategoriasPage() {
     })();
   }, [storeId]);
 
+  // -----------------------------
+  // Helpers UI
+  // -----------------------------
   function patch(id: string, p: Partial<Cat>) {
     setCats((prev) => prev.map((x) => (x.id === id ? { ...x, ...p } : x)));
   }
 
+  // -----------------------------
+  // Guardar categoría
+  // -----------------------------
   async function save(c: Cat) {
     setSaving(true);
+
     const sb = supabaseBrowser();
 
     const { error } = await sb
@@ -144,10 +165,14 @@ export default function AdminCategoriasPage() {
     });
   }
 
+  // -----------------------------
+  // Crear categoría
+  // -----------------------------
   async function create() {
     if (!storeId) return;
 
     setSaving(true);
+
     const sb = supabaseBrowser();
 
     const { data, error } = await sb
@@ -175,10 +200,12 @@ export default function AdminCategoriasPage() {
       return;
     }
 
-    // La ponemos arriba
     setCats((prev) => [data as Cat, ...prev]);
   }
 
+  // -----------------------------
+  // Eliminar categoría
+  // -----------------------------
   async function removeCat(c: Cat) {
     const res = await Swal.fire({
       icon: "warning",
@@ -191,9 +218,11 @@ export default function AdminCategoriasPage() {
       background: "#0b0b0b",
       color: "#fff",
     });
+
     if (!res.isConfirmed) return;
 
     setSaving(true);
+
     const sb = supabaseBrowser();
 
     const { error } = await sb
@@ -217,6 +246,9 @@ export default function AdminCategoriasPage() {
     setCats((prev) => prev.filter((x) => x.id !== c.id));
   }
 
+  // -----------------------------
+  // UI
+  // -----------------------------
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -269,91 +301,93 @@ export default function AdminCategoriasPage() {
         <p className="mt-4">Cargando...</p>
       ) : (
         <div className="mt-4 space-y-4">
-          {filtered.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-white/10 p-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs opacity-70">Nombre</label>
-                  <input
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                    value={c.name}
-                    onChange={(e) => patch(c.id, { name: e.target.value })}
-                  />
-
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs opacity-70">Orden</label>
-                      <input
-                        type="number"
-                        className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                        value={c.sort_order}
-                        onChange={(e) =>
-                          patch(c.id, { sort_order: Number(e.target.value) })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-end">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={c.active}
-                          onChange={(e) =>
-                            patch(c.id, { active: e.target.checked })
-                          }
-                        />
-                        Activa
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
-                      onClick={() => save(c)}
-                      disabled={saving}
-                    >
-                      Guardar
-                    </button>
-
-                    <button
-                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
-                      onClick={() => removeCat(c)}
-                      disabled={saving}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 p-4">
-                  <p className="font-semibold">Imagen de categoría</p>
-                  <p className="text-sm opacity-80">Se verá en el catálogo.</p>
-
-                  <div className="mt-3">
-                    <ImageUpload
-                      label="Subir imagen"
-                      currentUrl={c.image_url}
-                      pathPrefix={`admin/categories/${c.store_id}/`}
-                      fileName={`${c.id}.png`}
-                      bucket="store-assets"
-                      onUploaded={(url) => patch(c.id, { image_url: url })}
-                    />
-                  </div>
-
-                  <p className="mt-2 text-xs opacity-70">
-                    Luego presiona <b>Guardar</b>.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-
           {filtered.length === 0 ? (
             <div className="rounded-2xl border border-white/10 p-6 text-sm opacity-80">
               No hay categorías para mostrar.
             </div>
-          ) : null}
+          ) : (
+            filtered.map((c) => (
+              <div key={c.id} className="rounded-2xl border border-white/10 p-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs opacity-70">Nombre</label>
+                    <input
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+                      value={c.name}
+                      onChange={(e) => patch(c.id, { name: e.target.value })}
+                    />
+
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs opacity-70">Orden</label>
+                        <input
+                          type="number"
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+                          value={c.sort_order}
+                          onChange={(e) =>
+                            patch(c.id, {
+                              sort_order: Number(e.target.value),
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={c.active}
+                            onChange={(e) =>
+                              patch(c.id, { active: e.target.checked })
+                            }
+                          />
+                          Activa
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
+                        onClick={() => save(c)}
+                        disabled={saving}
+                      >
+                        Guardar
+                      </button>
+
+                      <button
+                        className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
+                        onClick={() => removeCat(c)}
+                        disabled={saving}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 p-4">
+                    <p className="font-semibold">Imagen de categoría</p>
+                    <p className="text-sm opacity-80">Se verá en el catálogo.</p>
+
+                    <div className="mt-3">
+                      <ImageUpload
+                        label="Subir imagen"
+                        currentUrl={c.image_url}
+                        pathPrefix={`admin/categories/${c.store_id}/`}
+                        fileName={`${c.id}.png`}
+                        bucket="store-assets"
+                        onUploaded={(url) => patch(c.id, { image_url: url })}
+                      />
+                    </div>
+
+                    <p className="mt-2 text-xs opacity-70">
+                      Luego presiona <b>Guardar</b>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
