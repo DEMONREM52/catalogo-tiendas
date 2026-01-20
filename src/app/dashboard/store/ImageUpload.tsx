@@ -9,7 +9,7 @@ type Props = {
   pathPrefix: string; // ej: `${userId}/products/`
   fileName: string; // ej: `${productId}.png`
   onUploaded: (publicUrl: string) => void;
-  bucket?: string; // 👈 nuevo (si no lo pasas, usa "store-assets")
+  bucket?: string; // si no lo pasas, usa "store-assets"
 };
 
 export function ImageUpload({
@@ -18,7 +18,7 @@ export function ImageUpload({
   pathPrefix,
   fileName,
   onUploaded,
-  bucket, // 👈 aquí se recibe
+  bucket,
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -31,28 +31,27 @@ export function ImageUpload({
     setMsg(null);
 
     try {
-      // validación mínima
+      // Validaciones
       if (!file.type.startsWith("image/")) {
         setMsg("❌ Debe ser una imagen.");
-        setUploading(false);
         return;
       }
       if (file.size > 2 * 1024 * 1024) {
         setMsg("❌ Máximo 2MB.");
-        setUploading(false);
         return;
       }
 
+      const sb = supabaseBrowser(); // ✅ importante
       const filePath = `${pathPrefix}${fileName}`;
-      const bucketName = bucket ?? "store-assets"; // ✅ aquí elegimos bucket
+      const bucketName = bucket ?? "store-assets";
 
-      const { error: upErr } = await supabaseBrowser.storage
+      const { error: upErr } = await sb.storage
         .from(bucketName)
         .upload(filePath, file, { upsert: true, cacheControl: "3600" });
 
       if (upErr) throw upErr;
 
-      const { data } = supabaseBrowser.storage.from(bucketName).getPublicUrl(filePath);
+      const { data } = sb.storage.from(bucketName).getPublicUrl(filePath);
       const url = `${data.publicUrl}?t=${Date.now()}`;
 
       onUploaded(url);
@@ -75,7 +74,12 @@ export function ImageUpload({
 
         <label className="cursor-pointer rounded-xl bg-white text-black px-4 py-2 font-semibold">
           {uploading ? "Subiendo..." : "Subir"}
-          <input className="hidden" type="file" accept="image/*" onChange={handleFile} />
+          <input
+            className="hidden"
+            type="file"
+            accept="image/*"
+            onChange={handleFile}
+          />
         </label>
       </div>
 
