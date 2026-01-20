@@ -7,7 +7,9 @@ export function LogoutButton() {
   const router = useRouter();
 
   async function logout() {
-    await supabaseBrowser.auth.signOut();
+    const sb = supabaseBrowser();
+    await sb.auth.signOut();
+
     document.cookie = "app_session=; path=/; max-age=0";
     router.push("/login");
   }
