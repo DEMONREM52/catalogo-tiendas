@@ -29,7 +29,7 @@ export default function AdminTiendasPage() {
     return stores.filter((x) =>
       (x.name + " " + x.slug + " " + x.whatsapp + " " + x.owner_id)
         .toLowerCase()
-        .includes(s)
+        .includes(s),
     );
   }, [q, stores]);
 
@@ -41,7 +41,7 @@ export default function AdminTiendasPage() {
       const { data, error } = await sb
         .from("stores")
         .select(
-          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at"
+          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at",
         )
         .order("created_at", { ascending: false });
 
@@ -127,7 +127,9 @@ export default function AdminTiendasPage() {
       color: "#fff",
       confirmButtonColor: "#f59e0b",
       preConfirm: () => {
-        const v = (document.getElementById("newOwner") as HTMLInputElement).value.trim();
+        const v = (
+          document.getElementById("newOwner") as HTMLInputElement
+        ).value.trim();
         if (!v) {
           Swal.showValidationMessage("Escribe un uuid válido.");
           return;
@@ -142,7 +144,10 @@ export default function AdminTiendasPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb.from("stores").update({ owner_id: res.value }).eq("id", s.id);
+      const { error } = await sb
+        .from("stores")
+        .update({ owner_id: res.value })
+        .eq("id", s.id);
       if (error) throw error;
 
       patch(s.id, { owner_id: res.value });
@@ -230,10 +235,18 @@ export default function AdminTiendasPage() {
       background: "#0b0b0b",
       color: "#fff",
       preConfirm: () => {
-        const name = (document.getElementById("name") as HTMLInputElement).value.trim();
-        const slug = (document.getElementById("slug") as HTMLInputElement).value.trim();
-        const whatsapp = (document.getElementById("wa") as HTMLInputElement).value.trim();
-        const owner_id = (document.getElementById("owner") as HTMLInputElement).value.trim();
+        const name = (
+          document.getElementById("name") as HTMLInputElement
+        ).value.trim();
+        const slug = (
+          document.getElementById("slug") as HTMLInputElement
+        ).value.trim();
+        const whatsapp = (
+          document.getElementById("wa") as HTMLInputElement
+        ).value.trim();
+        const owner_id = (
+          document.getElementById("owner") as HTMLInputElement
+        ).value.trim();
 
         if (!name || !slug || !whatsapp || !owner_id) {
           Swal.showValidationMessage("Completa todos los campos.");
@@ -263,7 +276,7 @@ export default function AdminTiendasPage() {
           ui_radius: 12,
         })
         .select(
-          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at"
+          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at",
         )
         .single();
 
@@ -433,14 +446,27 @@ export default function AdminTiendasPage() {
                   Abrir catálogo Detal
                 </a>
 
-                <a
-                  href={`/${s.slug}/mayor`}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
                   className="rounded-xl border border-white/10 px-4 py-2"
+                  disabled={saving}
+                  onClick={async () => {
+                    if (!s.wholesale_key) {
+                      await Swal.fire({
+                        icon: "info",
+                        title: "Falta Mayoristas key",
+                        text: "Esta tienda no tiene clave mayorista configurada.",
+                        background: "#0b0b0b",
+                        color: "#fff",
+                      });
+                      return;
+                    }
+
+                    const url = `/${s.slug}/mayor?key=${encodeURIComponent(s.wholesale_key)}`;
+                    window.open(url, "_blank");
+                  }}
                 >
                   Abrir catálogo Mayor
-                </a>
+                </button>
 
                 <button
                   className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 font-semibold text-yellow-200"

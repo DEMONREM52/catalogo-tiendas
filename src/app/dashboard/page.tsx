@@ -38,6 +38,15 @@ function CardLink({
   );
 }
 
+type StoreInfo = {
+  id: string;
+  name: string;
+  slug: string;
+  whatsapp: string;
+  active: boolean;
+  wholesale_key: string | null; // ✅ IMPORTANTE
+};
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -45,22 +54,19 @@ export default function DashboardPage() {
   const [email, setEmail] = useState<string>("");
   const [role, setRole] = useState<Role | null>(null);
 
-  const [store, setStore] = useState<{
-    id: string;
-    name: string;
-    slug: string;
-    whatsapp: string;
-    active: boolean;
-  } | null>(null);
+  const [store, setStore] = useState<StoreInfo | null>(null);
 
+  // ✅ Link Detal normal
   const storeCatalogDetal = useMemo(() => {
     if (!store) return "#";
     return `/${store.slug}/detal`;
   }, [store]);
 
+  // ✅ Link Mayor con key
   const storeCatalogMayor = useMemo(() => {
     if (!store) return "#";
-    return `/${store.slug}/mayor`;
+    if (!store.wholesale_key) return `/${store.slug}/mayor`;
+    return `/${store.slug}/mayor?key=${encodeURIComponent(store.wholesale_key)}`;
   }, [store]);
 
   useEffect(() => {
@@ -104,15 +110,16 @@ export default function DashboardPage() {
         const userRole = prof.role as Role;
         setRole(userRole);
 
-        // 2) Si es tienda → datos de la tienda
+        // 2) Si es tienda → datos de la tienda (✅ con wholesale_key)
         if (userRole === "store") {
           const { data: storeData, error: stErr } = await sb
             .from("stores")
-            .select("id,name,slug,whatsapp,active")
+            .select("id,name,slug,whatsapp,active,wholesale_key")
             .eq("owner_id", userRes.user.id)
             .maybeSingle();
 
-          if (!stErr && storeData) setStore(storeData);
+          if (stErr) throw stErr;
+          if (storeData) setStore(storeData as StoreInfo);
         }
       } catch (e: any) {
         await Swal.fire({
@@ -134,6 +141,24 @@ export default function DashboardPage() {
     await sb.auth.signOut();
     document.cookie = "app_session=; path=/; max-age=0";
     router.replace("/login");
+  }
+
+  // ✅ Botón para abrir catálogo mayor con validación
+  async function openMayorCatalog() {
+    if (!store) return;
+
+    if (!store.wholesale_key) {
+      await Swal.fire({
+        icon: "info",
+        title: "Falta Mayoristas key",
+        text: "Esta tienda no tiene la clave mayorista configurada. Pídele al administrador que la ponga.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    window.open(storeCatalogMayor, "_blank");
   }
 
   if (loading) {
@@ -203,14 +228,14 @@ export default function DashboardPage() {
                   >
                     Ver catálogo Detal
                   </a>
-                  <a
-                    href={storeCatalogMayor}
-                    target="_blank"
-                    rel="noreferrer"
+
+                  {/* ✅ Mayor: botón con key */}
+                  <button
+                    onClick={openMayorCatalog}
                     className="rounded-xl border border-white/10 px-4 py-2"
                   >
                     Ver catálogo Mayor
-                  </a>
+                  </button>
                 </>
               ) : null}
 
