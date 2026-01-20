@@ -49,62 +49,66 @@ export default function OrdersDashboardPage() {
   async function load() {
     setLoading(true);
 
-    const { data: userData } = await supabaseBrowser.auth.getUser();
-    if (!userData.user) {
-      await Swal.fire({
-        icon: "error",
-        title: "Debes iniciar sesión",
-        background: "#0b0b0b",
-        color: "#fff",
-      });
-      setLoading(false);
-      return;
-    }
+    try {
+      const sb = supabaseBrowser();
 
-    const { data: storeData, error: storeErr } = await supabaseBrowser
-      .from("stores")
-      .select("id")
-      .eq("owner_id", userData.user.id)
-      .maybeSingle();
+      const { data: userData, error: userErr } = await sb.auth.getUser();
+      if (userErr) throw userErr;
 
-    if (storeErr || !storeData) {
-      await Swal.fire({
-        icon: "error",
-        title: "No se encontró tu tienda",
-        text: storeErr?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
-      });
-      setLoading(false);
-      return;
-    }
+      if (!userData.user) {
+        await Swal.fire({
+          icon: "error",
+          title: "Debes iniciar sesión",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
+        setLoading(false);
+        return;
+      }
 
-    setStoreId(storeData.id);
+      const { data: storeData, error: storeErr } = await sb
+        .from("stores")
+        .select("id")
+        .eq("owner_id", userData.user.id)
+        .maybeSingle();
 
-    const query = supabaseBrowser
-      .from("orders")
-      .select(
-        "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type",
-      )
-      .eq("store_id", storeData.id)
-      .order("created_at", { ascending: false });
+      if (storeErr) throw storeErr;
 
-    const { data: ordData, error: ordErr } = await query;
+      if (!storeData) {
+        await Swal.fire({
+          icon: "error",
+          title: "No se encontró tu tienda",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
+        setLoading(false);
+        return;
+      }
 
-    if (ordErr) {
+      setStoreId(storeData.id);
+
+      const { data: ordData, error: ordErr } = await sb
+        .from("orders")
+        .select(
+          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type"
+        )
+        .eq("store_id", storeData.id)
+        .order("created_at", { ascending: false });
+
+      if (ordErr) throw ordErr;
+
+      setOrders((ordData as OrderRow[]) ?? []);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error cargando pedidos",
-        text: ordErr.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setOrders((ordData as any) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -128,68 +132,70 @@ export default function OrdersDashboardPage() {
   }, [orders, q, status]);
 
   async function openOrder(o: OrderRow) {
-    // Traer items con info del producto
-    const { data, error } = await supabaseBrowser
-      .from("order_items")
-      .select("id,order_id,product_id,quantity,price, products(name,image_url)")
-      .eq("order_id", o.id)
-      .order("id", { ascending: true });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { data, error } = await sb
+        .from("order_items")
+        .select("id,order_id,product_id,quantity,price, products(name,image_url)")
+        .eq("order_id", o.id)
+        .order("id", { ascending: true });
+
+      if (error) throw error;
+
+      const items: ItemRow[] = (data as any[]).map((x) => ({
+        ...x,
+        product: x.products ?? null,
+      }));
+
+      const html = `
+        <div style="text-align:left">
+          <div style="opacity:.85;margin-bottom:8px">
+            <b>Comprobante:</b> #${o.receipt_no ?? "—"}<br/>
+            <b>Estado:</b> ${statusLabel(o.status)}<br/>
+            <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
+            <b>Total:</b> ${money(o.total)}<br/>
+            <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
+          </div>
+          <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
+          ${items
+            .map((i) => {
+              const name = i.product?.name ?? i.product_id;
+              const sub = Number(i.price) * Number(i.quantity);
+              return `<div style="margin:8px 0">
+                <div><b>${name}</b></div>
+                <div style="opacity:.8">Cant: ${i.quantity} · Precio: ${money(
+                  i.price
+                )} · Subtotal: ${money(sub)}</div>
+              </div>`;
+            })
+            .join("")}
+          <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
+          <div style="opacity:.85">
+            <b>Link comprobante:</b><br/>
+            <code style="font-size:12px">${window.location.origin}/pedido/${o.token}</code>
+          </div>
+        </div>
+      `;
+
+      await Swal.fire({
+        title: "Detalle del pedido",
+        html,
+        background: "#0b0b0b",
+        color: "#fff",
+        width: 700,
+        showConfirmButton: true,
+        confirmButtonText: "Cerrar",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error cargando items",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
     }
-
-    const items: ItemRow[] = (data as any[]).map((x) => ({
-      ...x,
-      product: x.products ?? null,
-    }));
-
-    const html = `
-      <div style="text-align:left">
-        <div style="opacity:.85;margin-bottom:8px">
-          <b>Comprobante:</b> #${o.receipt_no ?? "—"}<br/>
-          <b>Estado:</b> ${statusLabel(o.status)}<br/>
-          <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
-          <b>Total:</b> ${money(o.total)}<br/>
-          <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
-        </div>
-        <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
-        ${items
-          .map((i) => {
-            const name = i.product?.name ?? i.product_id;
-            const sub = Number(i.price) * Number(i.quantity);
-            return `<div style="margin:8px 0">
-              <div><b>${name}</b></div>
-              <div style="opacity:.8">Cant: ${i.quantity} · Precio: ${money(
-                i.price,
-              )} · Subtotal: ${money(sub)}</div>
-            </div>`;
-          })
-          .join("")}
-        <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
-        <div style="opacity:.85">
-          <b>Link comprobante:</b><br/>
-          <code style="font-size:12px">${window.location.origin}/pedido/${o.token}</code>
-        </div>
-      </div>
-    `;
-
-    await Swal.fire({
-      title: "Detalle del pedido",
-      html,
-      background: "#0b0b0b",
-      color: "#fff",
-      width: 700,
-      showConfirmButton: true,
-      confirmButtonText: "Cerrar",
-    });
   }
 
   async function setOrderStatus(o: OrderRow, nextStatus: OrderRow["status"]) {
@@ -197,7 +203,7 @@ export default function OrdersDashboardPage() {
       icon: "question",
       title: "Cambiar estado",
       text: `¿Cambiar el pedido #${o.receipt_no ?? "—"} a "${statusLabel(
-        nextStatus,
+        nextStatus
       )}"?`,
       showCancelButton: true,
       confirmButtonText: "Sí",
@@ -209,44 +215,39 @@ export default function OrdersDashboardPage() {
 
     if (!confirm.isConfirmed) return;
 
-    const { error } = await supabaseBrowser.rpc("owner_set_order_status", {
-      p_order_id: o.id,
-      p_status: nextStatus,
-    });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { error } = await sb.rpc("owner_set_order_status", {
+        p_order_id: o.id,
+        p_status: nextStatus,
+      });
+
+      if (error) throw error;
+
+      setOrders((prev) =>
+        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x))
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Actualizado",
+        text: "Estado actualizado correctamente.",
+        timer: 1200,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo actualizar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
     }
-
-    setOrders((prev) =>
-      prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x)),
-    );
-
-    await Swal.fire({
-      icon: "success",
-      title: "Actualizado",
-      text: "Estado actualizado correctamente.",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
-  }
-
-  if (loading) {
-    return (
-      <main className="p-6">
-        <p>Cargando pedidos...</p>
-      </main>
-    );
   }
 
   async function orderActions(o: OrderRow) {
@@ -255,20 +256,20 @@ export default function OrdersDashboardPage() {
     const res = await Swal.fire({
       title: `Pedido #${o.receipt_no ?? "—"}`,
       html: `
-      <div style="text-align:left; opacity:.9">
-        <div style="margin-bottom:10px">
-          <b>Estado:</b> ${statusLabel(o.status)}<br/>
-          <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
-          <b>Total:</b> ${money(o.total)}<br/>
-          <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
-        </div>
+        <div style="text-align:left; opacity:.9">
+          <div style="margin-bottom:10px">
+            <b>Estado:</b> ${statusLabel(o.status)}<br/>
+            <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
+            <b>Total:</b> ${money(o.total)}<br/>
+            <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
+          </div>
 
-        <div style="margin-top:12px">
-          <div style="font-size:12px; opacity:.7; margin-bottom:6px">Link del comprobante</div>
-          <code style="font-size:12px; word-break:break-all;">${link}</code>
+          <div style="margin-top:12px">
+            <div style="font-size:12px; opacity:.7; margin-bottom:6px">Link del comprobante</div>
+            <code style="font-size:12px; word-break:break-all;">${link}</code>
+          </div>
         </div>
-      </div>
-    `,
+      `,
       background: "#0b0b0b",
       color: "#fff",
       showCancelButton: true,
@@ -278,21 +279,19 @@ export default function OrdersDashboardPage() {
       denyButtonText: "PDF",
       cancelButtonText: "Copiar link",
 
-      confirmButtonColor: "#22c55e", // Abrir
-      denyButtonColor: "#60a5fa", // PDF
-      cancelButtonColor: "#374151", // Copiar
+      confirmButtonColor: "#22c55e",
+      denyButtonColor: "#60a5fa",
+      cancelButtonColor: "#374151",
     });
 
-    // ✅ Abrir en pestaña nueva
+    // Abrir
     if (res.isConfirmed) {
       window.open(link, "_blank");
       return;
     }
 
-    // ✅ Descargar PDF (factura)
+    // PDF (imprimir)
     if (res.isDenied) {
-      // Esto usa el print del navegador en modo PDF.
-      // Abre el pedido en una pestaña y dispara imprimir.
       const w = window.open(link, "_blank");
       if (!w) {
         await Swal.fire({
@@ -305,23 +304,17 @@ export default function OrdersDashboardPage() {
         return;
       }
 
-      // Espera a que cargue y manda print
-      const t = setInterval(() => {
+      setTimeout(() => {
         try {
-          if (w.document?.readyState === "complete") {
-            clearInterval(t);
-            w.focus();
-            w.print();
-          }
-        } catch {
-          // si el navegador no deja leer readyState, igual intentamos después
-        }
-      }, 800);
+          w.focus();
+          w.print();
+        } catch {}
+      }, 1200);
 
       return;
     }
 
-    // ✅ Copiar link
+    // Copiar
     if (res.dismiss === Swal.DismissReason.cancel) {
       await navigator.clipboard.writeText(link);
 
@@ -335,6 +328,14 @@ export default function OrdersDashboardPage() {
         color: "#fff",
       });
     }
+  }
+
+  if (loading) {
+    return (
+      <main className="p-6">
+        <p>Cargando pedidos...</p>
+      </main>
+    );
   }
 
   return (
@@ -378,8 +379,7 @@ export default function OrdersDashboardPage() {
         </select>
 
         <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm opacity-80">
-          Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos:{" "}
-          <b>{orders.length}</b>
+          Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos: <b>{orders.length}</b>
         </div>
       </div>
 
@@ -421,6 +421,13 @@ export default function OrdersDashboardPage() {
                   onClick={() => orderActions(o)}
                 >
                   Ver
+                </button>
+
+                <button
+                  className="rounded-xl border border-white/10 px-3 py-1 text-sm"
+                  onClick={() => openOrder(o)}
+                >
+                  Detalle
                 </button>
 
                 {o.status !== "confirmed" && (

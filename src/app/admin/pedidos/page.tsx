@@ -46,50 +46,47 @@ export default function AdminPedidosPage() {
   async function load() {
     setLoading(true);
 
-    const { data: st, error: stErr } = await supabaseBrowser
-      .from("stores")
-      .select("id,name,slug")
-      .order("created_at", { ascending: false });
+    try {
+      const sb = supabaseBrowser();
 
-    if (stErr) {
+      // Tiendas
+      const { data: st, error: stErr } = await sb
+        .from("stores")
+        .select("id,name,slug")
+        .order("created_at", { ascending: false });
+
+      if (stErr) throw stErr;
+
+      setStores((st as StoreMini[]) ?? []);
+
+      // Pedidos
+      const { data, error } = await sb
+        .from("orders")
+        .select(
+          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,stores(name,slug)",
+        )
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+
+      setOrders((data as any) ?? []);
+    } catch (err: any) {
       await Swal.fire({
         icon: "error",
-        title: "Error cargando tiendas",
-        text: stErr.message,
+        title: "Error cargando datos",
+        text: err?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-    setStores((st as StoreMini[]) ?? []);
-
-    const { data, error } = await supabaseBrowser
-      .from("orders")
-      .select(
-        "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,stores(name,slug)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (error) {
-      await Swal.fire({
-        icon: "error",
-        title: "Error cargando pedidos",
-        text: error.message,
-        background: "#0b0b0b",
-        color: "#fff",
-      });
-      setLoading(false);
-      return;
-    }
-
-    setOrders((data as any) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -100,8 +97,10 @@ export default function AdminPedidosPage() {
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
 
       if (!s) return true;
+
       const txt =
-        `${o.receipt_no ?? ""} ${o.token} ${o.stores?.name ?? ""} ${o.stores?.slug ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""}`.toLowerCase();
+        `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${o.stores?.slug ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""}`.toLowerCase();
+
       return txt.includes(s);
     });
   }, [orders, q, storeFilter, statusFilter]);
@@ -122,38 +121,41 @@ export default function AdminPedidosPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("orders")
-      .update({ status: next })
-      .eq("id", o.id);
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { error } = await sb
+        .from("orders")
+        .update({ status: next })
+        .eq("id", o.id);
 
-    if (error) {
+      if (error) throw error;
+
+      setOrders((prev) =>
+        prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)),
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Listo",
+        text: "Estado actualizado.",
+        timer: 1000,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (err: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo cambiar",
-        text: error.message,
+        text: err?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setOrders((prev) =>
-      prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)),
-    );
-
-    await Swal.fire({
-      icon: "success",
-      title: "Listo",
-      text: "Estado actualizado.",
-      timer: 1000,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   function openReceipt(o: OrderRow) {
@@ -161,18 +163,28 @@ export default function AdminPedidosPage() {
   }
 
   async function copyLink(o: OrderRow) {
-    const url = `${window.location.origin}/pedido/${o.token}`;
-    await navigator.clipboard.writeText(url);
+    try {
+      const url = `${window.location.origin}/pedido/${o.token}`;
+      await navigator.clipboard.writeText(url);
 
-    await Swal.fire({
-      icon: "success",
-      title: "Link copiado",
-      text: "El link del comprobante fue copiado al portapapeles.",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
+      await Swal.fire({
+        icon: "success",
+        title: "Link copiado",
+        text: "El link del comprobante fue copiado al portapapeles.",
+        timer: 1200,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo copiar",
+        text: "Tu navegador bloqueó el portapapeles. Copia el link manualmente.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    }
   }
 
   return (
@@ -184,6 +196,7 @@ export default function AdminPedidosPage() {
             Ver todos, filtrar y cambiar estado.
           </p>
         </div>
+
         <button
           className="rounded-xl border border-white/10 px-4 py-2"
           onClick={load}
@@ -248,10 +261,12 @@ export default function AdminPedidosPage() {
                       ({o.catalog_type === "retail" ? "Detal" : "Mayor"})
                     </span>
                   </p>
+
                   <p className="text-sm opacity-80">
                     {new Date(o.created_at).toLocaleString("es-CO")} · Total:{" "}
                     <b>{money(o.total)}</b>
                   </p>
+
                   <p className="text-xs opacity-60 mt-1">
                     Estado: <b>{statusLabel(o.status)}</b> · Token: {o.token}
                   </p>
@@ -275,6 +290,7 @@ export default function AdminPedidosPage() {
                   <button
                     className="rounded-xl border border-white/10 px-4 py-2"
                     onClick={() => setStatus(o, "draft")}
+                    disabled={saving}
                   >
                     Borrador
                   </button>
@@ -282,6 +298,7 @@ export default function AdminPedidosPage() {
                   <button
                     className="rounded-xl border border-white/10 px-4 py-2"
                     onClick={() => setStatus(o, "sent")}
+                    disabled={saving}
                   >
                     Enviado
                   </button>
@@ -289,6 +306,7 @@ export default function AdminPedidosPage() {
                   <button
                     className="rounded-xl border border-white/10 px-4 py-2"
                     onClick={() => setStatus(o, "confirmed")}
+                    disabled={saving}
                   >
                     Confirmado
                   </button>
@@ -296,6 +314,7 @@ export default function AdminPedidosPage() {
                   <button
                     className="rounded-xl border border-white/10 px-4 py-2"
                     onClick={() => setStatus(o, "completed")}
+                    disabled={saving}
                   >
                     Completado
                   </button>
@@ -303,6 +322,7 @@ export default function AdminPedidosPage() {
               </div>
             </div>
           ))}
+
           <p className="text-xs opacity-60">
             Mostrando últimos 200 pedidos (puedes subir el limit si quieres).
           </p>

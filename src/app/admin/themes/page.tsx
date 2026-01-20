@@ -18,25 +18,28 @@ export default function AdminThemesPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabaseBrowser
-      .from("themes")
-      .select("id,name,active,sort_order")
-      .order("sort_order", { ascending: true });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { data, error } = await sb
+        .from("themes")
+        .select("id,name,active,sort_order")
+        .order("sort_order", { ascending: true });
+
+      if (error) throw error;
+
+      setRows((data as ThemeRow[]) ?? []);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error cargando themes",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setRows((data as ThemeRow[]) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -49,32 +52,35 @@ export default function AdminThemesPage() {
 
   async function save(t: ThemeRow) {
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("themes")
-      .update({ name: t.name, active: t.active, sort_order: t.sort_order })
-      .eq("id", t.id);
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { error } = await sb
+        .from("themes")
+        .update({ name: t.name, active: t.active, sort_order: t.sort_order })
+        .eq("id", t.id);
 
-    if (error) {
+      if (error) throw error;
+
       await Swal.fire({
-        icon: "error",
-        title: "No se pudo guardar",
-        text: error.message,
+        icon: "success",
+        title: "Guardado",
+        timer: 900,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo guardar",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    await Swal.fire({
-      icon: "success",
-      title: "Guardado",
-      timer: 900,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function create() {
@@ -92,6 +98,7 @@ export default function AdminThemesPage() {
       preConfirm: () => {
         const id = (document.getElementById("id") as HTMLInputElement).value.trim();
         const name = (document.getElementById("name") as HTMLInputElement).value.trim();
+
         if (!id || !name) {
           Swal.showValidationMessage("Completa id y name.");
           return;
@@ -103,26 +110,34 @@ export default function AdminThemesPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { data, error } = await supabaseBrowser
-      .from("themes")
-      .insert({ id: res.value.id, name: res.value.name, active: true, sort_order: 0 })
-      .select("id,name,active,sort_order")
-      .single();
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { data, error } = await sb
+        .from("themes")
+        .insert({
+          id: res.value.id,
+          name: res.value.name,
+          active: true,
+          sort_order: 0,
+        })
+        .select("id,name,active,sort_order")
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      setRows((prev) => [data as ThemeRow, ...prev]);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo crear",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setRows((prev) => [data as ThemeRow, ...prev]);
   }
 
   async function remove(t: ThemeRow) {
@@ -140,21 +155,24 @@ export default function AdminThemesPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser.from("themes").delete().eq("id", t.id);
-    setSaving(false);
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { error } = await sb.from("themes").delete().eq("id", t.id);
+      if (error) throw error;
+
+      setRows((prev) => prev.filter((x) => x.id !== t.id));
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo eliminar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setRows((prev) => prev.filter((x) => x.id !== t.id));
   }
 
   return (
@@ -165,10 +183,18 @@ export default function AdminThemesPage() {
           <p className="text-sm opacity-80">CRUD de themes.</p>
         </div>
         <div className="flex gap-2">
-          <button className="rounded-xl border border-white/10 px-4 py-2" onClick={load} disabled={saving}>
+          <button
+            className="rounded-xl border border-white/10 px-4 py-2"
+            onClick={load}
+            disabled={saving}
+          >
             Recargar
           </button>
-          <button className="rounded-xl bg-white text-black px-4 py-2 font-semibold" onClick={create} disabled={saving}>
+          <button
+            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
+            onClick={create}
+            disabled={saving}
+          >
             + Nuevo
           </button>
         </div>
@@ -176,6 +202,11 @@ export default function AdminThemesPage() {
 
       {loading ? (
         <p className="mt-4">Cargando...</p>
+      ) : rows.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+          <p className="font-semibold">No hay themes</p>
+          <p className="text-sm opacity-80 mt-1">Crea el primero con “+ Nuevo”.</p>
+        </div>
       ) : (
         <div className="mt-4 space-y-3">
           {rows.map((t) => (
@@ -205,7 +236,9 @@ export default function AdminThemesPage() {
                     type="number"
                     className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
                     value={t.sort_order}
-                    onChange={(e) => patch(t.id, { sort_order: Number(e.target.value) })}
+                    onChange={(e) =>
+                      patch(t.id, { sort_order: Number(e.target.value) })
+                    }
                   />
                 </div>
 
@@ -222,10 +255,18 @@ export default function AdminThemesPage() {
               </div>
 
               <div className="mt-3 flex gap-2">
-                <button className="rounded-xl bg-white text-black px-4 py-2 font-semibold" onClick={() => save(t)} disabled={saving}>
+                <button
+                  className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
+                  onClick={() => save(t)}
+                  disabled={saving}
+                >
                   Guardar
                 </button>
-                <button className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200" onClick={() => remove(t)} disabled={saving}>
+                <button
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
+                  onClick={() => remove(t)}
+                  disabled={saving}
+                >
                   Eliminar
                 </button>
               </div>

@@ -13,14 +13,20 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabaseBrowser.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) setMsg("❌ " + error.message);
-    else setMsg("✅ Te enviamos un correo para cambiar tu contraseña.");
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-    setLoading(false);
+      if (error) setMsg("❌ " + error.message);
+      else setMsg("✅ Te enviamos un correo para cambiar tu contraseña.");
+    } catch (e: any) {
+      setMsg("❌ " + (e?.message ?? "Error enviando el correo"));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -40,6 +46,7 @@ export default function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+
           <button
             disabled={loading}
             className="w-full rounded-xl bg-white text-black p-3 font-semibold disabled:opacity-60"

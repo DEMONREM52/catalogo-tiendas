@@ -38,24 +38,29 @@ export default function ResetPasswordPage() {
   const same = password.length > 0 && password === password2;
 
   useEffect(() => {
-    // 1) Intentar crear sesión si llega con ?code=...
-    // Supabase manda code en el link cuando está bien configurado redirectTo.
     (async () => {
       try {
+        const sb = supabaseBrowser();
+
+        // 1) Intentar crear sesión si llega con ?code=...
         const code = search.get("code");
         if (code) {
-          const { error } = await supabaseBrowser.auth.exchangeCodeForSession(code);
+          const { error } = await sb.auth.exchangeCodeForSession(code);
           if (error) {
-            setMsg("❌ Link inválido o expirado. Pide otro correo de recuperación.");
+            setMsg(
+              "❌ Link inválido o expirado. Pide otro correo de recuperación.",
+            );
             setReady(false);
             return;
           }
         }
 
         // 2) Verificar si hay sesión (de recovery)
-        const { data } = await supabaseBrowser.auth.getSession();
+        const { data } = await sb.auth.getSession();
         if (!data.session) {
-          setMsg("❌ No hay sesión de recuperación. Abre esta página desde el link del correo.");
+          setMsg(
+            "❌ No hay sesión de recuperación. Abre esta página desde el link del correo.",
+          );
           setReady(false);
           return;
         }
@@ -82,22 +87,29 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const { error } = await supabaseBrowser.auth.updateUser({ password });
 
-    if (error) {
-      setMsg("❌ " + error.message);
+    try {
+      const sb = supabaseBrowser();
+
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) {
+        setMsg("❌ " + error.message);
+        setLoading(false);
+        return;
+      }
+
+      setMsg("✅ Contraseña cambiada. Ahora inicia sesión.");
+
+      // cerrar sesión de recovery y limpiar cookie simple
+      await sb.auth.signOut();
+      document.cookie = "app_session=; path=/; max-age=0";
+
+      setTimeout(() => router.push("/login"), 900);
+    } catch (e: any) {
+      setMsg("❌ Error: " + (e?.message ?? "desconocido"));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setMsg("✅ Contraseña cambiada. Ahora inicia sesión.");
-    setLoading(false);
-
-    // cerrar sesión de recovery y limpiar cookie simple
-    await supabaseBrowser.auth.signOut();
-    document.cookie = "app_session=; path=/; max-age=0";
-
-    setTimeout(() => router.push("/login"), 900);
   }
 
   return (
@@ -116,6 +128,7 @@ export default function ResetPasswordPage() {
           <form onSubmit={updatePass} className="mt-6 space-y-3">
             <div>
               <label className="text-sm opacity-80">Nueva contraseña</label>
+
               <div className="mt-1 flex gap-2">
                 <input
                   className="w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
@@ -144,7 +157,8 @@ export default function ResetPasswordPage() {
                   />
                 </div>
                 <p className="mt-1 text-xs opacity-80">
-                  Seguridad: <b>{strengthLabel(strength)}</b> (usa mayúsculas, números y símbolos)
+                  Seguridad: <b>{strengthLabel(strength)}</b> (usa mayúsculas,
+                  números y símbolos)
                 </p>
               </div>
             </div>
@@ -160,10 +174,9 @@ export default function ResetPasswordPage() {
                 required
                 minLength={6}
               />
+
               {password2.length > 0 && (
-                <p className="mt-1 text-xs">
-                  {same ? "✅ Coinciden" : "❌ No coinciden"}
-                </p>
+                <p className="mt-1 text-xs">{same ? "✅ Coinciden" : "❌ No coinciden"}</p>
               )}
             </div>
 

@@ -6,7 +6,6 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";
 
 type StoreMini = { id: string; name: string; slug: string };
-
 type Cat = { id: string; name: string };
 
 type Product = {
@@ -35,13 +34,19 @@ export default function AdminProductosPage() {
 
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
+  const currentStore = useMemo(
+    () => stores.find((s) => s.id === storeId) ?? null,
+    [stores, storeId],
+  );
+
   const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+
     return products.filter((p) => {
       if (categoryFilter !== "all" && p.category_id !== categoryFilter) {
         return false;
       }
 
-      const s = q.trim().toLowerCase();
       if (!s) return true;
 
       return (
@@ -52,7 +57,9 @@ export default function AdminProductosPage() {
   }, [products, q, categoryFilter]);
 
   async function loadStores() {
-    const { data, error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { data, error } = await sb
       .from("stores")
       .select("id,name,slug")
       .order("created_at", { ascending: false });
@@ -61,11 +68,15 @@ export default function AdminProductosPage() {
 
     const arr = (data as StoreMini[]) ?? [];
     setStores(arr);
+
+    // si no hay store seleccionada, usar la primera
     if (!storeId && arr[0]) setStoreId(arr[0].id);
   }
 
   async function loadCats(sid: string) {
-    const { data, error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { data, error } = await sb
       .from("product_categories")
       .select("id,name")
       .eq("store_id", sid)
@@ -78,17 +89,23 @@ export default function AdminProductosPage() {
 
   async function loadProducts(sid: string) {
     setLoading(true);
-    const { data, error } = await supabaseBrowser
-      .from("products")
-      .select(
-        "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id",
-      )
-      .eq("store_id", sid)
-      .order("created_at", { ascending: false });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) throw error;
-    setProducts((data as Product[]) ?? []);
-    setLoading(false);
+      const { data, error } = await sb
+        .from("products")
+        .select(
+          "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id",
+        )
+        .eq("store_id", sid)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setProducts((data as Product[]) ?? []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -132,83 +149,88 @@ export default function AdminProductosPage() {
 
   async function create() {
     if (!storeId) return;
+
     setSaving(true);
+    try {
+      const sb = supabaseBrowser();
 
-    const { data, error } = await supabaseBrowser
-      .from("products")
-      .insert({
-        store_id: storeId,
-        name: "Nuevo producto",
-        description: "",
-        price_retail: 0,
-        price_wholesale: 0,
-        min_wholesale: 1,
-        active: true,
-        image_url: null,
-        category_id: null,
-      })
-      .select(
-        "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id",
-      )
-      .single();
+      const { data, error } = await sb
+        .from("products")
+        .insert({
+          store_id: storeId,
+          name: "Nuevo producto",
+          description: "",
+          price_retail: 0,
+          price_wholesale: 0,
+          min_wholesale: 1,
+          active: true,
+          image_url: null,
+          category_id: null,
+        })
+        .select(
+          "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id",
+        )
+        .single();
 
-    setSaving(false);
+      if (error) throw error;
 
-    if (error) {
+      setProducts((prev) => [data as Product, ...prev]);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo crear",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setProducts((prev) => [data as Product, ...prev]);
   }
 
   async function save(p: Product) {
     setSaving(true);
+    try {
+      const sb = supabaseBrowser();
 
-    const { error } = await supabaseBrowser
-      .from("products")
-      .update({
-        name: p.name,
-        description: p.description,
-        price_retail: p.price_retail,
-        price_wholesale: p.price_wholesale,
-        min_wholesale: p.min_wholesale,
-        active: p.active,
-        image_url: p.image_url,
-        category_id: cats.some((c) => c.id === p.category_id)
-          ? p.category_id
-          : null,
-      })
-      .eq("id", p.id);
+      const validCategory = cats.some((c) => c.id === p.category_id);
 
-    setSaving(false);
+      const { error } = await sb
+        .from("products")
+        .update({
+          name: p.name,
+          description: p.description,
+          price_retail: Number(p.price_retail ?? 0),
+          price_wholesale: Number(p.price_wholesale ?? 0),
+          min_wholesale: Math.max(1, Number(p.min_wholesale ?? 1)),
+          active: !!p.active,
+          image_url: p.image_url,
+          category_id: validCategory ? p.category_id : null,
+        })
+        .eq("id", p.id);
 
-    if (error) {
+      if (error) throw error;
+
+      await Swal.fire({
+        icon: "success",
+        title: "Guardado",
+        timer: 900,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error al guardar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    await Swal.fire({
-      icon: "success",
-      title: "Guardado",
-      timer: 900,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function remove(p: Product) {
@@ -226,24 +248,24 @@ export default function AdminProductosPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("products")
-      .delete()
-      .eq("id", p.id);
-    setSaving(false);
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { error } = await sb.from("products").delete().eq("id", p.id);
+      if (error) throw error;
+
+      setProducts((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo eliminar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setProducts((prev) => prev.filter((x) => x.id !== p.id));
   }
 
   return (
@@ -256,25 +278,27 @@ export default function AdminProductosPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <a
-            href={`/${stores.find((s) => s.id === storeId)?.slug}/detal`}
+            href={`/${currentStore?.slug ?? ""}/detal`}
             target="_blank"
+            rel="noreferrer"
             className="rounded-xl border border-white/10 px-4 py-2"
           >
             Ver catálogo Detal
           </a>
 
           <a
-            href={`/${stores.find((s) => s.id === storeId)?.slug}/mayor`}
+            href={`/${currentStore?.slug ?? ""}/mayor`}
             target="_blank"
+            rel="noreferrer"
             className="rounded-xl border border-white/10 px-4 py-2"
           >
             Ver catálogo Mayor
           </a>
 
           <button
-            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
+            className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
             onClick={create}
             disabled={saving || !storeId}
           >
@@ -283,7 +307,7 @@ export default function AdminProductosPage() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
         <select
           className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
           value={storeId}
@@ -319,6 +343,13 @@ export default function AdminProductosPage() {
 
       {loading ? (
         <p className="mt-4">Cargando...</p>
+      ) : filtered.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+          <p className="font-semibold">No hay productos</p>
+          <p className="text-sm opacity-80 mt-1">
+            Crea un producto o cambia los filtros.
+          </p>
+        </div>
       ) : (
         <div className="mt-4 space-y-4">
           {filtered.map((p) => (
@@ -331,6 +362,7 @@ export default function AdminProductosPage() {
                       value={p.name}
                       onChange={(e) => patch(p.id, { name: e.target.value })}
                     />
+
                     <label className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -364,6 +396,7 @@ export default function AdminProductosPage() {
                         }
                       />
                     </div>
+
                     <div>
                       <label className="text-sm opacity-80">Precio Mayor</label>
                       <input
@@ -377,6 +410,7 @@ export default function AdminProductosPage() {
                         }
                       />
                     </div>
+
                     <div>
                       <label className="text-sm opacity-80">Mínimo Mayor</label>
                       <input
@@ -430,9 +464,7 @@ export default function AdminProductosPage() {
                 <div className="w-full lg:w-[360px]">
                   <div className="rounded-2xl border border-white/10 p-4">
                     <p className="font-semibold">Imagen principal</p>
-                    <p className="text-sm opacity-80">
-                      Se verá en el catálogo.
-                    </p>
+                    <p className="text-sm opacity-80">Se verá en el catálogo.</p>
 
                     <div className="mt-3">
                       <ImageUpload

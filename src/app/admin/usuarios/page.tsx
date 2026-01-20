@@ -19,30 +19,35 @@ export default function AdminUsuariosPage() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
-    return rows.filter((r) => (r.user_id + " " + r.role).toLowerCase().includes(s));
+    return rows.filter((r) =>
+      (r.user_id + " " + r.role).toLowerCase().includes(s)
+    );
   }, [rows, q]);
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabaseBrowser
-      .from("user_profiles")
-      .select("user_id,role,created_at")
-      .order("created_at", { ascending: false });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { data, error } = await sb
+        .from("user_profiles")
+        .select("user_id,role,created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setRows((data as UserProfile[]) ?? []);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error cargando usuarios",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setRows((data as UserProfile[]) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -66,7 +71,10 @@ export default function AdminUsuariosPage() {
       color: "#fff",
       preConfirm: () => {
         const user_id = (document.getElementById("uid") as HTMLInputElement).value.trim();
-        const role = (document.getElementById("role") as HTMLSelectElement).value as "admin" | "store";
+        const role = (document.getElementById("role") as HTMLSelectElement).value as
+          | "admin"
+          | "store";
+
         if (!user_id) {
           Swal.showValidationMessage("Escribe un user_id.");
           return;
@@ -78,42 +86,42 @@ export default function AdminUsuariosPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { data, error } = await supabaseBrowser
-      .from("user_profiles")
-      .upsert(
-        { user_id: res.value.user_id, role: res.value.role },
-        { onConflict: "user_id" },
-      )
-      .select("user_id,role,created_at")
-      .single();
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { data, error } = await sb
+        .from("user_profiles")
+        .upsert({ user_id: res.value.user_id, role: res.value.role }, { onConflict: "user_id" })
+        .select("user_id,role,created_at")
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      setRows((prev) => {
+        const next = prev.filter((x) => x.user_id !== data.user_id);
+        return [data as UserProfile, ...next];
+      });
+
+      await Swal.fire({
+        icon: "success",
+        title: "Rol actualizado",
+        timer: 1000,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo guardar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    setRows((prev) => {
-      const next = prev.filter((x) => x.user_id !== data.user_id);
-      return [data as UserProfile, ...next];
-    });
-
-    await Swal.fire({
-      icon: "success",
-      title: "Rol actualizado",
-      timer: 1000,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function removeUser(r: UserProfile) {
@@ -131,21 +139,54 @@ export default function AdminUsuariosPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser.from("user_profiles").delete().eq("user_id", r.user_id);
-    setSaving(false);
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { error } = await sb.from("user_profiles").delete().eq("user_id", r.user_id);
+      if (error) throw error;
+
+      setRows((prev) => prev.filter((x) => x.user_id !== r.user_id));
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo eliminar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
+  }
 
-    setRows((prev) => prev.filter((x) => x.user_id !== r.user_id));
+  async function toggleRole(r: UserProfile) {
+    const nextRole: "admin" | "store" = r.role === "admin" ? "store" : "admin";
+
+    setSaving(true);
+    try {
+      const sb = supabaseBrowser();
+
+      const { error } = await sb
+        .from("user_profiles")
+        .update({ role: nextRole })
+        .eq("user_id", r.user_id);
+
+      if (error) throw error;
+
+      setRows((prev) =>
+        prev.map((x) => (x.user_id === r.user_id ? { ...x, role: nextRole } : x))
+      );
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -153,13 +194,25 @@ export default function AdminUsuariosPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Usuarios / Roles</h2>
-          <p className="text-sm opacity-80">Administrar user_profiles (admin / store).</p>
+          <p className="text-sm opacity-80">
+            Administrar user_profiles (admin / store).
+          </p>
         </div>
+
         <div className="flex gap-2">
-          <button className="rounded-xl border border-white/10 px-4 py-2" onClick={load} disabled={saving}>
+          <button
+            className="rounded-xl border border-white/10 px-4 py-2"
+            onClick={load}
+            disabled={saving}
+          >
             Recargar
           </button>
-          <button className="rounded-xl bg-white text-black px-4 py-2 font-semibold" onClick={upsertUser} disabled={saving}>
+
+          <button
+            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
+            onClick={upsertUser}
+            disabled={saving}
+          >
             + Asignar rol
           </button>
         </div>
@@ -176,44 +229,29 @@ export default function AdminUsuariosPage() {
 
       {loading ? (
         <p className="mt-4">Cargando...</p>
+      ) : filtered.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+          <p className="font-semibold">No hay perfiles</p>
+          <p className="text-sm opacity-80 mt-1">Crea uno con “+ Asignar rol”.</p>
+        </div>
       ) : (
         <div className="mt-4 space-y-3">
           {filtered.map((r) => (
             <div key={r.user_id} className="rounded-2xl border border-white/10 p-4">
               <p className="font-semibold">{r.user_id}</p>
-              <p className="text-sm opacity-80">Rol: <b>{r.role}</b></p>
+
+              <p className="text-sm opacity-80">
+                Rol: <b>{r.role}</b>
+              </p>
+
               <p className="text-xs opacity-60 mt-1">
                 Creado: {new Date(r.created_at).toLocaleString("es-CO")}
               </p>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   className="rounded-xl border border-white/10 px-4 py-2"
-                  onClick={async () => {
-                    setSaving(true);
-                    const { error } = await supabaseBrowser
-                      .from("user_profiles")
-                      .update({ role: r.role === "admin" ? "store" : "admin" })
-                      .eq("user_id", r.user_id);
-                    setSaving(false);
-
-                    if (error) {
-                      await Swal.fire({
-                        icon: "error",
-                        title: "Error",
-                        text: error.message,
-                        background: "#0b0b0b",
-                        color: "#fff",
-                      });
-                      return;
-                    }
-
-                    setRows((prev) =>
-                      prev.map((x) =>
-                        x.user_id === r.user_id ? { ...x, role: x.role === "admin" ? "store" : "admin" } : x,
-                      ),
-                    );
-                  }}
+                  onClick={() => toggleRole(r)}
                   disabled={saving}
                 >
                   Cambiar a {r.role === "admin" ? "store" : "admin"}
@@ -231,6 +269,7 @@ export default function AdminUsuariosPage() {
           ))}
         </div>
       )}
+
       <p className="mt-4 text-xs opacity-60">
         Nota: aquí manejas roles por uuid. Para ver emails, se necesita backend con service role.
       </p>

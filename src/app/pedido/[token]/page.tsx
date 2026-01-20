@@ -37,17 +37,15 @@ export default function PedidoPage() {
     return st === "confirmed" || st === "completed";
   }, [order]);
 
-  // ✅ Número de comprobante (con fallback por si tu columna se llama distinto)
+  // ✅ Número de comprobante (fallback por si tu columna se llama distinto)
   const receiptNumber = useMemo(() => {
-    const n =
+    return (
       order?.receipt_no ??
       order?.order_no ??
       order?.number ??
       order?.seq ??
-      null;
-
-    // si viene como string número, lo dejamos
-    return n;
+      null
+    );
   }, [order]);
 
   function statusLabel(st: string) {
@@ -60,23 +58,27 @@ export default function PedidoPage() {
 
   async function load() {
     setLoading(true);
+
     try {
-      const { data, error } = await supabaseBrowser.rpc("get_order_by_token", {
+      const sb = supabaseBrowser();
+
+      const { data, error } = await sb.rpc("get_order_by_token", {
         p_token: token,
       });
+
       if (error) throw error;
 
-      setStore(data.store);
-      setOrder(data.order);console.log("ORDER RPC =>", data.order);
+      setStore(data?.store ?? null);
+      setOrder(data?.order ?? null);
 
       setItems(
-        (data.items ?? []).map((i: any) => ({
+        (data?.items ?? []).map((i: any) => ({
           product_id: i.product_id,
           name: i.name,
           image_url: i.image_url ?? null,
           price: Number(i.price),
           qty: Number(i.qty),
-        }))
+        })),
       );
     } catch (err: any) {
       await Swal.fire({
@@ -94,14 +96,15 @@ export default function PedidoPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   function setQty(productId: string, qty: number) {
     if (isLocked) return;
+    const q = Math.max(1, Math.floor(Number(qty || 1)));
 
-    const q = Math.max(1, Number(qty || 1));
     setItems((prev) =>
-      prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x))
+      prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x)),
     );
   }
 
@@ -118,13 +121,16 @@ export default function PedidoPage() {
     }
 
     setSaving(true);
+
     try {
+      const sb = supabaseBrowser();
+
       const payload = items.map((i) => ({
         product_id: i.product_id,
         qty: i.qty,
       }));
 
-      const { error } = await supabaseBrowser.rpc("update_order_items_by_token", {
+      const { error } = await sb.rpc("update_order_items_by_token", {
         p_token: token,
         p_items: payload,
       });
@@ -174,10 +180,14 @@ export default function PedidoPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
+
     try {
-      const { error } = await supabaseBrowser.rpc("confirm_order", {
+      const sb = supabaseBrowser();
+
+      const { error } = await sb.rpc("confirm_order", {
         p_token: token,
       });
+
       if (error) throw error;
 
       await Swal.fire({
@@ -210,31 +220,33 @@ export default function PedidoPage() {
 
     const lines: string[] = [];
     lines.push(
-      `🧾 Pedido (${order.catalog_type === "retail" ? "DETAL" : "MAYOR"})`
+      `🧾 Pedido (${order.catalog_type === "retail" ? "DETAL" : "MAYOR"})`,
     );
     lines.push(`🏪 Tienda: ${store.name}`);
     if (receiptNumber) lines.push(`🧾 Comprobante: #${receiptNumber}`);
     lines.push(`Estado: ${statusLabel(order.status)}`);
-    lines.push(``);
+    lines.push("");
 
     items.forEach((i, idx) => {
       lines.push(`${idx + 1}. ${i.name}`);
       lines.push(
         `   Cant: ${i.qty} | Precio: ${money(i.price)} | Subtotal: ${money(
-          i.price * i.qty
-        )}`
+          i.price * i.qty,
+        )}`,
       );
     });
 
-    lines.push(``);
+    lines.push("");
     lines.push(`TOTAL: ${money(total)}`);
-    lines.push(``);
+    lines.push("");
     lines.push(`Link del comprobante: ${window.location.href}`);
     lines.push(`✅ Quiero confirmar este pedido.`);
 
     window.open(
-      `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`,
-      "_blank"
+      `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
+        lines.join("\n"),
+      )}`,
+      "_blank",
     );
   }
 
@@ -255,11 +267,13 @@ export default function PedidoPage() {
   }
 
   return (
-    <main className="min-h-screen p-6" style={{ background: "#0b0b0b", color: "#fff" }}>
+    <main
+      className="min-h-screen p-6"
+      style={{ background: "#0b0b0b", color: "#fff" }}
+    >
       <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            {/* ✅ Aquí se muestra al lado */}
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">Comprobante</h1>
               {receiptNumber ? (
@@ -270,7 +284,8 @@ export default function PedidoPage() {
             </div>
 
             <p className="text-sm opacity-80">
-              {store.name} · {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
+              {store.name} ·{" "}
+              {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
             </p>
 
             <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-xs opacity-90">
@@ -313,7 +328,10 @@ export default function PedidoPage() {
 
         <div className="mt-6 space-y-3">
           {items.map((i) => (
-            <div key={i.product_id} className="rounded-2xl border border-white/10 p-4">
+            <div
+              key={i.product_id}
+              className="rounded-2xl border border-white/10 p-4"
+            >
               <div className="flex gap-3">
                 <div className="h-16 w-16 overflow-hidden rounded-xl border border-white/10 bg-white/5">
                   {i.image_url ? (
@@ -341,7 +359,9 @@ export default function PedidoPage() {
                     <input
                       className="w-20 rounded-xl border border-white/10 bg-transparent px-3 py-1 text-center disabled:opacity-50"
                       value={i.qty}
-                      onChange={(e) => setQty(i.product_id, Number(e.target.value))}
+                      onChange={(e) =>
+                        setQty(i.product_id, Number(e.target.value))
+                      }
                       disabled={saving || isLocked}
                     />
 
@@ -380,11 +400,13 @@ export default function PedidoPage() {
 
           {!isLocked ? (
             <p className="mt-2 text-xs opacity-70">
-              Tip: puedes editar cantidades y luego enviar por WhatsApp. El pedido queda guardado en este link.
+              Tip: puedes editar cantidades y luego enviar por WhatsApp. El
+              pedido queda guardado en este link.
             </p>
           ) : (
             <p className="mt-2 text-xs opacity-70">
-              Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo.
+              Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo
+              pedido desde el catálogo.
             </p>
           )}
         </div>

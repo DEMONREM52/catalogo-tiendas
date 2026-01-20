@@ -67,7 +67,6 @@ export default function StoreSettingsPage() {
   const [links, setLinks] = useState<StoreLink[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Helpers UI: crear link nuevo localmente
   const newLinkTemplate = useMemo(
     () => ({
       id: "new-" + crypto.randomUUID(),
@@ -77,6 +76,7 @@ export default function StoreSettingsPage() {
       url: "",
       sort_order: links.length,
       active: true,
+      icon_url: null as string | null,
     }),
     [store?.id, links.length],
   );
@@ -84,47 +84,51 @@ export default function StoreSettingsPage() {
   useEffect(() => {
     (async () => {
       setMsg(null);
-      const { data: userData } = await supabaseBrowser.auth.getUser();
-      if (!userData.user) {
-        router.push("/login");
-        return;
-      }
-      setUserId(userData.user.id);
+      setLoading(true);
 
-      // 1) Buscar la tienda del usuario (por owner_id)
-      const { data: storeData, error: storeErr } = await supabaseBrowser
-        .from("stores")
-        .select("*")
-        .eq("owner_id", userData.user.id)
-        .maybeSingle();
+      try {
+        const sb = supabaseBrowser();
 
-      if (storeErr) {
-        setMsg("❌ Error cargando tienda: " + storeErr.message);
-        setLoading(false);
-        return;
-      }
+        const { data: userData, error: userErr } = await sb.auth.getUser();
+        if (userErr) throw userErr;
 
-      if (!storeData) {
-        setMsg(
-          "⚠️ Aún no tienes una tienda creada. (Luego haremos el flujo de solicitud/creación automática).",
-        );
-        setLoading(false);
-        return;
-      }
+        if (!userData.user) {
+          router.push("/login");
+          return;
+        }
 
-      setStore(storeData as Store);
+        setUserId(userData.user.id);
 
-      // 2) Cargar perfil
-      const { data: profData, error: profErr } = await supabaseBrowser
-        .from("store_profiles")
-        .select("*")
-        .eq("store_id", storeData.id)
-        .maybeSingle();
+        // 1) Tienda del usuario (por owner_id)
+        const { data: storeData, error: storeErr } = await sb
+          .from("stores")
+          .select(
+            "id,name,slug,whatsapp,phone,email,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url",
+          )
+          .eq("owner_id", userData.user.id)
+          .maybeSingle();
 
-      if (profErr) {
-        setMsg("❌ Error cargando perfil: " + profErr.message);
-      } else {
-        // si no existe, creamos uno en memoria (se insertará al guardar)
+        if (storeErr) throw storeErr;
+
+        if (!storeData) {
+          setMsg(
+            "⚠️ Aún no tienes una tienda creada. (Luego haremos el flujo de solicitud/creación automática).",
+          );
+          setLoading(false);
+          return;
+        }
+
+        setStore(storeData as Store);
+
+        // 2) Perfil
+        const { data: profData, error: profErr } = await sb
+          .from("store_profiles")
+          .select("*")
+          .eq("store_id", storeData.id)
+          .maybeSingle();
+
+        if (profErr) throw profErr;
+
         setProfile(
           (profData as StoreProfile) ?? {
             store_id: storeData.id,
@@ -139,47 +143,46 @@ export default function StoreSettingsPage() {
             policies: "",
           },
         );
+
+        // 3) Links / redes
+        const { data: linksData, error: linksErr } = await sb
+          .from("store_links")
+          .select("id,store_id,type,label,url,sort_order,active,icon_url")
+          .eq("store_id", storeData.id)
+          .order("sort_order", { ascending: true });
+
+        if (linksErr) throw linksErr;
+
+        setLinks((linksData as StoreLink[]) ?? []);
+      } catch (e: any) {
+        setMsg("❌ Error cargando: " + (e?.message ?? "Error"));
+      } finally {
+        setLoading(false);
       }
-
-      // 3) Cargar redes/links
-      const { data: linksData, error: linksErr } = await supabaseBrowser
-        .from("store_links")
-        .select("*")
-        .eq("store_id", storeData.id)
-        .order("sort_order", { ascending: true });
-
-      if (linksErr) setMsg("❌ Error cargando redes: " + linksErr.message);
-      else setLinks((linksData as StoreLink[]) ?? []);
-
-      setLoading(false);
     })();
   }, [router]);
 
   function setStoreField<K extends keyof Store>(key: K, value: Store[K]) {
-    if (!store) return;
-    setStore({ ...store, [key]: value });
+    setStore((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function setProfileField<K extends keyof StoreProfile>(
     key: K,
     value: StoreProfile[K],
   ) {
-    if (!profile) return;
-    setProfile({ ...profile, [key]: value });
+    setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function addLink() {
-  if (!store) return;
-
-  setLinks([
-    ...links,
-    {
-      ...newLinkTemplate,
-      store_id: store.id,
-      icon_url: null, // 👈 importante para "Otro"
-    },
-  ]);
-}
+    if (!store) return;
+    setLinks((prev) => [
+      ...prev,
+      {
+        ...newLinkTemplate,
+        store_id: store.id,
+      },
+    ]);
+  }
 
   function updateLink(id: string, patch: Partial<StoreLink>) {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -195,45 +198,33 @@ export default function StoreSettingsPage() {
     setSaving(true);
     setMsg(null);
 
-    // Validación mínima
-    if (!store.name.trim()) {
-      setMsg("❌ El nombre es obligatorio.");
-      setSaving(false);
-      return;
-    }
-    if (!store.whatsapp.trim()) {
-      setMsg("❌ El WhatsApp es obligatorio.");
-      setSaving(false);
-      return;
-    }
+    try {
+      const sb = supabaseBrowser();
 
-    // 1) Guardar store
-    const { error: storeErr } = await supabaseBrowser
-      .from("stores")
-      .update({
-        name: store.name,
-        whatsapp: store.whatsapp,
-        phone: store.phone,
-        email: store.email,
-        active: store.active,
-        catalog_retail: store.catalog_retail,
-        catalog_wholesale: store.catalog_wholesale,
-        theme: store.theme,
-        logo_url: store.logo_url,
-        banner_url: store.banner_url,
-      })
-      .eq("id", store.id);
+      if (!store.name.trim()) throw new Error("El nombre es obligatorio.");
+      if (!store.whatsapp.trim()) throw new Error("El WhatsApp es obligatorio.");
 
-    if (storeErr) {
-      setMsg("❌ Error guardando tienda: " + storeErr.message);
-      setSaving(false);
-      return;
-    }
+      // 1) Guardar store
+      const { error: storeErr } = await sb
+        .from("stores")
+        .update({
+          name: store.name,
+          whatsapp: store.whatsapp,
+          phone: store.phone,
+          email: store.email,
+          active: store.active,
+          catalog_retail: store.catalog_retail,
+          catalog_wholesale: store.catalog_wholesale,
+          theme: store.theme,
+          logo_url: store.logo_url,
+          banner_url: store.banner_url,
+        })
+        .eq("id", store.id);
 
-    // 2) Upsert profile (insert si no existe / update si existe)
-    const { error: profErr } = await supabaseBrowser
-      .from("store_profiles")
-      .upsert({
+      if (storeErr) throw storeErr;
+
+      // 2) Upsert profile
+      const { error: profErr } = await sb.from("store_profiles").upsert({
         store_id: store.id,
         headline: profile.headline,
         description: profile.description,
@@ -246,70 +237,58 @@ export default function StoreSettingsPage() {
         policies: profile.policies,
       });
 
-    if (profErr) {
-      setMsg("❌ Error guardando perfil: " + profErr.message);
-      setSaving(false);
-      return;
-    }
+      if (profErr) throw profErr;
 
-    // 3) Guardar links: separar nuevos vs existentes
-    const newOnes = links.filter(
-      (l) => l.id.startsWith("new-") && l.url.trim(),
-    );
-    const existing = links.filter((l) => !l.id.startsWith("new-"));
+      // 3) Links: nuevos vs existentes
+      const newOnes = links.filter((l) => l.id.startsWith("new-") && l.url.trim());
+      const existing = links.filter((l) => !l.id.startsWith("new-"));
 
-    if (newOnes.length) {
-      const payload = newOnes.map((l, idx) => ({
-        store_id: store.id,
-        type: l.type,
-        label: l.label,
-        url: l.url,
-        sort_order: l.sort_order ?? idx,
-        active: l.active,
-        icon_url: l.icon_url,
-      }));
-
-      const { error } = await supabaseBrowser
-        .from("store_links")
-        .insert(payload);
-      if (error) {
-        setMsg("❌ Error creando redes: " + error.message);
-        setSaving(false);
-        return;
-      }
-    }
-
-    // Actualizar existentes (uno por uno; simple para empezar)
-    for (const l of existing) {
-      const { error } = await supabaseBrowser
-        .from("store_links")
-        .update({
+      if (newOnes.length) {
+        const payload = newOnes.map((l, idx) => ({
+          store_id: store.id,
           type: l.type,
           label: l.label,
           url: l.url,
-          sort_order: l.sort_order,
+          sort_order: Number.isFinite(l.sort_order) ? l.sort_order : idx,
           active: l.active,
-          icon_url: l.icon_url,
-        })
-        .eq("id", l.id);
+          icon_url: l.icon_url ?? null,
+        }));
 
-      if (error) {
-        setMsg("❌ Error actualizando una red: " + error.message);
-        setSaving(false);
-        return;
+        const { error } = await sb.from("store_links").insert(payload);
+        if (error) throw error;
       }
+
+      for (const l of existing) {
+        const { error } = await sb
+          .from("store_links")
+          .update({
+            type: l.type,
+            label: l.label,
+            url: l.url,
+            sort_order: l.sort_order,
+            active: l.active,
+            icon_url: l.icon_url ?? null,
+          })
+          .eq("id", l.id);
+
+        if (error) throw error;
+      }
+
+      setMsg("✅ Guardado correctamente.");
+
+      // Recargar links para obtener IDs reales
+      const { data: linksData, error: reloadErr } = await sb
+        .from("store_links")
+        .select("id,store_id,type,label,url,sort_order,active,icon_url")
+        .eq("store_id", store.id)
+        .order("sort_order", { ascending: true });
+
+      if (!reloadErr) setLinks((linksData as StoreLink[]) ?? []);
+    } catch (e: any) {
+      setMsg("❌ " + (e?.message ?? "Error guardando"));
+    } finally {
+      setSaving(false);
     }
-
-    setMsg("✅ Guardado correctamente.");
-    setSaving(false);
-
-    // recargar links para obtener IDs reales de los nuevos
-    const { data: linksData } = await supabaseBrowser
-      .from("store_links")
-      .select("*")
-      .eq("store_id", store.id)
-      .order("sort_order", { ascending: true });
-    setLinks((linksData as StoreLink[]) ?? []);
   }
 
   if (loading) {
@@ -396,9 +375,7 @@ export default function StoreSettingsPage() {
             <input
               type="checkbox"
               checked={store.catalog_retail}
-              onChange={(e) =>
-                setStoreField("catalog_retail", e.target.checked)
-              }
+              onChange={(e) => setStoreField("catalog_retail", e.target.checked)}
             />
             <span>Catálogo Detal activo</span>
           </label>
@@ -486,9 +463,7 @@ export default function StoreSettingsPage() {
             <input
               className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
               value={profile.google_maps_url ?? ""}
-              onChange={(e) =>
-                setProfileField("google_maps_url", e.target.value)
-              }
+              onChange={(e) => setProfileField("google_maps_url", e.target.value)}
             />
           </div>
 
@@ -506,9 +481,7 @@ export default function StoreSettingsPage() {
             <textarea
               className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none min-h-[90px]"
               value={profile.payment_methods ?? ""}
-              onChange={(e) =>
-                setProfileField("payment_methods", e.target.value)
-              }
+              onChange={(e) => setProfileField("payment_methods", e.target.value)}
             />
           </div>
 
@@ -576,6 +549,7 @@ export default function StoreSettingsPage() {
                 value={l.url}
                 onChange={(e) => updateLink(l.id, { url: e.target.value })}
               />
+
               {l.type === "other" && userId && (
                 <div className="md:col-span-5 rounded-xl border border-white/10 p-3">
                   <p className="text-sm opacity-80 mb-2">
@@ -597,9 +571,7 @@ export default function StoreSettingsPage() {
                   <input
                     type="checkbox"
                     checked={l.active}
-                    onChange={(e) =>
-                      updateLink(l.id, { active: e.target.checked })
-                    }
+                    onChange={(e) => updateLink(l.id, { active: e.target.checked })}
                   />
                   Activo
                 </label>
@@ -616,12 +588,11 @@ export default function StoreSettingsPage() {
         </div>
       </section>
 
-      {/* Nota logo/banner */}
+      {/* Logo y banner */}
       <section className="rounded-2xl border border-white/10 p-4">
         <h2 className="text-lg font-semibold">Logo y banner</h2>
         <p className="mt-2 text-sm opacity-80">
-          Sube tus imágenes y luego guarda cambios para que queden fijas en tu
-          tienda.
+          Sube tus imágenes y luego guarda cambios para que queden fijas en tu tienda.
         </p>
 
         {!userId ? (

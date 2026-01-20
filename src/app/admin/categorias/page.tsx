@@ -30,11 +30,13 @@ export default function AdminCategoriasPage() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return cats;
-    return cats.filter((c) => c.name.toLowerCase().includes(s));
+    return cats.filter((c) => (c.name ?? "").toLowerCase().includes(s));
   }, [cats, q]);
 
   async function loadStores() {
-    const { data, error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { data, error } = await sb
       .from("stores")
       .select("id,name,slug")
       .order("created_at", { ascending: false });
@@ -43,18 +45,23 @@ export default function AdminCategoriasPage() {
 
     const arr = (data as StoreMini[]) ?? [];
     setStores(arr);
+
+    // Si no hay tienda seleccionada, poner la primera
     if (!storeId && arr[0]) setStoreId(arr[0].id);
   }
 
   async function loadCats(sid: string) {
     setLoading(true);
-    const { data, error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { data, error } = await sb
       .from("product_categories")
       .select("id,store_id,name,image_url,sort_order,active,created_at")
       .eq("store_id", sid)
       .order("sort_order", { ascending: true });
 
     if (error) throw error;
+
     setCats((data as Cat[]) ?? []);
     setLoading(false);
   }
@@ -71,6 +78,7 @@ export default function AdminCategoriasPage() {
           background: "#0b0b0b",
           color: "#fff",
         });
+        setLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,7 +108,9 @@ export default function AdminCategoriasPage() {
 
   async function save(c: Cat) {
     setSaving(true);
-    const { error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { error } = await sb
       .from("product_categories")
       .update({
         name: c.name,
@@ -138,7 +148,9 @@ export default function AdminCategoriasPage() {
     if (!storeId) return;
 
     setSaving(true);
-    const { data, error } = await supabaseBrowser
+    const sb = supabaseBrowser();
+
+    const { data, error } = await sb
       .from("product_categories")
       .insert({
         store_id: storeId,
@@ -163,10 +175,11 @@ export default function AdminCategoriasPage() {
       return;
     }
 
+    // La ponemos arriba
     setCats((prev) => [data as Cat, ...prev]);
   }
 
-  async function remove(c: Cat) {
+  async function removeCat(c: Cat) {
     const res = await Swal.fire({
       icon: "warning",
       title: "Eliminar categoría",
@@ -181,7 +194,13 @@ export default function AdminCategoriasPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser.from("product_categories").delete().eq("id", c.id);
+    const sb = supabaseBrowser();
+
+    const { error } = await sb
+      .from("product_categories")
+      .delete()
+      .eq("id", c.id);
+
     setSaving(false);
 
     if (error) {
@@ -205,11 +224,21 @@ export default function AdminCategoriasPage() {
           <h2 className="text-xl font-semibold">Categorías</h2>
           <p className="text-sm opacity-80">CRUD por tienda + imagen y orden.</p>
         </div>
+
         <div className="flex gap-2">
-          <button className="rounded-xl border border-white/10 px-4 py-2" onClick={() => storeId && loadCats(storeId)} disabled={saving}>
+          <button
+            className="rounded-xl border border-white/10 px-4 py-2"
+            onClick={() => storeId && loadCats(storeId)}
+            disabled={saving}
+          >
             Recargar
           </button>
-          <button className="rounded-xl bg-white text-black px-4 py-2 font-semibold" onClick={create} disabled={saving || !storeId}>
+
+          <button
+            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
+            onClick={create}
+            disabled={saving || !storeId}
+          >
             + Nueva
           </button>
         </div>
@@ -258,7 +287,9 @@ export default function AdminCategoriasPage() {
                         type="number"
                         className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
                         value={c.sort_order}
-                        onChange={(e) => patch(c.id, { sort_order: Number(e.target.value) })}
+                        onChange={(e) =>
+                          patch(c.id, { sort_order: Number(e.target.value) })
+                        }
                       />
                     </div>
 
@@ -267,7 +298,9 @@ export default function AdminCategoriasPage() {
                         <input
                           type="checkbox"
                           checked={c.active}
-                          onChange={(e) => patch(c.id, { active: e.target.checked })}
+                          onChange={(e) =>
+                            patch(c.id, { active: e.target.checked })
+                          }
                         />
                         Activa
                       </label>
@@ -282,9 +315,10 @@ export default function AdminCategoriasPage() {
                     >
                       Guardar
                     </button>
+
                     <button
                       className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
-                      onClick={() => remove(c)}
+                      onClick={() => removeCat(c)}
                       disabled={saving}
                     >
                       Eliminar
@@ -314,6 +348,12 @@ export default function AdminCategoriasPage() {
               </div>
             </div>
           ))}
+
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 p-6 text-sm opacity-80">
+              No hay categorías para mostrar.
+            </div>
+          ) : null}
         </div>
       )}
     </div>

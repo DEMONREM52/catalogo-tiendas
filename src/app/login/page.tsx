@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,22 +17,31 @@ export default function LoginPage() {
     setLoading(true);
     setMsg(null);
 
-    const { data, error } = await supabaseBrowser.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
-      setMsg("❌ " + error.message);
+      const { data, error } = await sb.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setMsg("❌ " + error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Cookie simple (opcional, solo para UX)
+      if (data.session?.access_token) {
+        document.cookie = `app_session=${data.session.access_token}; path=/; max-age=604800`;
+      }
+
+      router.push("/dashboard");
+    } catch (e: any) {
+      setMsg("❌ " + (e?.message ?? "Error iniciando sesión"));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Creamos cookie simple para proteger dashboard
-    document.cookie = `app_session=${data.session?.access_token}; path=/; max-age=604800`;
-
-    router.push("/dashboard");
-    setLoading(false);
   }
 
   return (
@@ -49,6 +59,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+
           <input
             className="w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
             placeholder="Contraseña"
@@ -64,6 +75,7 @@ export default function LoginPage() {
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
+
           <a className="text-sm underline opacity-80" href="/forgot-password">
             ¿Olvidaste tu contraseña?
           </a>

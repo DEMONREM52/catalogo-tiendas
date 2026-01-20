@@ -33,42 +33,70 @@ export default function CategoriesPage() {
   async function load() {
     setLoading(true);
 
-    const { data: userData } = await supabaseBrowser.auth.getUser();
-    if (!userData.user) {
+    try {
+      const sb = supabaseBrowser();
+
+      // 1) Usuario
+      const { data: userData, error: userErr } = await sb.auth.getUser();
+      if (userErr) throw userErr;
+
+      if (!userData.user) {
+        await Swal.fire({
+          icon: "error",
+          title: "Debes iniciar sesión",
+          background: "#0b0b0b",
+          color: "#ffffff",
+        });
+        setLoading(false);
+        return;
+      }
+
+      setUserId(userData.user.id);
+
+      // 2) Tienda por owner_id
+      const { data: storeData, error: storeErr } = await sb
+        .from("stores")
+        .select("id")
+        .eq("owner_id", userData.user.id)
+        .maybeSingle();
+
+      if (storeErr) throw storeErr;
+
+      if (!storeData) {
+        await Swal.fire({
+          icon: "error",
+          title: "No se encontró tu tienda",
+          background: "#0b0b0b",
+          color: "#ffffff",
+        });
+        setLoading(false);
+        return;
+      }
+
+      setStoreId(storeData.id);
+
+      // 3) Categorías
+      const { data: catData, error: catErr } = await sb
+        .from("product_categories")
+        .select("id,store_id,name,image_url,sort_order,active")
+        .eq("store_id", storeData.id)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (catErr) throw catErr;
+
+      setCategories((catData as Category[]) ?? []);
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error cargando",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } finally {
       setLoading(false);
-      await Swal.fire({ icon: "error", title: "Debes iniciar sesión" });
-      return;
     }
-    setUserId(userData.user.id);
-
-    const { data: storeData, error: storeErr } = await supabaseBrowser
-      .from("stores")
-      .select("id")
-      .eq("owner_id", userData.user.id)
-      .maybeSingle();
-
-    if (storeErr || !storeData) {
-      setLoading(false);
-      await Swal.fire({ icon: "error", title: "No se encontró tu tienda" });
-      return;
-    }
-    setStoreId(storeData.id);
-
-    const { data: catData, error: catErr } = await supabaseBrowser
-      .from("product_categories")
-      .select("id,store_id,name,image_url,sort_order,active")
-      .eq("store_id", storeData.id)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (catErr) {
-      setLoading(false);
-      await Swal.fire({ icon: "error", title: "Error cargando", text: catErr.message });
-      return;
-    }
-
-    setCategories((catData as Category[]) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -76,78 +104,92 @@ export default function CategoriesPage() {
   }, []);
 
   function updateCat(id: string, patch: Partial<Category>) {
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+    );
   }
 
   async function createCategory() {
     if (!storeId) return;
+
     setSaving(true);
+    try {
+      const sb = supabaseBrowser();
 
-    const { data, error } = await supabaseBrowser
-      .from("product_categories")
-      .insert({
-        store_id: storeId,
-        name: "Nueva categoría",
-        image_url: null,
-        sort_order: categories.length + 1,
-        active: true,
-      })
-      .select("id,store_id,name,image_url,sort_order,active")
-      .single();
+      const { data, error } = await sb
+        .from("product_categories")
+        .insert({
+          store_id: storeId,
+          name: "Nueva categoría",
+          image_url: null,
+          sort_order: categories.length + 1,
+          active: true,
+        })
+        .select("id,store_id,name,image_url,sort_order,active")
+        .single();
 
-    setSaving(false);
+      if (error) throw error;
 
-    if (error) {
-      await Swal.fire({ icon: "error", title: "Error creando", text: error.message });
-      return;
+      setCategories((prev) => [data as Category, ...prev]);
+
+      await Swal.fire({
+        icon: "success",
+        title: "Categoría creada",
+        timer: 1100,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error creando",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    setCategories((prev) => [data as Category, ...prev]);
-    await Swal.fire({
-      icon: "success",
-      title: "Categoría creada",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#ffffff",
-    });
   }
 
   async function saveCategory(c: Category) {
     setSaving(true);
+    try {
+      const sb = supabaseBrowser();
 
-    const { error } = await supabaseBrowser
-      .from("product_categories")
-      .update({
-        name: c.name,
-        image_url: c.image_url,
-        sort_order: c.sort_order,
-        active: c.active,
-      })
-      .eq("id", c.id);
+      const { error } = await sb
+        .from("product_categories")
+        .update({
+          name: c.name,
+          image_url: c.image_url,
+          sort_order: c.sort_order,
+          active: c.active,
+        })
+        .eq("id", c.id);
 
-    setSaving(false);
+      if (error) throw error;
 
-    if (error) {
       await Swal.fire({
-        icon: "error",
-        title: "Error guardando",
-        text: error.message,
+        icon: "success",
+        title: "Guardado",
+        text: "Categoría actualizada correctamente.",
+        timer: 1100,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#ffffff",
       });
-      return;
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error guardando",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    await Swal.fire({
-      icon: "success",
-      title: "Guardado",
-      text: "Categoría actualizada correctamente.",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#ffffff",
-    });
   }
 
   async function deleteCategory(c: Category) {
@@ -166,33 +208,47 @@ export default function CategoriesPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-
-    // borrar imagen (si existe)
     try {
-      if (userId) {
-        const path = `${userId}/categories/${c.id}.png`;
-        await supabaseBrowser.storage.from("category-images").remove([path]);
+      const sb = supabaseBrowser();
+
+      // borrar imagen (si existe)
+      try {
+        if (userId) {
+          const path = `${userId}/categories/${c.id}.png`;
+          await sb.storage.from("category-images").remove([path]);
+        }
+      } catch {
+        // ignorar
       }
-    } catch {}
 
-    const { error } = await supabaseBrowser.from("product_categories").delete().eq("id", c.id);
+      const { error } = await sb
+        .from("product_categories")
+        .delete()
+        .eq("id", c.id);
 
-    setSaving(false);
+      if (error) throw error;
 
-    if (error) {
-      await Swal.fire({ icon: "error", title: "Error eliminando", text: error.message });
-      return;
+      setCategories((prev) => prev.filter((x) => x.id !== c.id));
+
+      await Swal.fire({
+        icon: "success",
+        title: "Eliminada",
+        timer: 1100,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error eliminando",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#ffffff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    setCategories((prev) => prev.filter((x) => x.id !== c.id));
-    await Swal.fire({
-      icon: "success",
-      title: "Eliminada",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#ffffff",
-    });
   }
 
   if (loading) return <main className="p-6">Cargando categorías...</main>;
@@ -202,10 +258,16 @@ export default function CategoriesPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Categorías</h1>
-          <p className="text-sm opacity-80">Crea categorías con imagen para ordenar tus productos.</p>
+          <p className="text-sm opacity-80">
+            Crea categorías con imagen para ordenar tus productos.
+          </p>
         </div>
         <div className="flex gap-2">
-          <button className="rounded-xl border border-white/10 px-4 py-2" onClick={load} disabled={saving}>
+          <button
+            className="rounded-xl border border-white/10 px-4 py-2"
+            onClick={load}
+            disabled={saving}
+          >
             Recargar
           </button>
           <button
@@ -240,7 +302,9 @@ export default function CategoriesPage() {
                     <input
                       type="checkbox"
                       checked={c.active}
-                      onChange={(e) => updateCat(c.id, { active: e.target.checked })}
+                      onChange={(e) =>
+                        updateCat(c.id, { active: e.target.checked })
+                      }
                     />
                     Activa
                   </label>
@@ -253,7 +317,9 @@ export default function CategoriesPage() {
                       type="number"
                       className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
                       value={c.sort_order}
-                      onChange={(e) => updateCat(c.id, { sort_order: Number(e.target.value) })}
+                      onChange={(e) =>
+                        updateCat(c.id, { sort_order: Number(e.target.value) })
+                      }
                     />
                   </div>
                 </div>
@@ -302,6 +368,12 @@ export default function CategoriesPage() {
             </div>
           </div>
         ))}
+
+        {filtered.length === 0 && (
+          <div className="rounded-2xl border border-white/10 p-4 text-sm opacity-80">
+            No hay categorías con ese filtro.
+          </div>
+        )}
       </div>
     </main>
   );

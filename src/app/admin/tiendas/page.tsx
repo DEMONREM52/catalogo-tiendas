@@ -29,33 +29,36 @@ export default function AdminTiendasPage() {
     return stores.filter((x) =>
       (x.name + " " + x.slug + " " + x.whatsapp + " " + x.owner_id)
         .toLowerCase()
-        .includes(s),
+        .includes(s)
     );
   }, [q, stores]);
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabaseBrowser
-      .from("stores")
-      .select(
-        "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at",
-      )
-      .order("created_at", { ascending: false });
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { data, error } = await sb
+        .from("stores")
+        .select(
+          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at"
+        )
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setStores((data as Store[]) ?? []);
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error cargando tiendas",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setStores((data as Store[]) ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -68,42 +71,45 @@ export default function AdminTiendasPage() {
 
   async function saveStore(s: Store) {
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("stores")
-      .update({
-        name: s.name,
-        slug: s.slug,
-        whatsapp: s.whatsapp,
-        active: s.active,
-        catalog_retail: s.catalog_retail,
-        catalog_wholesale: s.catalog_wholesale,
-        wholesale_key: s.wholesale_key,
-      })
-      .eq("id", s.id);
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { error } = await sb
+        .from("stores")
+        .update({
+          name: s.name,
+          slug: s.slug,
+          whatsapp: s.whatsapp,
+          active: s.active,
+          catalog_retail: s.catalog_retail,
+          catalog_wholesale: s.catalog_wholesale,
+          wholesale_key: s.wholesale_key,
+        })
+        .eq("id", s.id);
 
-    if (error) {
+      if (error) throw error;
+
+      await Swal.fire({
+        icon: "success",
+        title: "Guardado",
+        text: "Tienda actualizada.",
+        timer: 1200,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo guardar",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    await Swal.fire({
-      icon: "success",
-      title: "Guardado",
-      text: "Tienda actualizada.",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function changeOwner(s: Store) {
@@ -121,9 +127,7 @@ export default function AdminTiendasPage() {
       color: "#fff",
       confirmButtonColor: "#f59e0b",
       preConfirm: () => {
-        const v = (
-          document.getElementById("newOwner") as HTMLInputElement
-        ).value.trim();
+        const v = (document.getElementById("newOwner") as HTMLInputElement).value.trim();
         if (!v) {
           Swal.showValidationMessage("Escribe un uuid válido.");
           return;
@@ -135,36 +139,35 @@ export default function AdminTiendasPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("stores")
-      .update({ owner_id: res.value })
-      .eq("id", s.id);
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { error } = await sb.from("stores").update({ owner_id: res.value }).eq("id", s.id);
+      if (error) throw error;
 
-    if (error) {
+      patch(s.id, { owner_id: res.value });
+
+      await Swal.fire({
+        icon: "success",
+        title: "Transferida",
+        text: "Owner actualizado.",
+        timer: 1200,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo transferir",
-        text: error.message,
+        text: e?.message ?? "Error",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    patch(s.id, { owner_id: res.value });
-
-    await Swal.fire({
-      icon: "success",
-      title: "Transferida",
-      text: "Owner actualizado.",
-      timer: 1200,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function deleteStore(s: Store) {
@@ -182,32 +185,33 @@ export default function AdminTiendasPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { error } = await supabaseBrowser
-      .from("stores")
-      .delete()
-      .eq("id", s.id);
-    setSaving(false);
+    try {
+      const sb = supabaseBrowser();
 
-    if (error) {
+      const { error } = await sb.from("stores").delete().eq("id", s.id);
+      if (error) throw error;
+
+      setStores((prev) => prev.filter((x) => x.id !== s.id));
+
       await Swal.fire({
-        icon: "error",
-        title: "No se pudo eliminar",
-        text: error.message,
+        icon: "success",
+        title: "Eliminada",
+        timer: 1000,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo eliminar",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    setStores((prev) => prev.filter((x) => x.id !== s.id));
-    await Swal.fire({
-      icon: "success",
-      title: "Eliminada",
-      timer: 1000,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   async function createStore() {
@@ -226,18 +230,11 @@ export default function AdminTiendasPage() {
       background: "#0b0b0b",
       color: "#fff",
       preConfirm: () => {
-        const name = (
-          document.getElementById("name") as HTMLInputElement
-        ).value.trim();
-        const slug = (
-          document.getElementById("slug") as HTMLInputElement
-        ).value.trim();
-        const whatsapp = (
-          document.getElementById("wa") as HTMLInputElement
-        ).value.trim();
-        const owner_id = (
-          document.getElementById("owner") as HTMLInputElement
-        ).value.trim();
+        const name = (document.getElementById("name") as HTMLInputElement).value.trim();
+        const slug = (document.getElementById("slug") as HTMLInputElement).value.trim();
+        const whatsapp = (document.getElementById("wa") as HTMLInputElement).value.trim();
+        const owner_id = (document.getElementById("owner") as HTMLInputElement).value.trim();
+
         if (!name || !slug || !whatsapp || !owner_id) {
           Swal.showValidationMessage("Completa todos los campos.");
           return;
@@ -249,46 +246,50 @@ export default function AdminTiendasPage() {
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    const { data, error } = await supabaseBrowser
-      .from("stores")
-      .insert({
-        name: res.value.name,
-        slug: res.value.slug,
-        whatsapp: res.value.whatsapp,
-        owner_id: res.value.owner_id,
-        active: true,
-        catalog_retail: true,
-        catalog_wholesale: true,
-        theme: "ocean",
-        ui_radius: 12,
-      })
-      .select(
-        "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at",
-      )
-      .single();
+    try {
+      const sb = supabaseBrowser();
 
-    setSaving(false);
+      const { data, error } = await sb
+        .from("stores")
+        .insert({
+          name: res.value.name,
+          slug: res.value.slug,
+          whatsapp: res.value.whatsapp,
+          owner_id: res.value.owner_id,
+          active: true,
+          catalog_retail: true,
+          catalog_wholesale: true,
+          theme: "ocean",
+          ui_radius: 12,
+        })
+        .select(
+          "id,name,slug,whatsapp,owner_id,active,catalog_retail,catalog_wholesale,wholesale_key,created_at"
+        )
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      setStores((prev) => [data as Store, ...prev]);
+
       await Swal.fire({
-        icon: "error",
-        title: "No se pudo crear",
-        text: error.message,
+        icon: "success",
+        title: "Tienda creada",
+        timer: 1000,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
       });
-      return;
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo crear",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    setStores((prev) => [data as Store, ...prev]);
-    await Swal.fire({
-      icon: "success",
-      title: "Tienda creada",
-      timer: 1000,
-      showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
-    });
   }
 
   return (
@@ -300,6 +301,7 @@ export default function AdminTiendasPage() {
             Crear/editar/activar/inactivar/eliminar + transferir owner.
           </p>
         </div>
+
         <div className="flex gap-2">
           <button
             className="rounded-xl border border-white/10 px-4 py-2"
@@ -308,6 +310,7 @@ export default function AdminTiendasPage() {
           >
             Recargar
           </button>
+
           <button
             className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
             onClick={createStore}
@@ -329,6 +332,11 @@ export default function AdminTiendasPage() {
 
       {loading ? (
         <p className="mt-4">Cargando...</p>
+      ) : filtered.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+          <p className="font-semibold">No hay tiendas</p>
+          <p className="text-sm opacity-80 mt-1">Crea una con “+ Nueva”.</p>
+        </div>
       ) : (
         <div className="mt-4 space-y-4">
           {filtered.map((s) => (
@@ -383,6 +391,7 @@ export default function AdminTiendasPage() {
                   />
                   Activa
                 </label>
+
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -393,6 +402,7 @@ export default function AdminTiendasPage() {
                   />
                   Catálogo detal
                 </label>
+
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -417,6 +427,7 @@ export default function AdminTiendasPage() {
                 <a
                   href={`/${s.slug}/detal`}
                   target="_blank"
+                  rel="noreferrer"
                   className="rounded-xl border border-white/10 px-4 py-2"
                 >
                   Abrir catálogo Detal
@@ -425,6 +436,7 @@ export default function AdminTiendasPage() {
                 <a
                   href={`/${s.slug}/mayor`}
                   target="_blank"
+                  rel="noreferrer"
                   className="rounded-xl border border-white/10 px-4 py-2"
                 >
                   Abrir catálogo Mayor

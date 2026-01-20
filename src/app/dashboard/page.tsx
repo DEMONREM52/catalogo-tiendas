@@ -67,60 +67,81 @@ export default function DashboardPage() {
     (async () => {
       setLoading(true);
 
-      const { data } = await supabaseBrowser.auth.getUser();
-      if (!data.user) {
-        router.replace("/login");
-        return;
-      }
+      try {
+        const sb = supabaseBrowser();
 
-      setEmail(data.user.email ?? "");
+        // 0) Usuario
+        const { data: userRes, error: userErr } = await sb.auth.getUser();
+        if (userErr) throw userErr;
 
-      // 1) Rol
-      const { data: prof, error: profErr } = await supabaseBrowser
-        .from("user_profiles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
+        if (!userRes.user) {
+          router.replace("/login");
+          return;
+        }
 
-      if (profErr || !prof?.role) {
+        setEmail(userRes.user.email ?? "");
+
+        // 1) Rol
+        const { data: prof, error: profErr } = await sb
+          .from("user_profiles")
+          .select("role")
+          .eq("user_id", userRes.user.id)
+          .maybeSingle();
+
+        if (profErr || !prof?.role) {
+          await Swal.fire({
+            icon: "error",
+            title: "Perfil no configurado",
+            text: "No se encontró tu rol. Contacta al administrador.",
+            background: "#0b0b0b",
+            color: "#fff",
+            confirmButtonColor: "#ef4444",
+          });
+          setLoading(false);
+          return;
+        }
+
+        const userRole = prof.role as Role;
+        setRole(userRole);
+
+        // 2) Si es tienda → datos de la tienda
+        if (userRole === "store") {
+          const { data: storeData, error: stErr } = await sb
+            .from("stores")
+            .select("id,name,slug,whatsapp,active")
+            .eq("owner_id", userRes.user.id)
+            .maybeSingle();
+
+          if (!stErr && storeData) setStore(storeData);
+        }
+      } catch (e: any) {
         await Swal.fire({
           icon: "error",
-          title: "Perfil no configurado",
-          text: "No se encontró tu rol. Contacta al administrador.",
+          title: "Error cargando dashboard",
+          text: e?.message ?? "Error",
           background: "#0b0b0b",
           color: "#fff",
           confirmButtonColor: "#ef4444",
         });
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setRole(prof.role as Role);
-
-      // 2) Si es tienda, traemos info básica de su store
-      if (prof.role === "store") {
-        const { data: storeData } = await supabaseBrowser
-          .from("stores")
-          .select("id,name,slug,whatsapp,active")
-          .eq("owner_id", data.user.id)
-          .maybeSingle();
-
-        if (storeData) setStore(storeData);
-      }
-
-      setLoading(false);
     })();
   }, [router]);
 
   async function logout() {
-    await supabaseBrowser.auth.signOut();
+    const sb = supabaseBrowser();
+    await sb.auth.signOut();
     document.cookie = "app_session=; path=/; max-age=0";
     router.replace("/login");
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen p-6" style={{ background: "#0b0b0b", color: "#fff" }}>
+      <main
+        className="min-h-screen p-6"
+        style={{ background: "#0b0b0b", color: "#fff" }}
+      >
         <div className="mx-auto max-w-6xl">
           <p>Cargando dashboard...</p>
         </div>
@@ -129,7 +150,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen p-6" style={{ background: "#0b0b0b", color: "#fff" }}>
+    <main
+      className="min-h-screen p-6"
+      style={{ background: "#0b0b0b", color: "#fff" }}
+    >
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Header */}
         <div className="rounded-2xl border border-white/10 bg-black/30 p-6">
@@ -174,6 +198,7 @@ export default function DashboardPage() {
                   <a
                     href={storeCatalogDetal}
                     target="_blank"
+                    rel="noreferrer"
                     className="rounded-xl border border-white/10 px-4 py-2"
                   >
                     Ver catálogo Detal
@@ -181,6 +206,7 @@ export default function DashboardPage() {
                   <a
                     href={storeCatalogMayor}
                     target="_blank"
+                    rel="noreferrer"
                     className="rounded-xl border border-white/10 px-4 py-2"
                   >
                     Ver catálogo Mayor
@@ -252,12 +278,6 @@ export default function DashboardPage() {
                   badge="Perfil"
                 />
                 <CardLink
-                  title="🔗 Redes y enlaces"
-                  desc="Instagram, Facebook, TikTok, WhatsApp, y enlaces personalizados."
-                  href="/dashboard/store/links"
-                  badge="Branding"
-                />
-                <CardLink
                   title="📦 Productos"
                   desc="Crear, editar, imagen, precios detal/mayor, activar/inactivar."
                   href="/dashboard/products"
@@ -274,12 +294,6 @@ export default function DashboardPage() {
                   desc="Ver pedidos de clientes, confirmar y completar estados."
                   href="/dashboard/pedidos"
                   badge="Ventas"
-                />
-                <CardLink
-                  title="🎨 Apariencia"
-                  desc="Paleta de colores/tema y ajustes visuales de tu catálogo."
-                  href="/dashboard/store/theme"
-                  badge="Diseño"
                 />
               </div>
             )}
