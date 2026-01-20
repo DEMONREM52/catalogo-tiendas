@@ -13,7 +13,6 @@ export function CartDrawer() {
   const { cart, isOpen, open, close, setQty, removeItem, empty, total, count } =
     useCart();
 
-  // Helpers seguros
   function minAllowed(i: { minWholesale?: number | null }) {
     if (!cart) return 1;
     if (cart.mode !== "mayor") return 1;
@@ -22,10 +21,8 @@ export function CartDrawer() {
 
   function safeSetQty(productId: string, next: number, item?: any) {
     const min = item ? minAllowed(item) : 1;
-
     const n = Number.isFinite(next) ? next : min;
     const fixed = Math.max(min, Math.floor(n));
-
     setQty(productId, fixed);
   }
 
@@ -40,7 +37,9 @@ export function CartDrawer() {
     cart.items.forEach((i, idx) => {
       lines.push(`${idx + 1}. ${i.name}`);
       lines.push(
-        `   Cant: ${i.qty} | Precio: ${money(i.price)} | Subtotal: ${money(i.price * i.qty)}`
+        `   Cant: ${i.qty} | Precio: ${money(i.price)} | Subtotal: ${money(
+          i.price * i.qty
+        )}`
       );
       if (cart.mode === "mayor" && i.minWholesale) {
         lines.push(`   (mínimo mayor: ${minAllowed(i)})`);
@@ -69,7 +68,6 @@ export function CartDrawer() {
       return;
     }
 
-    // 🔥 IMPORTANTE: necesitamos storeId en el cart para crear el pedido
     if (!cart.storeId) {
       await Swal.fire({
         icon: "error",
@@ -83,14 +81,15 @@ export function CartDrawer() {
     }
 
     try {
-      // Creamos SIEMPRE un pedido NUEVO con el carrito actual (así nunca se desincroniza)
       const payload = cart.items.map((i) => ({
         product_id: i.productId,
         qty: i.qty,
         price: i.price,
       }));
 
-      const { data, error } = await supabaseBrowser.rpc("create_order_from_cart", {
+      const sb = supabaseBrowser(); // ✅ IMPORTANTE
+
+      const { data, error } = await sb.rpc("create_order_from_cart", {
         p_store_id: cart.storeId,
         p_catalog_type: cart.mode === "detal" ? "retail" : "wholesale",
         p_items: payload,
@@ -98,7 +97,7 @@ export function CartDrawer() {
 
       if (error) throw error;
 
-      const token = data?.token as string;
+      const token = (data as any)?.token as string;
       if (!token) throw new Error("No se generó token.");
 
       const invoiceUrl = `${window.location.origin}/pedido/${token}`;
@@ -110,13 +109,11 @@ export function CartDrawer() {
         invoiceUrl,
       ].join("\n");
 
-      // Abrir WhatsApp con el mensaje + link del comprobante
       window.open(
         `https://wa.me/${cart.whatsapp}?text=${encodeURIComponent(waText)}`,
         "_blank"
       );
 
-      // Abrir también el comprobante
       window.open(invoiceUrl, "_blank");
 
       await Swal.fire({
@@ -144,7 +141,6 @@ export function CartDrawer() {
 
   return (
     <>
-      {/* Botón flotante */}
       <button
         onClick={() => (isOpen ? close() : open())}
         className="fixed bottom-4 right-4 z-40 rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-sm font-semibold"
@@ -154,13 +150,10 @@ export function CartDrawer() {
         🛒 Carrito ({count})
       </button>
 
-      {/* Drawer */}
       {isOpen && (
         <div className="fixed inset-0 z-50">
-          {/* overlay */}
           <div className="absolute inset-0 bg-black/60" onClick={close} />
 
-          {/* panel */}
           <div
             className="absolute right-0 top-0 h-full w-full max-w-md border-l border-white/10 bg-black/80 p-4"
             style={{ backdropFilter: "blur(12px)" }}
@@ -169,7 +162,8 @@ export function CartDrawer() {
               <div>
                 <h3 className="text-lg font-semibold">Tu carrito</h3>
                 <p className="text-sm opacity-80 mt-1">
-                  {cart.mode === "detal" ? "Detal" : "Mayoristas"} · {cart.storeName}
+                  {cart.mode === "detal" ? "Detal" : "Mayoristas"} ·{" "}
+                  {cart.storeName}
                 </p>
               </div>
 
@@ -186,7 +180,8 @@ export function CartDrawer() {
                 <div className="rounded-2xl border border-white/10 p-4">
                   <p className="text-lg font-semibold">Tu carrito está vacío</p>
                   <p className="mt-2 text-sm opacity-80">
-                    Agrega productos desde el catálogo para crear tu comprobante y enviarlo por WhatsApp.
+                    Agrega productos desde el catálogo para crear tu comprobante
+                    y enviarlo por WhatsApp.
                   </p>
 
                   <div className="mt-4 flex gap-2">
@@ -219,11 +214,14 @@ export function CartDrawer() {
                         <div className="min-w-0">
                           <p className="font-semibold truncate">{i.name}</p>
                           <p className="text-sm opacity-80">
-                            {money(i.price)} <span className="opacity-60">c/u</span>
+                            {money(i.price)}{" "}
+                            <span className="opacity-60">c/u</span>
                           </p>
 
                           {cart.mode === "mayor" && i.minWholesale ? (
-                            <p className="text-xs opacity-70">Mínimo mayor: {min}</p>
+                            <p className="text-xs opacity-70">
+                              Mínimo mayor: {min}
+                            </p>
                           ) : null}
                         </div>
 
@@ -239,9 +237,13 @@ export function CartDrawer() {
                         <div className="flex items-center gap-2">
                           <button
                             className="rounded-xl border border-white/10 px-3 py-1"
-                            onClick={() => safeSetQty(i.productId, i.qty - 1, i)}
+                            onClick={() =>
+                              safeSetQty(i.productId, i.qty - 1, i)
+                            }
                             disabled={i.qty <= min}
-                            title={i.qty <= min ? `Mínimo: ${min}` : "Disminuir"}
+                            title={
+                              i.qty <= min ? `Mínimo: ${min}` : "Disminuir"
+                            }
                           >
                             -
                           </button>
@@ -252,13 +254,19 @@ export function CartDrawer() {
                             className="w-20 rounded-xl border border-white/10 bg-transparent px-3 py-1 text-center"
                             value={i.qty}
                             onChange={(e) =>
-                              safeSetQty(i.productId, Number(e.target.value), i)
+                              safeSetQty(
+                                i.productId,
+                                Number(e.target.value),
+                                i
+                              )
                             }
                           />
 
                           <button
                             className="rounded-xl border border-white/10 px-3 py-1"
-                            onClick={() => safeSetQty(i.productId, i.qty + 1, i)}
+                            onClick={() =>
+                              safeSetQty(i.productId, i.qty + 1, i)
+                            }
                             title="Aumentar"
                           >
                             +
@@ -273,7 +281,6 @@ export function CartDrawer() {
               )}
             </div>
 
-            {/* Totales + acciones */}
             <div className="mt-4 rounded-2xl border border-white/10 p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm opacity-80">Total</p>
@@ -300,7 +307,8 @@ export function CartDrawer() {
               </div>
 
               <p className="mt-2 text-xs opacity-70">
-                Tip: el comprobante queda guardado en un link y puedes editar cantidades después.
+                Tip: el comprobante queda guardado en un link y puedes editar
+                cantidades después.
               </p>
             </div>
           </div>
