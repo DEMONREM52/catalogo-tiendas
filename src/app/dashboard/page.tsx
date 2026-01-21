@@ -254,7 +254,8 @@ export default function DashboardPage() {
           <div className="rounded-2xl border border-white/10 bg-black/30 p-6">
             <h2 className="text-xl font-semibold">Acceso de administrador</h2>
             <p className="mt-2 text-sm opacity-80">
-              Puedes gestionar tiendas, pedidos, productos, categorías y usuarios.
+              Puedes gestionar tiendas, pedidos, productos, categorías y
+              usuarios.
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -284,7 +285,8 @@ export default function DashboardPage() {
           <div className="rounded-2xl border border-white/10 bg-black/30 p-6">
             <h2 className="text-xl font-semibold">Panel de tu tienda</h2>
             <p className="mt-2 text-sm opacity-80">
-              Administra tu catálogo, tu perfil y revisa pedidos. Todo desde aquí.
+              Administra tu catálogo, tu perfil y revisa pedidos. Todo desde
+              aquí.
             </p>
 
             {!store ? (
@@ -326,7 +328,8 @@ export default function DashboardPage() {
         )}
 
         <p className="text-xs opacity-60">
-          Consejo: mantén tu catálogo actualizado (imágenes y categorías) para vender más.
+          Consejo: mantén tu catálogo actualizado (imágenes y categorías) para
+          vender más.
         </p>
       </div>
     </main>

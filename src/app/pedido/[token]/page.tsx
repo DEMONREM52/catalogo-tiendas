@@ -17,6 +17,20 @@ type Item = {
   qty: number;
 };
 
+type StoreExtra = {
+  id: string;
+  name: string;
+  whatsapp: string;
+  logo_url: string | null;
+};
+
+type StoreProfileLite = {
+  address: string | null;
+  city: string | null;
+  department: string | null;
+  description: string | null; // 👈 aquí va tu “descripción de la empresa”
+};
+
 export default function PedidoPage() {
   const params = useParams();
   const token = String((params as any).token);
@@ -24,7 +38,10 @@ export default function PedidoPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [store, setStore] = useState<any>(null);
+  const [store, setStore] = useState<any>(null); // viene del RPC
+  const [storeExtra, setStoreExtra] = useState<StoreExtra | null>(null); // logo, whatsapp, name (seguro)
+  const [profile, setProfile] = useState<StoreProfileLite | null>(null);
+
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<Item[]>([]);
 
@@ -37,7 +54,7 @@ export default function PedidoPage() {
     return st === "confirmed" || st === "completed";
   }, [order]);
 
-  // ✅ Número de comprobante (fallback por si tu columna se llama distinto)
+  // ✅ Número de comprobante / factura (con fallback)
   const receiptNumber = useMemo(() => {
     return (
       order?.receipt_no ??
@@ -56,20 +73,31 @@ export default function PedidoPage() {
     return st;
   }
 
+  const addressLine = useMemo(() => {
+    if (!profile) return "";
+    const parts = [profile.address, profile.city, profile.department]
+      .map((x) => (x ?? "").trim())
+      .filter(Boolean);
+    return parts.join(" · ");
+  }, [profile]);
+
   async function load() {
     setLoading(true);
 
     try {
       const sb = supabaseBrowser();
 
+      // 1) Tu RPC
       const { data, error } = await sb.rpc("get_order_by_token", {
         p_token: token,
       });
-
       if (error) throw error;
 
-      setStore(data?.store ?? null);
-      setOrder(data?.order ?? null);
+      const storeRpc = data?.store ?? null;
+      const orderRpc = data?.order ?? null;
+
+      setStore(storeRpc);
+      setOrder(orderRpc);
 
       setItems(
         (data?.items ?? []).map((i: any) => ({
@@ -80,6 +108,31 @@ export default function PedidoPage() {
           qty: Number(i.qty),
         })),
       );
+
+      // 2) Cargar info extra de tienda (logo + whatsapp + name)
+      const storeId = orderRpc?.store_id ?? storeRpc?.id ?? null;
+      if (!storeId) throw new Error("No se encontró store_id del pedido.");
+
+      const { data: stData, error: stErr } = await sb
+        .from("stores")
+        .select("id,name,whatsapp,logo_url")
+        .eq("id", storeId)
+        .maybeSingle();
+
+      if (stErr) throw stErr;
+      if (!stData) throw new Error("No se encontró la tienda.");
+
+      setStoreExtra(stData as StoreExtra);
+
+      // 3) Cargar perfil (dirección + descripción empresa)
+      const { data: profData, error: profErr } = await sb
+        .from("store_profiles")
+        .select("address,city,department,description")
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (profErr) throw profErr;
+      setProfile((profData as StoreProfileLite) ?? null);
     } catch (err: any) {
       await Swal.fire({
         icon: "error",
@@ -216,13 +269,16 @@ export default function PedidoPage() {
   }
 
   function sendWhatsApp() {
-    if (!store || !order) return;
+    const wa = storeExtra?.whatsapp ?? store?.whatsapp;
+    const storeName = storeExtra?.name ?? store?.name;
+
+    if (!wa || !order) return;
 
     const lines: string[] = [];
     lines.push(
       `🧾 Pedido (${order.catalog_type === "retail" ? "DETAL" : "MAYOR"})`,
     );
-    lines.push(`🏪 Tienda: ${store.name}`);
+    lines.push(`🏪 Tienda: ${storeName}`);
     if (receiptNumber) lines.push(`🧾 Comprobante: #${receiptNumber}`);
     lines.push(`Estado: ${statusLabel(order.status)}`);
     lines.push("");
@@ -243,11 +299,13 @@ export default function PedidoPage() {
     lines.push(`✅ Quiero confirmar este pedido.`);
 
     window.open(
-      `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
-        lines.join("\n"),
-      )}`,
+      `https://wa.me/${wa}?text=${encodeURIComponent(lines.join("\n"))}`,
       "_blank",
     );
+  }
+
+  function printPDF() {
+    window.print();
   }
 
   if (loading) {
@@ -258,7 +316,7 @@ export default function PedidoPage() {
     );
   }
 
-  if (!store || !order) {
+  if (!order) {
     return (
       <main className="p-6">
         <p>No se pudo cargar el pedido.</p>
@@ -266,12 +324,169 @@ export default function PedidoPage() {
     );
   }
 
+  const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
+  const storeWhatsapp = storeExtra?.whatsapp ?? store?.whatsapp ?? "";
+  const storeLogo = storeExtra?.logo_url ?? store?.logo_url ?? null;
+
   return (
-    <main
-      className="min-h-screen p-6"
-      style={{ background: "#0b0b0b", color: "#fff" }}
-    >
-      <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 p-6">
+    <main className="min-h-screen p-6 bg-black text-white print:bg-white print:text-black">
+      {/* ✅ Estilos de impresión: muestra factura y oculta el comprobante */}
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .only-print {
+            display: block !important;
+          }
+          .print-card {
+            border: none !important;
+            box-shadow: none !important;
+            background: #fff !important;
+            color: #000 !important;
+          }
+        }
+        @media screen {
+          .only-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* ✅ BOTÓN PDF (solo pantalla) */}
+      <div className="no-print mx-auto max-w-3xl mb-4 flex justify-end gap-2">
+        <button
+          onClick={printPDF}
+          className="rounded-xl px-4 py-2 font-semibold"
+          style={{ background: "#fff", color: "#0b0b0b" }}
+        >
+          Descargar PDF / Imprimir
+        </button>
+      </div>
+
+      {/* ========================================================= */}
+      {/* ✅ FACTURA PARA PDF (solo imprime) */}
+      {/* ========================================================= */}
+      <div className="only-print mx-auto max-w-3xl print-card rounded-2xl border border-white/10 p-6">
+        {/* Header factura */}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            {storeLogo ? (
+              <img
+                src={storeLogo}
+                alt="Logo"
+                style={{
+                  width: 70,
+                  height: 70,
+                  objectFit: "contain",
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 70,
+                  height: 70,
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                }}
+              />
+            )}
+
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{storeName}</div>
+              {addressLine ? (
+                <div style={{ fontSize: 12, marginTop: 4 }}>{addressLine}</div>
+              ) : null}
+              {storeWhatsapp ? (
+                <div style={{ fontSize: 12, marginTop: 4 }}>
+                  WhatsApp: <b>{storeWhatsapp}</b>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
+              Factura de venta
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+              #{receiptNumber ?? "—"}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {new Date(order.created_at).toLocaleString("es-CO")}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: "rgba(0,0,0,0.12)", margin: "14px 0" }} />
+
+        {/* Tabla */}
+        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.12)" }}>
+              <th style={{ textAlign: "left", padding: "8px 0", width: 60 }}>Cant</th>
+              <th style={{ textAlign: "left", padding: "8px 0" }}>Descripción</th>
+              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>
+                Precio Unit
+              </th>
+              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>
+                Subtotal
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {items.map((i) => {
+              const sub = Number(i.price) * Number(i.qty);
+              return (
+                <tr key={i.product_id} style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                  <td style={{ padding: "8px 0" }}>{i.qty}</td>
+                  <td style={{ padding: "8px 0" }}>{i.name}</td>
+                  <td style={{ padding: "8px 0", textAlign: "right" }}>{money(i.price)}</td>
+                  <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>
+                    {money(sub)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Total */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+          <div
+            style={{
+              width: 260,
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              padding: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 12 }}>TOTAL</div>
+              <div style={{ fontSize: 16, fontWeight: 900 }}>{money(total)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Descripción empresa */}
+        <div style={{ fontSize: 11, marginTop: 14, opacity: 0.9 }}>
+          {profile?.description ? (
+            <div>{profile.description}</div>
+          ) : (
+            <div>
+              Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* ✅ TU COMPROBANTE NORMAL (pantalla) */}
+      {/* ========================================================= */}
+      <div className="no-print mx-auto max-w-3xl rounded-2xl border border-white/10 p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="flex items-center gap-3">
@@ -284,8 +499,7 @@ export default function PedidoPage() {
             </div>
 
             <p className="text-sm opacity-80">
-              {store.name} ·{" "}
-              {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
+              {storeName} · {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
             </p>
 
             <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-xs opacity-90">
@@ -328,10 +542,7 @@ export default function PedidoPage() {
 
         <div className="mt-6 space-y-3">
           {items.map((i) => (
-            <div
-              key={i.product_id}
-              className="rounded-2xl border border-white/10 p-4"
-            >
+            <div key={i.product_id} className="rounded-2xl border border-white/10 p-4">
               <div className="flex gap-3">
                 <div className="h-16 w-16 overflow-hidden rounded-xl border border-white/10 bg-white/5">
                   {i.image_url ? (
@@ -359,9 +570,7 @@ export default function PedidoPage() {
                     <input
                       className="w-20 rounded-xl border border-white/10 bg-transparent px-3 py-1 text-center disabled:opacity-50"
                       value={i.qty}
-                      onChange={(e) =>
-                        setQty(i.product_id, Number(e.target.value))
-                      }
+                      onChange={(e) => setQty(i.product_id, Number(e.target.value))}
                       disabled={saving || isLocked}
                     />
 
@@ -400,13 +609,11 @@ export default function PedidoPage() {
 
           {!isLocked ? (
             <p className="mt-2 text-xs opacity-70">
-              Tip: puedes editar cantidades y luego enviar por WhatsApp. El
-              pedido queda guardado en este link.
+              Tip: puedes editar cantidades y luego enviar por WhatsApp. El pedido queda guardado en este link.
             </p>
           ) : (
             <p className="mt-2 text-xs opacity-70">
-              Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo
-              pedido desde el catálogo.
+              Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo.
             </p>
           )}
         </div>

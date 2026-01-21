@@ -124,16 +124,10 @@ export default function AdminPedidosPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb
-        .from("orders")
-        .update({ status: next })
-        .eq("id", o.id);
-
+      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
       if (error) throw error;
 
-      setOrders((prev) =>
-        prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)),
-      );
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
 
       await Swal.fire({
         icon: "success",
@@ -187,14 +181,53 @@ export default function AdminPedidosPage() {
     }
   }
 
+  // ✅ PDF (Factura) = abrir comprobante y mandar a imprimir
+  async function printReceipt(o: OrderRow) {
+    const link = `${window.location.origin}/pedido/${o.token}`;
+
+    const w = window.open(link, "_blank");
+    if (!w) {
+      await Swal.fire({
+        icon: "info",
+        title: "Pop-up bloqueado",
+        text: "Tu navegador bloqueó la pestaña. Permite pop-ups y vuelve a intentar.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    const startedAt = Date.now();
+    const maxWait = 9000;
+
+    const timer = setInterval(() => {
+      try {
+        const ready = w.document?.readyState === "complete";
+        const tooLong = Date.now() - startedAt > maxWait;
+
+        if (ready || tooLong) {
+          clearInterval(timer);
+          w.focus();
+          w.print();
+        }
+      } catch {
+        clearInterval(timer);
+        setTimeout(() => {
+          try {
+            w.focus();
+            w.print();
+          } catch {}
+        }, 1400);
+      }
+    }, 400);
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Pedidos</h2>
-          <p className="text-sm opacity-80">
-            Ver todos, filtrar y cambiar estado.
-          </p>
+          <p className="text-sm opacity-80">Ver todos, filtrar y cambiar estado.</p>
         </div>
 
         <button
@@ -278,6 +311,13 @@ export default function AdminPedidosPage() {
                     onClick={() => openReceipt(o)}
                   >
                     Ver comprobante
+                  </button>
+
+                  <button
+                    className="rounded-xl border border-white/10 px-4 py-2"
+                    onClick={() => printReceipt(o)}
+                  >
+                    PDF (Factura)
                   </button>
 
                   <button

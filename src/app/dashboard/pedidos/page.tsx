@@ -52,6 +52,7 @@ export default function OrdersDashboardPage() {
     try {
       const sb = supabaseBrowser();
 
+      // 1) Usuario
       const { data: userData, error: userErr } = await sb.auth.getUser();
       if (userErr) throw userErr;
 
@@ -62,10 +63,10 @@ export default function OrdersDashboardPage() {
           background: "#0b0b0b",
           color: "#fff",
         });
-        setLoading(false);
         return;
       }
 
+      // 2) Buscar store del owner
       const { data: storeData, error: storeErr } = await sb
         .from("stores")
         .select("id")
@@ -81,16 +82,16 @@ export default function OrdersDashboardPage() {
           background: "#0b0b0b",
           color: "#fff",
         });
-        setLoading(false);
         return;
       }
 
       setStoreId(storeData.id);
 
+      // 3) Pedidos
       const { data: ordData, error: ordErr } = await sb
         .from("orders")
         .select(
-          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type"
+          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type",
         )
         .eq("store_id", storeData.id)
         .order("created_at", { ascending: false });
@@ -117,6 +118,7 @@ export default function OrdersDashboardPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
+
     return orders.filter((o) => {
       const matchQ =
         !s ||
@@ -165,7 +167,7 @@ export default function OrdersDashboardPage() {
               return `<div style="margin:8px 0">
                 <div><b>${name}</b></div>
                 <div style="opacity:.8">Cant: ${i.quantity} · Precio: ${money(
-                  i.price
+                  i.price,
                 )} · Subtotal: ${money(sub)}</div>
               </div>`;
             })
@@ -203,7 +205,7 @@ export default function OrdersDashboardPage() {
       icon: "question",
       title: "Cambiar estado",
       text: `¿Cambiar el pedido #${o.receipt_no ?? "—"} a "${statusLabel(
-        nextStatus
+        nextStatus,
       )}"?`,
       showCancelButton: true,
       confirmButtonText: "Sí",
@@ -226,7 +228,7 @@ export default function OrdersDashboardPage() {
       if (error) throw error;
 
       setOrders((prev) =>
-        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x))
+        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x)),
       );
 
       await Swal.fire({
@@ -250,6 +252,47 @@ export default function OrdersDashboardPage() {
     }
   }
 
+  // ✅ Imprimir PDF (FACTURA) usando la página /pedido/[token]
+  async function printOrderAsPDF(link: string) {
+    const w = window.open(link, "_blank");
+    if (!w) {
+      await Swal.fire({
+        icon: "info",
+        title: "Pop-up bloqueado",
+        text: "Tu navegador bloqueó la pestaña. Permite pop-ups y vuelve a intentar.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    // Esperar a que cargue bien (más confiable que un setTimeout fijo)
+    const startedAt = Date.now();
+    const maxWait = 9000;
+
+    const timer = setInterval(() => {
+      try {
+        const ready = w.document?.readyState === "complete";
+        const tooLong = Date.now() - startedAt > maxWait;
+
+        if (ready || tooLong) {
+          clearInterval(timer);
+          w.focus();
+          w.print();
+        }
+      } catch {
+        // si por alguna razón el navegador no deja leer readyState, hacemos fallback
+        clearInterval(timer);
+        setTimeout(() => {
+          try {
+            w.focus();
+            w.print();
+          } catch {}
+        }, 1400);
+      }
+    }, 400);
+  }
+
   async function orderActions(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
 
@@ -268,6 +311,10 @@ export default function OrdersDashboardPage() {
             <div style="font-size:12px; opacity:.7; margin-bottom:6px">Link del comprobante</div>
             <code style="font-size:12px; word-break:break-all;">${link}</code>
           </div>
+
+          <div style="margin-top:10px; font-size:12px; opacity:.75">
+            Nota: el botón <b>PDF</b> imprime la <b>factura</b> (la página del comprobante ya está diseñada para imprimir).
+          </div>
         </div>
       `,
       background: "#0b0b0b",
@@ -276,7 +323,7 @@ export default function OrdersDashboardPage() {
       showDenyButton: true,
 
       confirmButtonText: "Abrir",
-      denyButtonText: "PDF",
+      denyButtonText: "PDF (Factura)",
       cancelButtonText: "Copiar link",
 
       confirmButtonColor: "#22c55e",
@@ -290,27 +337,9 @@ export default function OrdersDashboardPage() {
       return;
     }
 
-    // PDF (imprimir)
+    // PDF (FACTURA)
     if (res.isDenied) {
-      const w = window.open(link, "_blank");
-      if (!w) {
-        await Swal.fire({
-          icon: "info",
-          title: "Pop-up bloqueado",
-          text: "Tu navegador bloqueó la pestaña. Permite pop-ups y vuelve a intentar.",
-          background: "#0b0b0b",
-          color: "#fff",
-        });
-        return;
-      }
-
-      setTimeout(() => {
-        try {
-          w.focus();
-          w.print();
-        } catch {}
-      }, 1200);
-
+      await printOrderAsPDF(link);
       return;
     }
 
@@ -385,7 +414,7 @@ export default function OrdersDashboardPage() {
 
       <div className="rounded-2xl border border-white/10 overflow-hidden">
         <div className="grid grid-cols-12 gap-2 border-b border-white/10 bg-black/20 p-3 text-sm opacity-80">
-          <div className="col-span-2">Comprobante</div>
+          <div className="col-span-2">Factura</div>
           <div className="col-span-2">Fecha</div>
           <div className="col-span-2">Estado</div>
           <div className="col-span-2">Tipo</div>
