@@ -14,8 +14,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RemHub · Catálogos Online",
-  description: "Crea y comparte tu catálogo digital en segundos",
+  title: {
+    default: "RemHub — Catálogos online",
+    template: "%s — RemHub",
+  },
+  description: "Crea y comparte catálogos online de tu tienda. Pedidos por WhatsApp y más.",
+  metadataBase: new URL("https://remhub.store"),
+  icons: {
+    icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "RemHub — Catálogos online",
+    description: "Crea y comparte catálogos online de tu tienda.",
+    url: "https://remhub.store",
+    siteName: "RemHub",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
