@@ -3,18 +3,65 @@ import AdminShell from "./AdminShell";
 export default function AdminHome() {
   return (
     <AdminShell>
-      <div className="space-y-3">
-        <h2 className="text-xl font-semibold">Resumen</h2>
-        <p className="text-sm opacity-80">
-          Desde aquí podrás administrar TODO: crear/editar/eliminar/activar/inactivar tiendas,
-          ver pedidos, cambiar estados, revisar comprobantes, etc.
-        </p>
-
-        <div className="rounded-2xl border border-white/10 p-4">
-          <p className="font-semibold">Siguiente paso recomendado</p>
-          <p className="text-sm opacity-80 mt-1">
-            Empecemos por <b>Tiendas</b> (CRUD total) y <b>Pedidos</b> (listar, cambiar estado, ver comprobante).
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="glass rounded-[28px] p-6">
+          <h2 className="text-2xl font-semibold">
+            Bienvenido al panel administrativo
+          </h2>
+          <p className="mt-2 text-sm opacity-80">
+            Desde aquí controlas todo tu negocio: tiendas, productos, pedidos,
+            comprobantes y facturas. Todo en un solo lugar.
           </p>
+        </div>
+
+        {/* Qué puedes hacer */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="glass-soft rounded-[24px] p-5">
+            <p className="font-semibold">🏪 Tiendas</p>
+            <p className="mt-1 text-sm opacity-80">
+              Crea, edita, activa o desactiva tiendas. Cada tienda tiene su
+              propio catálogo y pedidos.
+            </p>
+          </div>
+
+          <div className="glass-soft rounded-[24px] p-5">
+            <p className="font-semibold">📦 Pedidos</p>
+            <p className="mt-1 text-sm opacity-80">
+              Revisa pedidos en tiempo real, cambia estados y accede a los
+              comprobantes y facturas.
+            </p>
+          </div>
+
+          <div className="glass-soft rounded-[24px] p-5">
+            <p className="font-semibold">🧾 Facturas</p>
+            <p className="mt-1 text-sm opacity-80">
+              Genera comprobantes y facturas PDF listas para imprimir o enviar
+              al cliente.
+            </p>
+          </div>
+        </div>
+
+        {/* Siguiente paso */}
+        <div className="glass rounded-[28px] p-6">
+          <p className="font-semibold">🚀 Siguiente paso recomendado</p>
+          <p className="mt-2 text-sm opacity-80">
+            Empieza creando tu primera <b>Tienda</b>, luego agrega productos y
+            categorías. Cuando compartas el link, los pedidos llegarán
+            automáticamente aquí.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <span className="glass-soft rounded-full px-4 py-2 text-xs font-semibold">
+              Diseño premium
+            </span>
+            <span className="glass-soft rounded-full px-4 py-2 text-xs font-semibold">
+              Control total
+            </span>
+            <span className="glass-soft rounded-full px-4 py-2 text-xs font-semibold">
+              Listo para vender
+            </span>
+          </div>
         </div>
       </div>
     </AdminShell>

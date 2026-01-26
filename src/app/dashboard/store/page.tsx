@@ -5,6 +5,9 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { ImageUpload } from "./ImageUpload";
 
+/* =========================
+   Types
+========================= */
 type Store = {
   id: string;
   name: string;
@@ -44,116 +47,402 @@ type StoreLink = {
   icon_url: string | null;
 };
 
-const THEMES = [
-  { id: "ocean", name: "Ocean (Azul)" },
-  { id: "forest", name: "Forest (Verde)" },
-  { id: "sunset", name: "Sunset (Naranja)" },
-  { id: "rose", name: "Rose (Rosa)" },
-  { id: "midnight", name: "Midnight (Oscuro)" },
-  { id: "lavender", name: "Lavender (Morado)" },
-  { id: "mono", name: "Mono (Blanco/Negro)" },
-  { id: "gold", name: "Gold (Dorado)" },
-];
+/**
+ * Tu catálogo usa vars:
+ * --t-bg, --t-text, --t-muted, --t-border, --t-card-bg, --t-accent2, --t-cta
+ *
+ * En tu tabla themes.config tú manejas:
+ * bg, card, card_border, text, muted, accent, accent2, success, cta, ctaA/ctaB (según como hayas seed)
+ */
+type ThemeConfig = Partial<{
+  bg: string;
+  card: string;
+  card_border: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accent2: string;
+  success: string;
 
+  // soporta variantes posibles
+  cta: string;
+  ctaA: string;
+  ctaB: string;
+}>;
+
+type ThemeRow = { id: string; name: string; config: ThemeConfig };
+
+const DEFAULT_PROFILE = (storeId: string): StoreProfile => ({
+  store_id: storeId,
+  headline: "",
+  description: "",
+  address: "",
+  city: "",
+  department: "",
+  google_maps_url: "",
+  delivery_info: "",
+  payment_methods: "",
+  policies: "",
+});
+
+function normalizeLinks(arr: StoreLink[]) {
+  return arr.map((l, idx) => ({ ...l, sort_order: idx }));
+}
+
+function pick(v?: string, fallback?: string) {
+  const s = (v ?? "").trim();
+  return s || (fallback ?? "");
+}
+
+/* =========================
+   Theme -> CSS Vars (para preview)
+========================= */
+function themeConfigToVars(cfg?: ThemeConfig) {
+  const bg = pick(
+    cfg?.bg,
+    "radial-gradient(circle at 18% 12%,rgba(168,85,247,0.45),transparent 48%),radial-gradient(circle at 82% 18%,rgba(217,70,239,0.28),transparent 52%),radial-gradient(circle at 50% 92%,rgba(99,102,241,0.20),transparent 58%), #07060d"
+  );
+
+  const cardBg = pick(cfg?.card, "rgba(255,255,255,0.06)");
+  const border = pick(cfg?.card_border, "rgba(255,255,255,0.10)");
+  const text = pick(cfg?.text, "rgba(255,255,255,0.92)");
+  const muted = pick(cfg?.muted, "rgba(255,255,255,0.70)");
+  const accent2 = pick(cfg?.accent2, cfg?.accent || "#a855f7");
+
+  // CTA: si existe cta, o ctaA, si no usa accent2
+  const cta = pick(cfg?.cta, pick(cfg?.ctaA, accent2));
+
+  return {
+    "--t-bg": bg,
+    "--t-text": text,
+    "--t-muted": muted,
+    "--t-border": border,
+    "--t-card-bg": cardBg,
+    "--t-accent2": accent2,
+    "--t-cta": cta,
+  } as React.CSSProperties;
+}
+
+/* =========================
+   Preview REAL del catálogo
+========================= */
+function CatalogThemePreview({
+  theme,
+}: {
+  theme: ThemeRow;
+}) {
+  const vars = themeConfigToVars(theme.config);
+
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.32em] text-white/60">
+            VISTA PREVIA DEL CATÁLOGO
+          </p>
+          <h3 className="mt-2 text-base font-semibold text-white">
+            {theme.name}
+          </h3>
+          <p className="mt-1 text-xs text-white/60">
+            ID: <span className="text-white/70">{theme.id}</span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className="h-4 w-4 rounded-full border border-white/10"
+            style={{ background: (theme.config?.accent2 ?? theme.config?.accent ?? "#a855f7") as any }}
+            title="accent2"
+          />
+          <span
+            className="h-4 w-4 rounded-full border border-white/10"
+            style={{ background: (theme.config?.cta ?? theme.config?.ctaA ?? theme.config?.accent2 ?? "#d946ef") as any }}
+            title="cta"
+          />
+        </div>
+      </div>
+
+      {/* Marco preview */}
+      <div
+        className="mt-4 overflow-hidden rounded-3xl border"
+        style={{
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+        }}
+      >
+        {/* Esto simula tu <main> del catálogo */}
+        <div style={vars} className="min-h-[520px]">
+          <main
+            className="min-h-[520px]"
+            style={{ background: "var(--t-bg)", color: "var(--t-text)" }}
+          >
+            {/* Header simulado */}
+            <header className="border-b" style={{ borderColor: "var(--t-border)" }}>
+              <div className="mx-auto max-w-[780px] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-12 w-12 rounded-2xl border"
+                      style={{ borderColor: "var(--t-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}
+                    />
+                    <div>
+                      <div className="text-lg font-bold leading-tight">Tu tienda</div>
+                      <div className="text-sm" style={{ color: "var(--t-muted)" }}>
+                        Catálogo Detal / Mayor
+                      </div>
+                    </div>
+                  </div>
+
+                  <a
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold"
+                    style={{
+                      borderColor: "var(--t-border)",
+                      background: "color-mix(in oklab, var(--t-card-bg) 78%, transparent)",
+                      color: "var(--t-text)",
+                    }}
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    Botón Header
+                  </a>
+                </div>
+
+                <div className="mt-4 rounded-2xl border p-4"
+                     style={{ borderColor: "var(--t-border)", background: "var(--t-card-bg)" }}>
+                  <div className="text-sm font-semibold">Headline / texto corto</div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                    Aquí se ve el estilo de card, borde y texto.
+                  </div>
+                </div>
+
+                <div
+                  className="mt-4 h-28 w-full rounded-2xl border"
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background:
+                      "linear-gradient(135deg, color-mix(in oklab, var(--t-accent2) 35%, transparent), transparent)",
+                  }}
+                />
+              </div>
+            </header>
+
+            {/* Body simulado */}
+            <section className="mx-auto max-w-[780px] p-5">
+              {/* Categorías */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-lg font-semibold">Productos</div>
+                  <div className="text-sm" style={{ color: "var(--t-muted)" }}>
+                    12 disponibles
+                  </div>
+                </div>
+
+                <button
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold"
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 78%, transparent)",
+                    color: "var(--t-text)",
+                  }}
+                  type="button"
+                >
+                  Ver todo
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {["Bebidas", "Snacks", "Aseo", "Ofertas"].map((c, idx) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`rounded-2xl border p-2 text-left transition ${
+                      idx === 1 ? "ring-2 ring-white/30" : ""
+                    }`}
+                    style={{
+                      borderColor: "var(--t-border)",
+                      background: "var(--t-card-bg)",
+                    }}
+                  >
+                    <div
+                      className="aspect-square w-full rounded-xl border"
+                      style={{
+                        borderColor: "var(--t-border)",
+                        background:
+                          "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+                      }}
+                    />
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold">{c}</p>
+                  </button>
+                ))}
+              </div>
+
+              {/* Productos */}
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <div
+                    key={n}
+                    className="rounded-2xl border p-4"
+                    style={{
+                      borderColor: "var(--t-border)",
+                      background: "var(--t-card-bg)",
+                    }}
+                  >
+                    <div
+                      className="mb-3 aspect-square w-full rounded-xl border"
+                      style={{
+                        borderColor: "var(--t-border)",
+                        background:
+                          "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+                      }}
+                    />
+
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="font-semibold leading-tight">Producto ejemplo {n}</div>
+                      <span
+                        className="rounded-full px-3 py-1 text-xs font-semibold"
+                        style={{ background: "var(--t-accent2)", color: "#0b0b0b" }}
+                      >
+                        DETAL
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
+                      Descripción corta para ver el texto muted.
+                    </p>
+
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                          Precio
+                        </p>
+                        <p className="text-lg font-bold">$25.000</p>
+                      </div>
+
+                      <button
+                        className="rounded-xl px-4 py-2 font-semibold"
+                        style={{ background: "var(--t-cta)", color: "#0b0b0b" }}
+                        type="button"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <footer className="border-t" style={{ borderColor: "var(--t-border)" }}>
+              <div className="mx-auto max-w-[780px] p-5 text-sm" style={{ color: "var(--t-muted)" }}>
+                Footer / dirección / ciudad…
+              </div>
+            </footer>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   Page
+========================= */
 export default function StoreSettingsPage() {
   const router = useRouter();
 
+  // UI state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // data state
+  const [userId, setUserId] = useState<string | null>(null);
+  const [themes, setThemes] = useState<ThemeRow[]>([]);
   const [store, setStore] = useState<Store | null>(null);
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [links, setLinks] = useState<StoreLink[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
 
-  const newLinkTemplate = useMemo(
-    () => ({
-      id: "new-" + crypto.randomUUID(),
-      store_id: store?.id ?? "",
-      type: "instagram",
-      label: "Instagram",
-      url: "",
-      sort_order: links.length,
-      active: true,
-      icon_url: null as string | null,
-    }),
-    [store?.id, links.length],
-  );
-
+  // ---------------------------
+  // Load
+  // ---------------------------
   useEffect(() => {
     (async () => {
-      setMsg(null);
       setLoading(true);
+      setMsg(null);
 
       try {
         const sb = supabaseBrowser();
 
-        const { data: userData, error: userErr } = await sb.auth.getUser();
+        // 1) auth user
+        const { data: userRes, error: userErr } = await sb.auth.getUser();
         if (userErr) throw userErr;
 
-        if (!userData.user) {
-          router.push("/login");
+        if (!userRes.user) {
+          router.replace("/login");
           return;
         }
 
-        setUserId(userData.user.id);
+        const uid = userRes.user.id;
+        setUserId(uid);
 
-        // 1) Tienda del usuario (por owner_id)
-        const { data: storeData, error: storeErr } = await sb
-          .from("stores")
-          .select(
-            "id,name,slug,whatsapp,phone,email,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url",
-          )
-          .eq("owner_id", userData.user.id)
-          .maybeSingle();
-
-        if (storeErr) throw storeErr;
-
-        if (!storeData) {
-          setMsg(
-            "⚠️ Aún no tienes una tienda creada. (Luego haremos el flujo de solicitud/creación automática).",
-          );
-          setLoading(false);
-          return;
-        }
-
-        setStore(storeData as Store);
-
-        // 2) Perfil
-        const { data: profData, error: profErr } = await sb
-          .from("store_profiles")
-          .select("*")
-          .eq("store_id", storeData.id)
-          .maybeSingle();
-
-        if (profErr) throw profErr;
-
-        setProfile(
-          (profData as StoreProfile) ?? {
-            store_id: storeData.id,
-            headline: "",
-            description: "",
-            address: "",
-            city: "",
-            department: "",
-            google_maps_url: "",
-            delivery_info: "",
-            payment_methods: "",
-            policies: "",
-          },
-        );
-
-        // 3) Links / redes
-        const { data: linksData, error: linksErr } = await sb
-          .from("store_links")
-          .select("id,store_id,type,label,url,sort_order,active,icon_url")
-          .eq("store_id", storeData.id)
+        // 2) themes (include config)
+        const { data: th, error: thErr } = await sb
+          .from("themes")
+          .select("id,name,config")
+          .eq("active", true)
           .order("sort_order", { ascending: true });
 
-        if (linksErr) throw linksErr;
+        if (thErr) throw thErr;
 
-        setLinks((linksData as StoreLink[]) ?? []);
+        const themesList = (th as ThemeRow[]) ?? [];
+        setThemes(themesList);
+
+        // 3) store by owner_id
+        const { data: st, error: stErr } = await sb
+          .from("stores")
+          .select(
+            "id,name,slug,whatsapp,phone,email,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url"
+          )
+          .eq("owner_id", uid)
+          .maybeSingle();
+
+        if (stErr) throw stErr;
+
+        if (!st) {
+          setMsg("⚠️ Aún no tienes una tienda creada.");
+          setStore(null);
+          setProfile(null);
+          setLinks([]);
+          return;
+        }
+
+        // ✅ theme safe
+        const themeExists = themesList.some((t) => t.id === (st as any).theme);
+        const safeTheme = themeExists
+          ? (st as any).theme
+          : (themesList[0]?.id ?? (st as any).theme);
+
+        const safeStore: Store = { ...(st as Store), theme: safeTheme };
+        setStore(safeStore);
+
+        // 4) profile
+        const { data: pr, error: prErr } = await sb
+          .from("store_profiles")
+          .select("*")
+          .eq("store_id", safeStore.id)
+          .maybeSingle();
+
+        if (prErr) throw prErr;
+        setProfile((pr as StoreProfile) ?? DEFAULT_PROFILE(safeStore.id));
+
+        // 5) links
+        const { data: ln, error: lnErr } = await sb
+          .from("store_links")
+          .select("id,store_id,type,label,url,sort_order,active,icon_url")
+          .eq("store_id", safeStore.id)
+          .order("sort_order", { ascending: true });
+
+        if (lnErr) throw lnErr;
+        setLinks((ln as StoreLink[]) ?? []);
       } catch (e: any) {
         setMsg("❌ Error cargando: " + (e?.message ?? "Error"));
       } finally {
@@ -162,24 +451,34 @@ export default function StoreSettingsPage() {
     })();
   }, [router]);
 
+  // ---------------------------
+  // Helpers
+  // ---------------------------
   function setStoreField<K extends keyof Store>(key: K, value: Store[K]) {
     setStore((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function setProfileField<K extends keyof StoreProfile>(
     key: K,
-    value: StoreProfile[K],
+    value: StoreProfile[K]
   ) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function addLink() {
     if (!store) return;
+
     setLinks((prev) => [
       ...prev,
       {
-        ...newLinkTemplate,
+        id: "new-" + crypto.randomUUID(),
         store_id: store.id,
+        type: "instagram",
+        label: "Instagram",
+        url: "",
+        sort_order: prev.length,
+        active: true,
+        icon_url: null,
       },
     ]);
   }
@@ -192,6 +491,9 @@ export default function StoreSettingsPage() {
     setLinks((prev) => prev.filter((l) => l.id !== id));
   }
 
+  // ---------------------------
+  // Save
+  // ---------------------------
   async function saveAll() {
     if (!store || !profile) return;
 
@@ -204,14 +506,17 @@ export default function StoreSettingsPage() {
       if (!store.name.trim()) throw new Error("El nombre es obligatorio.");
       if (!store.whatsapp.trim()) throw new Error("El WhatsApp es obligatorio.");
 
-      // 1) Guardar store
+      const normalizedLinks = normalizeLinks(links);
+      setLinks(normalizedLinks);
+
+      // 1) store
       const { error: storeErr } = await sb
         .from("stores")
         .update({
-          name: store.name,
-          whatsapp: store.whatsapp,
-          phone: store.phone,
-          email: store.email,
+          name: store.name.trim(),
+          whatsapp: store.whatsapp.trim(),
+          phone: (store.phone ?? "").trim() || null,
+          email: (store.email ?? "").trim() || null,
           active: store.active,
           catalog_retail: store.catalog_retail,
           catalog_wholesale: store.catalog_wholesale,
@@ -223,33 +528,35 @@ export default function StoreSettingsPage() {
 
       if (storeErr) throw storeErr;
 
-      // 2) Upsert profile
+      // 2) profile upsert
       const { error: profErr } = await sb.from("store_profiles").upsert({
         store_id: store.id,
-        headline: profile.headline,
-        description: profile.description,
-        address: profile.address,
-        city: profile.city,
-        department: profile.department,
-        google_maps_url: profile.google_maps_url,
-        delivery_info: profile.delivery_info,
-        payment_methods: profile.payment_methods,
-        policies: profile.policies,
+        headline: (profile.headline ?? "").trim(),
+        description: (profile.description ?? "").trim(),
+        address: (profile.address ?? "").trim(),
+        city: (profile.city ?? "").trim(),
+        department: (profile.department ?? "").trim(),
+        google_maps_url: (profile.google_maps_url ?? "").trim(),
+        delivery_info: (profile.delivery_info ?? "").trim(),
+        payment_methods: (profile.payment_methods ?? "").trim(),
+        policies: (profile.policies ?? "").trim(),
       });
 
       if (profErr) throw profErr;
 
-      // 3) Links: nuevos vs existentes
-      const newOnes = links.filter((l) => l.id.startsWith("new-") && l.url.trim());
-      const existing = links.filter((l) => !l.id.startsWith("new-"));
+      // 3) links insert/update
+      const newOnes = normalizedLinks.filter(
+        (l) => l.id.startsWith("new-") && l.url.trim()
+      );
+      const existing = normalizedLinks.filter((l) => !l.id.startsWith("new-"));
 
       if (newOnes.length) {
-        const payload = newOnes.map((l, idx) => ({
+        const payload = newOnes.map((l) => ({
           store_id: store.id,
           type: l.type,
-          label: l.label,
-          url: l.url,
-          sort_order: Number.isFinite(l.sort_order) ? l.sort_order : idx,
+          label: (l.label ?? "").trim() || null,
+          url: l.url.trim(),
+          sort_order: l.sort_order,
           active: l.active,
           icon_url: l.icon_url ?? null,
         }));
@@ -263,8 +570,8 @@ export default function StoreSettingsPage() {
           .from("store_links")
           .update({
             type: l.type,
-            label: l.label,
-            url: l.url,
+            label: (l.label ?? "").trim() || null,
+            url: l.url.trim(),
             sort_order: l.sort_order,
             active: l.active,
             icon_url: l.icon_url ?? null,
@@ -274,16 +581,16 @@ export default function StoreSettingsPage() {
         if (error) throw error;
       }
 
-      setMsg("✅ Guardado correctamente.");
-
-      // Recargar links para obtener IDs reales
-      const { data: linksData, error: reloadErr } = await sb
+      // reload links
+      const { data: ln, error: reloadErr } = await sb
         .from("store_links")
         .select("id,store_id,type,label,url,sort_order,active,icon_url")
         .eq("store_id", store.id)
         .order("sort_order", { ascending: true });
 
-      if (!reloadErr) setLinks((linksData as StoreLink[]) ?? []);
+      if (!reloadErr) setLinks((ln as StoreLink[]) ?? []);
+
+      setMsg("✅ Guardado correctamente.");
     } catch (e: any) {
       setMsg("❌ " + (e?.message ?? "Error guardando"));
     } finally {
@@ -291,332 +598,388 @@ export default function StoreSettingsPage() {
     }
   }
 
+  // ---------------------------
+  // UI Card
+  // ---------------------------
+  function Card({
+    title,
+    subtitle,
+    children,
+    right,
+  }: {
+    title: string;
+    subtitle?: string;
+    right?: React.ReactNode;
+    children: React.ReactNode;
+  }) {
+    return (
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">{title}</h2>
+            {subtitle ? <p className="mt-1 text-sm text-white/70">{subtitle}</p> : null}
+          </div>
+          {right}
+        </div>
+        <div className="mt-4">{children}</div>
+      </section>
+    );
+  }
+
+  // ---------------------------
+  // Render states
+  // ---------------------------
   if (loading) {
     return (
-      <main className="p-6">
-        <p>Cargando...</p>
+      <main className="min-h-screen px-6 py-10 text-white">
+        <div className="mx-auto max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-6">
+          <p className="text-sm text-white/70">Cargando...</p>
+        </div>
       </main>
     );
   }
 
   if (!store || !profile) {
     return (
-      <main className="p-6">
-        <h1 className="text-2xl font-bold">Mi tienda</h1>
-        <p className="mt-4">{msg ?? "No hay tienda."}</p>
+      <main className="min-h-screen px-6 py-10 text-white">
+        <div className="mx-auto max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-6">
+          <h1 className="text-2xl font-semibold">Mi tienda</h1>
+          <p className="mt-3 text-sm text-white/70">{msg ?? "No hay tienda."}</p>
+        </div>
       </main>
     );
   }
 
+  const selectedTheme = themes.find((t) => t.id === store.theme) ?? null;
+
   return (
-    <main className="p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Mi tienda</h1>
-        <button
-          className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
-          onClick={saveAll}
-          disabled={saving}
-        >
-          {saving ? "Guardando..." : "Guardar cambios"}
-        </button>
-      </div>
-
-      {msg && <p className="text-sm">{msg}</p>}
-
-      {/* Básico */}
-      <section className="rounded-2xl border border-white/10 p-4">
-        <h2 className="text-lg font-semibold">Datos básicos</h2>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm opacity-80">Nombre</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={store.name}
-              onChange={(e) => setStoreField("name", e.target.value)}
-            />
+    <main className="min-h-screen text-white">
+      <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8 space-y-5">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
+            <h1 className="text-2xl font-semibold">Mi tienda</h1>
+            <p className="mt-1 text-sm text-white/70">
+              Configura tu perfil, enlaces y apariencia.
+            </p>
+            {msg ? <p className="mt-2 text-sm">{msg}</p> : null}
           </div>
 
-          <div>
-            <label className="text-sm opacity-80">WhatsApp (57...)</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={store.whatsapp}
-              onChange={(e) => setStoreField("whatsapp", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Teléfono</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={store.phone ?? ""}
-              onChange={(e) => setStoreField("phone", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={store.email ?? ""}
-              onChange={(e) => setStoreField("email", e.target.value)}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Catálogos + tema */}
-      <section className="rounded-2xl border border-white/10 p-4">
-        <h2 className="text-lg font-semibold">Catálogos y apariencia</h2>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label className="flex items-center gap-3 rounded-xl border border-white/10 p-3">
-            <input
-              type="checkbox"
-              checked={store.catalog_retail}
-              onChange={(e) => setStoreField("catalog_retail", e.target.checked)}
-            />
-            <span>Catálogo Detal activo</span>
-          </label>
-
-          <label className="flex items-center gap-3 rounded-xl border border-white/10 p-3">
-            <input
-              type="checkbox"
-              checked={store.catalog_wholesale}
-              onChange={(e) =>
-                setStoreField("catalog_wholesale", e.target.checked)
-              }
-            />
-            <span>Catálogo Mayor activo</span>
-          </label>
-
-          <div className="rounded-xl border border-white/10 p-3">
-            <label className="text-sm opacity-80">Tema (paleta)</label>
-            <select
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={store.theme}
-              onChange={(e) => setStoreField("theme", e.target.value)}
-            >
-              {THEMES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      {/* Perfil */}
-      <section className="rounded-2xl border border-white/10 p-4">
-        <h2 className="text-lg font-semibold">Perfil público</h2>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="md:col-span-2">
-            <label className="text-sm opacity-80">Frase corta (headline)</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={profile.headline ?? ""}
-              onChange={(e) => setProfileField("headline", e.target.value)}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm opacity-80">Descripción</label>
-            <textarea
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none min-h-[120px]"
-              value={profile.description ?? ""}
-              onChange={(e) => setProfileField("description", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Dirección</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={profile.address ?? ""}
-              onChange={(e) => setProfileField("address", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Ciudad</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={profile.city ?? ""}
-              onChange={(e) => setProfileField("city", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Departamento</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={profile.department ?? ""}
-              onChange={(e) => setProfileField("department", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm opacity-80">Link Google Maps</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-              value={profile.google_maps_url ?? ""}
-              onChange={(e) => setProfileField("google_maps_url", e.target.value)}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm opacity-80">Envíos</label>
-            <textarea
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none min-h-[90px]"
-              value={profile.delivery_info ?? ""}
-              onChange={(e) => setProfileField("delivery_info", e.target.value)}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm opacity-80">Métodos de pago</label>
-            <textarea
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none min-h-[90px]"
-              value={profile.payment_methods ?? ""}
-              onChange={(e) => setProfileField("payment_methods", e.target.value)}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm opacity-80">
-              Políticas (garantías, devoluciones)
-            </label>
-            <textarea
-              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none min-h-[90px]"
-              value={profile.policies ?? ""}
-              onChange={(e) => setProfileField("policies", e.target.value)}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Redes */}
-      <section className="rounded-2xl border border-white/10 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Redes sociales y enlaces</h2>
           <button
-            className="rounded-xl border border-white/10 px-3 py-2"
-            onClick={addLink}
+            className="rounded-2xl bg-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(217,70,239,0.35)] transition hover:brightness-110 disabled:opacity-60"
+            onClick={saveAll}
+            disabled={saving}
           >
-            + Agregar red
+            {saving ? "Guardando..." : "Guardar cambios"}
           </button>
         </div>
 
-        <div className="mt-4 space-y-3">
-          {links.length === 0 && (
-            <p className="text-sm opacity-80">
-              Aún no tienes redes. Agrega Instagram, Facebook, TikTok, web, etc.
-            </p>
-          )}
+        {/* Grid */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_.9fr]">
+          <div className="space-y-5">
+            <Card title="Datos básicos" subtitle="Nombre, WhatsApp y contacto.">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="text-sm text-white/70">Nombre</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={store.name}
+                    onChange={(e) => setStoreField("name", e.target.value)}
+                  />
+                </div>
 
-          {links.map((l) => (
-            <div
-              key={l.id}
-              className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-xl border border-white/10 p-3"
-            >
-              <select
-                className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                value={l.type}
-                onChange={(e) => updateLink(l.id, { type: e.target.value })}
-              >
-                <option value="instagram">Instagram</option>
-                <option value="facebook">Facebook</option>
-                <option value="tiktok">TikTok</option>
-                <option value="youtube">YouTube</option>
-                <option value="website">Website</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="other">Otro</option>
-              </select>
+                <div>
+                  <label className="text-sm text-white/70">WhatsApp (57...)</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={store.whatsapp}
+                    onChange={(e) => setStoreField("whatsapp", e.target.value)}
+                  />
+                </div>
 
-              <input
-                className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                placeholder="Etiqueta (opcional)"
-                value={l.label ?? ""}
-                onChange={(e) => updateLink(l.id, { label: e.target.value })}
-              />
+                <div>
+                  <label className="text-sm text-white/70">Teléfono</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={store.phone ?? ""}
+                    onChange={(e) => setStoreField("phone", e.target.value)}
+                  />
+                </div>
 
-              <input
-                className="md:col-span-2 rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                placeholder="URL"
-                value={l.url}
-                onChange={(e) => updateLink(l.id, { url: e.target.value })}
-              />
+                <div>
+                  <label className="text-sm text-white/70">Email</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={store.email ?? ""}
+                    onChange={(e) => setStoreField("email", e.target.value)}
+                  />
+                </div>
+              </div>
+            </Card>
 
-              {l.type === "other" && userId && (
-                <div className="md:col-span-5 rounded-xl border border-white/10 p-3">
-                  <p className="text-sm opacity-80 mb-2">
-                    Icono personalizado (solo para “Otro”)
-                  </p>
+            <Card title="Catálogos y apariencia" subtitle="Activa/desactiva y elige tema.">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <input
+                    type="checkbox"
+                    checked={store.catalog_retail}
+                    onChange={(e) => setStoreField("catalog_retail", e.target.checked)}
+                  />
+                  <span className="text-sm">Catálogo Detal</span>
+                </label>
+
+                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <input
+                    type="checkbox"
+                    checked={store.catalog_wholesale}
+                    onChange={(e) => setStoreField("catalog_wholesale", e.target.checked)}
+                  />
+                  <span className="text-sm">Catálogo Mayor</span>
+                </label>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <label className="text-sm text-white/70">Tema</label>
+                  <select
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={store.theme}
+                    onChange={(e) => setStoreField("theme", e.target.value)}
+                  >
+                    {themes.length ? (
+                      themes.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={store.theme}>{store.theme}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* ✅ Preview real */}
+              <div className="mt-4">
+                {selectedTheme ? (
+                  <CatalogThemePreview theme={selectedTheme} />
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                    No se encontró el theme seleccionado.
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <Card title="Perfil público" subtitle="Texto que se verá en tu catálogo.">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="text-sm text-white/70">Headline</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={profile.headline ?? ""}
+                    onChange={(e) => setProfileField("headline", e.target.value)}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-white/70">Descripción</label>
+                  <textarea
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[120px]"
+                    value={profile.description ?? ""}
+                    onChange={(e) => setProfileField("description", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-white/70">Dirección</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={profile.address ?? ""}
+                    onChange={(e) => setProfileField("address", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-white/70">Ciudad</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={profile.city ?? ""}
+                    onChange={(e) => setProfileField("city", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-white/70">Departamento</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={profile.department ?? ""}
+                    onChange={(e) => setProfileField("department", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-white/70">Google Maps</label>
+                  <input
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    value={profile.google_maps_url ?? ""}
+                    onChange={(e) => setProfileField("google_maps_url", e.target.value)}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-white/70">Envíos</label>
+                  <textarea
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    value={profile.delivery_info ?? ""}
+                    onChange={(e) => setProfileField("delivery_info", e.target.value)}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-white/70">Métodos de pago</label>
+                  <textarea
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    value={profile.payment_methods ?? ""}
+                    onChange={(e) => setProfileField("payment_methods", e.target.value)}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-white/70">Políticas</label>
+                  <textarea
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    value={profile.policies ?? ""}
+                    onChange={(e) => setProfileField("policies", e.target.value)}
+                  />
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-5">
+            <Card title="Logo y banner" subtitle="Se verán en tu catálogo.">
+              {!userId ? (
+                <p className="text-sm text-white/70">Cargando usuario...</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  <ImageUpload
+                    label="Logo"
+                    currentUrl={store.logo_url}
+                    pathPrefix={`${userId}/`}
+                    fileName="logo.png"
+                    onUploaded={(url) => setStoreField("logo_url", url)}
+                  />
 
                   <ImageUpload
-                    label="Icono"
-                    currentUrl={l.icon_url}
-                    pathPrefix={`${userId}/links/`}
-                    fileName={`${l.id}.png`}
-                    onUploaded={(url) => updateLink(l.id, { icon_url: url })}
+                    label="Banner"
+                    currentUrl={store.banner_url}
+                    pathPrefix={`${userId}/`}
+                    fileName="banner.png"
+                    onUploaded={(url) => setStoreField("banner_url", url)}
                   />
                 </div>
               )}
+            </Card>
 
-              <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={l.active}
-                    onChange={(e) => updateLink(l.id, { active: e.target.checked })}
-                  />
-                  Activo
-                </label>
-
+            <Card
+              title="Redes sociales y enlaces"
+              subtitle="Instagram, TikTok, web, etc."
+              right={
                 <button
-                  className="rounded-xl border border-white/10 px-3 py-2"
-                  onClick={() => removeLink(l.id)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
+                  onClick={addLink}
                 >
-                  Eliminar
+                  + Agregar
                 </button>
-              </div>
+              }
+            >
+              {links.length === 0 ? (
+                <p className="text-sm text-white/70">
+                  Aún no tienes enlaces. Agrega Instagram, Facebook, TikTok, web, etc.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {links.map((l, idx) => (
+                    <div key={l.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">Enlace #{idx + 1}</p>
+                        <button
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs transition hover:bg-white/10"
+                          onClick={() => removeLink(l.id)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+                        <select
+                          className="rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          value={l.type}
+                          onChange={(e) => updateLink(l.id, { type: e.target.value })}
+                        >
+                          <option value="instagram">Instagram</option>
+                          <option value="facebook">Facebook</option>
+                          <option value="tiktok">TikTok</option>
+                          <option value="youtube">YouTube</option>
+                          <option value="website">Website</option>
+                          <option value="whatsapp">WhatsApp</option>
+                          <option value="other">Otro</option>
+                        </select>
+
+                        <input
+                          className="rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          placeholder="Etiqueta (opcional)"
+                          value={l.label ?? ""}
+                          onChange={(e) => updateLink(l.id, { label: e.target.value })}
+                        />
+
+                        <input
+                          className="md:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          placeholder="URL"
+                          value={l.url}
+                          onChange={(e) => updateLink(l.id, { url: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <label className="flex items-center gap-2 text-sm text-white/80">
+                          <input
+                            type="checkbox"
+                            checked={l.active}
+                            onChange={(e) => updateLink(l.id, { active: e.target.checked })}
+                          />
+                          Activo
+                        </label>
+
+                        <div className="text-xs text-white/60">Orden: {l.sort_order}</div>
+                      </div>
+
+                      {l.type === "other" && userId ? (
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                          <p className="text-sm text-white/80 mb-2">
+                            Icono personalizado (solo “Otro”)
+                          </p>
+                          <ImageUpload
+                            label="Icono"
+                            currentUrl={l.icon_url}
+                            pathPrefix={`${userId}/links/`}
+                            fileName={`${l.id}.png`}
+                            onUploaded={(url) => updateLink(l.id, { icon_url: url })}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/60">
+              💡 Recuerda: subes imágenes aquí, pero quedan guardadas cuando le das{" "}
+              <b>Guardar cambios</b>.
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Logo y banner */}
-      <section className="rounded-2xl border border-white/10 p-4">
-        <h2 className="text-lg font-semibold">Logo y banner</h2>
-        <p className="mt-2 text-sm opacity-80">
-          Sube tus imágenes y luego guarda cambios para que queden fijas en tu tienda.
-        </p>
-
-        {!userId ? (
-          <p className="mt-4 text-sm">Cargando usuario...</p>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ImageUpload
-              label="Logo"
-              currentUrl={store.logo_url}
-              pathPrefix={`${userId}/`}
-              fileName="logo.png"
-              onUploaded={(url) => setStoreField("logo_url", url)}
-            />
-
-            <ImageUpload
-              label="Banner"
-              currentUrl={store.banner_url}
-              pathPrefix={`${userId}/`}
-              fileName="banner.png"
-              onUploaded={(url) => setStoreField("banner_url", url)}
-            />
           </div>
-        )}
-      </section>
+        </div>
+      </div>
     </main>
   );
 }

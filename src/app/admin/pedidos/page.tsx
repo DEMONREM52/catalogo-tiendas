@@ -32,6 +32,19 @@ function statusLabel(st: string) {
   return st;
 }
 
+function statusBadge(st: OrderRow["status"]) {
+  const base =
+    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold";
+
+  if (st === "draft")
+    return `${base} border-white/10 bg-white/5 text-white/80`;
+  if (st === "sent")
+    return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
+  if (st === "confirmed")
+    return `${base} border-emerald-400/30 bg-emerald-400/10 text-emerald-100`;
+  return `${base} border-indigo-400/30 bg-indigo-400/10 text-indigo-100`;
+}
+
 export default function AdminPedidosPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,9 +56,11 @@ export default function AdminPedidosPage() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // -----------------------------
+  // Cargar tiendas + pedidos
+  // -----------------------------
   async function load() {
     setLoading(true);
-
     try {
       const sb = supabaseBrowser();
 
@@ -56,20 +71,18 @@ export default function AdminPedidosPage() {
         .order("created_at", { ascending: false });
 
       if (stErr) throw stErr;
-
       setStores((st as StoreMini[]) ?? []);
 
       // Pedidos
       const { data, error } = await sb
         .from("orders")
         .select(
-          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,stores(name,slug)",
+          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,stores(name,slug)"
         )
         .order("created_at", { ascending: false })
         .limit(200);
 
       if (error) throw error;
-
       setOrders((data as any) ?? []);
     } catch (err: any) {
       await Swal.fire({
@@ -89,6 +102,9 @@ export default function AdminPedidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // -----------------------------
+  // Filtrado
+  // -----------------------------
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
 
@@ -99,12 +115,17 @@ export default function AdminPedidosPage() {
       if (!s) return true;
 
       const txt =
-        `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${o.stores?.slug ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""}`.toLowerCase();
+        `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${
+          o.stores?.slug ?? ""
+        } ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""}`.toLowerCase();
 
       return txt.includes(s);
     });
   }, [orders, q, storeFilter, statusFilter]);
 
+  // -----------------------------
+  // Cambiar estado
+  // -----------------------------
   async function setStatus(o: OrderRow, next: OrderRow["status"]) {
     const res = await Swal.fire({
       icon: "question",
@@ -124,10 +145,16 @@ export default function AdminPedidosPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
+      const { error } = await sb
+        .from("orders")
+        .update({ status: next })
+        .eq("id", o.id);
+
       if (error) throw error;
 
-      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
+      setOrders((prev) =>
+        prev.map((x) => (x.id === o.id ? { ...x, status: next } : x))
+      );
 
       await Swal.fire({
         icon: "success",
@@ -152,6 +179,9 @@ export default function AdminPedidosPage() {
     }
   }
 
+  // -----------------------------
+  // Acciones
+  // -----------------------------
   function openReceipt(o: OrderRow) {
     window.open(`/pedido/${o.token}`, "_blank");
   }
@@ -181,8 +211,8 @@ export default function AdminPedidosPage() {
     }
   }
 
-  // ✅ PDF (Factura) = abrir comprobante y mandar a imprimir
-  async function printReceipt(o: OrderRow) {
+  // ✅ SOLO imprime cuando tú das click en "Generar factura"
+  async function printInvoice(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
 
     const w = window.open(link, "_blank");
@@ -190,13 +220,14 @@ export default function AdminPedidosPage() {
       await Swal.fire({
         icon: "info",
         title: "Pop-up bloqueado",
-        text: "Tu navegador bloqueó la pestaña. Permite pop-ups y vuelve a intentar.",
+        text: "Permite pop-ups y vuelve a intentar.",
         background: "#0b0b0b",
         color: "#fff",
       });
       return;
     }
 
+    // Espera a que cargue para imprimir (mejor que setTimeout fijo)
     const startedAt = Date.now();
     const maxWait = 9000;
 
@@ -217,38 +248,45 @@ export default function AdminPedidosPage() {
             w.focus();
             w.print();
           } catch {}
-        }, 1400);
+        }, 1200);
       }
-    }, 400);
+    }, 350);
   }
 
+  // -----------------------------
+  // UI
+  // -----------------------------
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Pedidos</h2>
-          <p className="text-sm opacity-80">Ver todos, filtrar y cambiar estado.</p>
+          <h2 className="text-2xl font-semibold">🧾 Pedidos</h2>
+          <p className="text-sm text-white/70">
+            Filtra pedidos, abre comprobantes y genera facturas en PDF.
+          </p>
         </div>
 
         <button
-          className="rounded-xl border border-white/10 px-4 py-2"
           onClick={load}
           disabled={saving}
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60"
         >
           Recargar
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+      {/* Filters */}
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
         <input
-          className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl"
           placeholder="Buscar (#, token, tienda, cliente, whatsapp...)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
 
         <select
-          className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none backdrop-blur-xl"
           value={storeFilter}
           onChange={(e) => setStoreFilter(e.target.value)}
         >
@@ -261,7 +299,7 @@ export default function AdminPedidosPage() {
         </select>
 
         <select
-          className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none backdrop-blur-xl"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
@@ -273,62 +311,81 @@ export default function AdminPedidosPage() {
         </select>
       </div>
 
+      {/* List */}
       {loading ? (
-        <p className="mt-4">Cargando...</p>
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+          Cargando...
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
           <p className="font-semibold">No hay pedidos</p>
-          <p className="text-sm opacity-80 mt-1">
+          <p className="mt-1 text-sm text-white/70">
             Prueba cambiando filtros o creando un pedido.
           </p>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           {filtered.map((o) => (
-            <div key={o.id} className="rounded-2xl border border-white/10 p-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-semibold">
-                    #{o.receipt_no ?? "—"} · {o.stores?.name ?? "Tienda"}{" "}
-                    <span className="opacity-70">
+            <div
+              key={o.id}
+              className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {/* Info */}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">
+                      #{o.receipt_no ?? "—"} · {o.stores?.name ?? "Tienda"}
+                    </p>
+
+                    <span className="text-xs text-white/60">
                       ({o.catalog_type === "retail" ? "Detal" : "Mayor"})
                     </span>
-                  </p>
 
-                  <p className="text-sm opacity-80">
+                    <span className={statusBadge(o.status)}>
+                      <span className="h-2 w-2 rounded-full bg-white/60" />
+                      {statusLabel(o.status)}
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-sm text-white/70">
                     {new Date(o.created_at).toLocaleString("es-CO")} · Total:{" "}
-                    <b>{money(o.total)}</b>
+                    <b className="text-white">{money(o.total)}</b>
                   </p>
 
-                  <p className="text-xs opacity-60 mt-1">
-                    Estado: <b>{statusLabel(o.status)}</b> · Token: {o.token}
+                  <p className="mt-1 text-xs text-white/50">
+                    Cliente: {o.customer_name ?? "—"} · WhatsApp:{" "}
+                    {o.customer_whatsapp ?? "—"} · Token: {o.token}
                   </p>
                 </div>
 
+                {/* Actions */}
                 <div className="flex flex-wrap gap-2">
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
                     onClick={() => openReceipt(o)}
                   >
                     Ver comprobante
                   </button>
 
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
-                    onClick={() => printReceipt(o)}
+                    className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25"
+                    onClick={() => printInvoice(o)}
                   >
-                    PDF (Factura)
+                    Generar factura (PDF)
                   </button>
 
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
                     onClick={() => copyLink(o)}
                   >
                     Copiar link
                   </button>
 
+                  <div className="w-full md:hidden" />
+
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-60"
                     onClick={() => setStatus(o, "draft")}
                     disabled={saving}
                   >
@@ -336,7 +393,7 @@ export default function AdminPedidosPage() {
                   </button>
 
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:opacity-60"
                     onClick={() => setStatus(o, "sent")}
                     disabled={saving}
                   >
@@ -344,7 +401,7 @@ export default function AdminPedidosPage() {
                   </button>
 
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
                     onClick={() => setStatus(o, "confirmed")}
                     disabled={saving}
                   >
@@ -352,7 +409,7 @@ export default function AdminPedidosPage() {
                   </button>
 
                   <button
-                    className="rounded-xl border border-white/10 px-4 py-2"
+                    className="rounded-2xl border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-100 transition hover:bg-indigo-400/15 disabled:opacity-60"
                     onClick={() => setStatus(o, "completed")}
                     disabled={saving}
                   >
@@ -363,7 +420,7 @@ export default function AdminPedidosPage() {
             </div>
           ))}
 
-          <p className="text-xs opacity-60">
+          <p className="text-xs text-white/50">
             Mostrando últimos 200 pedidos (puedes subir el limit si quieres).
           </p>
         </div>

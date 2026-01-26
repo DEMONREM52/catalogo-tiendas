@@ -10,18 +10,50 @@ type UserProfile = {
   created_at: string;
 };
 
+function inputBase() {
+  return "rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+}
+
+function buttonGhost() {
+  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+}
+
+function buttonPrimary() {
+  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+}
+
+function buttonDanger() {
+  return "rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60";
+}
+
+function rolePill(role: "admin" | "store") {
+  return role === "admin"
+    ? "border-fuchsia-400/30 bg-fuchsia-500/15 text-fuchsia-100"
+    : "border-sky-400/30 bg-sky-500/10 text-sky-100";
+}
+
+async function swalError(title: string, text?: string) {
+  await Swal.fire({
+    icon: "error",
+    title,
+    text: text ?? "Error",
+    background: "#0b0b0b",
+    color: "#fff",
+    confirmButtonColor: "#ef4444",
+  });
+}
+
 export default function AdminUsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<UserProfile[]>([]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
-    return rows.filter((r) =>
-      (r.user_id + " " + r.role).toLowerCase().includes(s)
-    );
+    return rows.filter((r) => `${r.user_id} ${r.role}`.toLowerCase().includes(s));
   }, [rows, q]);
 
   async function load() {
@@ -35,16 +67,9 @@ export default function AdminUsuariosPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-
       setRows((data as UserProfile[]) ?? []);
     } catch (e: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "Error cargando usuarios",
-        text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
-      });
+      await swalError("Error cargando usuarios", e?.message);
     } finally {
       setLoading(false);
     }
@@ -58,17 +83,24 @@ export default function AdminUsuariosPage() {
     const res = await Swal.fire({
       title: "Asignar rol",
       html: `
-        <input id="uid" class="swal2-input" placeholder="user_id (uuid)">
-        <select id="role" class="swal2-input">
-          <option value="store">store</option>
-          <option value="admin">admin</option>
-        </select>
+        <div style="text-align:left; opacity:.9">
+          <div style="opacity:.75; font-size:12px; margin-bottom:8px">
+            Pega el <b>UUID</b> del usuario (user_id) y selecciona el rol.
+          </div>
+
+          <input id="uid" class="swal2-input" placeholder="user_id (uuid)">
+          <select id="role" class="swal2-input">
+            <option value="store">store</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
       `,
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
       background: "#0b0b0b",
       color: "#fff",
+      confirmButtonColor: "#a855f7",
       preConfirm: () => {
         const user_id = (document.getElementById("uid") as HTMLInputElement).value.trim();
         const role = (document.getElementById("role") as HTMLSelectElement).value as
@@ -111,14 +143,7 @@ export default function AdminUsuariosPage() {
         color: "#fff",
       });
     } catch (e: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "No se pudo guardar",
-        text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
-        confirmButtonColor: "#ef4444",
-      });
+      await swalError("No se pudo guardar", e?.message);
     } finally {
       setSaving(false);
     }
@@ -146,14 +171,17 @@ export default function AdminUsuariosPage() {
       if (error) throw error;
 
       setRows((prev) => prev.filter((x) => x.user_id !== r.user_id));
-    } catch (e: any) {
+
       await Swal.fire({
-        icon: "error",
-        title: "No se pudo eliminar",
-        text: e?.message ?? "Error",
+        icon: "success",
+        title: "Eliminado",
+        timer: 900,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
       });
+    } catch (e: any) {
+      await swalError("No se pudo eliminar", e?.message);
     } finally {
       setSaving(false);
     }
@@ -161,6 +189,20 @@ export default function AdminUsuariosPage() {
 
   async function toggleRole(r: UserProfile) {
     const nextRole: "admin" | "store" = r.role === "admin" ? "store" : "admin";
+
+    const res = await Swal.fire({
+      icon: "question",
+      title: "Cambiar rol",
+      text: `Cambiar ${r.user_id} a "${nextRole}"?`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, cambiar",
+      cancelButtonText: "Cancelar",
+      background: "#0b0b0b",
+      color: "#fff",
+      confirmButtonColor: "#a855f7",
+    });
+
+    if (!res.isConfirmed) return;
 
     setSaving(true);
     try {
@@ -176,103 +218,112 @@ export default function AdminUsuariosPage() {
       setRows((prev) =>
         prev.map((x) => (x.user_id === r.user_id ? { ...x, role: nextRole } : x))
       );
-    } catch (e: any) {
+
       await Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: e?.message ?? "Error",
+        icon: "success",
+        title: "Actualizado",
+        timer: 900,
+        showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
       });
+    } catch (e: any) {
+      await swalError("Error", e?.message);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Usuarios / Roles</h2>
-          <p className="text-sm opacity-80">
-            Administrar user_profiles (admin / store).
+          <h2 className="text-2xl font-semibold">👤 Usuarios / Roles</h2>
+          <p className="text-sm text-white/70">
+            Administrar <b>user_profiles</b> (admin / store).
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <button
-            className="rounded-xl border border-white/10 px-4 py-2"
-            onClick={load}
-            disabled={saving}
-          >
+        <div className="flex flex-wrap gap-2">
+          <button className={buttonGhost()} onClick={load} disabled={saving}>
             Recargar
           </button>
 
-          <button
-            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
-            onClick={upsertUser}
-            disabled={saving}
-          >
+          <button className={buttonPrimary()} onClick={upsertUser} disabled={saving}>
             + Asignar rol
           </button>
         </div>
       </div>
 
-      <div className="mt-4">
+      {/* Search */}
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
         <input
-          className="w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+          className="w-full bg-transparent outline-none placeholder:text-white/45"
           placeholder="Buscar por uuid o rol..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
 
+      {/* Content */}
       {loading ? (
-        <p className="mt-4">Cargando...</p>
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+          Cargando...
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-white/10 p-4">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
           <p className="font-semibold">No hay perfiles</p>
-          <p className="text-sm opacity-80 mt-1">Crea uno con “+ Asignar rol”.</p>
+          <p className="mt-1 text-sm text-white/70">Crea uno con “+ Asignar rol”.</p>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           {filtered.map((r) => (
-            <div key={r.user_id} className="rounded-2xl border border-white/10 p-4">
-              <p className="font-semibold">{r.user_id}</p>
+            <div
+              key={r.user_id}
+              className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-white/90">{r.user_id}</p>
 
-              <p className="text-sm opacity-80">
-                Rol: <b>{r.role}</b>
-              </p>
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolePill(
+                        r.role
+                      )}`}
+                    >
+                      {r.role}
+                    </span>
+                  </div>
 
-              <p className="text-xs opacity-60 mt-1">
-                Creado: {new Date(r.created_at).toLocaleString("es-CO")}
-              </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    Creado: {new Date(r.created_at).toLocaleString("es-CO")}
+                  </p>
+                </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  className="rounded-xl border border-white/10 px-4 py-2"
-                  onClick={() => toggleRole(r)}
-                  disabled={saving}
-                >
-                  Cambiar a {r.role === "admin" ? "store" : "admin"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button className={buttonGhost()} onClick={() => toggleRole(r)} disabled={saving}>
+                    Cambiar a {r.role === "admin" ? "store" : "admin"}
+                  </button>
 
-                <button
-                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200"
-                  onClick={() => removeUser(r)}
-                  disabled={saving}
-                >
-                  Eliminar perfil
-                </button>
+                  <button className={buttonDanger()} onClick={() => removeUser(r)} disabled={saving}>
+                    Eliminar perfil
+                  </button>
+                </div>
               </div>
             </div>
           ))}
+
+          <p className="text-xs text-white/50">
+            Mostrando {filtered.length} perfil(es).
+          </p>
         </div>
       )}
 
-      <p className="mt-4 text-xs opacity-60">
-        Nota: aquí manejas roles por uuid. Para ver emails, se necesita backend con service role.
-      </p>
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 text-xs text-white/60 backdrop-blur-xl">
+        <b>Nota:</b> aquí manejas roles por UUID. Para ver emails necesitas backend con Service Role.
+      </div>
     </div>
   );
 }

@@ -1,26 +1,264 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* =========================================================
+   ✅ THEME TOKENS (DINÁMICOS)
+   Los cambia JS desde themes.config (applyThemeToRoot)
+   ========================================================= */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+:root {
+  /* Texto / bordes (modo oscuro por defecto para look premium) */
+  --t-text: #ffffff;
+  --t-muted: rgba(255, 255, 255, 0.72);
+  --t-border: rgba(255, 255, 255, 0.14);
+
+  /* Cards / glass */
+  --t-card-bg: rgba(8, 2, 24, 0.58);
+  --t-card-bg-soft: rgba(255, 255, 255, 0.07);
+  --t-card-border: rgba(255, 255, 255, 0.14);
+
+  /* Accents */
+  --t-accent: #a855f7;
+  --t-accent2: #ec4899;
+  --t-accent3: #7c3aed;
+  --t-accent4: #4f46e5;
+
+  /* Radios / glow */
+  --t-radius: 24; /* px */
+  --t-glow: 60;   /* 0-100 */
+
+  /* ✅ Base oscura (para que nunca se vea blanco) */
+  --t-bg-base: #070014;
+
+  /* ✅ Glows morados (overlay) */
+  --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
+          radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
+          radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.18), transparent 62%);
+
+  /* CTA dinámico (solid o gradient) */
+  --t-cta: linear-gradient(90deg, #ec4899, #a855f7, #4f46e5);
+
+  /* Sombras */
+  --t-shadow: 0 26px 85px rgba(0, 0, 0, 0.55);
+
+  /* Tipografía (si usas Geist en layout) */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* =========================================================
+   ✅ TAILWIND v4 THEME TOKENS (utilities)
+   ========================================================= */
+@theme inline {
+  --color-background: var(--t-bg);
+  --color-foreground: var(--t-text);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* =========================================================
+   GLOBAL RESET / QUALITY
+   ========================================================= */
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--t-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* ✅ Fondo premium como tu 2da imagen:
+     base oscuro + glows. */
+  background: var(--t-bg-base);
+  background-image: var(--t-bg);
+  background-attachment: fixed;
+}
+
+/* ✅ Capa de estrellas global (sin tener que poner class="starfield") */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: 0 0;
+
+  mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
+
+  opacity: 0.80;
+  animation: stars-drift 18s linear infinite;
+}
+
+/* ✅ Vignette suave (oscurece bordes y parte alta/baja) */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 25%),
+    linear-gradient(to top, rgba(0,0,0,0.40), transparent 35%);
+  opacity: 1;
+}
+
+/* Selection */
+::selection {
+  background: color-mix(in oklab, var(--t-accent) 35%, transparent);
+}
+
+/* Links */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* =========================================================
+   STARFIELD (si aún lo quieres como clase extra)
+   ========================================================= */
+.starfield {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: 0 0;
+  mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
+  animation: stars-drift 18s linear infinite;
+  opacity: 0.8;
+}
+
+@keyframes stars-drift {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(60px); }
+}
+
+/* =========================================================
+   PREMIUM UI HELPERS
+   ========================================================= */
+.glass {
+  background: var(--t-card-bg);
+  border: 1px solid var(--t-card-border);
+  box-shadow: var(--t-shadow);
+  border-radius: calc(var(--t-radius) * 1px);
+  backdrop-filter: blur(16px);
+}
+
+.glass-soft {
+  background: var(--t-card-bg-soft);
+  border: 1px solid var(--t-card-border);
+  border-radius: calc(var(--t-radius) * 1px);
+  backdrop-filter: blur(12px);
+}
+
+/* ✅ Botón CTA (dinámico desde theme) */
+.btn-cta {
+  background: var(--t-cta);
+  color: #fff;
+  border-radius: calc(var(--t-radius) * 1px);
+  box-shadow: 0 18px 45px color-mix(in oklab, var(--t-accent) 30%, transparent);
+  transition: transform 160ms ease, filter 160ms ease;
+}
+.btn-cta:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn-cta:active {
+  transform: translateY(0px);
+}
+
+/* ✅ Botón secundario */
+.btn-soft {
+  background: color-mix(in oklab, var(--t-card-bg) 80%, transparent);
+  border: 1px solid var(--t-card-border);
+  color: var(--t-text);
+  border-radius: calc(var(--t-radius) * 1px);
+  backdrop-filter: blur(14px);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.btn-soft:hover {
+  background: color-mix(in oklab, var(--t-card-bg) 92%, transparent);
+  transform: translateY(-1px);
+}
+.btn-soft:active {
+  transform: translateY(0px);
+}
+
+/* Focus ring */
+.ring-focus:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--t-accent) 28%, transparent);
+}
+
+/* =========================================================
+   INPUTS BONITOS (dinámicos)
+   ========================================================= */
+input,
+select,
+textarea {
+  background: color-mix(in oklab, var(--t-card-bg) 92%, transparent);
+  color: var(--t-text);
+  border: 1px solid var(--t-card-border);
+  border-radius: calc((var(--t-radius) - 10) * 1px);
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--t-accent) 25%, transparent);
+  border-color: color-mix(in oklab, var(--t-accent) 55%, var(--t-card-border));
+}
+
+/* =========================================================
+   SCROLLBAR (morado)
+   ========================================================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--t-accent) 55%, transparent)
+                   color-mix(in oklab, var(--t-card-bg) 30%, transparent);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: color-mix(in oklab, var(--t-card-bg) 35%, transparent);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--t-accent2) 75%, transparent),
+    color-mix(in oklab, var(--t-accent) 75%, transparent)
+  );
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--t-card-bg) 25%, transparent);
+}
+
+/* =========================================================
+   PRINT SAFETY
+   ========================================================= */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body::before,
+  body::after {
+    display: none !important;
+  }
 }

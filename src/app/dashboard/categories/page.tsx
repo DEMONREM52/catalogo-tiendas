@@ -254,7 +254,8 @@ export default function CategoriesPage() {
   if (loading) return <main className="p-6">Cargando categorías...</main>;
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="p-6 space-y-6 panel-enter">
+      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Categorías</h1>
@@ -262,49 +263,46 @@ export default function CategoriesPage() {
             Crea categorías con imagen para ordenar tus productos.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            className="rounded-xl border border-white/10 px-4 py-2"
-            onClick={load}
-            disabled={saving}
-          >
+
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-soft px-4 py-2" onClick={load} disabled={saving}>
             Recargar
           </button>
-          <button
-            className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
-            onClick={createCategory}
-            disabled={saving}
-          >
+          <button className="btn-cta px-4 py-2 font-semibold" onClick={createCategory} disabled={saving}>
             + Nueva
           </button>
         </div>
       </div>
 
-      <input
-        className="w-full md:max-w-md rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-        placeholder="Buscar categoría..."
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
+      {/* Search */}
+      <div className="glass p-4">
+        <input
+          className="w-full md:max-w-md p-3"
+          placeholder="Buscar categoría..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
 
+      {/* List */}
       <div className="space-y-4">
         {filtered.map((c) => (
-          <div key={c.id} className="rounded-2xl border border-white/10 p-4">
+          <div key={c.id} className="glass p-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Left */}
               <div className="lg:col-span-2 space-y-3">
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <input
-                    className="w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none text-lg font-semibold"
+                    className="w-full p-3 text-lg font-semibold"
                     value={c.name}
                     onChange={(e) => updateCat(c.id, { name: e.target.value })}
                   />
+
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={c.active}
-                      onChange={(e) =>
-                        updateCat(c.id, { active: e.target.checked })
-                      }
+                      onChange={(e) => updateCat(c.id, { active: e.target.checked })}
                     />
                     Activa
                   </label>
@@ -315,7 +313,7 @@ export default function CategoriesPage() {
                     <label className="text-sm opacity-80">Orden</label>
                     <input
                       type="number"
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+                      className="mt-1 w-full p-3"
                       value={c.sort_order}
                       onChange={(e) =>
                         updateCat(c.id, { sort_order: Number(e.target.value) })
@@ -324,16 +322,22 @@ export default function CategoriesPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
-                    className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
+                    className="btn-cta px-4 py-2 font-semibold disabled:opacity-60"
                     onClick={() => saveCategory(c)}
                     disabled={saving}
                   >
                     Guardar
                   </button>
+
                   <button
-                    className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
+                    className="btn-soft px-4 py-2 font-semibold disabled:opacity-60"
+                    style={{
+                      borderColor: "color-mix(in oklab, red 35%, transparent)",
+                      background: "color-mix(in oklab, red 10%, transparent)",
+                      color: "color-mix(in oklab, white 85%, red 15%)",
+                    }}
                     onClick={() => deleteCategory(c)}
                     disabled={saving}
                   >
@@ -342,7 +346,8 @@ export default function CategoriesPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 p-4">
+              {/* Right */}
+              <div className="glass-soft p-4">
                 <p className="font-semibold">Imagen de categoría</p>
                 <p className="text-sm opacity-80">Se verá en el catálogo.</p>
 
@@ -370,7 +375,7 @@ export default function CategoriesPage() {
         ))}
 
         {filtered.length === 0 && (
-          <div className="rounded-2xl border border-white/10 p-4 text-sm opacity-80">
+          <div className="glass p-4 text-sm opacity-80">
             No hay categorías con ese filtro.
           </div>
         )}

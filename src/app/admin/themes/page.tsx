@@ -1,34 +1,240 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+
+type ThemeConfig = {
+  text: string;
+  mutedText: string;
+  border: string;
+
+  cardBg: string;
+  cardBorder: string;
+
+  accent: string;
+  accent2: string;
+
+  radius: number;
+  glow: number;
+
+  bgMode: "solid" | "gradient";
+  bgSolid: string;
+  bgGradA: string;
+  bgGradB: string;
+  bgAngle: number;
+
+  ctaMode: "solid" | "gradient";
+  ctaSolid: string;
+  ctaA: string;
+  ctaB: string;
+  ctaAngle: number;
+};
 
 type ThemeRow = {
   id: string;
   name: string;
   active: boolean;
   sort_order: number;
+  config: any; // viene de supabase como json
 };
+
+const DEFAULT_CFG: ThemeConfig = {
+  text: "#ffffff",
+  mutedText: "rgba(255,255,255,0.72)",
+  border: "rgba(255,255,255,0.12)",
+
+  cardBg: "rgba(255,255,255,0.06)",
+  cardBorder: "rgba(255,255,255,0.12)",
+
+  accent: "#d946ef",
+  accent2: "#8b5cf6",
+
+  radius: 24,
+  glow: 60,
+
+  bgMode: "gradient",
+  bgSolid: "#07060d",
+  bgGradA: "#2a0a5e",
+  bgGradB: "#060620",
+  bgAngle: 135,
+
+  ctaMode: "gradient",
+  ctaSolid: "#d946ef",
+  ctaA: "#d946ef",
+  ctaB: "#8b5cf6",
+  ctaAngle: 90,
+};
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function gradient(angle: number, a: string, b: string) {
+  return `linear-gradient(${angle}deg, ${a}, ${b})`;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const h = hex.replace("#", "").trim();
+  const full = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+/** Convierte lo que venga en config a ThemeConfig completo */
+function normalizeConfig(raw: any): ThemeConfig {
+  const o = (raw && typeof raw === "object") ? raw : {};
+  return {
+    ...DEFAULT_CFG,
+    ...o,
+    radius: Number.isFinite(Number(o.radius)) ? Number(o.radius) : DEFAULT_CFG.radius,
+    glow: Number.isFinite(Number(o.glow)) ? Number(o.glow) : DEFAULT_CFG.glow,
+    bgAngle: Number.isFinite(Number(o.bgAngle)) ? Number(o.bgAngle) : DEFAULT_CFG.bgAngle,
+    ctaAngle: Number.isFinite(Number(o.ctaAngle)) ? Number(o.ctaAngle) : DEFAULT_CFG.ctaAngle,
+    bgMode: o.bgMode === "solid" ? "solid" : "gradient",
+    ctaMode: o.ctaMode === "solid" ? "solid" : "gradient",
+  };
+}
+
+function Preview({ cfg }: { cfg: ThemeConfig }) {
+  const bg =
+    cfg.bgMode === "gradient"
+      ? gradient(cfg.bgAngle, cfg.bgGradA, cfg.bgGradB)
+      : cfg.bgSolid;
+
+  const ctaBg =
+    cfg.ctaMode === "gradient"
+      ? gradient(cfg.ctaAngle, cfg.ctaA, cfg.ctaB)
+      : cfg.ctaSolid;
+
+  const glowA = hexToRgba(cfg.accent, cfg.glow / 100);
+  const glowB = hexToRgba(cfg.accent2, (cfg.glow / 100) * 0.75);
+
+  return (
+    <div className="rounded-[28px] border border-white/10 overflow-hidden bg-black/30">
+      <div className="relative p-5" style={{ background: bg, color: cfg.text }}>
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(circle at 25% 20%, ${glowA}, transparent 55%),
+                         radial-gradient(circle at 75% 25%, ${glowB}, transparent 60%)`,
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: "radial-gradient(#ffffff 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
+
+        <div className="relative">
+          <p className="text-xs font-semibold tracking-[0.24em] opacity-80">
+            PREVIEW
+          </p>
+
+          <div
+            className="mt-4 rounded-[24px] p-4"
+            style={{
+              borderRadius: cfg.radius,
+              background: cfg.cardBg,
+              border: `1px solid ${cfg.cardBorder}`,
+              backdropFilter: "blur(10px)",
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-semibold">Landing / Panel</p>
+              <span
+                className="rounded-full px-2 py-1 text-[11px] font-semibold"
+                style={{
+                  background: hexToRgba(cfg.accent, 0.18),
+                  border: `1px solid ${hexToRgba(cfg.accent, 0.28)}`,
+                }}
+              >
+                Preview
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {["Catálogo", "Pedidos", "Factura PDF"].map((t) => (
+                <div
+                  key={t}
+                  className="rounded-2xl p-2.5 text-[11px]"
+                  style={{
+                    borderRadius: cfg.radius,
+                    background: hexToRgba("#ffffff", 0.06),
+                    border: `1px solid ${hexToRgba("#ffffff", 0.12)}`,
+                    color: cfg.mutedText,
+                  }}
+                >
+                  <p className="text-white/90 font-semibold text-[11px]">
+                    {t}
+                  </p>
+                  <p className="mt-1 opacity-80 leading-tight">UI limpia</p>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="mt-4 w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+              style={{
+                borderRadius: cfg.radius,
+                background: ctaBg,
+                color: "#0b0b0b",
+                boxShadow: `0 18px 40px ${hexToRgba(cfg.accent, 0.28)}`,
+              }}
+            >
+              Botón principal (CTA)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminThemesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [rows, setRows] = useState<ThemeRow[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+
+  // Este cfg SÍ cambia por theme seleccionado
+  const [cfg, setCfg] = useState<ThemeConfig>(DEFAULT_CFG);
+
+  const selected = useMemo(
+    () => rows.find((x) => x.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
 
   async function load() {
     setLoading(true);
     try {
       const sb = supabaseBrowser();
 
+      // ✅ IMPORTANTE: ahora traemos config
       const { data, error } = await sb
         .from("themes")
-        .select("id,name,active,sort_order")
+        .select("id,name,active,sort_order,config")
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
 
-      setRows((data as ThemeRow[]) ?? []);
+      const arr = (data as ThemeRow[]) ?? [];
+      setRows(arr);
+
+      // Seleccionar el primero si no hay
+      if (!selectedId && arr[0]) {
+        setSelectedId(arr[0].id);
+        setCfg(normalizeConfig(arr[0].config));
+      }
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -42,30 +248,52 @@ export default function AdminThemesPage() {
     }
   }
 
+  // ✅ carga inicial
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function patch(id: string, p: Partial<ThemeRow>) {
+  // ✅ CUANDO CAMBIA EL THEME SELECCIONADO -> cargar su config real
+  useEffect(() => {
+    if (!selected) return;
+    setCfg(normalizeConfig(selected.config));
+  }, [selectedId]); // intencional: cuando cambie id
+
+  function patchRow(id: string, p: Partial<ThemeRow>) {
     setRows((prev) => prev.map((x) => (x.id === id ? { ...x, ...p } : x)));
   }
 
-  async function save(t: ThemeRow) {
+  async function saveSelected() {
+    if (!selected) return;
+
     setSaving(true);
     try {
       const sb = supabaseBrowser();
 
+      // ✅ guardamos meta + config
       const { error } = await sb
         .from("themes")
-        .update({ name: t.name, active: t.active, sort_order: t.sort_order })
-        .eq("id", t.id);
+        .update({
+          name: selected.name,
+          active: selected.active,
+          sort_order: selected.sort_order,
+          config: cfg, // ✅ AQUÍ SE GUARDA LO QUE EDITASTE
+        })
+        .eq("id", selected.id);
 
       if (error) throw error;
+
+      // ✅ reflejar en UI el config guardado
+      setRows((prev) =>
+        prev.map((x) => (x.id === selected.id ? { ...x, config: cfg } : x)),
+      );
 
       await Swal.fire({
         icon: "success",
         title: "Guardado",
-        timer: 900,
+        text: "Theme guardado con su configuración.",
+        timer: 1100,
         showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
@@ -83,11 +311,11 @@ export default function AdminThemesPage() {
     }
   }
 
-  async function create() {
+  async function createTheme() {
     const res = await Swal.fire({
       title: "Nuevo theme",
       html: `
-        <input id="id" class="swal2-input" placeholder="id (ej: ocean2)">
+        <input id="id" class="swal2-input" placeholder="id (ej: lavender_neon)">
         <input id="name" class="swal2-input" placeholder="name (texto)">
       `,
       showCancelButton: true,
@@ -98,7 +326,6 @@ export default function AdminThemesPage() {
       preConfirm: () => {
         const id = (document.getElementById("id") as HTMLInputElement).value.trim();
         const name = (document.getElementById("name") as HTMLInputElement).value.trim();
-
         if (!id || !name) {
           Swal.showValidationMessage("Completa id y name.");
           return;
@@ -113,6 +340,7 @@ export default function AdminThemesPage() {
     try {
       const sb = supabaseBrowser();
 
+      // ✅ insertar con config default (o lo que quieras)
       const { data, error } = await sb
         .from("themes")
         .insert({
@@ -120,13 +348,26 @@ export default function AdminThemesPage() {
           name: res.value.name,
           active: true,
           sort_order: 0,
+          config: DEFAULT_CFG,
         })
-        .select("id,name,active,sort_order")
+        .select("id,name,active,sort_order,config")
         .single();
 
       if (error) throw error;
 
-      setRows((prev) => [data as ThemeRow, ...prev]);
+      const row = data as ThemeRow;
+      setRows((prev) => [row, ...prev]);
+      setSelectedId(row.id);
+      setCfg(normalizeConfig(row.config));
+
+      await Swal.fire({
+        icon: "success",
+        title: "Theme creado",
+        timer: 900,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -140,7 +381,7 @@ export default function AdminThemesPage() {
     }
   }
 
-  async function remove(t: ThemeRow) {
+  async function removeTheme(t: ThemeRow) {
     const res = await Swal.fire({
       icon: "warning",
       title: "Eliminar theme",
@@ -157,11 +398,14 @@ export default function AdminThemesPage() {
     setSaving(true);
     try {
       const sb = supabaseBrowser();
-
       const { error } = await sb.from("themes").delete().eq("id", t.id);
       if (error) throw error;
 
       setRows((prev) => prev.filter((x) => x.id !== t.id));
+      if (selectedId === t.id) {
+        setSelectedId("");
+        setCfg(DEFAULT_CFG);
+      }
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -175,24 +419,30 @@ export default function AdminThemesPage() {
     }
   }
 
+  if (loading) return <p className="text-white/80">Cargando themes...</p>;
+
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
+    <div className="text-white">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Themes</h2>
-          <p className="text-sm opacity-80">CRUD de themes.</p>
+          <p className="text-sm text-white/70">
+            Selecciona un theme y edita sus colores. Cada theme guarda su propio config.
+          </p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex flex-wrap gap-2">
           <button
-            className="rounded-xl border border-white/10 px-4 py-2"
+            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
             onClick={load}
             disabled={saving}
           >
             Recargar
           </button>
+
           <button
-            className="rounded-xl bg-white text-black px-4 py-2 font-semibold"
-            onClick={create}
+            className="rounded-2xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-black hover:bg-fuchsia-400 disabled:opacity-60"
+            onClick={createTheme}
             disabled={saving}
           >
             + Nuevo
@@ -200,80 +450,387 @@ export default function AdminThemesPage() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="mt-4">Cargando...</p>
-      ) : rows.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-white/10 p-4">
-          <p className="font-semibold">No hay themes</p>
-          <p className="text-sm opacity-80 mt-1">Crea el primero con “+ Nuevo”.</p>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          {rows.map((t) => (
-            <div key={t.id} className="rounded-2xl border border-white/10 p-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs opacity-70">ID</label>
-                  <input
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none opacity-80"
-                    value={t.id}
-                    disabled
-                  />
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(520px,1fr)_minmax(360px,440px)]">
+        {/* Lista */}
+        <aside className="rounded-[28px] border border-white/10 bg-white/5 p-3">
+          <div className="mb-2 px-2">
+            <p className="text-xs font-semibold tracking-[0.22em] text-white/60">
+              THEMES
+            </p>
+          </div>
+
+          <div className="max-h-[72vh] overflow-auto pr-1 space-y-2">
+            {rows.map((t) => {
+              const activeSel = t.id === selectedId;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedId(t.id)}
+                  className={cx(
+                    "w-full rounded-2xl border px-3 py-3 text-left transition",
+                    activeSel
+                      ? "border-fuchsia-400/40 bg-fuchsia-500/15"
+                      : "border-white/10 bg-white/5 hover:bg-white/10",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{t.name}</p>
+                      <p className="truncate text-xs text-white/60">{t.id}</p>
+                    </div>
+                    <span
+                      className={cx(
+                        "rounded-full px-2 py-1 text-[11px] font-semibold border",
+                        t.active
+                          ? "bg-emerald-400/15 text-emerald-200 border-emerald-400/20"
+                          : "bg-white/10 text-white/70 border-white/10",
+                      )}
+                    >
+                      {t.active ? "Activo" : "Inactivo"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        {/* Editor */}
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 max-h-[72vh] overflow-auto pr-1">
+          {!selected ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+              Selecciona un theme de la izquierda.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Theme</p>
+                    <p className="text-xs text-white/60">ID: {selected.id}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold hover:bg-white/10"
+                      onClick={() => removeTheme(selected)}
+                      disabled={saving}
+                    >
+                      Eliminar
+                    </button>
+                    <button
+                      className="rounded-2xl bg-emerald-400 px-3 py-2 text-sm font-semibold text-black hover:bg-emerald-300 disabled:opacity-60"
+                      onClick={saveSelected}
+                      disabled={saving}
+                    >
+                      Guardar (incluye colores)
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs opacity-70">Nombre</label>
-                  <input
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                    value={t.name}
-                    onChange={(e) => patch(t.id, { name: e.target.value })}
-                  />
-                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs text-white/60">Nombre</label>
+                    <input
+                      className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
+                      value={selected.name}
+                      onChange={(e) =>
+                        patchRow(selected.id, { name: e.target.value })
+                      }
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs opacity-70">Orden</label>
-                  <input
-                    type="number"
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-                    value={t.sort_order}
-                    onChange={(e) =>
-                      patch(t.id, { sort_order: Number(e.target.value) })
-                    }
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-white/60">Orden</label>
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
+                      value={selected.sort_order}
+                      onChange={(e) =>
+                        patchRow(selected.id, {
+                          sort_order: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
 
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm">
+                  <div className="md:col-span-2 flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={t.active}
-                      onChange={(e) => patch(t.id, { active: e.target.checked })}
+                      checked={selected.active}
+                      onChange={(e) =>
+                        patchRow(selected.id, { active: e.target.checked })
+                      }
                     />
-                    Activo
-                  </label>
+                    <span className="text-sm">Activo</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-3 flex gap-2">
-                <button
-                  className="rounded-xl bg-white text-black px-4 py-2 font-semibold disabled:opacity-60"
-                  onClick={() => save(t)}
-                  disabled={saving}
-                >
-                  Guardar
-                </button>
-                <button
-                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 font-semibold text-red-200 disabled:opacity-60"
-                  onClick={() => remove(t)}
-                  disabled={saving}
-                >
-                  Eliminar
-                </button>
+              {/* Editor dinámico */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-semibold">🎨 Colores</p>
+                <p className="mt-1 text-xs text-white/60">
+                  Cambia el theme, y verás colores diferentes (porque se cargan de la BD).
+                </p>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold text-white/80">Básico</p>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <label className="text-xs text-white/60">
+                        Accent
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.accent}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, accent: e.target.value }))
+                          }
+                        />
+                      </label>
+
+                      <label className="text-xs text-white/60">
+                        Accent 2
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.accent2}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, accent2: e.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="text-xs text-white/60">
+                        Radio: {cfg.radius}px
+                      </label>
+                      <input
+                        type="range"
+                        min={12}
+                        max={32}
+                        value={cfg.radius}
+                        onChange={(e) =>
+                          setCfg((p) => ({ ...p, radius: Number(e.target.value) }))
+                        }
+                        className="mt-2 w-full"
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="text-xs text-white/60">
+                        Glow: {cfg.glow}%
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={90}
+                        value={cfg.glow}
+                        onChange={(e) =>
+                          setCfg((p) => ({
+                            ...p,
+                            glow: clamp(Number(e.target.value), 0, 90),
+                          }))
+                        }
+                        className="mt-2 w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold text-white/80">Fondo</p>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        className={cx(
+                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
+                          cfg.bgMode === "gradient"
+                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
+                        )}
+                        onClick={() => setCfg((p) => ({ ...p, bgMode: "gradient" }))}
+                      >
+                        Gradient
+                      </button>
+                      <button
+                        className={cx(
+                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
+                          cfg.bgMode === "solid"
+                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
+                        )}
+                        onClick={() => setCfg((p) => ({ ...p, bgMode: "solid" }))}
+                      >
+                        Solid
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <label className="text-xs text-white/60">
+                        Gradient A
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.bgGradA}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, bgGradA: e.target.value }))
+                          }
+                        />
+                      </label>
+
+                      <label className="text-xs text-white/60">
+                        Gradient B
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.bgGradB}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, bgGradB: e.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="text-xs text-white/60">
+                        Ángulo: {cfg.bgAngle}°
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        value={cfg.bgAngle}
+                        onChange={(e) =>
+                          setCfg((p) => ({ ...p, bgAngle: Number(e.target.value) }))
+                        }
+                        className="mt-2 w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:col-span-2">
+                    <p className="text-xs font-semibold text-white/80">Botón (CTA)</p>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        className={cx(
+                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
+                          cfg.ctaMode === "gradient"
+                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
+                        )}
+                        onClick={() => setCfg((p) => ({ ...p, ctaMode: "gradient" }))}
+                      >
+                        Gradient
+                      </button>
+                      <button
+                        className={cx(
+                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
+                          cfg.ctaMode === "solid"
+                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
+                            : "border-white/10 bg-white/5 hover:bg-white/10",
+                        )}
+                        onClick={() => setCfg((p) => ({ ...p, ctaMode: "solid" }))}
+                      >
+                        Solid
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+                      <label className="text-xs text-white/60">
+                        CTA A
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.ctaA}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, ctaA: e.target.value }))
+                          }
+                        />
+                      </label>
+
+                      <label className="text-xs text-white/60">
+                        CTA B
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.ctaB}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, ctaB: e.target.value }))
+                          }
+                        />
+                      </label>
+
+                      <label className="text-xs text-white/60">
+                        CTA Solid
+                        <input
+                          type="color"
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          value={cfg.ctaSolid}
+                          onChange={(e) =>
+                            setCfg((p) => ({ ...p, ctaSolid: e.target.value }))
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="text-xs text-white/60">
+                        Ángulo CTA: {cfg.ctaAngle}°
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        value={cfg.ctaAngle}
+                        onChange={(e) =>
+                          setCfg((p) => ({ ...p, ctaAngle: Number(e.target.value) }))
+                        }
+                        className="mt-2 w-full"
+                      />
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+                        onClick={() => setCfg(DEFAULT_CFG)}
+                        type="button"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        className="rounded-2xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-black hover:bg-fuchsia-400 disabled:opacity-60"
+                        onClick={saveSelected}
+                        disabled={saving}
+                        type="button"
+                      >
+                        Guardar colores en este theme
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
+        </section>
+
+        {/* Preview */}
+        <aside className="space-y-3 xl:sticky xl:top-6">
+          <div className="max-w-[440px] xl:max-w-none">
+            <Preview cfg={cfg} />
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 text-sm text-white/70 max-w-[440px] xl:max-w-none">
+            <p className="font-semibold text-white">✅ Ahora sí funciona</p>
+            <p className="mt-1">
+              Cambias de theme → se carga su config desde BD.  
+              Editas → Guardar → se guarda en themes.config.
+            </p>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

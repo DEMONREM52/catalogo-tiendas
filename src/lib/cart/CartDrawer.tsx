@@ -1,12 +1,33 @@
 "use client";
 
 import { useMemo } from "react";
-import { useCart } from "./CartProvider";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { useCart } from "./CartProvider";
 
 function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export function CartDrawer() {
@@ -80,6 +101,22 @@ export function CartDrawer() {
       return;
     }
 
+    // ✅ validación extra: mínimos mayoristas
+    if (cart.mode === "mayor") {
+      const bad = cart.items.find((i) => i.qty < minAllowed(i));
+      if (bad) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Cantidad mínima mayorista",
+          text: `El producto "${bad.name}" debe tener mínimo ${minAllowed(bad)}.`,
+          background: "#0b0b0b",
+          color: "#fff",
+          confirmButtonColor: "#f59e0b",
+        });
+        return;
+      }
+    }
+
     try {
       const payload = cart.items.map((i) => ({
         product_id: i.productId,
@@ -87,7 +124,7 @@ export function CartDrawer() {
         price: i.price,
       }));
 
-      const sb = supabaseBrowser(); // ✅ IMPORTANTE
+      const sb = supabaseBrowser();
 
       const { data, error } = await sb.rpc("create_order_from_cart", {
         p_store_id: cart.storeId,
@@ -109,22 +146,57 @@ export function CartDrawer() {
         invoiceUrl,
       ].join("\n");
 
+      // ✅ abre WhatsApp
       window.open(
         `https://wa.me/${cart.whatsapp}?text=${encodeURIComponent(waText)}`,
         "_blank"
       );
 
-      window.open(invoiceUrl, "_blank");
-
-      await Swal.fire({
+      // ✅ Modal premium con acciones
+      const res = await Swal.fire({
         icon: "success",
         title: "Comprobante generado",
-        text: "Se creó el pedido y se abrió WhatsApp.",
-        timer: 1200,
-        showConfirmButton: false,
+        html: `
+          <div style="text-align:left; opacity:.9">
+            <div style="margin-bottom:10px;">
+              Se creó el pedido y se abrió WhatsApp.
+            </div>
+            <div style="font-size:12px; opacity:.8; margin-bottom:6px;">
+              Link del comprobante:
+            </div>
+            <div style="padding:10px; border:1px solid rgba(255,255,255,.12); border-radius:12px; word-break:break-all; font-size:12px;">
+              ${invoiceUrl}
+            </div>
+          </div>
+        `,
         background: "#0b0b0b",
         color: "#fff",
+        showCancelButton: true,
+        confirmButtonText: "Abrir comprobante",
+        cancelButtonText: "Cerrar",
+        confirmButtonColor: "#a855f7",
+        showDenyButton: true,
+        denyButtonText: "Copiar link",
+        denyButtonColor: "#22c55e",
       });
+
+      if (res.isConfirmed) {
+        window.open(invoiceUrl, "_blank");
+      } else if (res.isDenied) {
+        const ok = await copyText(invoiceUrl);
+        await Swal.fire({
+          icon: ok ? "success" : "error",
+          title: ok ? "Copiado" : "No se pudo copiar",
+          text: ok ? "Link copiado al portapapeles." : "Tu navegador bloqueó el copiado.",
+          timer: 1000,
+          showConfirmButton: false,
+          background: "#0b0b0b",
+          color: "#fff",
+        });
+      }
+
+      // opcional: también abrir el comprobante automáticamente
+      // window.open(invoiceUrl, "_blank");
     } catch (err: any) {
       await Swal.fire({
         icon: "error",
@@ -141,9 +213,10 @@ export function CartDrawer() {
 
   return (
     <>
+      {/* FAB carrito */}
       <button
         onClick={() => (isOpen ? close() : open())}
-        className="fixed bottom-4 right-4 z-40 rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-sm font-semibold"
+        className="fixed bottom-4 right-4 z-40 rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-sm font-semibold text-white"
         style={{ backdropFilter: "blur(10px)" }}
         aria-label="Abrir carrito"
       >
@@ -155,46 +228,40 @@ export function CartDrawer() {
           <div className="absolute inset-0 bg-black/60" onClick={close} />
 
           <div
-            className="absolute right-0 top-0 h-full w-full max-w-md border-l border-white/10 bg-black/80 p-4"
-            style={{ backdropFilter: "blur(12px)" }}
+            className="absolute right-0 top-0 h-full w-full max-w-md border-l border-white/10 bg-black/70 p-4"
+            style={{ backdropFilter: "blur(14px)" }}
           >
-            <div className="flex items-center justify-between">
-              <div>
+            {/* Header */}
+            <div className="glass flex items-start justify-between gap-3 p-4">
+              <div className="min-w-0">
                 <h3 className="text-lg font-semibold">Tu carrito</h3>
-                <p className="text-sm opacity-80 mt-1">
+                <p className="mt-1 text-sm opacity-80">
                   {cart.mode === "detal" ? "Detal" : "Mayoristas"} ·{" "}
-                  {cart.storeName}
+                  <span className="font-semibold">{cart.storeName}</span>
                 </p>
               </div>
 
-              <button
-                className="rounded-xl border border-white/10 px-3 py-1 text-sm"
-                onClick={close}
-              >
+              <button className="btn-soft px-3 py-2 text-xs font-semibold" onClick={close}>
                 Cerrar
               </button>
             </div>
 
+            {/* Body */}
             <div className="mt-4 space-y-3">
               {cart.items.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 p-4">
+                <div className="glass-soft p-4">
                   <p className="text-lg font-semibold">Tu carrito está vacío</p>
                   <p className="mt-2 text-sm opacity-80">
-                    Agrega productos desde el catálogo para crear tu comprobante
-                    y enviarlo por WhatsApp.
+                    Agrega productos desde el catálogo para crear tu comprobante y enviarlo por WhatsApp.
                   </p>
 
                   <div className="mt-4 flex gap-2">
-                    <button
-                      className="flex-1 rounded-xl border border-white/10 px-4 py-2"
-                      onClick={close}
-                    >
+                    <button className="btn-soft flex-1 px-4 py-2 text-sm font-semibold" onClick={close}>
                       Seguir mirando
                     </button>
 
                     <a
-                      className="flex-1 rounded-xl px-4 py-2 text-center font-semibold"
-                      style={{ background: "var(--brand)", color: "#0b0b0b" }}
+                      className="btn-cta flex-1 px-4 py-2 text-center text-sm font-semibold"
                       href={`/${cart.storeSlug}/${cart.mode}`}
                     >
                       Ir al catálogo
@@ -206,27 +273,21 @@ export function CartDrawer() {
                   const min = minAllowed(i);
 
                   return (
-                    <div
-                      key={i.productId}
-                      className="rounded-2xl border border-white/10 p-3"
-                    >
+                    <div key={i.productId} className="glass-soft p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold truncate">{i.name}</p>
+                          <p className="truncate font-semibold">{i.name}</p>
                           <p className="text-sm opacity-80">
-                            {money(i.price)}{" "}
-                            <span className="opacity-60">c/u</span>
+                            {money(i.price)} <span className="opacity-60">c/u</span>
                           </p>
 
                           {cart.mode === "mayor" && i.minWholesale ? (
-                            <p className="text-xs opacity-70">
-                              Mínimo mayor: {min}
-                            </p>
+                            <p className="mt-1 text-xs opacity-70">Mínimo mayor: {min}</p>
                           ) : null}
                         </div>
 
                         <button
-                          className="rounded-xl border border-white/10 px-3 py-1 text-sm"
+                          className="btn-soft px-3 py-2 text-xs font-semibold"
                           onClick={() => removeItem(i.productId)}
                         >
                           Quitar
@@ -236,44 +297,32 @@ export function CartDrawer() {
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <button
-                            className="rounded-xl border border-white/10 px-3 py-1"
-                            onClick={() =>
-                              safeSetQty(i.productId, i.qty - 1, i)
-                            }
+                            className="btn-soft px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                            onClick={() => safeSetQty(i.productId, i.qty - 1, i)}
                             disabled={i.qty <= min}
-                            title={
-                              i.qty <= min ? `Mínimo: ${min}` : "Disminuir"
-                            }
+                            title={i.qty <= min ? `Mínimo: ${min}` : "Disminuir"}
                           >
-                            -
+                            −
                           </button>
 
                           <input
                             type="number"
                             min={min}
-                            className="w-20 rounded-xl border border-white/10 bg-transparent px-3 py-1 text-center"
+                            className="ring-focus w-20 px-3 py-2 text-center text-sm"
                             value={i.qty}
-                            onChange={(e) =>
-                              safeSetQty(
-                                i.productId,
-                                Number(e.target.value),
-                                i
-                              )
-                            }
+                            onChange={(e) => safeSetQty(i.productId, Number(e.target.value), i)}
                           />
 
                           <button
-                            className="rounded-xl border border-white/10 px-3 py-1"
-                            onClick={() =>
-                              safeSetQty(i.productId, i.qty + 1, i)
-                            }
+                            className="btn-soft px-3 py-2 text-sm font-semibold"
+                            onClick={() => safeSetQty(i.productId, i.qty + 1, i)}
                             title="Aumentar"
                           >
                             +
                           </button>
                         </div>
 
-                        <p className="font-semibold">{money(i.price * i.qty)}</p>
+                        <p className="text-sm font-semibold">{money(i.price * i.qty)}</p>
                       </div>
                     </div>
                   );
@@ -281,15 +330,16 @@ export function CartDrawer() {
               )}
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/10 p-4">
+            {/* Footer */}
+            <div className="mt-4 glass p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm opacity-80">Total</p>
-                <p className="text-lg font-bold">{money(total)}</p>
+                <p className="text-lg font-extrabold">{money(total)}</p>
               </div>
 
               <div className="mt-3 flex gap-2">
                 <button
-                  className="flex-1 rounded-xl border border-white/10 px-4 py-2"
+                  className="btn-soft flex-1 px-4 py-2 text-sm font-semibold disabled:opacity-60"
                   onClick={empty}
                   disabled={cart.items.length === 0}
                 >
@@ -297,18 +347,16 @@ export function CartDrawer() {
                 </button>
 
                 <button
-                  className="flex-1 rounded-xl px-4 py-2 text-center font-semibold"
-                  style={{ background: "var(--brand)", color: "#0b0b0b" }}
+                  className="btn-cta flex-1 px-4 py-2 text-sm font-semibold disabled:opacity-60"
                   onClick={generateAndSend}
                   disabled={cart.items.length === 0}
                 >
-                  Generar comprobante + WhatsApp
+                  Generar + WhatsApp
                 </button>
               </div>
 
               <p className="mt-2 text-xs opacity-70">
-                Tip: el comprobante queda guardado en un link y puedes editar
-                cantidades después.
+                Tip: el comprobante queda guardado en un link y puedes editar cantidades después.
               </p>
             </div>
           </div>

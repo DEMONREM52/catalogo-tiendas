@@ -36,6 +36,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   function open() {
     setIsOpen(true);
   }
+
   function close() {
     setIsOpen(false);
   }
@@ -52,6 +53,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCart(existing);
       return;
     }
+
     const fresh: CartState = { ...s, items: [] };
     setCart(fresh);
     saveCart(fresh);
@@ -62,7 +64,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     saveCart(next);
   }
 
-  // ✅ IMPORTANTE: ya NO abre el carrito automáticamente
+  // ✅ No abre el carrito automáticamente
   function addItem(item: CartItem, opts?: { openDrawer?: boolean }) {
     if (!cart) return;
 
@@ -82,7 +84,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     update({ ...cart, items });
 
-    // Solo abre si explícitamente lo piden
     if (opts?.openDrawer) open();
   }
 
@@ -92,9 +93,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const items = cart.items
       .map((i) => {
         if (i.productId !== productId) return i;
+
         const safeQty = Math.max(0, Math.floor(qty || 0));
         const min = cart.mode === "mayor" ? (i.minWholesale ?? null) : null;
         const finalQty = min ? Math.max(safeQty, min) : safeQty;
+
         return { ...i, qty: finalQty };
       })
       .filter((i) => i.qty > 0);
@@ -104,10 +107,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   function removeItem(productId: string) {
     if (!cart) return;
-    update({
-      ...cart,
-      items: cart.items.filter((i) => i.productId !== productId),
-    });
+    update({ ...cart, items: cart.items.filter((i) => i.productId !== productId) });
   }
 
   function empty() {

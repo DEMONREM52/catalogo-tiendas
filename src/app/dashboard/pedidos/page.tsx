@@ -91,7 +91,7 @@ export default function OrdersDashboardPage() {
       const { data: ordData, error: ordErr } = await sb
         .from("orders")
         .select(
-          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type",
+          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type"
         )
         .eq("store_id", storeData.id)
         .order("created_at", { ascending: false });
@@ -167,7 +167,7 @@ export default function OrdersDashboardPage() {
               return `<div style="margin:8px 0">
                 <div><b>${name}</b></div>
                 <div style="opacity:.8">Cant: ${i.quantity} · Precio: ${money(
-                  i.price,
+                  i.price
                 )} · Subtotal: ${money(sub)}</div>
               </div>`;
             })
@@ -205,7 +205,7 @@ export default function OrdersDashboardPage() {
       icon: "question",
       title: "Cambiar estado",
       text: `¿Cambiar el pedido #${o.receipt_no ?? "—"} a "${statusLabel(
-        nextStatus,
+        nextStatus
       )}"?`,
       showCancelButton: true,
       confirmButtonText: "Sí",
@@ -228,7 +228,7 @@ export default function OrdersDashboardPage() {
       if (error) throw error;
 
       setOrders((prev) =>
-        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x)),
+        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x))
       );
 
       await Swal.fire({
@@ -252,47 +252,6 @@ export default function OrdersDashboardPage() {
     }
   }
 
-  // ✅ Imprimir PDF (FACTURA) usando la página /pedido/[token]
-  async function printOrderAsPDF(link: string) {
-    const w = window.open(link, "_blank");
-    if (!w) {
-      await Swal.fire({
-        icon: "info",
-        title: "Pop-up bloqueado",
-        text: "Tu navegador bloqueó la pestaña. Permite pop-ups y vuelve a intentar.",
-        background: "#0b0b0b",
-        color: "#fff",
-      });
-      return;
-    }
-
-    // Esperar a que cargue bien (más confiable que un setTimeout fijo)
-    const startedAt = Date.now();
-    const maxWait = 9000;
-
-    const timer = setInterval(() => {
-      try {
-        const ready = w.document?.readyState === "complete";
-        const tooLong = Date.now() - startedAt > maxWait;
-
-        if (ready || tooLong) {
-          clearInterval(timer);
-          w.focus();
-          w.print();
-        }
-      } catch {
-        // si por alguna razón el navegador no deja leer readyState, hacemos fallback
-        clearInterval(timer);
-        setTimeout(() => {
-          try {
-            w.focus();
-            w.print();
-          } catch {}
-        }, 1400);
-      }
-    }, 400);
-  }
-
   async function orderActions(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
 
@@ -311,39 +270,24 @@ export default function OrdersDashboardPage() {
             <div style="font-size:12px; opacity:.7; margin-bottom:6px">Link del comprobante</div>
             <code style="font-size:12px; word-break:break-all;">${link}</code>
           </div>
-
-          <div style="margin-top:10px; font-size:12px; opacity:.75">
-            Nota: el botón <b>PDF</b> imprime la <b>factura</b> (la página del comprobante ya está diseñada para imprimir).
-          </div>
         </div>
       `,
       background: "#0b0b0b",
       color: "#fff",
       showCancelButton: true,
-      showDenyButton: true,
 
       confirmButtonText: "Abrir",
-      denyButtonText: "PDF (Factura)",
       cancelButtonText: "Copiar link",
 
       confirmButtonColor: "#22c55e",
-      denyButtonColor: "#60a5fa",
       cancelButtonColor: "#374151",
     });
 
-    // Abrir
     if (res.isConfirmed) {
       window.open(link, "_blank");
       return;
     }
 
-    // PDF (FACTURA)
-    if (res.isDenied) {
-      await printOrderAsPDF(link);
-      return;
-    }
-
-    // Copiar
     if (res.dismiss === Swal.DismissReason.cancel) {
       await navigator.clipboard.writeText(link);
 
@@ -368,7 +312,8 @@ export default function OrdersDashboardPage() {
   }
 
   return (
-    <main className="p-6 space-y-5">
+    <main className="p-6 space-y-5 panel-enter">
+      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Pedidos</h1>
@@ -378,42 +323,46 @@ export default function OrdersDashboardPage() {
         </div>
 
         <div className="flex gap-2">
-          <button
-            className="rounded-xl border border-white/10 px-4 py-2"
-            onClick={load}
-          >
+          <button className="btn-soft px-4 py-2" onClick={load}>
             Recargar
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-        <input
-          className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-          placeholder="Buscar: comprobante, nombre, whatsapp, estado..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      {/* Filtros */}
+      <div className="glass p-4">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <input
+            className="p-3"
+            placeholder="Buscar: comprobante, nombre, whatsapp, estado..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
 
-        <select
-          className="rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="all">Todos</option>
-          <option value="draft">Borrador</option>
-          <option value="sent">Enviado (editable)</option>
-          <option value="confirmed">Confirmado</option>
-          <option value="completed">Completado</option>
-        </select>
+          <select
+            className="p-3"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="all">Todos</option>
+            <option value="draft">Borrador</option>
+            <option value="sent">Enviado (editable)</option>
+            <option value="confirmed">Confirmado</option>
+            <option value="completed">Completado</option>
+          </select>
 
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm opacity-80">
-          Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos: <b>{orders.length}</b>
+          <div className="glass-soft p-3 text-sm">
+            Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos: <b>{orders.length}</b>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 border-b border-white/10 bg-black/20 p-3 text-sm opacity-80">
+      {/* Tabla */}
+      <div className="glass overflow-hidden">
+        <div
+          className="grid grid-cols-12 gap-2 border-b p-3 text-sm opacity-80"
+          style={{ borderColor: "var(--t-card-border)" }}
+        >
           <div className="col-span-2">Factura</div>
           <div className="col-span-2">Fecha</div>
           <div className="col-span-2">Estado</div>
@@ -428,40 +377,46 @@ export default function OrdersDashboardPage() {
           filtered.map((o) => (
             <div
               key={o.id}
-              className="grid grid-cols-12 gap-2 p-3 border-b border-white/10"
+              className="grid grid-cols-12 gap-2 p-3 border-b"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--t-card-border) 85%, transparent)",
+              }}
             >
-              <div className="col-span-2 font-semibold">
-                #{o.receipt_no ?? "—"}
-              </div>
+              <div className="col-span-2 font-semibold">#{o.receipt_no ?? "—"}</div>
+
               <div className="col-span-2 text-sm opacity-80">
                 {new Date(o.created_at).toLocaleDateString("es-CO")}
               </div>
+
               <div className="col-span-2 text-sm">
                 <span className="opacity-90">{statusLabel(o.status)}</span>
               </div>
+
               <div className="col-span-2 text-sm opacity-80">
                 {o.catalog_type === "retail" ? "Detal" : "Mayor"}
               </div>
+
               <div className="col-span-2 font-semibold">{money(o.total)}</div>
 
-              <div className="col-span-2 flex justify-end gap-2">
-                <button
-                  className="rounded-xl border border-white/10 px-3 py-1 text-sm"
-                  onClick={() => orderActions(o)}
-                >
+              <div className="col-span-2 flex justify-end flex-wrap gap-2">
+                <button className="btn-soft px-3 py-1 text-sm" onClick={() => orderActions(o)}>
                   Ver
                 </button>
 
-                <button
-                  className="rounded-xl border border-white/10 px-3 py-1 text-sm"
-                  onClick={() => openOrder(o)}
-                >
+                <button className="btn-soft px-3 py-1 text-sm" onClick={() => openOrder(o)}>
                   Detalle
                 </button>
 
                 {o.status !== "confirmed" && (
                   <button
-                    className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-1 text-sm text-green-200"
+                    className="btn-soft px-3 py-1 text-sm font-semibold"
+                    style={{
+                      borderColor:
+                        "color-mix(in oklab, lime 35%, var(--t-card-border))",
+                      background: "color-mix(in oklab, lime 10%, transparent)",
+                      color: "color-mix(in oklab, white 85%, lime 15%)",
+                    }}
                     onClick={() => setOrderStatus(o, "confirmed")}
                   >
                     Confirmar
@@ -470,7 +425,14 @@ export default function OrdersDashboardPage() {
 
                 {o.status === "confirmed" && (
                   <button
-                    className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-200"
+                    className="btn-soft px-3 py-1 text-sm font-semibold"
+                    style={{
+                      borderColor:
+                        "color-mix(in oklab, dodgerblue 35%, var(--t-card-border))",
+                      background:
+                        "color-mix(in oklab, dodgerblue 10%, transparent)",
+                      color: "color-mix(in oklab, white 85%, dodgerblue 15%)",
+                    }}
                     onClick={() => setOrderStatus(o, "completed")}
                   >
                     Completar
@@ -483,8 +445,7 @@ export default function OrdersDashboardPage() {
       </div>
 
       <p className="text-xs opacity-70">
-        Tip: el cliente puede editar mientras esté en <b>Enviado</b>. Si tú lo
-        confirmas, ya no debería editarse.
+        Tip: el cliente puede editar mientras esté en <b>Enviado</b>. Si tú lo confirmas, ya no debería editarse.
       </p>
     </main>
   );
