@@ -9,9 +9,11 @@ import { SocialIconRow } from "./socials";
 import { useCart } from "@/lib/cart/CartProvider";
 import { CartDrawer } from "@/lib/cart/CartDrawer";
 
-// ✅ helper centralizado
 import { applyThemeToRoot, type ThemeConfig } from "@/lib/themes/applyTheme";
 
+/* =========================
+   Types
+========================= */
 type Mode = "detal" | "mayor";
 
 type StoreRow = {
@@ -22,7 +24,7 @@ type StoreRow = {
   active: boolean;
   catalog_retail: boolean;
   catalog_wholesale: boolean;
-  theme: string | null;
+  theme: string | null; // FK -> themes.id (text)
   logo_url: string | null;
   banner_url: string | null;
   wholesale_key: string | null;
@@ -40,6 +42,158 @@ function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
 }
 
+function pickStr(v: any) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s || undefined;
+}
+
+function asNum(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function isHexOrRgbaLike(s?: string) {
+  if (!s) return false;
+  const t = s.trim();
+  if (!t) return false;
+  // #rgb / #rrggbb / #rrggbbaa
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(t)) return true;
+  // rgba(...) / rgb(...) / hsl(...)
+  if (/^(rgb|rgba|hsl|hsla)\(/i.test(t)) return true;
+  return false;
+}
+
+/* =========================
+   Map DB theme.config -> ThemeConfig (applyThemeToRoot)
+   DB config soportado (por tu schema + seeds):
+   - bg (puede ser hex/rgba o puede ser un gradient string)
+   - card, card_border, text, muted, accent, accent2
+   - cta (solid) OR ctaA/ctaB (+ optional ctaAngle)
+   - bgGradA/bgGradB/bgAngle (si lo manejas)
+========================= */
+function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
+  if (!dbCfg || typeof dbCfg !== "object") return undefined;
+
+  // Colors / tokens
+  const bg = pickStr(dbCfg.bg);
+  const card = pickStr(dbCfg.card);
+  const cardBorder = pickStr(dbCfg.card_border);
+  const text = pickStr(dbCfg.text);
+  const muted = pickStr(dbCfg.muted);
+  const accent = pickStr(dbCfg.accent);
+  const accent2 = pickStr(dbCfg.accent2);
+
+  // Background advanced (optional)
+  const bgGradA = pickStr(dbCfg.bgGradA ?? dbCfg.bg_grad_a);
+  const bgGradB = pickStr(dbCfg.bgGradB ?? dbCfg.bg_grad_b);
+  const bgAngle = asNum(dbCfg.bgAngle ?? dbCfg.bg_angle);
+
+  // CTA
+  const cta = pickStr(dbCfg.cta);
+  const ctaA = pickStr(dbCfg.ctaA ?? dbCfg.cta_a);
+  const ctaB = pickStr(dbCfg.ctaB ?? dbCfg.cta_b);
+  const ctaAngle = asNum(dbCfg.ctaAngle ?? dbCfg.cta_angle);
+
+  const cfg: ThemeConfig = {};
+
+  // ---- BG ----
+  // Si bg viene como color => solid
+  // Si bg viene como "linear-gradient(...)" => lo tratamos como gradient:
+  //   (no podemos meter raw string en applyThemeToRoot, pero sí usando el fix de --t-bg en runtime)
+  // Mejor: si tienes bgGradA/bgGradB úsalo como gradient real.
+  if (bg) {
+    if (isHexOrRgbaLike(bg)) {
+      cfg.bgMode = "solid";
+      cfg.bgSolid = bg;
+    } else if (/gradient\(/i.test(bg)) {
+      // si guardaste el string de gradient en dbCfg.bg, lo manejamos luego con el fix runtime
+      // pero también setea modo gradient para que existan tokens consistentes
+      cfg.bgMode = "gradient";
+      // intenta extraer A/B si existen; si no, dejamos defaults del helper y luego fijamos --t-bg manual
+      if (bgGradA) cfg.bgGradA = bgGradA;
+      if (bgGradB) cfg.bgGradB = bgGradB;
+      if (bgAngle != null) cfg.bgAngle = bgAngle;
+      // nota: el raw gradient lo aplicaremos como --t-bg en runtime si hace falta
+      (cfg as any).__rawBg = bg;
+    }
+  } else if (bgGradA || bgGradB) {
+    cfg.bgMode = "gradient";
+    if (bgGradA) cfg.bgGradA = bgGradA;
+    if (bgGradB) cfg.bgGradB = bgGradB;
+    if (bgAngle != null) cfg.bgAngle = bgAngle;
+  }
+
+  // ---- Text / borders ----
+  if (text) cfg.text = text;
+  if (muted) cfg.mutedText = muted;
+
+  // tu UI usa var(--t-border) para bordes generales,
+  // y cardBorder para cards. Si viene card_border, lo usamos en ambos.
+  if (cardBorder) {
+    cfg.border = cardBorder;
+    cfg.cardBorder = cardBorder;
+  }
+
+  // ---- Cards ----
+  if (card) cfg.cardBg = card;
+
+  // ---- Accents ----
+  if (accent) cfg.accent = accent;
+  if (accent2) cfg.accent2 = accent2;
+
+  // ---- CTA ----
+  if (cta) {
+    cfg.ctaMode = "solid";
+    cfg.ctaSolid = cta;
+  } else if (ctaA || ctaB) {
+    cfg.ctaMode = "gradient";
+    if (ctaA) cfg.ctaA = ctaA;
+    if (ctaB) cfg.ctaB = ctaB;
+    if (ctaAngle != null) cfg.ctaAngle = ctaAngle;
+  } else if (accent2 || accent) {
+    cfg.ctaMode = "solid";
+    cfg.ctaSolid = accent2 ?? accent!;
+  }
+
+  return cfg;
+}
+
+/* =========================
+   IMPORTANT FIX for your globals.css
+   globals.css uses:
+   body { background: var(--t-bg-base); background-image: var(--t-bg); }
+
+   - If theme is SOLID => set --t-bg-base = color and --t-bg = none
+   - If theme is GRADIENT => set --t-bg-base = dark base and --t-bg = gradient
+========================= */
+function syncGlobalBodyBackground(cfg?: ThemeConfig) {
+  if (typeof document === "undefined") return;
+
+  const r = document.documentElement;
+
+  const isSolid = cfg?.bgMode === "solid" && !!cfg?.bgSolid;
+
+  if (isSolid) {
+    r.style.setProperty("--t-bg-base", cfg!.bgSolid!);
+    // background-image necesita "none" (color NO vale)
+    r.style.setProperty("--t-bg", "none");
+    return;
+  }
+
+  // gradient mode
+  r.style.setProperty("--t-bg-base", "#070014");
+
+  // Si tu theme venía con bg string raw (linear-gradient...) lo ponemos directo
+  const raw = (cfg as any)?.__rawBg as string | undefined;
+  if (raw && /gradient\(/i.test(raw)) {
+    r.style.setProperty("--t-bg", raw);
+  }
+  // si no hay raw, applyThemeToRoot ya setea --t-bg con gradient(...)
+}
+
+/* =========================
+   Page
+========================= */
 export default function StoreCatalogPage() {
   const params = useParams<{ slug: string; mode: string }>();
   const searchParams = useSearchParams();
@@ -59,7 +213,6 @@ export default function StoreCatalogPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
 
-  // ✅ buscador (se moverá debajo de categorías)
   const [q, setQ] = useState("");
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -68,6 +221,8 @@ export default function StoreCatalogPage() {
   const safeMode: Mode = useMemo(() => (isValidMode(mode) ? mode : "detal"), [mode]);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       setMsg(null);
       setLoading(true);
@@ -76,12 +231,11 @@ export default function StoreCatalogPage() {
         const sb = supabaseBrowser();
 
         if (!slug || !isValidMode(mode)) {
-          setMsg("❌ Ruta inválida.");
-          setLoading(false);
+          if (!cancelled) setMsg("❌ Ruta inválida.");
           return;
         }
 
-        // 1) Tienda
+        // 1) store
         const { data: storeData, error: storeErr } = await sb
           .from("stores")
           .select(
@@ -91,59 +245,53 @@ export default function StoreCatalogPage() {
           .maybeSingle();
 
         if (storeErr || !storeData) {
-          setMsg("❌ Tienda no encontrada.");
-          setLoading(false);
+          if (!cancelled) setMsg("❌ Tienda no encontrada.");
           return;
         }
 
         const st = storeData as StoreRow;
 
-        // Acceso mayorista por key
+        // mayorista key
         if (safeMode === "mayor") {
           if (!st.wholesale_key) {
-            setMsg("❌ Este catálogo mayorista no está disponible.");
-            setLoading(false);
+            if (!cancelled) setMsg("❌ Este catálogo mayorista no está disponible.");
             return;
           }
           if (key !== st.wholesale_key) {
-            setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
-            setLoading(false);
+            if (!cancelled) setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
             return;
           }
         }
 
         if (!st.active) {
-          setMsg("❌ Esta tienda está desactivada.");
-          setLoading(false);
+          if (!cancelled) setMsg("❌ Esta tienda está desactivada.");
           return;
         }
 
         if (safeMode === "detal" && !st.catalog_retail) {
-          setMsg("❌ Catálogo detal no disponible.");
-          setLoading(false);
+          if (!cancelled) setMsg("❌ Catálogo detal no disponible.");
           return;
         }
 
         if (safeMode === "mayor" && !st.catalog_wholesale) {
-          setMsg("❌ Catálogo mayor no disponible.");
-          setLoading(false);
+          if (!cancelled) setMsg("❌ Catálogo mayor no disponible.");
           return;
         }
 
-        setStore(st);
+        if (!cancelled) setStore(st);
 
-        // ✅ THEME real desde DB
+        // 2) theme
         const themeId = st.theme?.trim() || null;
         let cfg: ThemeConfig | undefined;
 
         if (themeId) {
-          const { data: themeRow, error: thErr } = await sb
+          const { data: themeRow } = await sb
             .from("themes")
             .select("id,active,config")
             .eq("id", themeId)
             .maybeSingle();
 
-          if (!thErr && themeRow?.config) cfg = themeRow.config as ThemeConfig;
+          cfg = mapDbThemeToApplyTheme(themeRow?.config);
         }
 
         if (!cfg) {
@@ -155,13 +303,14 @@ export default function StoreCatalogPage() {
             .limit(1)
             .maybeSingle();
 
-          cfg = (fallback?.config ?? undefined) as ThemeConfig | undefined;
+          cfg = mapDbThemeToApplyTheme(fallback?.config);
         }
 
-        // ✅ aplica a :root
+        // apply vars + sync global background system
         applyThemeToRoot(cfg);
+        syncGlobalBodyBackground(cfg);
 
-        // carrito
+        // init cart
         initCart({
           storeId: st.id,
           storeSlug: st.slug,
@@ -170,33 +319,33 @@ export default function StoreCatalogPage() {
           mode: safeMode,
         });
 
-        // 2) Perfil
+        // 3) profile
         const { data: profData } = await sb
           .from("store_profiles")
           .select("*")
           .eq("store_id", st.id)
           .maybeSingle();
-        setProfile(profData ?? null);
+        if (!cancelled) setProfile(profData ?? null);
 
-        // 3) Redes
+        // 4) links
         const { data: linksData } = await sb
           .from("store_links")
           .select("id,type,label,url,active,sort_order,icon_url")
           .eq("store_id", st.id)
           .eq("active", true)
           .order("sort_order", { ascending: true });
-        setLinks(linksData ?? []);
+        if (!cancelled) setLinks(linksData ?? []);
 
-        // 4) Categorías
+        // 5) categories
         const { data: catData } = await sb
           .from("product_categories")
           .select("id,name,image_url,sort_order")
           .eq("store_id", st.id)
           .eq("active", true)
           .order("sort_order", { ascending: true });
-        setCategories(catData ?? []);
+        if (!cancelled) setCategories(catData ?? []);
 
-        // 5) Productos
+        // 6) products
         const { data: prodData } = await sb
           .from("products")
           .select(
@@ -205,33 +354,31 @@ export default function StoreCatalogPage() {
           .eq("store_id", st.id)
           .eq("active", true)
           .order("name", { ascending: true });
-        setProducts(prodData ?? []);
+        if (!cancelled) setProducts(prodData ?? []);
       } catch (err: any) {
-        setMsg(err?.message ?? "Error cargando catálogo.");
+        if (!cancelled) setMsg(err?.message ?? "Error cargando catálogo.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, mode, key, initCart, safeMode]);
 
-  // ✅ TITULO + LOGO EN LA PESTAÑA (cuando ya existe store)
+  // tab title + favicon
   useEffect(() => {
     if (!store?.name) return;
 
-    // Título de la pestaña
     document.title = `${store.name} - Catálogos online`;
 
-    // Favicon (logo en la pestaña)
     const favicon =
       (document.querySelector("link[rel~='icon']") as HTMLLinkElement | null) ||
       (document.createElement("link") as HTMLLinkElement);
 
     favicon.rel = "icon";
-
-    // Cache-buster para que el navegador no se quede con el favicon viejo
-    const iconUrl = store.logo_url ? `${store.logo_url}?v=${Date.now()}` : "/favicon.ico";
-    favicon.href = iconUrl;
-
+    favicon.href = store.logo_url ? `${store.logo_url}?v=${Date.now()}` : "/favicon.ico";
     document.head.appendChild(favicon);
   }, [store]);
 
@@ -304,7 +451,9 @@ export default function StoreCatalogPage() {
     });
   }
 
-  const shownProductsBase = selectedCat ? products.filter((p) => p.category_id === selectedCat) : products;
+  const shownProductsBase = selectedCat
+    ? products.filter((p) => p.category_id === selectedCat)
+    : products;
 
   const shownProducts = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -316,9 +465,12 @@ export default function StoreCatalogPage() {
     });
   }, [shownProductsBase, q]);
 
+  /* =========================
+     Render
+  ========================= */
   if (loading) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg)", color: "var(--t-text)" }}>
+      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <div
             className="rounded-3xl border p-5"
@@ -338,7 +490,7 @@ export default function StoreCatalogPage() {
 
   if (!store) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg)", color: "var(--t-text)" }}>
+      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <p>{msg ?? "No se pudo cargar."}</p>
         </div>
@@ -351,29 +503,20 @@ export default function StoreCatalogPage() {
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--t-bg)", color: "var(--t-text)" }}>
-      {/* ✅ Premium background overlay */}
+    <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      {/* overlay SOLO si hay gradient (si solid, --t-bg = none por syncGlobalBodyBackground) */}
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0" style={{ background: "var(--t-bg)" }} />
+        <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
         <div
-          className="absolute inset-0 opacity-[0.22]"
+          className="absolute inset-0"
           style={{
-            background:
-              "radial-gradient(900px 420px at 12% 10%, color-mix(in oklab, var(--t-accent2) 55%, transparent), transparent 60%), radial-gradient(800px 420px at 88% 16%, color-mix(in oklab, var(--t-cta) 45%, transparent), transparent 58%), radial-gradient(900px 520px at 50% 92%, color-mix(in oklab, var(--t-accent2) 35%, transparent), transparent 64%)",
+            backgroundImage: "var(--t-bg)",
+            opacity: 0.22,
           }}
         />
-        <div
-          className="absolute inset-0 opacity-[0.09]"
-          style={{
-            backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-            color: "rgba(255,255,255,0.35)",
-          }}
-        />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/30 to-transparent" />
       </div>
 
-      {/* ✅ CSS extra */}
+      {/* helpers */}
       <style jsx global>{`
         .t-glass {
           backdrop-filter: blur(16px);
@@ -402,13 +545,10 @@ export default function StoreCatalogPage() {
         }
       `}</style>
 
-      {/* ✅ Sticky Topbar */}
+      {/* Topbar */}
       <div
         className="sticky top-0 z-40 border-b t-glass"
-        style={{
-          borderColor: "var(--t-border)",
-          background: glassBg,
-        }}
+        style={{ borderColor: "var(--t-border)", background: glassBg }}
       >
         <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-3">
@@ -435,10 +575,7 @@ export default function StoreCatalogPage() {
             <div className="flex items-center gap-2">
               <span
                 className="hidden sm:inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-                style={{
-                  borderColor: "var(--t-border)",
-                  background: glassBg2,
-                }}
+                style={{ borderColor: "var(--t-border)", background: glassBg2 }}
               >
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
                 {safeMode === "detal" ? "DETAL" : "MAYOR"}
@@ -447,10 +584,7 @@ export default function StoreCatalogPage() {
               {safeMode === "detal" ? (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg2,
-                  }}
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   href={`https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
                     `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`
                   )}`}
@@ -462,10 +596,7 @@ export default function StoreCatalogPage() {
               ) : (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg2,
-                  }}
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   href={`/${store.slug}/detal`}
                 >
                   Ver Detal
@@ -476,34 +607,29 @@ export default function StoreCatalogPage() {
         </div>
       </div>
 
-      {/* ✅ Header principal (SIN buscador aquí) */}
+      {/* Header */}
       <header className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
         <div
           className="rounded-[28px] border p-5 t-glass"
-          style={{
-            borderColor: "var(--t-border)",
-            background: glassBg,
-          }}
+          style={{ borderColor: "var(--t-border)", background: glassBg }}
         >
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
-              <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} · {shownProducts.length} productos
-              </p>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
+            <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+              {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} · {shownProducts.length} productos
+            </p>
 
-              {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
+            {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
 
-              {links.length ? (
-                <div className="mt-4">
-                  <SocialIconRow links={links} />
-                </div>
-              ) : null}
-            </div>
+            {links.length ? (
+              <div className="mt-4">
+                <SocialIconRow links={links} />
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {/* Banner premium */}
+        {/* Banner */}
         {store.banner_url ? (
           <div className="mt-5">
             <div className="relative overflow-hidden rounded-[28px] border" style={{ borderColor: "var(--t-border)" }}>
@@ -514,36 +640,15 @@ export default function StoreCatalogPage() {
                 onLoad={() => setImgLoaded(true)}
               />
 
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.08) 55%, rgba(0,0,0,0.35) 100%)",
-                }}
-              />
-
               {!imgLoaded ? (
                 <div
                   className="absolute inset-0 animate-pulse"
                   style={{
-                    background: "linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06))",
+                    background:
+                      "linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06))",
                   }}
                 />
               ) : null}
-
-              <div className="absolute bottom-4 left-4 right-4">
-                <div
-                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold t-glass"
-                  style={{
-                    borderColor: "color-mix(in oklab, var(--t-border) 70%, transparent)",
-                    background: "rgba(0,0,0,0.25)",
-                    color: "rgba(255,255,255,0.95)",
-                  }}
-                >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
-                  {safeMode === "detal" ? "Compra rápida" : "Precios mayoristas"}
-                </div>
-              </div>
             </div>
           </div>
         ) : null}
@@ -581,11 +686,7 @@ export default function StoreCatalogPage() {
                     key={c.id}
                     onClick={() => setSelectedCat(c.id)}
                     className={cx("t-btn shrink-0 rounded-2xl border p-2 text-left", active && "ring-2 ring-white/25")}
-                    style={{
-                      width: 150,
-                      borderColor: "var(--t-border)",
-                      background: glassBg,
-                    }}
+                    style={{ width: 150, borderColor: "var(--t-border)", background: glassBg }}
                   >
                     {c.image_url ? (
                       <img
@@ -596,13 +697,7 @@ export default function StoreCatalogPage() {
                         loading="lazy"
                       />
                     ) : (
-                      <div
-                        className="aspect-square w-full rounded-xl border"
-                        style={{
-                          borderColor: "var(--t-border)",
-                          background: "rgba(255,255,255,0.05)",
-                        }}
-                      />
+                      <div className="aspect-square w-full rounded-xl border" style={{ borderColor: "var(--t-border)" }} />
                     )}
                     <p className="mt-2 line-clamp-2 text-sm font-bold">{c.name}</p>
                   </button>
@@ -610,53 +705,8 @@ export default function StoreCatalogPage() {
               })}
             </div>
 
-            {/* ✅ BUSCADOR DEBAJO DE CATEGORÍAS */}
-            <div className="mt-4">
-              <div
-                className="rounded-2xl border p-3"
-                style={{
-                  borderColor: "var(--t-border)",
-                  background: glassBg2,
-                }}
-              >
-                <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-                  Buscar producto
-                </label>
-                <input
-                  className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: "color-mix(in oklab, var(--t-bg) 70%, transparent)",
-                    color: "var(--t-text)",
-                  }}
-                  placeholder="Ej: camiseta, bolso, perfume..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-
-                {q ? (
-                  <button
-                    type="button"
-                    className="mt-2 text-xs underline opacity-80"
-                    onClick={() => setQ("")}
-                    style={{ color: "var(--t-muted)" }}
-                  >
-                    Limpiar búsqueda
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Si NO hay categorías, mostramos el buscador igualmente
-          <div className="mt-2">
-            <div
-              className="rounded-2xl border p-3"
-              style={{
-                borderColor: "var(--t-border)",
-                background: glassBg2,
-              }}
-            >
+            {/* Buscador */}
+            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
               <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                 Buscar producto
               </label>
@@ -664,7 +714,7 @@ export default function StoreCatalogPage() {
                 className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
                 style={{
                   borderColor: "var(--t-border)",
-                  background: "color-mix(in oklab, var(--t-bg) 70%, transparent)",
+                  background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                   color: "var(--t-text)",
                 }}
                 placeholder="Ej: camiseta, bolso, perfume..."
@@ -684,31 +734,44 @@ export default function StoreCatalogPage() {
               ) : null}
             </div>
           </div>
+        ) : (
+          // si no hay categorías, igual mostrar buscador
+          <div className="mt-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+            <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+              Buscar producto
+            </label>
+            <input
+              className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+              style={{
+                borderColor: "var(--t-border)",
+                background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                color: "var(--t-text)",
+              }}
+              placeholder="Ej: camiseta, bolso, perfume..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
         )}
 
-        {/* Productos header */}
+        {/* Productos */}
         <div className="mt-7 flex items-end justify-between gap-4">
           <div>
             <h2 className="text-xl font-extrabold">Productos</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {shownProducts.length} disponibles
-              {q ? ` · filtrados por “${q}”` : ""}
+              {shownProducts.length} disponibles{q ? ` · filtrados por “${q}”` : ""}
             </p>
           </div>
 
           <span
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-            style={{
-              borderColor: "var(--t-border)",
-              background: glassBg2,
-            }}
+            style={{ borderColor: "var(--t-border)", background: glassBg2 }}
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
             {safeMode === "detal" ? "DETAL" : "MAYOR"}
           </span>
         </div>
 
-        {/* Grid productos */}
         {shownProducts.length === 0 ? (
           <div className="mt-5 rounded-[28px] border p-6" style={{ borderColor: "var(--t-border)", background: glassBg }}>
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
@@ -721,14 +784,7 @@ export default function StoreCatalogPage() {
               const price = safeMode === "detal" ? p.price_retail : p.price_wholesale;
 
               return (
-                <div
-                  key={p.id}
-                  className="t-card rounded-[28px] border p-4"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg,
-                  }}
-                >
+                <div key={p.id} className="t-card rounded-[28px] border p-4" style={{ borderColor: "var(--t-border)", background: glassBg }}>
                   {p.image_url ? (
                     <img
                       src={p.image_url}
@@ -738,10 +794,7 @@ export default function StoreCatalogPage() {
                       style={{ borderColor: "var(--t-border)" }}
                     />
                   ) : (
-                    <div
-                      className="mb-3 aspect-square w-full rounded-2xl border"
-                      style={{ borderColor: "var(--t-border)", background: "rgba(255,255,255,0.05)" }}
-                    />
+                    <div className="mb-3 aspect-square w-full rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
                   )}
 
                   <div className="flex items-start justify-between gap-3">
@@ -788,24 +841,22 @@ export default function StoreCatalogPage() {
           </div>
         )}
 
-        {/* FOOTER */}
-        <div className="mt-10">
-          <footer className="border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
-            <div className="text-sm" style={{ color: "var(--t-muted)" }}>
-              {profile?.address || profile?.city ? (
-                <p>
-                  {profile?.address ? profile.address + " · " : ""}
-                  {profile?.city ?? ""}
-                </p>
-              ) : (
-                <p>Catálogo generado por la tienda.</p>
-              )}
-            </div>
-          </footer>
+        {/* Footer */}
+        <div className="mt-10 border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
+          <div className="text-sm" style={{ color: "var(--t-muted)" }}>
+            {profile?.address || profile?.city ? (
+              <p>
+                {profile?.address ? profile.address + " · " : ""}
+                {profile?.city ?? ""}
+              </p>
+            ) : (
+              <p>Catálogo generado por la tienda.</p>
+            )}
+          </div>
         </div>
       </section>
 
-      {/* Toast msg */}
+      {/* Toast */}
       {msg ? (
         <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md">
           <div
