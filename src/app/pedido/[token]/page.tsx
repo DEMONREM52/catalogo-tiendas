@@ -124,18 +124,25 @@ export default function PedidoPage() {
   }, [order]);
 
   const receiptNumber = useMemo(() => {
-    return (
-      order?.receipt_no ??
-      order?.order_no ??
-      order?.number ??
-      order?.seq ??
-      null
-    );
+    return order?.receipt_no ?? order?.order_no ?? order?.number ?? order?.seq ?? null;
   }, [order]);
 
   const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
   const storeWhatsapp = storeExtra?.whatsapp ?? store?.whatsapp ?? "";
   const storeLogo = storeExtra?.logo_url ?? store?.logo_url ?? null;
+
+  // ✅ Cliente / Observaciones (si no existen, muestra —)
+  const customerName = useMemo(() => {
+    return String(order?.customer_name ?? "").trim();
+  }, [order]);
+
+  // ⚠️ si aún no agregas customer_note en tu tabla, esto quedará siempre ""
+  const customerNote = useMemo(() => {
+    return String((order as any)?.customer_note ?? "").trim();
+  }, [order]);
+
+  const customerNameShow = customerName || "—";
+  const customerNoteShow = customerNote || "—";
 
   /* -------------------------
      Load
@@ -147,9 +154,7 @@ export default function PedidoPage() {
       const sb = supabaseBrowser();
 
       // 1) RPC principal
-      const { data, error } = await sb.rpc("get_order_by_token", {
-        p_token: token,
-      });
+      const { data, error } = await sb.rpc("get_order_by_token", { p_token: token });
       if (error) throw error;
 
       const storeRpc = data?.store ?? null;
@@ -183,7 +188,7 @@ export default function PedidoPage() {
       if (!stData) throw new Error("No se encontró la tienda.");
       setStoreExtra(stData as StoreExtra);
 
-      // 4) perfil tienda (solo usamos description para impresión)
+      // 4) perfil tienda
       const { data: profData, error: profErr } = await sb
         .from("store_profiles")
         .select("address,city,department,description")
@@ -224,8 +229,7 @@ export default function PedidoPage() {
       try {
         window.print();
       } finally {
-        // al volver del diálogo de impresión, salimos de printMode
-        // (afterprint funciona en la mayoría, pero hacemos fallback)
+        // afterprint
       }
     }, 200);
 
@@ -237,7 +241,6 @@ export default function PedidoPage() {
 
     window.addEventListener("afterprint", onAfterPrint);
 
-    // fallback por si afterprint no dispara
     const fallback = window.setTimeout(() => {
       setPrintMode(false);
       document.title = prevTitle;
@@ -252,7 +255,6 @@ export default function PedidoPage() {
   }, [printMode, receiptNumber, token]);
 
   function printNow() {
-    // ✅ imprime sin abrir pestaña y mostrando solo la factura
     setPrintMode(true);
   }
 
@@ -262,9 +264,7 @@ export default function PedidoPage() {
   function setQty(productId: string, qty: number) {
     if (isLocked) return;
     const q = Math.max(1, Math.floor(Number(qty || 1)));
-    setItems((prev) =>
-      prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x))
-    );
+    setItems((prev) => prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x)));
   }
 
   async function saveChanges() {
@@ -375,35 +375,27 @@ export default function PedidoPage() {
     if (!storeWhatsapp || !order) return;
 
     const lines: string[] = [];
-    lines.push(
-      `🧾 Pedido (${order.catalog_type === "retail" ? "DETAL" : "MAYOR"})`
-    );
-    lines.push(`🏪 Tienda: ${storeName}`);
-    if (receiptNumber) lines.push(`🧾 Comprobante: #${receiptNumber}`);
+    lines.push(`Hola, soy *${customerNameShow}* 👋`);
+    lines.push(`Quiero confirmar este pedido:`);
+    lines.push("");
+    lines.push(`🏪 Tienda: *${storeName}*`);
+    if (receiptNumber) lines.push(`🧾 Comprobante: *#${receiptNumber}*`);
     lines.push(`Estado: ${statusLabel(order.status)}`);
+    lines.push(`📝 Observaciones: ${customerNoteShow}`);
     lines.push("");
 
     items.forEach((i, idx) => {
-      lines.push(`${idx + 1}. ${i.name}`);
       lines.push(
-        `   Cant: ${i.qty} | Precio: ${money(i.price)} | Subtotal: ${money(
-          i.price * i.qty
-        )}`
+        `${idx + 1}. ${i.name} — Cant: ${i.qty} — ${money(i.price)} c/u — Subtotal: ${money(i.price * i.qty)}`
       );
     });
 
     lines.push("");
-    lines.push(`TOTAL: ${money(total)}`);
+    lines.push(`💰 TOTAL: *${money(total)}*`);
     lines.push("");
     lines.push(`Link del comprobante: ${window.location.href}`);
-    lines.push(`✅ Quiero confirmar este pedido.`);
 
-    window.open(
-      `https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(
-        lines.join("\n")
-      )}`,
-      "_blank"
-    );
+    window.open(`https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
 
   /* -------------------------
@@ -441,35 +433,26 @@ export default function PedidoPage() {
         <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/25 to-transparent" />
       </div>
 
-      {/* ✅ Estilos de impresión: muestra SOLO la factura cuando printMode=true o al imprimir */}
+      {/* Estilos impresión */}
       <style jsx global>{`
         @media print {
-          .no-print {
-            display: none !important;
-          }
-          .only-print {
-            display: block !important;
-          }
+          .no-print { display: none !important; }
+          .only-print { display: block !important; }
           .print-card {
             border: none !important;
             box-shadow: none !important;
             background: #fff !important;
             color: #000 !important;
           }
-          @page {
-            margin: 14mm;
-          }
+          @page { margin: 14mm; }
         }
         @media screen {
-          .only-print {
-            display: none !important;
-          }
+          .only-print { display: none !important; }
         }
       `}</style>
 
       {/* =========================================================
          ✅ FACTURA (solo impresión)
-         - NO muestra dirección
       ========================================================= */}
       <div className="only-print mx-auto max-w-3xl print-card rounded-2xl border border-white/10 p-6">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
@@ -500,26 +483,26 @@ export default function PedidoPage() {
             <div>
               <div style={{ fontSize: 18, fontWeight: 900 }}>{storeName}</div>
 
-              {/* ✅ SIN DIRECCIÓN EN IMPRESIÓN */}
-
               {storeWhatsapp ? (
                 <div style={{ fontSize: 12, marginTop: 4 }}>
                   WhatsApp: <b>{storeWhatsapp}</b>
                 </div>
               ) : null}
+
+              {/* ✅ CLIENTE + OBSERVACIONES (IMPRESIÓN) */}
+              <div style={{ fontSize: 12, marginTop: 8 }}>
+                Cliente: <b>{customerNameShow}</b>
+              </div>
+              <div style={{ fontSize: 12, marginTop: 2 }}>
+                Observaciones: <b>{customerNoteShow}</b>
+              </div>
             </div>
           </div>
 
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
-              Factura de venta
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-              #{receiptNumber ?? "—"}
-            </div>
-            <div style={{ fontSize: 11, marginTop: 4 }}>
-              {new Date(order.created_at).toLocaleString("es-CO")}
-            </div>
+            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Factura de venta</div>
+            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>#{receiptNumber ?? "—"}</div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>{new Date(order.created_at).toLocaleString("es-CO")}</div>
           </div>
         </div>
 
@@ -538,16 +521,11 @@ export default function PedidoPage() {
             {items.map((i) => {
               const sub = Number(i.price) * Number(i.qty);
               return (
-                <tr
-                  key={i.product_id}
-                  style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
-                >
+                <tr key={i.product_id} style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
                   <td style={{ padding: "8px 0" }}>{i.qty}</td>
                   <td style={{ padding: "8px 0" }}>{i.name}</td>
                   <td style={{ padding: "8px 0", textAlign: "right" }}>{money(i.price)}</td>
-                  <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>
-                    {money(sub)}
-                  </td>
+                  <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>{money(sub)}</td>
                 </tr>
               );
             })}
@@ -555,14 +533,7 @@ export default function PedidoPage() {
         </table>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-          <div
-            style={{
-              width: 260,
-              border: "1px solid rgba(0,0,0,0.12)",
-              borderRadius: 10,
-              padding: 12,
-            }}
-          >
+          <div style={{ width: 260, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <div style={{ fontSize: 12 }}>TOTAL</div>
               <div style={{ fontSize: 16, fontWeight: 900 }}>{money(total)}</div>
@@ -574,9 +545,7 @@ export default function PedidoPage() {
           {profile?.description ? (
             <div>{profile.description}</div>
           ) : (
-            <div>
-              Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.
-            </div>
+            <div>Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.</div>
           )}
         </div>
       </div>
@@ -601,6 +570,16 @@ export default function PedidoPage() {
                 {storeName} · {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
               </p>
 
+              {/* ✅ CLIENTE + OBSERVACIONES (PANTALLA) */}
+              <div className="mt-3 space-y-1">
+                <p className="text-sm">
+                  👋 Hola, <b className="opacity-100">{customerNameShow}</b>
+                </p>
+                <p className="text-sm opacity-80">
+                  📝 Observaciones: <b className="opacity-100">{customerNoteShow}</b>
+                </p>
+              </div>
+
               <p className="mt-2 text-xs opacity-70">Guarda este link: siempre podrás volver.</p>
 
               {isLocked ? (
@@ -616,8 +595,7 @@ export default function PedidoPage() {
                 onClick={sendWhatsApp}
                 className="rounded-2xl px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
                 style={{
-                  background:
-                    "linear-gradient(90deg, rgba(34,197,94,1), rgba(16,185,129,1))",
+                  background: "linear-gradient(90deg, rgba(34,197,94,1), rgba(16,185,129,1))",
                   boxShadow: "0 18px 45px rgba(16,185,129,0.18)",
                 }}
                 disabled={saving}
@@ -634,7 +612,6 @@ export default function PedidoPage() {
                 Confirmar pedido
               </SoftBtn>
 
-              {/* ✅ imprime en la misma pestaña */}
               <SoftBtn onClick={printNow} disabled={!order}>
                 Imprimir
               </SoftBtn>
@@ -651,11 +628,7 @@ export default function PedidoPage() {
                   <div className="flex gap-4">
                     <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                       {i.image_url ? (
-                        <img
-                          src={i.image_url}
-                          className="h-full w-full object-cover"
-                          alt={i.name}
-                        />
+                        <img src={i.image_url} className="h-full w-full object-cover" alt={i.name} />
                       ) : null}
                     </div>
 
@@ -669,7 +642,6 @@ export default function PedidoPage() {
                         <Pill tone="soft">{money(subtotal)}</Pill>
                       </div>
 
-                      {/* Qty controls */}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
                           className="btn-soft px-3 py-2 text-sm font-semibold disabled:opacity-50"

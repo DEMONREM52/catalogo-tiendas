@@ -26,6 +26,10 @@ type OrderRow = {
   created_at: string;
   customer_name: string | null;
   customer_whatsapp: string | null;
+
+  // ✅ NUEVO
+  customer_note: string | null;
+
   catalog_type: "retail" | "wholesale";
 };
 
@@ -87,11 +91,11 @@ export default function OrdersDashboardPage() {
 
       setStoreId(storeData.id);
 
-      // 3) Pedidos
+      // 3) Pedidos (✅ incluye customer_note)
       const { data: ordData, error: ordErr } = await sb
         .from("orders")
         .select(
-          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,catalog_type"
+          "id,token,store_id,receipt_no,status,total,created_at,customer_name,customer_whatsapp,customer_note,catalog_type"
         )
         .eq("store_id", storeData.id)
         .order("created_at", { ascending: false });
@@ -125,6 +129,7 @@ export default function OrdersDashboardPage() {
         String(o.receipt_no ?? "").includes(s) ||
         (o.customer_name ?? "").toLowerCase().includes(s) ||
         (o.customer_whatsapp ?? "").toLowerCase().includes(s) ||
+        (o.customer_note ?? "").toLowerCase().includes(s) ||
         (o.status ?? "").toLowerCase().includes(s);
 
       const matchStatus = status === "all" ? true : o.status === status;
@@ -150,16 +155,30 @@ export default function OrdersDashboardPage() {
         product: x.products ?? null,
       }));
 
+      const customerName = (o.customer_name ?? "").trim() || "—";
+      const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
+      const note = (o.customer_note ?? "").trim() || "—";
+
       const html = `
         <div style="text-align:left">
-          <div style="opacity:.85;margin-bottom:8px">
-            <b>Comprobante:</b> #${o.receipt_no ?? "—"}<br/>
-            <b>Estado:</b> ${statusLabel(o.status)}<br/>
-            <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
-            <b>Total:</b> ${money(o.total)}<br/>
-            <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
+          <div style="opacity:.9; margin-bottom:8px">
+            <div style="font-size:14px; margin-bottom:8px">
+              👋 Hola, <b style="font-size:15px">${customerName}</b>
+            </div>
+
+            <div style="opacity:.85">
+              <b>Comprobante:</b> #${o.receipt_no ?? "—"}<br/>
+              <b>Estado:</b> ${statusLabel(o.status)}<br/>
+              <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
+              <b>Total:</b> ${money(o.total)}<br/>
+              <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
+              <b>WhatsApp:</b> ${customerWa}<br/>
+              <b>Observaciones:</b> ${note}<br/>
+            </div>
           </div>
+
           <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
+
           ${items
             .map((i) => {
               const name = i.product?.name ?? i.product_id;
@@ -172,7 +191,9 @@ export default function OrdersDashboardPage() {
               </div>`;
             })
             .join("")}
+
           <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
+
           <div style="opacity:.85">
             <b>Link comprobante:</b><br/>
             <code style="font-size:12px">${window.location.origin}/pedido/${o.token}</code>
@@ -185,7 +206,7 @@ export default function OrdersDashboardPage() {
         html,
         background: "#0b0b0b",
         color: "#fff",
-        width: 700,
+        width: 720,
         showConfirmButton: true,
         confirmButtonText: "Cerrar",
       });
@@ -255,15 +276,25 @@ export default function OrdersDashboardPage() {
   async function orderActions(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
 
+    const customerName = (o.customer_name ?? "").trim() || "—";
+    const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
+    const note = (o.customer_note ?? "").trim() || "—";
+
     const res = await Swal.fire({
       title: `Pedido #${o.receipt_no ?? "—"}`,
       html: `
-        <div style="text-align:left; opacity:.9">
+        <div style="text-align:left; opacity:.92">
+          <div style="font-size:14px; margin-bottom:10px">
+            👋 Hola, <b style="font-size:15px">${customerName}</b>
+          </div>
+
           <div style="margin-bottom:10px">
             <b>Estado:</b> ${statusLabel(o.status)}<br/>
             <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
             <b>Total:</b> ${money(o.total)}<br/>
             <b>Fecha:</b> ${new Date(o.created_at).toLocaleString("es-CO")}<br/>
+            <b>WhatsApp:</b> ${customerWa}<br/>
+            <b>Observaciones:</b> ${note}<br/>
           </div>
 
           <div style="margin-top:12px">
@@ -334,16 +365,12 @@ export default function OrdersDashboardPage() {
         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           <input
             className="p-3"
-            placeholder="Buscar: comprobante, nombre, whatsapp, estado..."
+            placeholder="Buscar: comprobante, nombre, whatsapp, obs, estado..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
 
-          <select
-            className="p-3"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
+          <select className="p-3" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="all">Todos</option>
             <option value="draft">Borrador</option>
             <option value="sent">Enviado (editable)</option>
@@ -379,8 +406,7 @@ export default function OrdersDashboardPage() {
               key={o.id}
               className="grid grid-cols-12 gap-2 p-3 border-b"
               style={{
-                borderColor:
-                  "color-mix(in oklab, var(--t-card-border) 85%, transparent)",
+                borderColor: "color-mix(in oklab, var(--t-card-border) 85%, transparent)",
               }}
             >
               <div className="col-span-2 font-semibold">#{o.receipt_no ?? "—"}</div>
@@ -412,8 +438,7 @@ export default function OrdersDashboardPage() {
                   <button
                     className="btn-soft px-3 py-1 text-sm font-semibold"
                     style={{
-                      borderColor:
-                        "color-mix(in oklab, lime 35%, var(--t-card-border))",
+                      borderColor: "color-mix(in oklab, lime 35%, var(--t-card-border))",
                       background: "color-mix(in oklab, lime 10%, transparent)",
                       color: "color-mix(in oklab, white 85%, lime 15%)",
                     }}
@@ -427,10 +452,8 @@ export default function OrdersDashboardPage() {
                   <button
                     className="btn-soft px-3 py-1 text-sm font-semibold"
                     style={{
-                      borderColor:
-                        "color-mix(in oklab, dodgerblue 35%, var(--t-card-border))",
-                      background:
-                        "color-mix(in oklab, dodgerblue 10%, transparent)",
+                      borderColor: "color-mix(in oklab, dodgerblue 35%, var(--t-card-border))",
+                      background: "color-mix(in oklab, dodgerblue 10%, transparent)",
                       color: "color-mix(in oklab, white 85%, dodgerblue 15%)",
                     }}
                     onClick={() => setOrderStatus(o, "completed")}

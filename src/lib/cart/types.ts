@@ -3,9 +3,9 @@ export type CartMode = "detal" | "mayor";
 export type CartItem = {
   productId: string;
   name: string;
-  price: number;        // precio según modo
+  price: number;
   qty: number;
-  minWholesale?: number | null; // mínimo si mayor
+  minWholesale?: number | null;
 };
 
 export type CartState = {
@@ -14,5 +14,10 @@ export type CartState = {
   storeName: string;
   whatsapp: string;
   mode: CartMode;
+
+  // ✅ nuevos campos
+  customerName?: string;
+  customerNote?: string;
+
   items: CartItem[];
 };

@@ -19,8 +19,13 @@ type OrderRow = {
   token: string;
   receipt_no: number | null;
   created_at: string;
+
   customer_name: string | null;
   customer_whatsapp: string | null;
+
+  // ✅ NUEVO (Observaciones) — requiere columna en orders
+  customer_note?: string | null;
+
   stores?: { name: string; slug: string } | null;
 };
 
@@ -36,10 +41,8 @@ function statusBadge(st: OrderRow["status"]) {
   const base =
     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold";
 
-  if (st === "draft")
-    return `${base} border-white/10 bg-white/5 text-white/80`;
-  if (st === "sent")
-    return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
+  if (st === "draft") return `${base} border-white/10 bg-white/5 text-white/80`;
+  if (st === "sent") return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
   if (st === "confirmed")
     return `${base} border-emerald-400/30 bg-emerald-400/10 text-emerald-100`;
   return `${base} border-indigo-400/30 bg-indigo-400/10 text-indigo-100`;
@@ -77,7 +80,8 @@ export default function AdminPedidosPage() {
       const { data, error } = await sb
         .from("orders")
         .select(
-          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,stores(name,slug)"
+          // ✅ añadimos customer_note
+          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,customer_note,stores(name,slug)"
         )
         .order("created_at", { ascending: false })
         .limit(200);
@@ -117,7 +121,9 @@ export default function AdminPedidosPage() {
       const txt =
         `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${
           o.stores?.slug ?? ""
-        } ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""}`.toLowerCase();
+        } ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${
+          o.customer_note ?? ""
+        }`.toLowerCase();
 
       return txt.includes(s);
     });
@@ -145,16 +151,10 @@ export default function AdminPedidosPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb
-        .from("orders")
-        .update({ status: next })
-        .eq("id", o.id);
-
+      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
       if (error) throw error;
 
-      setOrders((prev) =>
-        prev.map((x) => (x.id === o.id ? { ...x, status: next } : x))
-      );
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
 
       await Swal.fire({
         icon: "success",
@@ -227,13 +227,12 @@ export default function AdminPedidosPage() {
       return;
     }
 
-    // Espera a que cargue para imprimir (mejor que setTimeout fijo)
     const startedAt = Date.now();
     const maxWait = 9000;
 
     const timer = setInterval(() => {
       try {
-        const ready = w.document?.readyState === "complete";
+        const ready = (w as any).document?.readyState === "complete";
         const tooLong = Date.now() - startedAt > maxWait;
 
         if (ready || tooLong) {
@@ -280,7 +279,7 @@ export default function AdminPedidosPage() {
       <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
         <input
           className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl"
-          placeholder="Buscar (#, token, tienda, cliente, whatsapp...)"
+          placeholder="Buscar (#, token, tienda, cliente, whatsapp, obs...)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -325,100 +324,115 @@ export default function AdminPedidosPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((o) => (
-            <div
-              key={o.id}
-              className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                {/* Info */}
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">
-                      #{o.receipt_no ?? "—"} · {o.stores?.name ?? "Tienda"}
+          {filtered.map((o) => {
+            const customerName = (o.customer_name ?? "").trim() || "—";
+            const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
+            const note = (o.customer_note ?? "").trim() || "—";
+
+            return (
+              <div
+                key={o.id}
+                className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  {/* Info */}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">
+                        #{o.receipt_no ?? "—"} · {o.stores?.name ?? "Tienda"}
+                      </p>
+
+                      <span className="text-xs text-white/60">
+                        ({o.catalog_type === "retail" ? "Detal" : "Mayor"})
+                      </span>
+
+                      <span className={statusBadge(o.status)}>
+                        <span className="h-2 w-2 rounded-full bg-white/60" />
+                        {statusLabel(o.status)}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-sm text-white/70">
+                      {new Date(o.created_at).toLocaleString("es-CO")} · Total:{" "}
+                      <b className="text-white">{money(o.total)}</b>
                     </p>
 
-                    <span className="text-xs text-white/60">
-                      ({o.catalog_type === "retail" ? "Detal" : "Mayor"})
-                    </span>
+                    {/* ✅ Cliente + WhatsApp + Observaciones */}
+                    <div className="mt-1 space-y-1">
+                      <p className="text-xs text-white/60">
+                        👤 Cliente: <b className="text-white/90">{customerName}</b> · WhatsApp:{" "}
+                        <b className="text-white/90">{customerWa}</b>
+                      </p>
 
-                    <span className={statusBadge(o.status)}>
-                      <span className="h-2 w-2 rounded-full bg-white/60" />
-                      {statusLabel(o.status)}
-                    </span>
+                      <p className="text-xs text-white/60">
+                        📝 Observaciones: <b className="text-white/90">{note}</b>
+                      </p>
+
+                      <p className="text-xs text-white/40">Token: {o.token}</p>
+                    </div>
                   </div>
 
-                  <p className="mt-1 text-sm text-white/70">
-                    {new Date(o.created_at).toLocaleString("es-CO")} · Total:{" "}
-                    <b className="text-white">{money(o.total)}</b>
-                  </p>
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                      onClick={() => openReceipt(o)}
+                    >
+                      Ver comprobante
+                    </button>
 
-                  <p className="mt-1 text-xs text-white/50">
-                    Cliente: {o.customer_name ?? "—"} · WhatsApp:{" "}
-                    {o.customer_whatsapp ?? "—"} · Token: {o.token}
-                  </p>
-                </div>
+                    <button
+                      className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25"
+                      onClick={() => printInvoice(o)}
+                    >
+                      Generar factura (PDF)
+                    </button>
 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                    onClick={() => openReceipt(o)}
-                  >
-                    Ver comprobante
-                  </button>
+                    <button
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                      onClick={() => copyLink(o)}
+                    >
+                      Copiar link
+                    </button>
 
-                  <button
-                    className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25"
-                    onClick={() => printInvoice(o)}
-                  >
-                    Generar factura (PDF)
-                  </button>
+                    <div className="w-full md:hidden" />
 
-                  <button
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                    onClick={() => copyLink(o)}
-                  >
-                    Copiar link
-                  </button>
+                    <button
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-60"
+                      onClick={() => setStatus(o, "draft")}
+                      disabled={saving}
+                    >
+                      Borrador
+                    </button>
 
-                  <div className="w-full md:hidden" />
+                    <button
+                      className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:opacity-60"
+                      onClick={() => setStatus(o, "sent")}
+                      disabled={saving}
+                    >
+                      Enviado
+                    </button>
 
-                  <button
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-60"
-                    onClick={() => setStatus(o, "draft")}
-                    disabled={saving}
-                  >
-                    Borrador
-                  </button>
+                    <button
+                      className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
+                      onClick={() => setStatus(o, "confirmed")}
+                      disabled={saving}
+                    >
+                      Confirmado
+                    </button>
 
-                  <button
-                    className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:opacity-60"
-                    onClick={() => setStatus(o, "sent")}
-                    disabled={saving}
-                  >
-                    Enviado
-                  </button>
-
-                  <button
-                    className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
-                    onClick={() => setStatus(o, "confirmed")}
-                    disabled={saving}
-                  >
-                    Confirmado
-                  </button>
-
-                  <button
-                    className="rounded-2xl border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-100 transition hover:bg-indigo-400/15 disabled:opacity-60"
-                    onClick={() => setStatus(o, "completed")}
-                    disabled={saving}
-                  >
-                    Completado
-                  </button>
+                    <button
+                      className="rounded-2xl border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-100 transition hover:bg-indigo-400/15 disabled:opacity-60"
+                      onClick={() => setStatus(o, "completed")}
+                      disabled={saving}
+                    >
+                      Completado
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <p className="text-xs text-white/50">
             Mostrando últimos 200 pedidos (puedes subir el limit si quieres).

@@ -5,7 +5,7 @@ import { CartItem, CartMode, CartState } from "./types";
 import { clearCart, loadCart, saveCart } from "./storage";
 
 type CartCtx = {
-  cart: CartState | null;
+  cart: (CartState & { customerName?: string; customerNote?: string }) | null;
   isOpen: boolean;
   open: () => void;
   close: () => void;
@@ -23,6 +23,10 @@ type CartCtx = {
   removeItem: (productId: string) => void;
   empty: () => void;
 
+  // ✅ NUEVO
+  setCustomerName: (name: string) => void;
+  setCustomerNote: (note: string) => void;
+
   total: number;
   count: number;
 };
@@ -30,7 +34,7 @@ type CartCtx = {
 const Ctx = createContext<CartCtx | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<CartState | null>(null);
+  const [cart, setCart] = useState<(CartState & { customerName?: string; customerNote?: string }) | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   function open() {
@@ -50,21 +54,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }) {
     const existing = loadCart(s.storeId, s.mode);
     if (existing) {
-      setCart(existing);
+      // ✅ asegura campos nuevos
+      setCart({
+        ...(existing as any),
+        customerName: (existing as any).customerName ?? "",
+        customerNote: (existing as any).customerNote ?? "",
+      });
       return;
     }
 
-    const fresh: CartState = { ...s, items: [] };
-    setCart(fresh);
-    saveCart(fresh);
+    const fresh = { ...s, items: [], customerName: "", customerNote: "" };
+    setCart(fresh as any);
+    saveCart(fresh as any);
   }
 
-  function update(next: CartState) {
+  function update(next: any) {
     setCart(next);
     saveCart(next);
   }
 
-  // ✅ No abre el carrito automáticamente
   function addItem(item: CartItem, opts?: { openDrawer?: boolean }) {
     if (!cart) return;
 
@@ -116,6 +124,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     update({ ...cart, items: [] });
   }
 
+  // ✅ NUEVO: setters de cliente
+  function setCustomerName(name: string) {
+    if (!cart) return;
+    update({ ...cart, customerName: name });
+  }
+
+  function setCustomerNote(note: string) {
+    if (!cart) return;
+    update({ ...cart, customerNote: note });
+  }
+
   const total = useMemo(
     () => (cart?.items ?? []).reduce((a, i) => a + i.price * i.qty, 0),
     [cart]
@@ -136,6 +155,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setQty,
     removeItem,
     empty,
+    setCustomerName,
+    setCustomerNote,
     total,
     count,
   };
