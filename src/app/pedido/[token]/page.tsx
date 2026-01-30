@@ -61,8 +61,8 @@ function Pill({
     tone === "cta"
       ? "border-white/10 bg-white/5 text-white/90"
       : tone === "green"
-      ? "border-emerald-400/25 bg-emerald-500/15 text-emerald-100"
-      : "border-white/10 bg-white/5 text-white/80";
+        ? "border-emerald-400/25 bg-emerald-500/15 text-emerald-100"
+        : "border-white/10 bg-white/5 text-white/80";
   return <span className={`${base} ${cls}`}>{children}</span>;
 }
 
@@ -115,7 +115,7 @@ export default function PedidoPage() {
   ------------------------- */
   const total = useMemo(
     () => items.reduce((acc, i) => acc + Number(i.price) * Number(i.qty), 0),
-    [items]
+    [items],
   );
 
   const isLocked = useMemo(() => {
@@ -124,7 +124,13 @@ export default function PedidoPage() {
   }, [order]);
 
   const receiptNumber = useMemo(() => {
-    return order?.receipt_no ?? order?.order_no ?? order?.number ?? order?.seq ?? null;
+    return (
+      order?.receipt_no ??
+      order?.order_no ??
+      order?.number ??
+      order?.seq ??
+      null
+    );
   }, [order]);
 
   const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
@@ -154,7 +160,9 @@ export default function PedidoPage() {
       const sb = supabaseBrowser();
 
       // 1) RPC principal
-      const { data, error } = await sb.rpc("get_order_by_token", { p_token: token });
+      const { data, error } = await sb.rpc("get_order_by_token", {
+        p_token: token,
+      });
       if (error) throw error;
 
       const storeRpc = data?.store ?? null;
@@ -170,7 +178,7 @@ export default function PedidoPage() {
           image_url: i.image_url ?? null,
           price: Number(i.price),
           qty: Number(i.qty),
-        }))
+        })),
       );
 
       // 2) storeId seguro
@@ -264,7 +272,9 @@ export default function PedidoPage() {
   function setQty(productId: string, qty: number) {
     if (isLocked) return;
     const q = Math.max(1, Math.floor(Number(qty || 1)));
-    setItems((prev) => prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x)));
+    setItems((prev) =>
+      prev.map((x) => (x.product_id === productId ? { ...x, qty: q } : x)),
+    );
   }
 
   async function saveChanges() {
@@ -308,10 +318,35 @@ export default function PedidoPage() {
 
       await load();
     } catch (err: any) {
+      const msg = String(err?.message ?? "");
+
+      if (msg.includes("row-level security")) {
+        await Swal.fire({
+          icon: "info",
+          title: "Pedido confirmado",
+          html: `
+        <p style="margin-bottom:8px">
+          Este pedido ya fue <b>confirmado por el vendedor</b> y no se puede editar.
+        </p>
+        <p style="font-size:13px; opacity:.85">
+          La página se actualizará para mostrar el estado correcto.
+        </p>
+      `,
+          background: "#0b0b0b",
+          color: "#fff",
+          confirmButtonColor: "#22c55e",
+        });
+
+        // 🔄 recargar para reflejar estado real
+        window.location.reload();
+        return;
+      }
+
+      // error genérico
       await Swal.fire({
         icon: "error",
         title: "No se pudo guardar",
-        text: err?.message ?? "Error",
+        text: "Ocurrió un error inesperado.",
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
@@ -386,7 +421,7 @@ export default function PedidoPage() {
 
     items.forEach((i, idx) => {
       lines.push(
-        `${idx + 1}. ${i.name} — Cant: ${i.qty} — ${money(i.price)} c/u — Subtotal: ${money(i.price * i.qty)}`
+        `${idx + 1}. ${i.name} — Cant: ${i.qty} — ${money(i.price)} c/u — Subtotal: ${money(i.price * i.qty)}`,
       );
     });
 
@@ -395,7 +430,10 @@ export default function PedidoPage() {
     lines.push("");
     lines.push(`Link del comprobante: ${window.location.href}`);
 
-    window.open(`https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+    window.open(
+      `https://wa.me/${storeWhatsapp}?text=${encodeURIComponent(lines.join("\n"))}`,
+      "_blank",
+    );
   }
 
   /* -------------------------
@@ -428,7 +466,10 @@ export default function PedidoPage() {
     <main className="relative min-h-screen px-4 py-10 text-[color:var(--t-text)] print:bg-white print:text-black">
       {/* Fondo premium */}
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0" style={{ background: "var(--t-bg)" }} />
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--t-bg)" }}
+        />
         <div className="absolute inset-0 starfield opacity-[0.55]" />
         <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/25 to-transparent" />
       </div>
@@ -436,18 +477,26 @@ export default function PedidoPage() {
       {/* Estilos impresión */}
       <style jsx global>{`
         @media print {
-          .no-print { display: none !important; }
-          .only-print { display: block !important; }
+          .no-print {
+            display: none !important;
+          }
+          .only-print {
+            display: block !important;
+          }
           .print-card {
             border: none !important;
             box-shadow: none !important;
             background: #fff !important;
             color: #000 !important;
           }
-          @page { margin: 14mm; }
+          @page {
+            margin: 14mm;
+          }
         }
         @media screen {
-          .only-print { display: none !important; }
+          .only-print {
+            display: none !important;
+          }
         }
       `}</style>
 
@@ -455,7 +504,9 @@ export default function PedidoPage() {
          ✅ FACTURA (solo impresión)
       ========================================================= */}
       <div className="only-print mx-auto max-w-3xl print-card rounded-2xl border border-white/10 p-6">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div
+          style={{ display: "flex", justifyContent: "space-between", gap: 16 }}
+        >
           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
             {storeLogo ? (
               <img
@@ -500,43 +551,95 @@ export default function PedidoPage() {
           </div>
 
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Factura de venta</div>
-            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>#{receiptNumber ?? "—"}</div>
-            <div style={{ fontSize: 11, marginTop: 4 }}>{new Date(order.created_at).toLocaleString("es-CO")}</div>
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              }}
+            >
+              Factura de venta
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+              #{receiptNumber ?? "—"}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {new Date(order.created_at).toLocaleString("es-CO")}
+            </div>
           </div>
         </div>
 
-        <div style={{ height: 1, background: "rgba(0,0,0,0.12)", margin: "14px 0" }} />
+        <div
+          style={{
+            height: 1,
+            background: "rgba(0,0,0,0.12)",
+            margin: "14px 0",
+          }}
+        />
 
-        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+        <table
+          style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}
+        >
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.12)" }}>
-              <th style={{ textAlign: "left", padding: "8px 0", width: 60 }}>Cant</th>
-              <th style={{ textAlign: "left", padding: "8px 0" }}>Descripción</th>
-              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>Precio Unit</th>
-              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>Subtotal</th>
+              <th style={{ textAlign: "left", padding: "8px 0", width: 60 }}>
+                Cant
+              </th>
+              <th style={{ textAlign: "left", padding: "8px 0" }}>
+                Descripción
+              </th>
+              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>
+                Precio Unit
+              </th>
+              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>
+                Subtotal
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.map((i) => {
               const sub = Number(i.price) * Number(i.qty);
               return (
-                <tr key={i.product_id} style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                <tr
+                  key={i.product_id}
+                  style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
+                >
                   <td style={{ padding: "8px 0" }}>{i.qty}</td>
                   <td style={{ padding: "8px 0" }}>{i.name}</td>
-                  <td style={{ padding: "8px 0", textAlign: "right" }}>{money(i.price)}</td>
-                  <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>{money(sub)}</td>
+                  <td style={{ padding: "8px 0", textAlign: "right" }}>
+                    {money(i.price)}
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 0",
+                      textAlign: "right",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {money(sub)}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-          <div style={{ width: 260, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: 12 }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}
+        >
+          <div
+            style={{
+              width: 260,
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              padding: 12,
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <div style={{ fontSize: 12 }}>TOTAL</div>
-              <div style={{ fontSize: 16, fontWeight: 900 }}>{money(total)}</div>
+              <div style={{ fontSize: 16, fontWeight: 900 }}>
+                {money(total)}
+              </div>
             </div>
           </div>
         </div>
@@ -545,7 +648,10 @@ export default function PedidoPage() {
           {profile?.description ? (
             <div>{profile.description}</div>
           ) : (
-            <div>Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.</div>
+            <div>
+              Gracias por tu compra. Para cualquier información adicional,
+              contáctanos por WhatsApp.
+            </div>
           )}
         </div>
       </div>
@@ -553,7 +659,9 @@ export default function PedidoPage() {
       {/* =========================================================
          ✅ COMPROBANTE (pantalla)
       ========================================================= */}
-      <div className={printMode ? "hidden" : "no-print mx-auto w-full max-w-3xl"}>
+      <div
+        className={printMode ? "hidden" : "no-print mx-auto w-full max-w-3xl"}
+      >
         <div className="glass p-6 md:p-7">
           {/* Header */}
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -562,12 +670,14 @@ export default function PedidoPage() {
                 <h1 className="text-2xl font-bold">Comprobante</h1>
                 {receiptNumber ? <Pill>#{receiptNumber}</Pill> : null}
                 <Pill tone="soft">
-                  Estado: <span className="font-bold">{statusLabel(order.status)}</span>
+                  Estado:{" "}
+                  <span className="font-bold">{statusLabel(order.status)}</span>
                 </Pill>
               </div>
 
               <p className="mt-2 text-sm opacity-80">
-                {storeName} · {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
+                {storeName} ·{" "}
+                {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
               </p>
 
               {/* ✅ CLIENTE + OBSERVACIONES (PANTALLA) */}
@@ -576,15 +686,19 @@ export default function PedidoPage() {
                   👋 Hola, <b className="opacity-100">{customerNameShow}</b>
                 </p>
                 <p className="text-sm opacity-80">
-                  📝 Observaciones: <b className="opacity-100">{customerNoteShow}</b>
+                  📝 Observaciones:{" "}
+                  <b className="opacity-100">{customerNoteShow}</b>
                 </p>
               </div>
 
-              <p className="mt-2 text-xs opacity-70">Guarda este link: siempre podrás volver.</p>
+              <p className="mt-2 text-xs opacity-70">
+                Guarda este link: siempre podrás volver.
+              </p>
 
               {isLocked ? (
                 <p className="mt-2 text-xs text-yellow-200/90">
-                  🔒 Este pedido está confirmado/completado y no se puede editar.
+                  🔒 Este pedido está confirmado/completado y no se puede
+                  editar.
                 </p>
               ) : null}
             </div>
@@ -595,7 +709,8 @@ export default function PedidoPage() {
                 onClick={sendWhatsApp}
                 className="rounded-2xl px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
                 style={{
-                  background: "linear-gradient(90deg, rgba(34,197,94,1), rgba(16,185,129,1))",
+                  background:
+                    "linear-gradient(90deg, rgba(34,197,94,1), rgba(16,185,129,1))",
                   boxShadow: "0 18px 45px rgba(16,185,129,0.18)",
                 }}
                 disabled={saving}
@@ -628,7 +743,11 @@ export default function PedidoPage() {
                   <div className="flex gap-4">
                     <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                       {i.image_url ? (
-                        <img src={i.image_url} className="h-full w-full object-cover" alt={i.name} />
+                        <img
+                          src={i.image_url}
+                          className="h-full w-full object-cover"
+                          alt={i.name}
+                        />
                       ) : null}
                     </div>
 
@@ -655,7 +774,9 @@ export default function PedidoPage() {
                         <input
                           className="ring-focus w-24 px-3 py-2 text-center text-sm disabled:opacity-50"
                           value={i.qty}
-                          onChange={(e) => setQty(i.product_id, Number(e.target.value))}
+                          onChange={(e) =>
+                            setQty(i.product_id, Number(e.target.value))
+                          }
                           disabled={saving || isLocked}
                         />
 
@@ -669,7 +790,8 @@ export default function PedidoPage() {
                         </button>
 
                         <span className="ml-auto text-xs opacity-70">
-                          Subtotal: <b className="opacity-100">{money(subtotal)}</b>
+                          Subtotal:{" "}
+                          <b className="opacity-100">{money(subtotal)}</b>
                         </span>
                       </div>
                     </div>
@@ -697,11 +819,13 @@ export default function PedidoPage() {
 
             {!isLocked ? (
               <p className="mt-3 text-xs opacity-70">
-                Tip: edita cantidades y luego envía por WhatsApp. El pedido queda guardado en este link.
+                Tip: edita cantidades y luego envía por WhatsApp. El pedido
+                queda guardado en este link.
               </p>
             ) : (
               <p className="mt-3 text-xs opacity-70">
-                Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo.
+                Este pedido ya fue confirmado. Si necesitas cambios, crea un
+                nuevo pedido desde el catálogo.
               </p>
             )}
           </div>
