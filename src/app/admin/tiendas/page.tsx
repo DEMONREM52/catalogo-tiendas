@@ -304,7 +304,7 @@ export default function AdminTiendasPage() {
           active: true,
           catalog_retail: true,
           catalog_wholesale: true,
-          theme: "ocean",
+          theme: "oceano-profundo",
           ui_radius: 12,
         })
         .select(
