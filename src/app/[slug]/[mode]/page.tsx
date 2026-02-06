@@ -11,9 +11,9 @@ import { CartDrawer } from "@/lib/cart/CartDrawer";
 
 import { applyThemeToRoot, type ThemeConfig } from "@/lib/themes/applyTheme";
 
-/* =========================
+/* =========================================================
    Types
-========================= */
+========================================================= */
 type Mode = "detal" | "mayor";
 
 type StoreRow = {
@@ -24,12 +24,35 @@ type StoreRow = {
   active: boolean;
   catalog_retail: boolean;
   catalog_wholesale: boolean;
-  theme: string | null; // FK -> themes.id (text)
+  theme: string | null;
   logo_url: string | null;
   banner_url: string | null;
   wholesale_key: string | null;
 };
 
+type ProductRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  price_retail: number;
+  price_wholesale: number;
+  min_wholesale: number | null;
+  active: boolean;
+  image_url: string | null;
+  category_id: string | null;
+  stock: number | null; // ✅ inventario (null = ilimitado)
+};
+
+type CategoryRow = {
+  id: string;
+  name: string;
+  image_url: string | null;
+  sort_order: number;
+};
+
+/* =========================================================
+   Helpers
+========================================================= */
 function isValidMode(x: any): x is Mode {
   return x === "detal" || x === "mayor";
 }
@@ -56,25 +79,25 @@ function isHexOrRgbaLike(s?: string) {
   if (!s) return false;
   const t = s.trim();
   if (!t) return false;
-  // #rgb / #rrggbb / #rrggbbaa
   if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(t)) return true;
-  // rgba(...) / rgb(...) / hsl(...)
   if (/^(rgb|rgba|hsl|hsla)\(/i.test(t)) return true;
   return false;
 }
 
-/* =========================
-   Map DB theme.config -> ThemeConfig (applyThemeToRoot)
-   DB config soportado (por tu schema + seeds):
-   - bg (puede ser hex/rgba o puede ser un gradient string)
-   - card, card_border, text, muted, accent, accent2
-   - cta (solid) OR ctaA/ctaB (+ optional ctaAngle)
-   - bgGradA/bgGradB/bgAngle (si lo manejas)
-========================= */
+function stockMeta(stock: number | null) {
+  if (stock === null) return { label: "Ilimitado", tone: "ok" as const };
+  const s = Math.max(0, Math.floor(Number(stock || 0)));
+  if (s <= 0) return { label: "Agotado", tone: "danger" as const };
+  if (s <= 5) return { label: `Últimas ${s}`, tone: "warn" as const };
+  return { label: `Disponible: ${s}`, tone: "ok" as const };
+}
+
+/* =========================================================
+   Theme mapping
+========================================================= */
 function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
   if (!dbCfg || typeof dbCfg !== "object") return undefined;
 
-  // Colors / tokens
   const bg = pickStr(dbCfg.bg);
   const card = pickStr(dbCfg.card);
   const cardBorder = pickStr(dbCfg.card_border);
@@ -83,12 +106,10 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
   const accent = pickStr(dbCfg.accent);
   const accent2 = pickStr(dbCfg.accent2);
 
-  // Background advanced (optional)
   const bgGradA = pickStr(dbCfg.bgGradA ?? dbCfg.bg_grad_a);
   const bgGradB = pickStr(dbCfg.bgGradB ?? dbCfg.bg_grad_b);
   const bgAngle = asNum(dbCfg.bgAngle ?? dbCfg.bg_angle);
 
-  // CTA
   const cta = pickStr(dbCfg.cta);
   const ctaA = pickStr(dbCfg.ctaA ?? dbCfg.cta_a);
   const ctaB = pickStr(dbCfg.ctaB ?? dbCfg.cta_b);
@@ -96,24 +117,15 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
 
   const cfg: ThemeConfig = {};
 
-  // ---- BG ----
-  // Si bg viene como color => solid
-  // Si bg viene como "linear-gradient(...)" => lo tratamos como gradient:
-  //   (no podemos meter raw string en applyThemeToRoot, pero sí usando el fix de --t-bg en runtime)
-  // Mejor: si tienes bgGradA/bgGradB úsalo como gradient real.
   if (bg) {
     if (isHexOrRgbaLike(bg)) {
       cfg.bgMode = "solid";
       cfg.bgSolid = bg;
     } else if (/gradient\(/i.test(bg)) {
-      // si guardaste el string de gradient en dbCfg.bg, lo manejamos luego con el fix runtime
-      // pero también setea modo gradient para que existan tokens consistentes
       cfg.bgMode = "gradient";
-      // intenta extraer A/B si existen; si no, dejamos defaults del helper y luego fijamos --t-bg manual
       if (bgGradA) cfg.bgGradA = bgGradA;
       if (bgGradB) cfg.bgGradB = bgGradB;
       if (bgAngle != null) cfg.bgAngle = bgAngle;
-      // nota: el raw gradient lo aplicaremos como --t-bg en runtime si hace falta
       (cfg as any).__rawBg = bg;
     }
   } else if (bgGradA || bgGradB) {
@@ -123,25 +135,18 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
     if (bgAngle != null) cfg.bgAngle = bgAngle;
   }
 
-  // ---- Text / borders ----
   if (text) cfg.text = text;
   if (muted) cfg.mutedText = muted;
 
-  // tu UI usa var(--t-border) para bordes generales,
-  // y cardBorder para cards. Si viene card_border, lo usamos en ambos.
   if (cardBorder) {
     cfg.border = cardBorder;
     cfg.cardBorder = cardBorder;
   }
-
-  // ---- Cards ----
   if (card) cfg.cardBg = card;
 
-  // ---- Accents ----
   if (accent) cfg.accent = accent;
   if (accent2) cfg.accent2 = accent2;
 
-  // ---- CTA ----
   if (cta) {
     cfg.ctaMode = "solid";
     cfg.ctaSolid = cta;
@@ -158,42 +163,29 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
   return cfg;
 }
 
-/* =========================
-   IMPORTANT FIX for your globals.css
-   globals.css uses:
-   body { background: var(--t-bg-base); background-image: var(--t-bg); }
-
-   - If theme is SOLID => set --t-bg-base = color and --t-bg = none
-   - If theme is GRADIENT => set --t-bg-base = dark base and --t-bg = gradient
-========================= */
 function syncGlobalBodyBackground(cfg?: ThemeConfig) {
   if (typeof document === "undefined") return;
 
   const r = document.documentElement;
-
   const isSolid = cfg?.bgMode === "solid" && !!cfg?.bgSolid;
 
   if (isSolid) {
     r.style.setProperty("--t-bg-base", cfg!.bgSolid!);
-    // background-image necesita "none" (color NO vale)
     r.style.setProperty("--t-bg", "none");
     return;
   }
 
-  // gradient mode
   r.style.setProperty("--t-bg-base", "#070014");
 
-  // Si tu theme venía con bg string raw (linear-gradient...) lo ponemos directo
   const raw = (cfg as any)?.__rawBg as string | undefined;
   if (raw && /gradient\(/i.test(raw)) {
     r.style.setProperty("--t-bg", raw);
   }
-  // si no hay raw, applyThemeToRoot ya setea --t-bg con gradient(...)
 }
 
-/* =========================
+/* =========================================================
    Page
-========================= */
+========================================================= */
 export default function StoreCatalogPage() {
   const params = useParams<{ slug: string; mode: string }>();
   const searchParams = useSearchParams();
@@ -202,15 +194,20 @@ export default function StoreCatalogPage() {
   const mode = String(params?.mode ?? "detal");
   const key = searchParams.get("key");
 
+  const safeMode: Mode = useMemo(
+    () => (isValidMode(mode) ? mode : "detal"),
+    [mode],
+  );
+
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
   const [store, setStore] = useState<StoreRow | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
 
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
@@ -218,8 +215,9 @@ export default function StoreCatalogPage() {
 
   const { initCart, addItem } = useCart();
 
-  const safeMode: Mode = useMemo(() => (isValidMode(mode) ? mode : "detal"), [mode]);
-
+  /* -------------------------
+     Load
+  ------------------------- */
   useEffect(() => {
     let cancelled = false;
 
@@ -239,7 +237,7 @@ export default function StoreCatalogPage() {
         const { data: storeData, error: storeErr } = await sb
           .from("stores")
           .select(
-            "id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key"
+            "id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key",
           )
           .eq("slug", slug)
           .maybeSingle();
@@ -254,11 +252,13 @@ export default function StoreCatalogPage() {
         // mayorista key
         if (safeMode === "mayor") {
           if (!st.wholesale_key) {
-            if (!cancelled) setMsg("❌ Este catálogo mayorista no está disponible.");
+            if (!cancelled)
+              setMsg("❌ Este catálogo mayorista no está disponible.");
             return;
           }
           if (key !== st.wholesale_key) {
-            if (!cancelled) setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
+            if (!cancelled)
+              setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
             return;
           }
         }
@@ -306,7 +306,6 @@ export default function StoreCatalogPage() {
           cfg = mapDbThemeToApplyTheme(fallback?.config);
         }
 
-        // apply vars + sync global background system
         applyThemeToRoot(cfg);
         syncGlobalBodyBackground(cfg);
 
@@ -343,18 +342,37 @@ export default function StoreCatalogPage() {
           .eq("store_id", st.id)
           .eq("active", true)
           .order("sort_order", { ascending: true });
-        if (!cancelled) setCategories(catData ?? []);
+        if (!cancelled) setCategories((catData as any) ?? []);
 
-        // 6) products
-        const { data: prodData } = await sb
+        // 6) products ✅ NO mostrar agotados, SI mostrar ilimitados
+        const { data: prodData, error: prodErr } = await sb
           .from("products")
           .select(
-            "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id"
+            "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock",
           )
           .eq("store_id", st.id)
           .eq("active", true)
+          // ✅ mostrar solo disponibles: ilimitado (NULL) o stock > 0
+          .or("stock.is.null,stock.gt.0")
           .order("name", { ascending: true });
-        if (!cancelled) setProducts(prodData ?? []);
+
+        if (prodErr) throw prodErr;
+
+        const normalized: ProductRow[] = ((prodData as any[]) ?? [])
+          .map((p) => ({
+            ...p,
+            price_retail: Number(p.price_retail ?? 0),
+            price_wholesale: Number(p.price_wholesale ?? 0),
+            min_wholesale:
+              p.min_wholesale == null ? null : Number(p.min_wholesale),
+            // ✅ IMPORTANT: NO conviertas NULL a 0
+            stock:
+              p.stock === null || p.stock === undefined ? null : Number(p.stock),
+          }))
+          // ✅ refuerzo extra
+          .filter((p) => p.stock === null || Number(p.stock) > 0);
+
+        if (!cancelled) setProducts(normalized);
       } catch (err: any) {
         if (!cancelled) setMsg(err?.message ?? "Error cargando catálogo.");
       } finally {
@@ -367,7 +385,9 @@ export default function StoreCatalogPage() {
     };
   }, [slug, mode, key, initCart, safeMode]);
 
-  // tab title + favicon
+  /* -------------------------
+     tab title + favicon
+  ------------------------- */
   useEffect(() => {
     if (!store?.name) return;
 
@@ -378,28 +398,72 @@ export default function StoreCatalogPage() {
       (document.createElement("link") as HTMLLinkElement);
 
     favicon.rel = "icon";
-    favicon.href = store.logo_url ? `${store.logo_url}?v=${Date.now()}` : "/favicon.ico";
+    favicon.href = store.logo_url
+      ? `${store.logo_url}?v=${Date.now()}`
+      : "/favicon.ico";
     document.head.appendChild(favicon);
   }, [store]);
 
-  async function addToCartWithQty(p: any, price: number) {
-    const min = safeMode === "mayor" ? Number(p.min_wholesale ?? 1) : 1;
+  /* -------------------------
+     Add to cart (with stock limits + ilimitado)
+  ------------------------- */
+  async function addToCartWithQty(p: ProductRow, price: number) {
+    const isUnlimited = p.stock === null;
+
+    // si es ilimitado, no hay max real
+    const stockNum = isUnlimited
+      ? Infinity
+      : Math.max(0, Math.floor(Number(p.stock || 0)));
+
+    // si NO es ilimitado y está agotado (igual por seguridad)
+    if (!isUnlimited && stockNum <= 0) {
+      await Swal.fire({
+        icon: "info",
+        title: "Producto agotado",
+        text: "Este producto no tiene unidades disponibles por ahora.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    const min =
+      safeMode === "mayor" ? Math.max(1, Number(p.min_wholesale ?? 1)) : 1;
+
+    const start = min;
 
     const res = await Swal.fire({
       title: "Agregar al carrito",
       html: `
         <div style="text-align:left; opacity:.92">
-          <div style="font-weight:800; margin-bottom:6px;">${p.name}</div>
-          <div style="opacity:.85; margin-bottom:12px;">
+          <div style="font-weight:900; margin-bottom:6px;">${p.name}</div>
+          <div style="opacity:.88; margin-bottom:10px;">
             Precio: <b>${money(price)}</b>
           </div>
+
+          <div style="font-size:12px; opacity:.82; margin-bottom:10px;">
+            Disponible: <b>${isUnlimited ? "Ilimitado" : stockNum}</b>
+            ${safeMode === "mayor" ? ` · Mínimo: <b>${min}</b>` : ""}
+          </div>
+
           <label style="font-size:12px; opacity:.8;">Cantidad</label>
-          <input id="qty" type="number" class="swal2-input" value="${min}" min="${min}" style="margin-top:6px;" />
-          ${
-            safeMode === "mayor"
-              ? `<div style="font-size:12px; opacity:.75; margin-top:6px;">Mínimo mayorista: ${min}</div>`
-              : ""
-          }
+          <input
+            id="qty"
+            type="number"
+            class="swal2-input"
+            value="${start}"
+            min="${min}"
+            ${isUnlimited ? "" : `max="${stockNum}"`}
+            style="margin-top:6px;"
+          />
+
+          <div style="font-size:12px; opacity:.7; margin-top:6px;">
+            ${
+              isUnlimited
+                ? "* Sin límite de stock."
+                : "* No se permite pedir más que el stock disponible."
+            }
+          </div>
         </div>
       `,
       background: "#0b0b0b",
@@ -410,14 +474,26 @@ export default function StoreCatalogPage() {
       confirmButtonColor: "#22c55e",
       preConfirm: () => {
         const el = document.getElementById("qty") as HTMLInputElement | null;
-        const qty = Number(el?.value ?? min);
-        return Math.max(min, Math.floor(qty || min));
+        const raw = el?.value ?? start;
+        const qty = Math.max(min, Math.floor(Number(raw)));
+
+        if (!Number.isFinite(qty) || qty < min) {
+          Swal.showValidationMessage(`La cantidad mínima es ${min}.`);
+          return;
+        }
+
+        if (!isUnlimited && qty > stockNum) {
+          Swal.showValidationMessage(`Solo hay ${stockNum} unidades disponibles.`);
+          return;
+        }
+
+        return qty;
       },
     });
 
     if (!res.isConfirmed) return;
 
-    const qty = Number(res.value ?? min);
+    const qty = Number(res.value ?? start);
 
     try {
       (addItem as any)(
@@ -428,7 +504,7 @@ export default function StoreCatalogPage() {
           qty,
           minWholesale: p.min_wholesale ?? null,
         },
-        { openDrawer: false }
+        { openDrawer: false },
       );
     } catch {
       addItem({
@@ -437,7 +513,7 @@ export default function StoreCatalogPage() {
         price: Number(price ?? 0),
         qty,
         minWholesale: p.min_wholesale ?? null,
-      });
+      } as any);
     }
 
     await Swal.fire({
@@ -451,6 +527,9 @@ export default function StoreCatalogPage() {
     });
   }
 
+  /* -------------------------
+     Filtering (ya vienen sin agotados)
+  ------------------------- */
   const shownProductsBase = selectedCat
     ? products.filter((p) => p.category_id === selectedCat)
     : products;
@@ -458,25 +537,29 @@ export default function StoreCatalogPage() {
   const shownProducts = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return shownProductsBase;
-    return shownProductsBase.filter((p: any) => {
+    return shownProductsBase.filter((p) => {
       const a = String(p?.name ?? "").toLowerCase();
       const b = String(p?.description ?? "").toLowerCase();
       return a.includes(s) || b.includes(s);
     });
   }, [shownProductsBase, q]);
 
-  /* =========================
-     Render
-  ========================= */
+  /* =========================================================
+     Render states
+  ========================================================= */
   if (loading) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      <main
+        className="p-6"
+        style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
+      >
         <div className="mx-auto max-w-6xl">
           <div
             className="rounded-3xl border p-5"
             style={{
               borderColor: "var(--t-border)",
-              background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
+              background:
+                "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
             }}
           >
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
@@ -490,7 +573,10 @@ export default function StoreCatalogPage() {
 
   if (!store) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      <main
+        className="p-6"
+        style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
+      >
         <div className="mx-auto max-w-6xl">
           <p>{msg ?? "No se pudo cargar."}</p>
         </div>
@@ -503,10 +589,16 @@ export default function StoreCatalogPage() {
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+    <main
+      className="min-h-screen"
+      style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
+    >
       {/* overlay SOLO si hay gradient (si solid, --t-bg = none por syncGlobalBodyBackground) */}
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--t-bg-base)" }}
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -524,10 +616,14 @@ export default function StoreCatalogPage() {
         }
         .t-ring:focus {
           outline: none;
-          box-shadow: 0 0 0 3px color-mix(in oklab, var(--t-accent2) 35%, transparent);
+          box-shadow: 0 0 0 3px
+            color-mix(in oklab, var(--t-accent2) 35%, transparent);
         }
         .t-card {
-          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+          transition:
+            transform 220ms ease,
+            box-shadow 220ms ease,
+            border-color 220ms ease;
         }
         .t-card:hover {
           transform: translateY(-2px);
@@ -535,13 +631,22 @@ export default function StoreCatalogPage() {
           border-color: color-mix(in oklab, var(--t-border) 60%, white 15%);
         }
         .t-btn {
-          transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+          transition:
+            transform 180ms ease,
+            filter 180ms ease,
+            box-shadow 180ms ease,
+            opacity 180ms ease;
         }
         .t-btn:active {
           transform: scale(0.99);
         }
         .t-btn:hover {
           filter: brightness(1.05);
+        }
+        .t-btn[disabled] {
+          opacity: 0.55;
+          cursor: not-allowed;
+          filter: none !important;
         }
       `}</style>
 
@@ -561,13 +666,18 @@ export default function StoreCatalogPage() {
                   style={{ borderColor: "var(--t-border)" }}
                 />
               ) : (
-                <div className="h-10 w-10 rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
+                <div
+                  className="h-10 w-10 rounded-2xl border"
+                  style={{ borderColor: "var(--t-border)" }}
+                />
               )}
 
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">{store.name}</p>
                 <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
-                  {safeMode === "detal" ? "Catálogo Detal" : "Catálogo Mayoristas"}
+                  {safeMode === "detal"
+                    ? "Catálogo Detal"
+                    : "Catálogo Mayoristas"}
                 </p>
               </div>
             </div>
@@ -577,16 +687,22 @@ export default function StoreCatalogPage() {
                 className="hidden sm:inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
                 style={{ borderColor: "var(--t-border)", background: glassBg2 }}
               >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: accentChipBg }}
+                />
                 {safeMode === "detal" ? "DETAL" : "MAYOR"}
               </span>
 
               {safeMode === "detal" ? (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background: glassBg2,
+                  }}
                   href={`https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
-                    `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`
+                    `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`,
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -596,7 +712,10 @@ export default function StoreCatalogPage() {
               ) : (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background: glassBg2,
+                  }}
                   href={`/${store.slug}/detal`}
                 >
                   Ver Detal
@@ -616,10 +735,13 @@ export default function StoreCatalogPage() {
           <div className="min-w-0">
             <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} · {shownProducts.length} productos
+              {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} ·{" "}
+              {shownProducts.length} productos
             </p>
 
-            {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
+            {profile?.headline ? (
+              <p className="mt-3 text-sm opacity-90">{profile.headline}</p>
+            ) : null}
 
             {links.length ? (
               <div className="mt-4">
@@ -632,11 +754,17 @@ export default function StoreCatalogPage() {
         {/* Banner */}
         {store.banner_url ? (
           <div className="mt-5">
-            <div className="relative overflow-hidden rounded-[28px] border" style={{ borderColor: "var(--t-border)" }}>
+            <div
+              className="relative overflow-hidden rounded-[28px] border"
+              style={{ borderColor: "var(--t-border)" }}
+            >
               <img
                 src={store.banner_url}
                 alt="Banner"
-                className={cx("h-56 w-full object-cover sm:h-64 md:h-80", imgLoaded ? "opacity-100" : "opacity-0")}
+                className={cx(
+                  "h-56 w-full object-cover sm:h-64 md:h-80",
+                  imgLoaded ? "opacity-100" : "opacity-0",
+                )}
                 onLoad={() => setImgLoaded(true)}
               />
 
@@ -670,7 +798,10 @@ export default function StoreCatalogPage() {
               {selectedCat ? (
                 <button
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:text-sm"
-                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background: glassBg2,
+                  }}
                   onClick={() => setSelectedCat(null)}
                 >
                   Ver todo
@@ -685,8 +816,15 @@ export default function StoreCatalogPage() {
                   <button
                     key={c.id}
                     onClick={() => setSelectedCat(c.id)}
-                    className={cx("t-btn shrink-0 rounded-2xl border p-2 text-left", active && "ring-2 ring-white/25")}
-                    style={{ width: 150, borderColor: "var(--t-border)", background: glassBg }}
+                    className={cx(
+                      "t-btn shrink-0 rounded-2xl border p-2 text-left",
+                      active && "ring-2 ring-white/25",
+                    )}
+                    style={{
+                      width: 150,
+                      borderColor: "var(--t-border)",
+                      background: glassBg,
+                    }}
                   >
                     {c.image_url ? (
                       <img
@@ -697,24 +835,36 @@ export default function StoreCatalogPage() {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="aspect-square w-full rounded-xl border" style={{ borderColor: "var(--t-border)" }} />
+                      <div
+                        className="aspect-square w-full rounded-xl border"
+                        style={{ borderColor: "var(--t-border)" }}
+                      />
                     )}
-                    <p className="mt-2 line-clamp-2 text-sm font-bold">{c.name}</p>
+                    <p className="mt-2 line-clamp-2 text-sm font-bold">
+                      {c.name}
+                    </p>
                   </button>
                 );
               })}
             </div>
 
             {/* Buscador */}
-            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
-              <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+            <div
+              className="mt-4 rounded-2xl border p-3"
+              style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+            >
+              <label
+                className="text-xs font-semibold"
+                style={{ color: "var(--t-muted)" }}
+              >
                 Buscar producto
               </label>
               <input
                 className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
                 style={{
                   borderColor: "var(--t-border)",
-                  background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                   color: "var(--t-text)",
                 }}
                 placeholder="Ej: camiseta, bolso, perfume..."
@@ -735,16 +885,22 @@ export default function StoreCatalogPage() {
             </div>
           </div>
         ) : (
-          // si no hay categorías, igual mostrar buscador
-          <div className="mt-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
-            <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+          <div
+            className="mt-2 rounded-2xl border p-3"
+            style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+          >
+            <label
+              className="text-xs font-semibold"
+              style={{ color: "var(--t-muted)" }}
+            >
               Buscar producto
             </label>
             <input
               className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
               style={{
                 borderColor: "var(--t-border)",
-                background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                background:
+                  "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                 color: "var(--t-text)",
               }}
               placeholder="Ej: camiseta, bolso, perfume..."
@@ -767,24 +923,65 @@ export default function StoreCatalogPage() {
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
             style={{ borderColor: "var(--t-border)", background: glassBg2 }}
           >
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ background: accentChipBg }}
+            />
             {safeMode === "detal" ? "DETAL" : "MAYOR"}
           </span>
         </div>
 
         {shownProducts.length === 0 ? (
-          <div className="mt-5 rounded-[28px] border p-6" style={{ borderColor: "var(--t-border)", background: glassBg }}>
+          <div
+            className="mt-5 rounded-[28px] border p-6"
+            style={{ borderColor: "var(--t-border)", background: glassBg }}
+          >
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-              No hay productos con ese filtro.
+              No hay productos disponibles (o están agotados).
             </p>
           </div>
         ) : (
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {shownProducts.map((p: any) => {
-              const price = safeMode === "detal" ? p.price_retail : p.price_wholesale;
+            {shownProducts.map((p) => {
+              const price =
+                safeMode === "detal" ? p.price_retail : p.price_wholesale;
+
+              const isUnlimited = p.stock === null;
+              const stockNum = isUnlimited
+                ? Infinity
+                : Math.max(0, Math.floor(Number(p.stock || 0)));
+              const isOut = !isUnlimited && stockNum <= 0;
+
+              const stockInfo = stockMeta(p.stock);
+
+              const stockPill =
+                stockInfo.tone === "danger"
+                  ? {
+                      border: "color-mix(in oklab, red 35%, var(--t-border))",
+                      bg: "color-mix(in oklab, red 12%, transparent)",
+                      color: "color-mix(in oklab, white 92%, red 8%)",
+                    }
+                  : stockInfo.tone === "warn"
+                  ? {
+                      border: "color-mix(in oklab, orange 35%, var(--t-border))",
+                      bg: "color-mix(in oklab, orange 12%, transparent)",
+                      color: "color-mix(in oklab, white 92%, orange 8%)",
+                    }
+                  : {
+                      border: "color-mix(in oklab, lime 30%, var(--t-border))",
+                      bg: "color-mix(in oklab, lime 10%, transparent)",
+                      color: "color-mix(in oklab, white 92%, lime 8%)",
+                    };
 
               return (
-                <div key={p.id} className="t-card rounded-[28px] border p-4" style={{ borderColor: "var(--t-border)", background: glassBg }}>
+                <div
+                  key={p.id}
+                  className="t-card rounded-[28px] border p-4"
+                  style={{
+                    borderColor: "var(--t-border)",
+                    background: glassBg,
+                  }}
+                >
                   {p.image_url ? (
                     <img
                       src={p.image_url}
@@ -794,33 +991,78 @@ export default function StoreCatalogPage() {
                       style={{ borderColor: "var(--t-border)" }}
                     />
                   ) : (
-                    <div className="mb-3 aspect-square w-full rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
+                    <div
+                      className="mb-3 aspect-square w-full rounded-2xl border"
+                      style={{ borderColor: "var(--t-border)" }}
+                    />
                   )}
 
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-extrabold leading-tight">{p.name}</h3>
-                    <span className="rounded-full px-3 py-1 text-[11px] font-extrabold" style={{ background: accentChipBg, color: "#0b0b0b" }}>
+                    <span
+                      className="rounded-full px-3 py-1 text-[11px] font-extrabold"
+                      style={{ background: accentChipBg, color: "#0b0b0b" }}
+                    >
                       {safeMode === "detal" ? "DETAL" : "MAYOR"}
                     </span>
                   </div>
 
+                  {/* Inventario */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
+                      style={{
+                        borderColor: stockPill.border,
+                        background: stockPill.bg,
+                        color: stockPill.color,
+                      }}
+                      title="Inventario disponible"
+                    >
+                      {stockInfo.tone === "danger"
+                        ? "⛔"
+                        : stockInfo.tone === "warn"
+                        ? "⚠️"
+                        : "✅"}{" "}
+                      {stockInfo.label}
+                    </span>
+
+                    {safeMode === "mayor" && p.min_wholesale ? (
+                      <span
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--t-border) 80%, transparent)",
+                          background:
+                            "color-mix(in oklab, var(--t-card-bg) 62%, transparent)",
+                          color: "var(--t-muted)",
+                        }}
+                      >
+                        Mínimo:{" "}
+                        <b style={{ color: "var(--t-text)" }}>
+                          {p.min_wholesale}
+                        </b>
+                      </span>
+                    ) : null}
+                  </div>
+
                   {p.description ? (
-                    <p className="mt-2 line-clamp-3 text-sm" style={{ color: "var(--t-muted)" }}>
+                    <p
+                      className="mt-2 line-clamp-3 text-sm"
+                      style={{ color: "var(--t-muted)" }}
+                    >
                       {p.description}
                     </p>
                   ) : null}
 
                   <div className="mt-4 flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+                      <p
+                        className="text-xs font-semibold"
+                        style={{ color: "var(--t-muted)" }}
+                      >
                         Precio
                       </p>
                       <p className="text-lg font-black">{money(price)}</p>
-                      {safeMode === "mayor" && p.min_wholesale ? (
-                        <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                          Mínimo: <b>{p.min_wholesale}</b>
-                        </p>
-                      ) : null}
                     </div>
 
                     <button
@@ -831,8 +1073,10 @@ export default function StoreCatalogPage() {
                         boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
                       }}
                       onClick={() => addToCartWithQty(p, Number(price ?? 0))}
+                      disabled={isOut}
+                      title={isOut ? "Producto agotado" : "Agregar al carrito"}
                     >
-                      Agregar
+                      {isOut ? "Agotado" : "Agregar"}
                     </button>
                   </div>
                 </div>
@@ -842,7 +1086,10 @@ export default function StoreCatalogPage() {
         )}
 
         {/* Footer */}
-        <div className="mt-10 border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
+        <div
+          className="mt-10 border-t pt-6"
+          style={{ borderColor: "var(--t-border)" }}
+        >
           <div className="text-sm" style={{ color: "var(--t-muted)" }}>
             {profile?.address || profile?.city ? (
               <p>

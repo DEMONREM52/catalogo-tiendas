@@ -23,7 +23,6 @@ type CartCtx = {
   removeItem: (productId: string) => void;
   empty: () => void;
 
-  // ✅ NUEVO
   setCustomerName: (name: string) => void;
   setCustomerNote: (note: string) => void;
 
@@ -33,8 +32,15 @@ type CartCtx = {
 
 const Ctx = createContext<CartCtx | null>(null);
 
+function cleanStr(v: any) {
+  return typeof v === "string" ? v : "";
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<(CartState & { customerName?: string; customerNote?: string }) | null>(null);
+  const [cart, setCart] = useState<
+    (CartState & { customerName?: string; customerNote?: string }) | null
+  >(null);
+
   const [isOpen, setIsOpen] = useState(false);
 
   function open() {
@@ -45,6 +51,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsOpen(false);
   }
 
+  function update(next: any) {
+    setCart(next);
+    saveCart(next);
+  }
+
   function initCart(s: {
     storeId: string;
     storeSlug: string;
@@ -52,25 +63,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     whatsapp: string;
     mode: CartMode;
   }) {
+    // Si cambias de tienda/modo, cerramos el drawer para evitar UI rara
+    setIsOpen(false);
+
     const existing = loadCart(s.storeId, s.mode);
     if (existing) {
-      // ✅ asegura campos nuevos
-      setCart({
+      // asegura campos nuevos
+      const next = {
         ...(existing as any),
-        customerName: (existing as any).customerName ?? "",
-        customerNote: (existing as any).customerNote ?? "",
-      });
+        // por si cambiaste el nombre/whatsapp/slug de tienda:
+        storeId: s.storeId,
+        storeSlug: s.storeSlug,
+        storeName: s.storeName,
+        whatsapp: s.whatsapp,
+        mode: s.mode,
+        customerName: cleanStr((existing as any).customerName),
+        customerNote: cleanStr((existing as any).customerNote),
+      };
+
+      setCart(next as any);
+      saveCart(next as any);
       return;
     }
 
-    const fresh = { ...s, items: [], customerName: "", customerNote: "" };
+    const fresh = {
+      ...s,
+      items: [],
+      customerName: "",
+      customerNote: "",
+    };
+
     setCart(fresh as any);
     saveCart(fresh as any);
-  }
-
-  function update(next: any) {
-    setCart(next);
-    saveCart(next);
   }
 
   function addItem(item: CartItem, opts?: { openDrawer?: boolean }) {
@@ -124,15 +148,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     update({ ...cart, items: [] });
   }
 
-  // ✅ NUEVO: setters de cliente
   function setCustomerName(name: string) {
     if (!cart) return;
-    update({ ...cart, customerName: name });
+    update({ ...cart, customerName: cleanStr(name) });
   }
 
   function setCustomerNote(note: string) {
     if (!cart) return;
-    update({ ...cart, customerNote: note });
+    update({ ...cart, customerNote: cleanStr(note) });
   }
 
   const total = useMemo(

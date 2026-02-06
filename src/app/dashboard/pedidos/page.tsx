@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
+/** =========================
+ * Helpers (UI)
+ * ========================= */
 function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
 }
@@ -16,20 +19,55 @@ function statusLabel(s: string) {
   return s;
 }
 
+type OrderStatus = "draft" | "sent" | "confirmed" | "completed";
+
+function statusBadge(st: OrderStatus) {
+  const base =
+    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold";
+
+  if (st === "draft") return `${base} border-white/10 bg-white/5 text-white/80`;
+  if (st === "sent") return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
+  if (st === "confirmed") return `${base} border-emerald-400/30 bg-emerald-400/10 text-emerald-100`;
+  return `${base} border-indigo-400/30 bg-indigo-400/10 text-indigo-100`;
+}
+
+function cleanText(v: string | null | undefined) {
+  return (v ?? "").trim();
+}
+
+function safeCustomer(v: string | null | undefined) {
+  return cleanText(v) || "—";
+}
+
+function inputBase() {
+  // ✅ mejor en móvil: más alto, más legible, sin desbordes
+  return "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+}
+
+function selectBase() {
+  return "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none backdrop-blur-xl";
+}
+
+function btnSoft() {
+  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+}
+
+function btnCta() {
+  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+}
+
 type OrderRow = {
   id: string;
   token: string;
   store_id: string;
   receipt_no: number | null;
-  status: "draft" | "sent" | "confirmed" | "completed";
+  status: OrderStatus;
   total: number;
   created_at: string;
   customer_name: string | null;
   customer_whatsapp: string | null;
 
-  // ✅ NUEVO
-  customer_note: string | null;
-
+  customer_note: string | null; // ✅ observaciones
   catalog_type: "retail" | "wholesale";
 };
 
@@ -91,7 +129,7 @@ export default function OrdersDashboardPage() {
 
       setStoreId(storeData.id);
 
-      // 3) Pedidos (✅ incluye customer_note)
+      // 3) Pedidos (incluye customer_note)
       const { data: ordData, error: ordErr } = await sb
         .from("orders")
         .select(
@@ -124,16 +162,12 @@ export default function OrdersDashboardPage() {
     const s = q.trim().toLowerCase();
 
     return orders.filter((o) => {
-      const matchQ =
-        !s ||
-        String(o.receipt_no ?? "").includes(s) ||
-        (o.customer_name ?? "").toLowerCase().includes(s) ||
-        (o.customer_whatsapp ?? "").toLowerCase().includes(s) ||
-        (o.customer_note ?? "").toLowerCase().includes(s) ||
-        (o.status ?? "").toLowerCase().includes(s);
+      const haystack = (
+        `${o.receipt_no ?? ""} ${o.status ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""}`
+      ).toLowerCase();
 
+      const matchQ = !s || haystack.includes(s);
       const matchStatus = status === "all" ? true : o.status === status;
-
       return matchQ && matchStatus;
     });
   }, [orders, q, status]);
@@ -155,18 +189,18 @@ export default function OrdersDashboardPage() {
         product: x.products ?? null,
       }));
 
-      const customerName = (o.customer_name ?? "").trim() || "—";
-      const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
-      const note = (o.customer_note ?? "").trim() || "—";
+      const customerName = safeCustomer(o.customer_name);
+      const customerWa = safeCustomer(o.customer_whatsapp);
+      const note = safeCustomer(o.customer_note);
 
       const html = `
         <div style="text-align:left">
-          <div style="opacity:.9; margin-bottom:8px">
+          <div style="opacity:.92; margin-bottom:8px">
             <div style="font-size:14px; margin-bottom:8px">
               👋 Hola, <b style="font-size:15px">${customerName}</b>
             </div>
 
-            <div style="opacity:.85">
+            <div style="opacity:.9; line-height:1.5">
               <b>Comprobante:</b> #${o.receipt_no ?? "—"}<br/>
               <b>Estado:</b> ${statusLabel(o.status)}<br/>
               <b>Tipo:</b> ${o.catalog_type === "retail" ? "Detal" : "Mayor"}<br/>
@@ -185,18 +219,16 @@ export default function OrdersDashboardPage() {
               const sub = Number(i.price) * Number(i.quantity);
               return `<div style="margin:8px 0">
                 <div><b>${name}</b></div>
-                <div style="opacity:.8">Cant: ${i.quantity} · Precio: ${money(
-                  i.price
-                )} · Subtotal: ${money(sub)}</div>
+                <div style="opacity:.85">Cant: ${i.quantity} · Precio: ${money(i.price)} · Subtotal: ${money(sub)}</div>
               </div>`;
             })
             .join("")}
 
           <hr style="border-color: rgba(255,255,255,0.12); margin: 12px 0" />
 
-          <div style="opacity:.85">
+          <div style="opacity:.9">
             <b>Link comprobante:</b><br/>
-            <code style="font-size:12px">${window.location.origin}/pedido/${o.token}</code>
+            <code style="font-size:12px; word-break:break-all;">${window.location.origin}/pedido/${o.token}</code>
           </div>
         </div>
       `;
@@ -206,7 +238,7 @@ export default function OrdersDashboardPage() {
         html,
         background: "#0b0b0b",
         color: "#fff",
-        width: 720,
+        width: 780,
         showConfirmButton: true,
         confirmButtonText: "Cerrar",
       });
@@ -221,15 +253,13 @@ export default function OrdersDashboardPage() {
     }
   }
 
-  async function setOrderStatus(o: OrderRow, nextStatus: OrderRow["status"]) {
+  async function setOrderStatus(o: OrderRow, nextStatus: OrderStatus) {
     const confirm = await Swal.fire({
       icon: "question",
       title: "Cambiar estado",
-      text: `¿Cambiar el pedido #${o.receipt_no ?? "—"} a "${statusLabel(
-        nextStatus
-      )}"?`,
+      text: `¿Cambiar el pedido #${o.receipt_no ?? "—"} a "${statusLabel(nextStatus)}"?`,
       showCancelButton: true,
-      confirmButtonText: "Sí",
+      confirmButtonText: "Sí, cambiar",
       cancelButtonText: "Cancelar",
       background: "#0b0b0b",
       color: "#fff",
@@ -248,9 +278,7 @@ export default function OrdersDashboardPage() {
 
       if (error) throw error;
 
-      setOrders((prev) =>
-        prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x))
-      );
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: nextStatus } : x)));
 
       await Swal.fire({
         icon: "success",
@@ -276,14 +304,14 @@ export default function OrdersDashboardPage() {
   async function orderActions(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
 
-    const customerName = (o.customer_name ?? "").trim() || "—";
-    const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
-    const note = (o.customer_note ?? "").trim() || "—";
+    const customerName = safeCustomer(o.customer_name);
+    const customerWa = safeCustomer(o.customer_whatsapp);
+    const note = safeCustomer(o.customer_note);
 
     const res = await Swal.fire({
       title: `Pedido #${o.receipt_no ?? "—"}`,
       html: `
-        <div style="text-align:left; opacity:.92">
+        <div style="text-align:left; opacity:.92; line-height:1.5">
           <div style="font-size:14px; margin-bottom:10px">
             👋 Hola, <b style="font-size:15px">${customerName}</b>
           </div>
@@ -306,10 +334,8 @@ export default function OrdersDashboardPage() {
       background: "#0b0b0b",
       color: "#fff",
       showCancelButton: true,
-
       confirmButtonText: "Abrir",
       cancelButtonText: "Copiar link",
-
       confirmButtonColor: "#22c55e",
       cancelButtonColor: "#374151",
     });
@@ -320,17 +346,26 @@ export default function OrdersDashboardPage() {
     }
 
     if (res.dismiss === Swal.DismissReason.cancel) {
-      await navigator.clipboard.writeText(link);
-
-      await Swal.fire({
-        icon: "success",
-        title: "Link copiado",
-        text: "Se copió el link del comprobante.",
-        timer: 1100,
-        showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
-      });
+      try {
+        await navigator.clipboard.writeText(link);
+        await Swal.fire({
+          icon: "success",
+          title: "Link copiado",
+          text: "Se copió el link del comprobante.",
+          timer: 1100,
+          showConfirmButton: false,
+          background: "#0b0b0b",
+          color: "#fff",
+        });
+      } catch {
+        await Swal.fire({
+          icon: "info",
+          title: "No se pudo copiar",
+          text: "Tu navegador bloqueó el portapapeles. Copia el link manualmente.",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
+      }
     }
   }
 
@@ -343,10 +378,10 @@ export default function OrdersDashboardPage() {
   }
 
   return (
-    <main className="p-6 space-y-5 panel-enter">
+    <main className="p-4 sm:p-6 space-y-5 panel-enter">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Pedidos</h1>
           <p className="text-sm opacity-80">
             Aquí verás todos los pedidos que llegan por el carrito.
@@ -354,23 +389,23 @@ export default function OrdersDashboardPage() {
         </div>
 
         <div className="flex gap-2">
-          <button className="btn-soft px-4 py-2" onClick={load}>
+          <button className={btnSoft()} onClick={load}>
             Recargar
           </button>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="glass p-4">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-          <input
-            className="p-3"
-            placeholder="Buscar: comprobante, nombre, whatsapp, obs, estado..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+      {/* Filtros (mejor móvil) */}
+      <div className="glass p-4 space-y-3">
+        <input
+          className={inputBase()}
+          placeholder="Buscar: comprobante, nombre, whatsapp, obs, estado..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
 
-          <select className="p-3" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select className={selectBase()} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="all">Todos</option>
             <option value="draft">Borrador</option>
             <option value="sent">Enviado (editable)</option>
@@ -378,14 +413,98 @@ export default function OrdersDashboardPage() {
             <option value="completed">Completado</option>
           </select>
 
-          <div className="glass-soft p-3 text-sm">
+          <div className="glass-soft px-4 py-3 text-sm rounded-2xl">
             Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos: <b>{orders.length}</b>
           </div>
         </div>
       </div>
 
-      {/* Tabla */}
-      <div className="glass overflow-hidden">
+      {/* =========================
+          MOBILE: Cards (✅ arregla el problema)
+         ========================= */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="glass p-5">
+            <p className="font-semibold">Aún no hay pedidos.</p>
+            <p className="text-sm opacity-80 mt-1">Prueba cambiando filtros.</p>
+          </div>
+        ) : (
+          filtered.map((o) => {
+            const customerName = safeCustomer(o.customer_name);
+            const customerWa = safeCustomer(o.customer_whatsapp);
+            const note = safeCustomer(o.customer_note);
+
+            return (
+              <div key={o.id} className="glass p-4 space-y-3">
+                {/* top */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-base">
+                      Pedido #{o.receipt_no ?? "—"}
+                    </div>
+                    <div className="text-xs opacity-75">
+                      {new Date(o.created_at).toLocaleString("es-CO")}
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex flex-col items-end gap-2">
+                    <span className={statusBadge(o.status)}>{statusLabel(o.status)}</span>
+                    <span className="text-xs opacity-80">
+                      {o.catalog_type === "retail" ? "Detal" : "Mayor"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* total */}
+                <div className="flex items-center justify-between">
+                  <div className="text-sm opacity-80">Total</div>
+                  <div className="text-lg font-bold">{money(o.total)}</div>
+                </div>
+
+                {/* cliente */}
+                <div className="text-sm space-y-1">
+                  <div className="opacity-80">
+                    👤 <b className="opacity-100">{customerName}</b>
+                  </div>
+                  <div className="opacity-80">
+                    📱 <b className="opacity-100">{customerWa}</b>
+                  </div>
+                  {note !== "—" ? (
+                    <div className="opacity-80">
+                      📝 <span className="opacity-100">{note}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* acciones */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button className={btnSoft()} onClick={() => orderActions(o)}>
+                    Ver
+                  </button>
+                  <button className={btnSoft()} onClick={() => openOrder(o)}>
+                    Detalle
+                  </button>
+
+                  {o.status !== "confirmed" ? (
+                    <button className={`${btnCta()} col-span-2`} onClick={() => setOrderStatus(o, "confirmed")}>
+                      Confirmar
+                    </button>
+                  ) : (
+                    <button className={`${btnCta()} col-span-2`} onClick={() => setOrderStatus(o, "completed")}>
+                      Completar
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* =========================
+          DESKTOP: Tabla (se mantiene)
+         ========================= */}
+      <div className="hidden md:block glass overflow-hidden">
         <div
           className="grid grid-cols-12 gap-2 border-b p-3 text-sm opacity-80"
           style={{ borderColor: "var(--t-card-border)" }}

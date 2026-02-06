@@ -4,17 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
+/** =========================
+ * Helpers
+ * ========================= */
 function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
 }
 
 type StoreMini = { id: string; name: string; slug: string };
 
+type OrderStatus = "draft" | "sent" | "confirmed" | "completed";
+
 type OrderRow = {
   id: string;
   store_id: string;
   catalog_type: "retail" | "wholesale";
-  status: "draft" | "sent" | "confirmed" | "completed";
+  status: OrderStatus;
   total: number;
   token: string;
   receipt_no: number | null;
@@ -22,30 +27,68 @@ type OrderRow = {
 
   customer_name: string | null;
   customer_whatsapp: string | null;
-
-  // ✅ NUEVO (Observaciones) — requiere columna en orders
   customer_note?: string | null;
 
   stores?: { name: string; slug: string } | null;
 };
 
-function statusLabel(st: string) {
+function statusLabel(st: OrderStatus) {
   if (st === "draft") return "Borrador";
   if (st === "sent") return "Enviado";
   if (st === "confirmed") return "Confirmado";
-  if (st === "completed") return "Completado";
-  return st;
+  return "Completado";
 }
 
-function statusBadge(st: OrderRow["status"]) {
+function statusPill(st: OrderStatus) {
   const base =
     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold";
-
   if (st === "draft") return `${base} border-white/10 bg-white/5 text-white/80`;
   if (st === "sent") return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
   if (st === "confirmed")
     return `${base} border-emerald-400/30 bg-emerald-400/10 text-emerald-100`;
   return `${base} border-indigo-400/30 bg-indigo-400/10 text-indigo-100`;
+}
+
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString("es-CO", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function safeText(v: string | null | undefined) {
+  const t = (v ?? "").trim();
+  return t ? t : "—";
+}
+
+function inputBase() {
+  // ✅ mejor en móvil: más padding y ancho completo
+  return "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+}
+
+function btnSoft() {
+  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+}
+
+function btnPrimary() {
+  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+}
+
+function btnDanger() {
+  return "rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
+}
+
+function cleanWhatsApp(v: string | null | undefined) {
+  const raw = (v ?? "").trim();
+  if (!raw) return "";
+  return raw.replace(/\D/g, "");
 }
 
 export default function AdminPedidosPage() {
@@ -57,11 +100,11 @@ export default function AdminPedidosPage() {
 
   const [q, setQ] = useState("");
   const [storeFilter, setStoreFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
 
-  // -----------------------------
-  // Cargar tiendas + pedidos
-  // -----------------------------
+  /** =========================
+   * Load
+   * ========================= */
   async function load() {
     setLoading(true);
     try {
@@ -76,11 +119,10 @@ export default function AdminPedidosPage() {
       if (stErr) throw stErr;
       setStores((st as StoreMini[]) ?? []);
 
-      // Pedidos
+      // Pedidos (últimos 200)
       const { data, error } = await sb
         .from("orders")
         .select(
-          // ✅ añadimos customer_note
           "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,customer_note,stores(name,slug)"
         )
         .order("created_at", { ascending: false })
@@ -106,9 +148,9 @@ export default function AdminPedidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------
-  // Filtrado
-  // -----------------------------
+  /** =========================
+   * Filter
+   * ========================= */
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
 
@@ -129,73 +171,21 @@ export default function AdminPedidosPage() {
     });
   }, [orders, q, storeFilter, statusFilter]);
 
-  // -----------------------------
-  // Cambiar estado
-  // -----------------------------
-  async function setStatus(o: OrderRow, next: OrderRow["status"]) {
-    const res = await Swal.fire({
-      icon: "question",
-      title: "Cambiar estado",
-      text: `Pedido #${o.receipt_no ?? "—"} → ${statusLabel(next)}`,
-      showCancelButton: true,
-      confirmButtonText: "Sí, cambiar",
-      cancelButtonText: "Cancelar",
-      background: "#0b0b0b",
-      color: "#fff",
-      confirmButtonColor: "#22c55e",
-    });
-
-    if (!res.isConfirmed) return;
-
-    setSaving(true);
-    try {
-      const sb = supabaseBrowser();
-
-      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
-      if (error) throw error;
-
-      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
-
-      await Swal.fire({
-        icon: "success",
-        title: "Listo",
-        text: "Estado actualizado.",
-        timer: 1000,
-        showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
-      });
-    } catch (err: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "No se pudo cambiar",
-        text: err?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
-        confirmButtonColor: "#ef4444",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // -----------------------------
-  // Acciones
-  // -----------------------------
+  /** =========================
+   * Actions
+   * ========================= */
   function openReceipt(o: OrderRow) {
     window.open(`/pedido/${o.token}`, "_blank");
   }
 
   async function copyLink(o: OrderRow) {
+    const url = `${window.location.origin}/pedido/${o.token}`;
     try {
-      const url = `${window.location.origin}/pedido/${o.token}`;
       await navigator.clipboard.writeText(url);
-
       await Swal.fire({
         icon: "success",
         title: "Link copiado",
-        text: "El link del comprobante fue copiado al portapapeles.",
-        timer: 1200,
+        timer: 900,
         showConfirmButton: false,
         background: "#0b0b0b",
         color: "#fff",
@@ -211,10 +201,8 @@ export default function AdminPedidosPage() {
     }
   }
 
-  // ✅ SOLO imprime cuando tú das click en "Generar factura"
   async function printInvoice(o: OrderRow) {
     const link = `${window.location.origin}/pedido/${o.token}`;
-
     const w = window.open(link, "_blank");
     if (!w) {
       await Swal.fire({
@@ -227,6 +215,7 @@ export default function AdminPedidosPage() {
       return;
     }
 
+    // imprimir cuando cargue
     const startedAt = Date.now();
     const maxWait = 9000;
 
@@ -252,65 +241,143 @@ export default function AdminPedidosPage() {
     }, 350);
   }
 
-  // -----------------------------
-  // UI
-  // -----------------------------
+  async function openWhatsApp(o: OrderRow) {
+    const wa = cleanWhatsApp(o.customer_whatsapp);
+    if (!wa) {
+      await Swal.fire({
+        icon: "info",
+        title: "Sin WhatsApp",
+        text: "Este pedido no tiene WhatsApp del cliente.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    const name = safeText(o.customer_name);
+    const msg = `Hola ${name}, sobre tu pedido #${o.receipt_no ?? "—"} ✅`;
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  async function setStatus(o: OrderRow, next: OrderStatus) {
+    if (o.status === next) return;
+
+    const res = await Swal.fire({
+      icon: "question",
+      title: "Cambiar estado",
+      text: `Pedido #${o.receipt_no ?? "—"} → ${statusLabel(next)}`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, cambiar",
+      cancelButtonText: "Cancelar",
+      background: "#0b0b0b",
+      color: "#fff",
+      confirmButtonColor: "#22c55e",
+    });
+
+    if (!res.isConfirmed) return;
+
+    setSaving(true);
+    try {
+      const sb = supabaseBrowser();
+      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
+      if (error) throw error;
+
+      setOrders((prev) =>
+        prev.map((x) => (x.id === o.id ? { ...x, status: next } : x))
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "Listo",
+        text: "Estado actualizado.",
+        timer: 900,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (err: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo cambiar",
+        text: err?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#ef4444",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** =========================
+   * UI
+   * ========================= */
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold">🧾 Pedidos</h2>
           <p className="text-sm text-white/70">
-            Filtra pedidos, abre comprobantes y genera facturas en PDF.
+            Aquí verás todos los pedidos que llegan por el carrito.
           </p>
         </div>
 
-        <button
-          onClick={load}
-          disabled={saving}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60"
-        >
-          Recargar
-        </button>
+        <div className="flex gap-2">
+          <button onClick={load} disabled={saving} className={btnSoft()}>
+            Recargar
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+      {/* Filters (mobile friendly) */}
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl space-y-2">
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl"
-          placeholder="Buscar (#, token, tienda, cliente, whatsapp, obs...)"
+          className={inputBase()}
+          placeholder="Buscar: comprobante, nombre, whatsapp, obs..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
 
-        <select
-          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none backdrop-blur-xl"
-          value={storeFilter}
-          onChange={(e) => setStoreFilter(e.target.value)}
-        >
-          <option value="all">Todas las tiendas</option>
-          {stores.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({s.slug})
-            </option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select
+            className={inputBase()}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+          >
+            <option value="all">Todos</option>
+            <option value="draft">Borrador</option>
+            <option value="sent">Enviado</option>
+            <option value="confirmed">Confirmado</option>
+            <option value="completed">Completado</option>
+          </select>
 
-        <select
-          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none backdrop-blur-xl"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="all">Todos los estados</option>
-          <option value="draft">Borrador</option>
-          <option value="sent">Enviado</option>
-          <option value="confirmed">Confirmado</option>
-          <option value="completed">Completado</option>
-        </select>
+          <select
+            className={inputBase()}
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <option value="all">Todas las tiendas</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.slug})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="text-xs text-white/60">
+          Tienda:{" "}
+          <b className="text-white/90">
+            {storeFilter === "all"
+              ? "Todas"
+              : stores.find((x) => x.id === storeFilter)?.name ?? "Filtrada"}
+          </b>{" "}
+          · Pedidos: <b className="text-white/90">{filtered.length}</b>
+        </div>
       </div>
 
-      {/* List */}
+      {/* Body */}
       {loading ? (
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-sm text-white/70">
           Cargando...
@@ -319,125 +386,185 @@ export default function AdminPedidosPage() {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
           <p className="font-semibold">No hay pedidos</p>
           <p className="mt-1 text-sm text-white/70">
-            Prueba cambiando filtros o creando un pedido.
+            Prueba cambiando filtros o recargando.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((o) => {
-            const customerName = (o.customer_name ?? "").trim() || "—";
-            const customerWa = (o.customer_whatsapp ?? "").trim() || "—";
-            const note = (o.customer_note ?? "").trim() || "—";
+        <>
+          {/* ✅ MOBILE: Cards (ya no se ve “tabla apretada”) */}
+          <div className="md:hidden space-y-3">
+            {filtered.map((o) => {
+              const storeName = o.stores?.name ?? "Tienda";
+              const typeLabel = o.catalog_type === "retail" ? "Detal" : "Mayor";
+              const created = formatDate(o.created_at);
 
-            return (
-              <div
-                key={o.id}
-                className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
-              >
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  {/* Info */}
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">
-                        #{o.receipt_no ?? "—"} · {o.stores?.name ?? "Tienda"}
-                      </p>
+              const customerName = safeText(o.customer_name);
+              const customerWa = safeText(o.customer_whatsapp);
+              const note = safeText(o.customer_note);
 
-                      <span className="text-xs text-white/60">
-                        ({o.catalog_type === "retail" ? "Detal" : "Mayor"})
-                      </span>
-
-                      <span className={statusBadge(o.status)}>
-                        <span className="h-2 w-2 rounded-full bg-white/60" />
-                        {statusLabel(o.status)}
-                      </span>
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-base truncate">
+                        Pedido #{o.receipt_no ?? "—"}
+                      </div>
+                      <div className="text-xs text-white/70 truncate">
+                        {storeName} · {typeLabel}
+                      </div>
+                      <div className="text-xs text-white/60">{created}</div>
                     </div>
 
-                    <p className="mt-1 text-sm text-white/70">
-                      {new Date(o.created_at).toLocaleString("es-CO")} · Total:{" "}
-                      <b className="text-white">{money(o.total)}</b>
-                    </p>
-
-                    {/* ✅ Cliente + WhatsApp + Observaciones */}
-                    <div className="mt-1 space-y-1">
-                      <p className="text-xs text-white/60">
-                        👤 Cliente: <b className="text-white/90">{customerName}</b> · WhatsApp:{" "}
-                        <b className="text-white/90">{customerWa}</b>
-                      </p>
-
-                      <p className="text-xs text-white/60">
-                        📝 Observaciones: <b className="text-white/90">{note}</b>
-                      </p>
-
-                      <p className="text-xs text-white/40">Token: {o.token}</p>
+                    <div className="shrink-0 flex flex-col items-end gap-2">
+                      <span className={statusPill(o.status)}>{statusLabel(o.status)}</span>
+                      <div className="text-lg font-bold">{money(o.total)}</div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                      onClick={() => openReceipt(o)}
-                    >
-                      Ver comprobante
-                    </button>
+                  <div className="grid grid-cols-1 gap-1 text-sm text-white/80">
+                    <div>
+                      👤 Cliente: <b className="text-white">{customerName}</b>
+                    </div>
+                    <div>
+                      📲 WhatsApp: <b className="text-white">{customerWa}</b>
+                    </div>
+                    {note !== "—" ? (
+                      <div>
+                        📝 Obs: <span className="text-white">{note}</span>
+                      </div>
+                    ) : null}
+                  </div>
 
-                    <button
-                      className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25"
-                      onClick={() => printInvoice(o)}
-                    >
-                      Generar factura (PDF)
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className={btnSoft()} onClick={() => openReceipt(o)}>
+                      Ver
                     </button>
-
-                    <button
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                      onClick={() => copyLink(o)}
-                    >
+                    <button className={btnSoft()} onClick={() => copyLink(o)}>
                       Copiar link
                     </button>
 
-                    <div className="w-full md:hidden" />
-
-                    <button
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-60"
-                      onClick={() => setStatus(o, "draft")}
-                      disabled={saving}
-                    >
-                      Borrador
+                    <button className={btnPrimary()} onClick={() => printInvoice(o)}>
+                      Factura (PDF)
                     </button>
-
-                    <button
-                      className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:opacity-60"
-                      onClick={() => setStatus(o, "sent")}
-                      disabled={saving}
-                    >
-                      Enviado
-                    </button>
-
-                    <button
-                      className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
-                      onClick={() => setStatus(o, "confirmed")}
-                      disabled={saving}
-                    >
-                      Confirmado
-                    </button>
-
-                    <button
-                      className="rounded-2xl border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-100 transition hover:bg-indigo-400/15 disabled:opacity-60"
-                      onClick={() => setStatus(o, "completed")}
-                      disabled={saving}
-                    >
-                      Completado
+                    <button className={btnSoft()} onClick={() => openWhatsApp(o)}>
+                      WhatsApp
                     </button>
                   </div>
-                </div>
-              </div>
-            );
-          })}
 
-          <p className="text-xs text-white/50">
-            Mostrando últimos 200 pedidos (puedes subir el limit si quieres).
-          </p>
-        </div>
+                  {/* cambiar estado en móvil (más fácil que 4 botones) */}
+                  <div className="grid grid-cols-1 gap-2">
+                    <select
+                      className={inputBase()}
+                      value={o.status}
+                      onChange={(e) => setStatus(o, e.target.value as OrderStatus)}
+                      disabled={saving}
+                      title="Cambiar estado"
+                    >
+                      <option value="draft">Borrador</option>
+                      <option value="sent">Enviado</option>
+                      <option value="confirmed">Confirmado</option>
+                      <option value="completed">Completado</option>
+                    </select>
+
+                    <details className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <summary className="cursor-pointer select-none text-sm font-semibold text-white/90">
+                        Ver token / más info
+                      </summary>
+                      <div className="mt-2 text-xs text-white/60 break-all">
+                        Token: {o.token}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ✅ DESKTOP: “tabla” pero bien */}
+          <div className="hidden md:block space-y-3">
+            {filtered.map((o) => {
+              const storeName = o.stores?.name ?? "Tienda";
+              const typeLabel = o.catalog_type === "retail" ? "Detal" : "Mayor";
+              const created = formatDate(o.created_at);
+
+              const customerName = safeText(o.customer_name);
+              const customerWa = safeText(o.customer_whatsapp);
+              const note = safeText(o.customer_note);
+
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-semibold">
+                          #{o.receipt_no ?? "—"} · {storeName}
+                        </div>
+                        <span className="text-xs text-white/60">({typeLabel})</span>
+                        <span className={statusPill(o.status)}>{statusLabel(o.status)}</span>
+                      </div>
+
+                      <div className="mt-1 text-sm text-white/70">
+                        {created} · Total: <b className="text-white">{money(o.total)}</b>
+                      </div>
+
+                      <div className="mt-2 text-sm text-white/70">
+                        👤 <b className="text-white">{customerName}</b> · 📲{" "}
+                        <b className="text-white">{customerWa}</b>
+                      </div>
+
+                      {note !== "—" ? (
+                        <div className="mt-1 text-sm text-white/70">
+                          📝 <span className="text-white">{note}</span>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-1 text-xs text-white/40">Token: {o.token}</div>
+                    </div>
+
+                    <div className="w-[220px] shrink-0 space-y-2">
+                      <select
+                        className={inputBase()}
+                        value={o.status}
+                        onChange={(e) => setStatus(o, e.target.value as OrderStatus)}
+                        disabled={saving}
+                      >
+                        <option value="draft">Borrador</option>
+                        <option value="sent">Enviado</option>
+                        <option value="confirmed">Confirmado</option>
+                        <option value="completed">Completado</option>
+                      </select>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button className={btnSoft()} onClick={() => openReceipt(o)}>
+                          Ver
+                        </button>
+                        <button className={btnSoft()} onClick={() => copyLink(o)}>
+                          Copiar
+                        </button>
+                        <button className={btnPrimary()} onClick={() => printInvoice(o)}>
+                          PDF
+                        </button>
+                        <button className={btnSoft()} onClick={() => openWhatsApp(o)}>
+                          WhatsApp
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            <p className="text-xs text-white/50">
+              Mostrando últimos 200 pedidos.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
