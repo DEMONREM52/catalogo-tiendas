@@ -1,62 +1,73 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../store/ImageUpload";
+
+type Category = { id: string; name: string };
 
 type Product = {
   id: string;
   store_id: string;
+  created_at: string;
   name: string;
   description: string | null;
-  price_retail: number | null;
-  price_wholesale: number | null;
-  min_wholesale: number | null;
 
-  active: boolean; // REAL DB
-  active_draft?: boolean; // SOLO UI (se aplica al guardar)
+  price_retail: number;
+  price_wholesale: number;
+  min_wholesale: number;
 
+  active: boolean;
   image_url: string | null;
   category_id: string | null;
 
   stock: number | null; // null = ilimitado
 };
 
-type Filter = "active" | "inactive" | "out" | "all";
+type StatusFilter = "all" | "active" | "inactive";
+type StockFilter = "all" | "in" | "out" | "unlimited";
+type SortBy = "newest" | "name" | "price" | "stock";
 
-function clampIntOrNull(v: any): number | null {
-  const t = String(v ?? "").trim();
-  if (!t) return null; // vacío => ilimitado
+/* =========================
+   Helpers
+========================= */
+function money(n: number) {
+  return `$${Number(n || 0).toLocaleString("es-CO")}`;
+}
+
+function stockLabel(stock: number | null) {
+  if (stock === null) return "∞ Ilimitado";
+  if (stock <= 0) return "Agotado";
+  return `${stock} disp.`;
+}
+
+function digitsOnlyToNumber(raw: string, fallback = 0) {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (!digits) return fallback;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function clampIntOrNull(raw: string): number | null {
+  const t = String(raw ?? "").trim();
+  if (!t) return null;
   const n = Math.floor(Number(t));
   if (!Number.isFinite(n)) return null;
   return Math.max(0, n);
 }
 
-function clampNum(v: any, fallback = 0): number {
-  const n = Number(v);
+function clampNum(raw: any, fallback = 0) {
+  const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function isOut(stock: number | null) {
-  return stock !== null && stock <= 0;
-}
-
-function stockLabel(stock: number | null) {
-  if (stock === null) return "Ilimitado";
-  if (stock <= 0) return "Agotado";
-  return `${stock} disponibles`;
-}
-
-/**
- * ✅ Excel-like: 1 click selecciona todo para sobreescribir (sin error)
- * - onFocus: selecciona el texto (usando requestAnimationFrame)
- * - onMouseDown: primer click no mueve cursor (para que luego seleccione)
- */
+/** Excel-like select-all */
 function excelSelectHandlers() {
   return {
     onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
-      const el = e.currentTarget; // ✅ guardamos el elemento (no el evento)
+      const el = e.currentTarget;
       requestAnimationFrame(() => {
         try {
           el.select();
@@ -73,58 +84,165 @@ function excelSelectHandlers() {
   };
 }
 
-/**
- * ✅ Mejor UX “tipo Excel” para precios:
- * - usamos text + inputMode numeric para que al escribir reemplaces fácil
- * - guardamos en estado como number
- */
-function digitsOnlyToNumber(raw: string, fallback = 0) {
-  const digits = String(raw ?? "").replace(/\D/g, "");
-  if (!digits) return fallback;
-  const n = Number(digits);
-  return Number.isFinite(n) ? n : fallback;
+/** Debounce */
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
 }
 
+function formatDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString("es-CO", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function clsInput() {
+  return "w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+}
+function clsInputSoft() {
+  return "w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm outline-none placeholder:text-white/40";
+}
+function clsBtnSoft() {
+  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+}
+function clsBtnPrimary() {
+  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+}
+function clsChip() {
+  return "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold";
+}
+
+/* =========================
+   Swipe down close (mobile)
+========================= */
+function useSwipeDownToClose(onClose: () => void) {
+  const startY = useRef<number | null>(null);
+  const lastY = useRef<number | null>(null);
+  const dragging = useRef(false);
+
+  function onTouchStart(e: React.TouchEvent) {
+    startY.current = e.touches[0]?.clientY ?? null;
+    lastY.current = startY.current;
+    dragging.current = true;
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging.current) return;
+    lastY.current = e.touches[0]?.clientY ?? null;
+  }
+  function onTouchEnd() {
+    if (!dragging.current) return;
+    dragging.current = false;
+
+    const sy = startY.current;
+    const ly = lastY.current;
+    startY.current = null;
+    lastY.current = null;
+
+    if (sy == null || ly == null) return;
+    const delta = ly - sy;
+    if (delta > 90) onClose();
+  }
+
+  return { onTouchStart, onTouchMove, onTouchEnd };
+}
+
+/** Bottom sheet simple para filtros (mobile) */
+function BottomSheet({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60"
+        onClick={onClose}
+        aria-label="Cerrar"
+      />
+      <div className="absolute inset-x-0 bottom-0">
+        <div className="rounded-t-[28px] border border-white/10 bg-[#0b0b0b] shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-2 p-4 border-b border-white/10">
+            <div className="min-w-0">
+              <div className="h-1.5 w-12 rounded-full bg-white/20 mx-auto mb-2" />
+              <p className="text-sm font-semibold">{title}</p>
+            </div>
+            <button type="button" className={clsBtnSoft()} onClick={onClose}>
+              Cerrar
+            </button>
+          </div>
+
+          <div className="p-4 max-h-[70vh] overflow-y-auto">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   Page
+========================= */
 export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+
+  // filters
   const [q, setQ] = useState("");
+  const dq = useDebouncedValue(q, 250);
 
-  // ✅ Default "all" para que no desaparezca nada al editar
-  const [filter, setFilter] = useState<Filter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [onlyWithImage, setOnlyWithImage] = useState(false);
 
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>(
-    []
-  );
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
 
-  // ✅ filtro basado en active REAL (DB), NO en draft
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
+  const [sortBy, setSortBy] = useState<SortBy>("newest");
 
-    return products.filter((p) => {
-      if (filter === "active" && (!p.active || isOut(p.stock))) return false;
-      if (filter === "inactive" && p.active) return false;
-      if (filter === "out" && !isOut(p.stock)) return false;
+  // UI: filtros en mobile como sheet
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-      if (!s) return true;
+  // editor
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [draft, setDraft] = useState<Product | null>(null);
 
-      return (
-        p.name.toLowerCase().includes(s) ||
-        (p.description ?? "").toLowerCase().includes(s)
-      );
-    });
-  }, [products, q, filter]);
+  // list
+  const parentRef = useRef<HTMLDivElement | null>(null);
 
-  async function load() {
-    setMsg(null);
+  const isDirty = useMemo(() => {
+    if (!selected || !draft) return false;
+    return JSON.stringify(selected) !== JSON.stringify(draft);
+  }, [selected, draft]);
+
+  async function loadAll() {
     setLoading(true);
-
     try {
       const sb = supabaseBrowser();
 
@@ -132,11 +250,14 @@ export default function ProductsPage() {
       if (userErr) throw userErr;
 
       if (!userData.user) {
-        setMsg("❌ Debes iniciar sesión.");
-        setLoading(false);
+        await Swal.fire({
+          icon: "error",
+          title: "Debes iniciar sesión",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
         return;
       }
-
       setUserId(userData.user.id);
 
       const { data: storeData, error: storeErr } = await sb
@@ -146,39 +267,16 @@ export default function ProductsPage() {
         .maybeSingle();
 
       if (storeErr) throw storeErr;
-
       if (!storeData) {
-        setMsg("❌ No se encontró tu tienda.");
-        setLoading(false);
+        await Swal.fire({
+          icon: "error",
+          title: "No se encontró tu tienda",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
         return;
       }
-
       setStoreId(storeData.id);
-
-      const { data: prodData, error: prodErr } = await sb
-        .from("products")
-        .select(
-          "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock"
-        )
-        .eq("store_id", storeData.id)
-        .order("created_at", { ascending: false });
-
-      if (prodErr) throw prodErr;
-
-      // ✅ normaliza + inicia draft = estado real
-      const rows = ((prodData as Product[]) ?? []).map((p) => ({
-        ...p,
-        price_retail: p.price_retail == null ? 0 : clampNum(p.price_retail, 0),
-        price_wholesale: p.price_wholesale == null ? 0 : clampNum(p.price_wholesale, 0),
-        min_wholesale: p.min_wholesale == null ? 1 : Math.max(1, clampNum(p.min_wholesale, 1)),
-        stock:
-          p.stock === null || p.stock === undefined
-            ? null
-            : Math.max(0, Math.floor(clampNum(p.stock, 0))),
-        active_draft: p.active,
-      }));
-
-      setProducts(rows);
 
       const { data: cats, error: catsErr } = await sb
         .from("product_categories")
@@ -188,151 +286,260 @@ export default function ProductsPage() {
         .order("sort_order", { ascending: true });
 
       if (catsErr) throw catsErr;
-
       setCategories((cats as any[]) ?? []);
+
+      const { data, error } = await sb
+        .from("products")
+        .select(
+          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock"
+        )
+        .eq("store_id", storeData.id)
+        .order("created_at", { ascending: false })
+        .limit(20000);
+
+      if (error) throw error;
+
+      setProducts(
+        ((data as any[]) ?? []).map((p) => ({
+          ...p,
+          price_retail: clampNum(p.price_retail, 0),
+          price_wholesale: clampNum(p.price_wholesale, 0),
+          min_wholesale: Math.max(1, clampNum(p.min_wholesale, 1)),
+          stock:
+            p.stock === null || p.stock === undefined
+              ? null
+              : Math.max(0, Math.floor(clampNum(p.stock, 0))),
+        }))
+      );
     } catch (e: any) {
-      setMsg("❌ Error cargando: " + (e?.message ?? "Error"));
+      await Swal.fire({
+        icon: "error",
+        title: "Error cargando productos",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function updateProduct(id: string, patch: Partial<Product>) {
+  function resetFilters() {
+    setQ("");
+    setStatusFilter("all");
+    setStockFilter("all");
+    setCategoryFilter("all");
+    setOnlyWithImage(false);
+    setMinPrice("");
+    setMaxPrice("");
+    setSortBy("newest");
+  }
+
+  function patchProduct(id: string, patch: Partial<Product>) {
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
 
-  // ✅ checkbox SOLO toca active_draft
-  function toggleActiveDraft(id: string) {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const cur = p.active_draft ?? p.active;
-        return { ...p, active_draft: !cur };
-      })
-    );
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (q.trim()) n++;
+    if (statusFilter !== "all") n++;
+    if (stockFilter !== "all") n++;
+    if (categoryFilter !== "all") n++;
+    if (onlyWithImage) n++;
+    if (minPrice.trim()) n++;
+    if (maxPrice.trim()) n++;
+    if (sortBy !== "newest") n++;
+    return n;
+  }, [q, statusFilter, stockFilter, categoryFilter, onlyWithImage, minPrice, maxPrice, sortBy]);
+
+  const filtered = useMemo(() => {
+    const s = dq.trim().toLowerCase();
+    const minP = minPrice.trim() ? clampNum(minPrice, 0) : null;
+    const maxP = maxPrice.trim() ? clampNum(maxPrice, 0) : null;
+
+    let arr = products.filter((p) => {
+      if (statusFilter === "active" && !p.active) return false;
+      if (statusFilter === "inactive" && p.active) return false;
+
+      const out = p.stock !== null && p.stock <= 0;
+      const unlimited = p.stock === null;
+
+      if (stockFilter === "in") {
+        if (!unlimited && (p.stock ?? 0) <= 0) return false;
+      }
+      if (stockFilter === "out") {
+        if (!out) return false;
+      }
+      if (stockFilter === "unlimited") {
+        if (!unlimited) return false;
+      }
+
+      if (categoryFilter !== "all" && p.category_id !== categoryFilter) return false;
+      if (onlyWithImage && !p.image_url) return false;
+
+      if (minP !== null && Number(p.price_retail ?? 0) < minP) return false;
+      if (maxP !== null && Number(p.price_retail ?? 0) > maxP) return false;
+
+      if (!s) return true;
+      const txt = `${p.name} ${p.description ?? ""}`.toLowerCase();
+      return txt.includes(s);
+    });
+
+    arr = [...arr];
+    arr.sort((a, b) => {
+      if (sortBy === "newest") return String(b.created_at).localeCompare(String(a.created_at));
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "price") return Number(a.price_retail ?? 0) - Number(b.price_retail ?? 0);
+
+      const sa = a.stock === null ? Number.POSITIVE_INFINITY : Number(a.stock ?? 0);
+      const sb = b.stock === null ? Number.POSITIVE_INFINITY : Number(b.stock ?? 0);
+      return sb - sa;
+    });
+
+    return arr;
+  }, [
+    products,
+    dq,
+    statusFilter,
+    stockFilter,
+    categoryFilter,
+    onlyWithImage,
+    minPrice,
+    maxPrice,
+    sortBy,
+  ]);
+
+  // ✅ CLAVE: altura fija para móvil (evita que se monten)
+  const ROW_H = 96;
+
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_H,
+    overscan: 18,
+  });
+
+  function openEditor(p: Product) {
+    setSelected(p);
+    setDraft({ ...p });
   }
 
-  // ✅ regla: si stock llega a 0 => draft inactivo automáticamente (sin guardar)
-  function setStockWithRule(id: string, newStock: number | null) {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const next: Product = { ...p, stock: newStock };
+  async function tryCloseEditor() {
+    if (!selected || !draft) {
+      setSelected(null);
+      setDraft(null);
+      return;
+    }
+    if (!isDirty) {
+      setSelected(null);
+      setDraft(null);
+      return;
+    }
 
-        if (newStock !== null && newStock <= 0) next.active_draft = false;
+    const res = await Swal.fire({
+      icon: "warning",
+      title: "Tienes cambios sin guardar",
+      text: "¿Quieres cerrar sin guardar?",
+      showCancelButton: true,
+      confirmButtonText: "Cerrar sin guardar",
+      cancelButtonText: "Seguir editando",
+      confirmButtonColor: "#ef4444",
+      background: "#0b0b0b",
+      color: "#fff",
+    });
 
-        return next;
-      })
-    );
+    if (res.isConfirmed) {
+      setSelected(null);
+      setDraft(null);
+    }
   }
 
-  async function saveProduct(p: Product) {
+  async function saveDraft() {
+    if (!draft) return;
     setSaving(true);
-
     try {
       const sb = supabaseBrowser();
-      const validCat = categories.some((c) => c.id === p.category_id);
 
-      const payloadActive = !!(p.active_draft ?? p.active);
-      const payloadStock =
-        p.stock === null ? null : Math.max(0, Math.floor(clampNum(p.stock, 0)));
+      const payload = {
+        name: draft.name,
+        description: draft.description,
+        price_retail: clampNum(draft.price_retail, 0),
+        price_wholesale: clampNum(draft.price_wholesale, 0),
+        min_wholesale: Math.max(1, clampNum(draft.min_wholesale, 1)),
+        stock: draft.stock === null ? null : Math.max(0, Math.floor(clampNum(draft.stock, 0))),
+        active: !!draft.active,
+        image_url: draft.image_url,
+        category_id: draft.category_id || null,
+      };
 
-      const { error } = await sb
-        .from("products")
-        .update({
-          name: p.name,
-          description: p.description,
-          price_retail: clampNum(p.price_retail, 0),
-          price_wholesale: clampNum(p.price_wholesale, 0),
-          min_wholesale: Math.max(1, clampNum(p.min_wholesale, 1)),
-          active: payloadActive,
-          image_url: p.image_url,
-          category_id: validCat ? p.category_id : null,
-          stock: payloadStock,
-        })
-        .eq("id", p.id);
-
+      const { error } = await sb.from("products").update(payload).eq("id", draft.id);
       if (error) throw error;
 
-      // ✅ sincroniza real con draft
-      updateProduct(p.id, {
-        active: payloadActive,
-        active_draft: payloadActive,
-        stock: payloadStock,
-      });
+      patchProduct(draft.id, payload as any);
 
       await Swal.fire({
         icon: "success",
         title: "Guardado",
-        text: "Producto actualizado correctamente.",
-        timer: 900,
+        timer: 850,
         showConfirmButton: false,
         background: "#0b0b0b",
-        color: "#ffffff",
+        color: "#fff",
       });
+
+      setSelected(null);
+      setDraft(null);
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error al guardar",
         text: e?.message ?? "Error",
         background: "#0b0b0b",
-        color: "#ffffff",
-        confirmButtonColor: "#ef4444",
+        color: "#fff",
       });
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteProduct(p: Product) {
+  async function deleteDraft() {
+    if (!draft) return;
+
     const res = await Swal.fire({
-      title: "¿Eliminar producto?",
-      text: `El producto "${p.name}" será eliminado permanentemente.`,
       icon: "warning",
+      title: "¿Eliminar producto?",
+      text: `Se eliminará "${draft.name}"`,
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#374151",
-      confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
+      confirmButtonText: "Sí, eliminar",
       background: "#0b0b0b",
-      color: "#ffffff",
+      color: "#fff",
     });
 
     if (!res.isConfirmed) return;
 
     setSaving(true);
-    setMsg(null);
-
     try {
       const sb = supabaseBrowser();
-
-      // borrar imagen (si existe) - NO bloquea si falla
-      try {
-        const { data: userData } = await sb.auth.getUser();
-        const uid = userData.user?.id;
-        if (uid) {
-          const path = `${uid}/products/${p.id}.png`;
-          await sb.storage.from("product-images").remove([path]);
-        }
-      } catch {}
-
-      const { error } = await sb.from("products").delete().eq("id", p.id);
+      const { error } = await sb.from("products").delete().eq("id", draft.id);
       if (error) throw error;
 
-      setProducts((prev) => prev.filter((x) => x.id !== p.id));
+      setProducts((prev) => prev.filter((p) => p.id !== draft.id));
+      setSelected(null);
+      setDraft(null);
 
       await Swal.fire({
         icon: "success",
         title: "Eliminado",
-        timer: 900,
+        timer: 850,
         showConfirmButton: false,
         background: "#0b0b0b",
-        color: "#ffffff",
+        color: "#fff",
       });
     } catch (e: any) {
       await Swal.fire({
@@ -340,396 +547,527 @@ export default function ProductsPage() {
         title: "Error eliminando",
         text: e?.message ?? "Error",
         background: "#0b0b0b",
-        color: "#ffffff",
+        color: "#fff",
       });
     } finally {
       setSaving(false);
     }
   }
 
-  async function createProduct() {
-    if (!storeId) return;
-
-    setSaving(true);
-    setMsg(null);
-
-    try {
-      const sb = supabaseBrowser();
-
-      const { data, error } = await sb
-        .from("products")
-        .insert({
-          store_id: storeId,
-          name: "Nuevo producto",
-          description: "",
-          price_retail: 0,
-          price_wholesale: 0,
-          min_wholesale: 1,
-          active: true,
-          image_url: null,
-          category_id: null,
-          stock: null, // ilimitado por defecto
-        })
-        .select(
-          "id,store_id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock"
-        )
-        .single();
-
-      if (error) throw error;
-
-      setProducts((prev) => [{ ...(data as Product), active_draft: true }, ...prev]);
-
-      await Swal.fire({
-        icon: "success",
-        title: "Producto creado",
-        timer: 850,
-        showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#ffffff",
-      });
-    } catch (e: any) {
-      setMsg("❌ Error creando producto: " + (e?.message ?? "Error"));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ✅ acciones rápidas: ponen draft activo
-  function quickStock(p: Product, delta: number) {
-    const base = p.stock ?? 0;
-    const next = Math.max(0, base + delta);
-    updateProduct(p.id, { stock: next, active_draft: true });
-  }
-
-  function setUnlimited(p: Product) {
-    updateProduct(p.id, { stock: null, active_draft: true });
-  }
-
-  if (loading) {
-    return (
-      <main className="p-6">
-        <p>Cargando productos...</p>
-      </main>
-    );
-  }
+  const drawerSwipe = useSwipeDownToClose(() => void tryCloseEditor());
 
   return (
-    <main className="p-4 sm:p-6 space-y-5 panel-enter">
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold">Productos</h1>
-          <p className="text-sm opacity-80">
-            Administra precios, imagen, categoría e <b>inventario</b>.
-          </p>
-        </div>
+    <main className="px-3 py-3 sm:p-6 space-y-3 panel-enter">
+      {/* Header sticky */}
+      <div className="sticky top-2 z-10">
+        <div className="rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl p-3 sm:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-bold leading-tight">Productos</h1>
+              <p className="text-[11px] sm:text-sm text-white/70">
+                Total: <b className="text-white/90">{products.length}</b> · Filtrados:{" "}
+                <b className="text-white/90">{filtered.length}</b>
+              </p>
+            </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button className="btn-soft px-4 py-2" onClick={load} disabled={saving}>
-            Recargar
-          </button>
-          <button
-            className="btn-cta px-4 py-2 font-semibold disabled:opacity-60"
-            onClick={createProduct}
-            disabled={saving}
-          >
-            + Nuevo
-          </button>
+            <div className="flex items-center gap-2">
+              <button
+                className={clsBtnSoft()}
+                onClick={loadAll}
+                disabled={saving}
+                type="button"
+                style={{ padding: "8px 10px", fontSize: 12 }}
+              >
+                Recargar
+              </button>
+
+              <button
+                className={clsBtnSoft()}
+                onClick={() => setFiltersOpen(true)}
+                disabled={saving}
+                type="button"
+                style={{ padding: "8px 10px", fontSize: 12 }}
+              >
+                Filtros
+                {activeFilterCount > 0 ? (
+                  <span className={`${clsChip()} ml-2 border-white/10 bg-white/10 text-white/90`}>
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_220px] gap-2">
+            <input
+              className={clsInput()}
+              placeholder="Buscar (nombre o descripción)…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              disabled={loading}
+            />
+
+            <select
+              className={clsInput()}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              disabled={loading}
+            >
+              <option value="newest">Más nuevos</option>
+              <option value="name">Nombre</option>
+              <option value="price">Precio detal</option>
+              <option value="stock">Stock</option>
+            </select>
+          </div>
+
+          <p className="mt-2 text-[11px] sm:text-xs text-white/60">
+            Tip: con 10.000 productos, escribir 2–3 letras filtra rapidísimo.
+          </p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="glass p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-            <select
-              className="w-full sm:w-[220px] p-3"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as Filter)}
+      {/* Lista */}
+      {loading ? (
+        <div className="rounded-[22px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl text-sm text-white/70">
+          Cargando productos…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-[22px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+          <p className="font-semibold">No hay resultados</p>
+          <p className="text-sm text-white/70 mt-1">Prueba cambiando filtros o la búsqueda.</p>
+          <button className={`${clsBtnSoft()} mt-3`} type="button" onClick={resetFilters}>
+            Reset filtros
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-[22px] border border-white/10 bg-white/5 overflow-hidden backdrop-blur-xl">
+          <div ref={parentRef} className="h-[72vh] overflow-auto">
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
             >
-              <option value="all">Todos</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Inactivos</option>
-              <option value="out">Agotados (stock 0)</option>
+              {rowVirtualizer.getVirtualItems().map((vRow) => {
+                const p = filtered[vRow.index];
+                if (!p) return null;
+
+                const out = p.stock !== null && p.stock <= 0;
+
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${vRow.start}px)`,
+                      height: ROW_H,
+                    }}
+                    className="border-b border-white/10"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openEditor(p)}
+                      className="w-full h-full text-left hover:bg-white/[0.06] transition"
+                    >
+                      <div className="flex items-center gap-3 px-3 py-3">
+                        <div className="h-12 w-12 rounded-2xl border border-white/10 bg-white/5 overflow-hidden shrink-0">
+                          {p.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.image_url}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-xs text-white/40">
+                              —
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold truncate">{p.name}</p>
+
+                            {!p.active ? (
+                              <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>
+                                Inactivo
+                              </span>
+                            ) : null}
+
+                            <span
+                              className={`${clsChip()} ${
+                                out
+                                  ? "border-red-400/30 bg-red-500/10 text-red-100"
+                                  : "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                              }`}
+                            >
+                              {stockLabel(p.stock)}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-white/70">
+                            <span>
+                              Detal: <b className="text-white/90">{money(p.price_retail)}</b>
+                            </span>
+                            <span className="text-white/30">·</span>
+                            <span className="text-white/60">{formatDate(p.created_at)}</span>
+                          </div>
+
+                          {/* en móvil NO mostramos descripción para no romper altura */}
+                          <p className="hidden sm:block mt-1 text-xs text-white/45 truncate">
+                            {p.description ?? ""}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-[11px] text-white/60">Editar →</div>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom sheet filtros */}
+      <BottomSheet open={filtersOpen} title="Filtros" onClose={() => setFiltersOpen(false)}>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-2">
+            <select
+              className={clsInput()}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              disabled={loading}
+            >
+              <option value="all">Estado: Todos</option>
+              <option value="active">Estado: Activos</option>
+              <option value="inactive">Estado: Inactivos</option>
             </select>
 
+            <select
+              className={clsInput()}
+              value={stockFilter}
+              onChange={(e) => setStockFilter(e.target.value as any)}
+              disabled={loading}
+            >
+              <option value="all">Stock: Todos</option>
+              <option value="in">Stock: Con stock</option>
+              <option value="out">Stock: Agotados</option>
+              <option value="unlimited">Stock: Ilimitados</option>
+            </select>
+
+            <select
+              className={clsInput()}
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              disabled={loading}
+            >
+              <option value="all">Categoría: Todas</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={onlyWithImage}
+                onChange={() => setOnlyWithImage((v) => !v)}
+                disabled={loading}
+              />
+              Solo con imagen
+            </label>
+
             <input
-              className="w-full sm:w-[360px] p-3"
-              placeholder="Buscar producto..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              className={clsInput()}
+              type="text"
+              inputMode="numeric"
+              placeholder="Precio detal mín"
+              value={minPrice}
+              {...excelSelectHandlers()}
+              onChange={(e) => setMinPrice(e.target.value.replace(/[^\d]/g, ""))}
+              disabled={loading}
+            />
+
+            <input
+              className={clsInput()}
+              type="text"
+              inputMode="numeric"
+              placeholder="Precio detal máx"
+              value={maxPrice}
+              {...excelSelectHandlers()}
+              onChange={(e) => setMaxPrice(e.target.value.replace(/[^\d]/g, ""))}
+              disabled={loading}
             />
           </div>
 
-          {msg ? <div className="glass-soft px-3 py-2 text-sm">{msg}</div> : null}
-        </div>
-      </div>
-
-      {/* List */}
-      <div className="space-y-4">
-        {filtered.length === 0 ? (
-          <div className="glass p-5">
-            <p className="font-semibold">No hay productos</p>
-            <p className="text-sm opacity-80 mt-1">
-              Crea uno con “+ Nuevo” o cambia filtros.
-            </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button className={clsBtnSoft()} type="button" onClick={resetFilters}>
+              Reset
+            </button>
+            <button className={clsBtnSoft()} type="button" onClick={() => setFiltersOpen(false)}>
+              Listo
+            </button>
           </div>
-        ) : (
-          filtered.map((p) => {
-            const out = isOut(p.stock);
 
-            const uiActive = p.active_draft ?? p.active;
-            const dirtyActive = uiActive !== p.active;
+          <p className="text-xs text-white/55">
+            Consejo: en móvil usa 1–2 filtros máximo + búsqueda.
+          </p>
+        </div>
+      </BottomSheet>
 
-            const chipBg = out
-              ? "color-mix(in oklab, red 18%, transparent)"
-              : "color-mix(in oklab, var(--t-accent) 18%, transparent)";
+      {/* Drawer editor */}
+      {selected && draft ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            onClick={() => void tryCloseEditor()}
+            className="absolute inset-0 bg-black/60"
+            aria-label="Cerrar"
+          />
 
-            return (
-              <div key={p.id} className="glass p-4 sm:p-5">
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 lg:gap-6">
-                  {/* LEFT */}
-                  <div className="min-w-0">
-                    {/* Name + chips */}
-                    <div className="flex flex-col md:flex-row md:items-center gap-3">
-                      <input
-                        className="w-full p-3 text-lg font-semibold"
-                        value={p.name}
-                        onChange={(e) => updateProduct(p.id, { name: e.target.value })}
-                      />
-
+          <div className="absolute inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[560px]">
+            <div
+              className="h-[92vh] sm:h-full rounded-t-[28px] sm:rounded-l-[28px] sm:rounded-tr-none border border-white/10 bg-[#0b0b0b] shadow-2xl overflow-hidden"
+              {...drawerSwipe}
+            >
+              <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="p-4 border-b border-white/10 bg-white/[0.04]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span
-                          className="rounded-full border px-3 py-1 text-xs font-semibold"
-                          style={{
-                            borderColor: "var(--t-card-border)",
-                            background: chipBg,
-                          }}
-                        >
-                          {stockLabel(p.stock)}
-                        </span>
-
-                        <label
-                          className="flex items-center gap-2 text-sm whitespace-nowrap"
-                          title={dirtyActive ? "Cambios sin guardar" : undefined}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={uiActive}
-                            onChange={() => toggleActiveDraft(p.id)}
-                          />
-                          Activo
-                          {dirtyActive ? (
-                            <span className="text-xs opacity-70">(sin guardar)</span>
-                          ) : null}
-                        </label>
+                        <div className="h-1.5 w-12 rounded-full bg-white/20 sm:hidden" />
+                        {isDirty ? (
+                          <span className={`${clsChip()} border-amber-400/30 bg-amber-500/10 text-amber-100`}>
+                            Cambios sin guardar
+                          </span>
+                        ) : (
+                          <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>
+                            Sin cambios
+                          </span>
+                        )}
                       </div>
+
+                      <h2 className="mt-2 text-lg font-semibold truncate">{draft.name || "Producto"}</h2>
+                      <p className="text-xs text-white/60">
+                        Stock: <b className="text-white/80">{stockLabel(draft.stock)}</b> ·{" "}
+                        {draft.active ? "Activo" : "Inactivo"}
+                      </p>
                     </div>
 
-                    <textarea
-                      className="mt-3 w-full p-3 min-h-[92px] resize-none"
-                      placeholder="Descripción"
-                      value={p.description ?? ""}
-                      onChange={(e) => updateProduct(p.id, { description: e.target.value })}
-                    />
-
-                    {/* GRID */}
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* ✅ PRECIOS: text + inputMode numeric (mejor que number para “excel”) */}
-                      <div className="glass-soft p-3">
-                        <label className="text-sm opacity-80">Precio Detal</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="mt-1 w-full p-3"
-                          value={String(p.price_retail ?? 0)}
-                          {...excelSelectHandlers()}
-                          onChange={(e) =>
-                            updateProduct(p.id, {
-                              price_retail: digitsOnlyToNumber(e.target.value, 0),
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className="glass-soft p-3">
-                        <label className="text-sm opacity-80">Precio Mayor</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="mt-1 w-full p-3"
-                          value={String(p.price_wholesale ?? 0)}
-                          {...excelSelectHandlers()}
-                          onChange={(e) =>
-                            updateProduct(p.id, {
-                              price_wholesale: digitsOnlyToNumber(e.target.value, 0),
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className="glass-soft p-3 sm:col-span-2">
-                        <label className="text-sm opacity-80">Mínimo Mayor</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="mt-1 w-full p-3"
-                          value={String(p.min_wholesale ?? 1)}
-                          {...excelSelectHandlers()}
-                          onChange={(e) =>
-                            updateProduct(p.id, {
-                              min_wholesale: Math.max(
-                                1,
-                                digitsOnlyToNumber(e.target.value, 1)
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className="glass-soft p-3 sm:col-span-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <label className="text-sm opacity-80">Stock (inventario)</label>
-
-                          <div className="flex flex-wrap gap-2 justify-end">
-                            <button
-                              className="btn-soft px-3 py-1 text-xs"
-                              onClick={() => quickStock(p, 10)}
-                              disabled={saving}
-                              type="button"
-                            >
-                              +10
-                            </button>
-                            <button
-                              className="btn-soft px-3 py-1 text-xs"
-                              onClick={() => quickStock(p, 100)}
-                              disabled={saving}
-                              type="button"
-                            >
-                              +100
-                            </button>
-                            <button
-                              className="btn-soft px-3 py-1 text-xs"
-                              onClick={() => quickStock(p, 1000)}
-                              disabled={saving}
-                              type="button"
-                            >
-                              +1000
-                            </button>
-                            <button
-                              className="btn-soft px-3 py-1 text-xs"
-                              onClick={() => setUnlimited(p)}
-                              disabled={saving}
-                              type="button"
-                            >
-                              Ilimitado
-                            </button>
-                          </div>
-                        </div>
-
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="mt-2 w-full p-3"
-                          placeholder="Vacío = ilimitado"
-                          value={p.stock ?? ""}
-                          {...excelSelectHandlers()}
-                          onChange={(e) => {
-                            const v = clampIntOrNull(e.target.value);
-                            setStockWithRule(p.id, v);
-                          }}
-                        />
-
-                        <p className="mt-2 text-xs opacity-70">
-                          Si el stock llega a <b>0</b>, el producto se marca{" "}
-                          <b>inactivo (sin guardar)</b> automáticamente.
-                        </p>
-
-                        {!p.active && !out ? (
-                          <p className="mt-1 text-xs opacity-80">
-                            Tienes stock pero está inactivo en BD: puedes activarlo con “Activo”
-                            y luego <b>Guardar</b>.
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="glass-soft p-3 sm:col-span-2">
-                        <label className="text-sm opacity-80">Categoría</label>
-                        <select
-                          className="mt-1 w-full p-3"
-                          value={p.category_id ?? ""}
-                          onChange={(e) =>
-                            updateProduct(p.id, { category_id: e.target.value || null })
-                          }
-                        >
-                          <option value="">Sin categoría</option>
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                      <button
-                        className="btn-cta px-4 py-2 font-semibold disabled:opacity-60"
-                        onClick={() => saveProduct(p)}
-                        disabled={saving}
-                      >
-                        Guardar
-                      </button>
-
-                      <button
-                        className="btn-soft px-4 py-2 font-semibold disabled:opacity-60"
-                        style={{
-                          borderColor: "color-mix(in oklab, red 30%, var(--t-card-border))",
-                          background: "color-mix(in oklab, red 10%, transparent)",
-                          color: "color-mix(in oklab, white 85%, red 15%)",
-                        }}
-                        onClick={() => deleteProduct(p)}
-                        disabled={saving}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* RIGHT IMAGE */}
-                  <div className="w-full">
-                    {!userId ? (
-                      <div className="glass-soft p-4">
-                        <p className="text-sm">Cargando usuario...</p>
-                      </div>
-                    ) : (
-                      <div className="glass-soft p-4">
-                        <p className="font-semibold">Imagen principal</p>
-                        <p className="text-sm opacity-80">Se verá en el catálogo.</p>
-
-                        <div className="mt-3">
-                          <ImageUpload
-                            label="Subir imagen"
-                            currentUrl={p.image_url}
-                            pathPrefix={`${userId}/products/`}
-                            fileName={`${p.id}.png`}
-                            bucket="product-images"
-                            onUploaded={(url) => updateProduct(p.id, { image_url: url })}
-                          />
-                        </div>
-
-                        <p className="mt-2 text-xs opacity-70">
-                          Luego presiona <b>Guardar</b>.
-                        </p>
-                      </div>
-                    )}
+                    <button className={clsBtnSoft()} onClick={() => void tryCloseEditor()} type="button">
+                      Cerrar
+                    </button>
                   </div>
                 </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-28">
+                  {/* Imagen */}
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                    <p className="font-semibold">Imagen</p>
+                    <p className="text-xs text-white/60">Se guarda cuando presionas Guardar.</p>
+
+                    <div className="mt-3">
+                      {userId ? (
+                        <ImageUpload
+                          label="Subir imagen"
+                          currentUrl={draft.image_url}
+                          pathPrefix={`${userId}/products/`}
+                          fileName={`${draft.id}.png`}
+                          bucket="product-images"
+                          onUploaded={(url) => setDraft({ ...draft, image_url: url })}
+                        />
+                      ) : (
+                        <div className="text-xs text-white/60">Cargando usuario…</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Nombre */}
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                    <label className="text-xs text-white/70">Nombre</label>
+                    <input
+                      className={`mt-1 ${clsInputSoft()}`}
+                      value={draft.name}
+                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Desc */}
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                    <label className="text-xs text-white/70">Descripción</label>
+                    <textarea
+                      className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm outline-none min-h-[90px]"
+                      value={draft.description ?? ""}
+                      onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Quick toggles */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={clsBtnSoft()}
+                      onClick={() => setDraft({ ...draft, active: !draft.active })}
+                    >
+                      {draft.active ? "Desactivar" : "Activar"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className={clsBtnSoft()}
+                      onClick={() => setDraft({ ...draft, stock: null })}
+                    >
+                      Stock ilimitado
+                    </button>
+                  </div>
+
+                  {/* Precios / stock */}
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                    <p className="font-semibold">Precios y stock</p>
+
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-white/70">Precio Detal</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className={`mt-1 ${clsInputSoft()}`}
+                          value={String(draft.price_retail ?? 0)}
+                          {...excelSelectHandlers()}
+                          onChange={(e) =>
+                            setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-white/70">Precio Mayor</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className={`mt-1 ${clsInputSoft()}`}
+                          value={String(draft.price_wholesale ?? 0)}
+                          {...excelSelectHandlers()}
+                          onChange={(e) =>
+                            setDraft({ ...draft, price_wholesale: digitsOnlyToNumber(e.target.value, 0) })
+                          }
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="text-xs text-white/70">Mínimo Mayor</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className={`mt-1 ${clsInputSoft()}`}
+                          value={String(draft.min_wholesale ?? 1)}
+                          {...excelSelectHandlers()}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)),
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="text-xs text-white/70">Stock (vacío = ilimitado)</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className={`mt-1 ${clsInputSoft()}`}
+                          placeholder="Vacío = ilimitado"
+                          value={draft.stock ?? ""}
+                          {...excelSelectHandlers()}
+                          onChange={(e) => setDraft({ ...draft, stock: clampIntOrNull(e.target.value) })}
+                        />
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button type="button" className={clsBtnSoft()} onClick={() => setDraft({ ...draft, stock: 0 })}>
+                            Agotado (0)
+                          </button>
+                          <button
+                            type="button"
+                            className={clsBtnSoft()}
+                            onClick={() => setDraft({ ...draft, stock: Math.max(0, (draft.stock ?? 0) + 10) })}
+                          >
+                            +10
+                          </button>
+                          <button
+                            type="button"
+                            className={clsBtnSoft()}
+                            onClick={() => setDraft({ ...draft, stock: Math.max(0, (draft.stock ?? 0) + 100) })}
+                          >
+                            +100
+                          </button>
+                          <button type="button" className={clsBtnSoft()} onClick={() => setDraft({ ...draft, stock: null })}>
+                            Ilimitado
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Categoría */}
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-3">
+                    <label className="text-xs text-white/70">Categoría</label>
+                    <select
+                      className={`mt-1 ${clsInputSoft()}`}
+                      value={draft.category_id ?? ""}
+                      onChange={(e) => setDraft({ ...draft, category_id: e.target.value || null })}
+                    >
+                      <option value="">Sin categoría</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Footer fijo */}
+                <div className="sticky bottom-0 p-4 border-t border-white/10 bg-[#0b0b0b]">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button className={clsBtnPrimary()} disabled={saving} onClick={() => void saveDraft()} type="button">
+                      Guardar
+                    </button>
+
+                    <button
+                      className={clsBtnSoft()}
+                      disabled={saving}
+                      onClick={() => void deleteDraft()}
+                      type="button"
+                      style={{
+                        borderColor: "color-mix(in oklab, red 30%, var(--t-card-border))",
+                        background: "color-mix(in oklab, red 10%, transparent)",
+                        color: "color-mix(in oklab, white 85%, red 15%)",
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+
+                  <p className="mt-2 text-[11px] text-white/50">En celular: desliza el panel hacia abajo para cerrar.</p>
+                </div>
               </div>
-            );
-          })
-        )}
-      </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
