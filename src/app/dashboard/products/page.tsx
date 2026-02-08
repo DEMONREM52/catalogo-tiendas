@@ -414,7 +414,7 @@ export default function ProductsPage() {
     sortBy,
   ]);
 
-  // ✅ CLAVE: altura fija para móvil (evita que se monten)
+  // ✅ altura fija para móvil (evita que se monten)
   const ROW_H = 96;
 
   const rowVirtualizer = useVirtualizer({
@@ -554,6 +554,103 @@ export default function ProductsPage() {
     }
   }
 
+  /** ✅ CREAR PRODUCTO (NUEVO) */
+  async function createProduct() {
+    if (!storeId) {
+      await Swal.fire({
+        icon: "error",
+        title: "No hay tienda",
+        text: "No se pudo detectar la tienda.",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    const res = await Swal.fire({
+      title: "Nuevo producto",
+      input: "text",
+      inputLabel: "Nombre",
+      inputPlaceholder: "Ej: Camisa negra",
+      showCancelButton: true,
+      confirmButtonText: "Crear",
+      cancelButtonText: "Cancelar",
+      background: "#0b0b0b",
+      color: "#fff",
+      inputValidator: (v) => {
+        const t = (v ?? "").trim();
+        if (!t) return "Escribe un nombre";
+        if (t.length < 2) return "Muy corto";
+        return null;
+      },
+    });
+
+    if (!res.isConfirmed) return;
+
+    setSaving(true);
+    try {
+      const sb = supabaseBrowser();
+
+      const payload = {
+        store_id: storeId,
+        name: String(res.value).trim(),
+        description: "",
+        price_retail: 0,
+        price_wholesale: 0,
+        min_wholesale: 1,
+        stock: null,
+        active: true,
+        image_url: null,
+        category_id: null,
+      };
+
+      const { data, error } = await sb
+        .from("products")
+        .insert(payload)
+        .select(
+          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock"
+        )
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error("No se recibió el producto creado.");
+
+      const newProduct: Product = {
+        ...(data as any),
+        price_retail: clampNum((data as any).price_retail, 0),
+        price_wholesale: clampNum((data as any).price_wholesale, 0),
+        min_wholesale: Math.max(1, clampNum((data as any).min_wholesale, 1)),
+        stock:
+          (data as any).stock === null || (data as any).stock === undefined
+            ? null
+            : Math.max(0, Math.floor(clampNum((data as any).stock, 0))),
+      };
+
+      setProducts((prev) => [newProduct, ...prev]);
+      setSelected(newProduct);
+      setDraft({ ...newProduct });
+
+      await Swal.fire({
+        icon: "success",
+        title: "Producto creado",
+        timer: 850,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo crear",
+        text: e?.message ?? "Error",
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const drawerSwipe = useSwipeDownToClose(() => void tryCloseEditor());
 
   return (
@@ -594,6 +691,17 @@ export default function ProductsPage() {
                     {activeFilterCount}
                   </span>
                 ) : null}
+              </button>
+
+              {/* ✅ NUEVO BOTÓN */}
+              <button
+                className={clsBtnPrimary()}
+                onClick={() => void createProduct()}
+                disabled={saving || loading || !storeId}
+                type="button"
+                style={{ padding: "8px 10px", fontSize: 12 }}
+              >
+                + Nuevo
               </button>
             </div>
           </div>
@@ -819,9 +927,7 @@ export default function ProductsPage() {
             </button>
           </div>
 
-          <p className="text-xs text-white/55">
-            Consejo: en móvil usa 1–2 filtros máximo + búsqueda.
-          </p>
+          <p className="text-xs text-white/55">Consejo: en móvil usa 1–2 filtros máximo + búsqueda.</p>
         </div>
       </BottomSheet>
 
@@ -916,19 +1022,11 @@ export default function ProductsPage() {
 
                   {/* Quick toggles */}
                   <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      className={clsBtnSoft()}
-                      onClick={() => setDraft({ ...draft, active: !draft.active })}
-                    >
+                    <button type="button" className={clsBtnSoft()} onClick={() => setDraft({ ...draft, active: !draft.active })}>
                       {draft.active ? "Desactivar" : "Activar"}
                     </button>
 
-                    <button
-                      type="button"
-                      className={clsBtnSoft()}
-                      onClick={() => setDraft({ ...draft, stock: null })}
-                    >
+                    <button type="button" className={clsBtnSoft()} onClick={() => setDraft({ ...draft, stock: null })}>
                       Stock ilimitado
                     </button>
                   </div>
