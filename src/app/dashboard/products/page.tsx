@@ -124,40 +124,6 @@ function clsChip() {
   return "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold";
 }
 
-/* =========================
-   Swipe down close (mobile)
-========================= */
-function useSwipeDownToClose(onClose: () => void) {
-  const startY = useRef<number | null>(null);
-  const lastY = useRef<number | null>(null);
-  const dragging = useRef(false);
-
-  function onTouchStart(e: React.TouchEvent) {
-    startY.current = e.touches[0]?.clientY ?? null;
-    lastY.current = startY.current;
-    dragging.current = true;
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    if (!dragging.current) return;
-    lastY.current = e.touches[0]?.clientY ?? null;
-  }
-  function onTouchEnd() {
-    if (!dragging.current) return;
-    dragging.current = false;
-
-    const sy = startY.current;
-    const ly = lastY.current;
-    startY.current = null;
-    lastY.current = null;
-
-    if (sy == null || ly == null) return;
-    const delta = ly - sy;
-    if (delta > 90) onClose();
-  }
-
-  return { onTouchStart, onTouchMove, onTouchEnd };
-}
-
 /** Bottom sheet simple para filtros (mobile) */
 function BottomSheet({
   open,
@@ -199,9 +165,6 @@ function BottomSheet({
   );
 }
 
-/* =========================
-   Page
-========================= */
 export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -554,7 +517,7 @@ export default function ProductsPage() {
     }
   }
 
-  /** ✅ CREAR PRODUCTO (NUEVO) */
+  /** ✅ CREAR PRODUCTO */
   async function createProduct() {
     if (!storeId) {
       await Swal.fire({
@@ -651,8 +614,8 @@ export default function ProductsPage() {
     }
   }
 
-  const drawerSwipe = useSwipeDownToClose(() => void tryCloseEditor());
-
+  // ✅ IMPORTANTE: YA NO HAY "SWIPE TO CLOSE"
+  // En móvil NO se cerrará por deslizar. Solo con el botón "Cerrar" (o el fondo).
   return (
     <main className="px-3 py-3 sm:p-6 space-y-3 panel-enter">
       {/* Header sticky */}
@@ -693,7 +656,6 @@ export default function ProductsPage() {
                 ) : null}
               </button>
 
-              {/* ✅ NUEVO BOTÓN */}
               <button
                 className={clsBtnPrimary()}
                 onClick={() => void createProduct()}
@@ -785,16 +747,9 @@ export default function ProductsPage() {
                         <div className="h-12 w-12 rounded-2xl border border-white/10 bg-white/5 overflow-hidden shrink-0">
                           {p.image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={p.image_url}
-                              alt={p.name}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
+                            <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-xs text-white/40">
-                              —
-                            </div>
+                            <div className="h-full w-full flex items-center justify-center text-xs text-white/40">—</div>
                           )}
                         </div>
 
@@ -803,9 +758,7 @@ export default function ProductsPage() {
                             <p className="font-semibold truncate">{p.name}</p>
 
                             {!p.active ? (
-                              <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>
-                                Inactivo
-                              </span>
+                              <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>Inactivo</span>
                             ) : null}
 
                             <span
@@ -827,10 +780,7 @@ export default function ProductsPage() {
                             <span className="text-white/60">{formatDate(p.created_at)}</span>
                           </div>
 
-                          {/* en móvil NO mostramos descripción para no romper altura */}
-                          <p className="hidden sm:block mt-1 text-xs text-white/45 truncate">
-                            {p.description ?? ""}
-                          </p>
+                          <p className="hidden sm:block mt-1 text-xs text-white/45 truncate">{p.description ?? ""}</p>
                         </div>
 
                         <div className="shrink-0 text-[11px] text-white/60">Editar →</div>
@@ -926,14 +876,13 @@ export default function ProductsPage() {
               Listo
             </button>
           </div>
-
-          <p className="text-xs text-white/55">Consejo: en móvil usa 1–2 filtros máximo + búsqueda.</p>
         </div>
       </BottomSheet>
 
-      {/* Drawer editor */}
+      {/* Drawer editor (SIN swipe close) */}
       {selected && draft ? (
         <div className="fixed inset-0 z-50">
+          {/* ✅ opcional: si NO quieres cerrar al tocar el fondo, cambia onClick por () => {} */}
           <button
             type="button"
             onClick={() => void tryCloseEditor()}
@@ -942,25 +891,21 @@ export default function ProductsPage() {
           />
 
           <div className="absolute inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[560px]">
-            <div
-              className="h-[92vh] sm:h-full rounded-t-[28px] sm:rounded-l-[28px] sm:rounded-tr-none border border-white/10 bg-[#0b0b0b] shadow-2xl overflow-hidden"
-              {...drawerSwipe}
-            >
+            <div className="h-[92vh] sm:h-full rounded-t-[28px] sm:rounded-l-[28px] sm:rounded-tr-none border border-white/10 bg-[#0b0b0b] shadow-2xl overflow-hidden">
               <div className="h-full flex flex-col">
                 {/* Header */}
                 <div className="p-4 border-b border-white/10 bg-white/[0.04]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
+                        {/* ✅ ya no es "handle" de swipe, solo decoración */}
                         <div className="h-1.5 w-12 rounded-full bg-white/20 sm:hidden" />
                         {isDirty ? (
                           <span className={`${clsChip()} border-amber-400/30 bg-amber-500/10 text-amber-100`}>
                             Cambios sin guardar
                           </span>
                         ) : (
-                          <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>
-                            Sin cambios
-                          </span>
+                          <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>Sin cambios</span>
                         )}
                       </div>
 
@@ -971,6 +916,7 @@ export default function ProductsPage() {
                       </p>
                     </div>
 
+                    {/* ✅ SOLO CIERRA CON BOTÓN */}
                     <button className={clsBtnSoft()} onClick={() => void tryCloseEditor()} type="button">
                       Cerrar
                     </button>
@@ -1022,7 +968,11 @@ export default function ProductsPage() {
 
                   {/* Quick toggles */}
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className={clsBtnSoft()} onClick={() => setDraft({ ...draft, active: !draft.active })}>
+                    <button
+                      type="button"
+                      className={clsBtnSoft()}
+                      onClick={() => setDraft({ ...draft, active: !draft.active })}
+                    >
                       {draft.active ? "Desactivar" : "Activar"}
                     </button>
 
@@ -1044,9 +994,7 @@ export default function ProductsPage() {
                           className={`mt-1 ${clsInputSoft()}`}
                           value={String(draft.price_retail ?? 0)}
                           {...excelSelectHandlers()}
-                          onChange={(e) =>
-                            setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })
-                          }
+                          onChange={(e) => setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })}
                         />
                       </div>
 
@@ -1159,7 +1107,9 @@ export default function ProductsPage() {
                     </button>
                   </div>
 
-                  <p className="mt-2 text-[11px] text-white/50">En celular: desliza el panel hacia abajo para cerrar.</p>
+                  <p className="mt-2 text-[11px] text-white/50">
+                    En celular: ya NO se cierra deslizando. Usa el botón <b>Cerrar</b>.
+                  </p>
                 </div>
               </div>
             </div>
