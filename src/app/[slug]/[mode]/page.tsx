@@ -53,6 +53,8 @@ type CategoryRow = {
 /* =========================================================
    Helpers
 ========================================================= */
+const PAGE_SIZE = 30;
+
 function isValidMode(x: any): x is Mode {
   return x === "detal" || x === "mayor";
 }
@@ -184,7 +186,9 @@ function syncGlobalBodyBackground(cfg?: ThemeConfig) {
 }
 
 /* =========================================================
-   Page
+   Page  ✅ PAGINADO 30 + BOTÓN "CARGAR MÁS"
+   - Carga imágenes normal (como antes)
+   - Pero NO trae todos los productos de golpe
 ========================================================= */
 export default function StoreCatalogPage() {
   const params = useParams<{ slug: string; mode: string }>();
@@ -194,10 +198,7 @@ export default function StoreCatalogPage() {
   const mode = String(params?.mode ?? "detal");
   const key = searchParams.get("key");
 
-  const safeMode: Mode = useMemo(
-    () => (isValidMode(mode) ? mode : "detal"),
-    [mode],
-  );
+  const safeMode: Mode = useMemo(() => (isValidMode(mode) ? mode : "detal"), [mode]);
 
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -205,7 +206,9 @@ export default function StoreCatalogPage() {
   const [store, setStore] = useState<StoreRow | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
+
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
@@ -213,10 +216,14 @@ export default function StoreCatalogPage() {
   const [q, setQ] = useState("");
   const [imgLoaded, setImgLoaded] = useState(false);
 
+  const [page, setPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+
   const { initCart, addItem } = useCart();
 
   /* -------------------------
-     Load
+     Load base (store/theme/profile/links/categories)
   ------------------------- */
   useEffect(() => {
     let cancelled = false;
@@ -236,9 +243,7 @@ export default function StoreCatalogPage() {
         // 1) store
         const { data: storeData, error: storeErr } = await sb
           .from("stores")
-          .select(
-            "id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key",
-          )
+          .select("id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key")
           .eq("slug", slug)
           .maybeSingle();
 
@@ -252,13 +257,11 @@ export default function StoreCatalogPage() {
         // mayorista key
         if (safeMode === "mayor") {
           if (!st.wholesale_key) {
-            if (!cancelled)
-              setMsg("❌ Este catálogo mayorista no está disponible.");
+            if (!cancelled) setMsg("❌ Este catálogo mayorista no está disponible.");
             return;
           }
           if (key !== st.wholesale_key) {
-            if (!cancelled)
-              setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
+            if (!cancelled) setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
             return;
           }
         }
@@ -285,12 +288,7 @@ export default function StoreCatalogPage() {
         let cfg: ThemeConfig | undefined;
 
         if (themeId) {
-          const { data: themeRow } = await sb
-            .from("themes")
-            .select("id,active,config")
-            .eq("id", themeId)
-            .maybeSingle();
-
+          const { data: themeRow } = await sb.from("themes").select("id,active,config").eq("id", themeId).maybeSingle();
           cfg = mapDbThemeToApplyTheme(themeRow?.config);
         }
 
@@ -319,11 +317,7 @@ export default function StoreCatalogPage() {
         });
 
         // 3) profile
-        const { data: profData } = await sb
-          .from("store_profiles")
-          .select("*")
-          .eq("store_id", st.id)
-          .maybeSingle();
+        const { data: profData } = await sb.from("store_profiles").select("*").eq("store_id", st.id).maybeSingle();
         if (!cancelled) setProfile(profData ?? null);
 
         // 4) links
@@ -343,36 +337,6 @@ export default function StoreCatalogPage() {
           .eq("active", true)
           .order("sort_order", { ascending: true });
         if (!cancelled) setCategories((catData as any) ?? []);
-
-        // 6) products ✅ NO mostrar agotados, SI mostrar ilimitados
-        const { data: prodData, error: prodErr } = await sb
-          .from("products")
-          .select(
-            "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock",
-          )
-          .eq("store_id", st.id)
-          .eq("active", true)
-          // ✅ mostrar solo disponibles: ilimitado (NULL) o stock > 0
-          .or("stock.is.null,stock.gt.0")
-          .order("name", { ascending: true });
-
-        if (prodErr) throw prodErr;
-
-        const normalized: ProductRow[] = ((prodData as any[]) ?? [])
-          .map((p) => ({
-            ...p,
-            price_retail: Number(p.price_retail ?? 0),
-            price_wholesale: Number(p.price_wholesale ?? 0),
-            min_wholesale:
-              p.min_wholesale == null ? null : Number(p.min_wholesale),
-            // ✅ IMPORTANT: NO conviertas NULL a 0
-            stock:
-              p.stock === null || p.stock === undefined ? null : Number(p.stock),
-          }))
-          // ✅ refuerzo extra
-          .filter((p) => p.stock === null || Number(p.stock) > 0);
-
-        if (!cancelled) setProducts(normalized);
       } catch (err: any) {
         if (!cancelled) setMsg(err?.message ?? "Error cargando catálogo.");
       } finally {
@@ -386,7 +350,7 @@ export default function StoreCatalogPage() {
   }, [slug, mode, key, initCart, safeMode]);
 
   /* -------------------------
-     tab title + favicon
+     favicon (✅ sin cache-bust)
   ------------------------- */
   useEffect(() => {
     if (!store?.name) return;
@@ -398,11 +362,116 @@ export default function StoreCatalogPage() {
       (document.createElement("link") as HTMLLinkElement);
 
     favicon.rel = "icon";
-    favicon.href = store.logo_url
-      ? `${store.logo_url}?v=${Date.now()}`
-      : "/favicon.ico";
+    favicon.href = store.logo_url ? store.logo_url : "/favicon.ico";
     document.head.appendChild(favicon);
   }, [store]);
+
+  /* -------------------------
+     Load products (paged)
+     - 30 al inicio
+     - "Cargar más" suma 30
+     - Filtros (q + category) se aplican en el server
+  ------------------------- */
+  async function fetchProducts(opts: { reset: boolean; nextPage?: number }) {
+    if (!store?.id) return;
+
+    const sb = supabaseBrowser();
+
+    const pageToLoad = opts.reset ? 0 : (opts.nextPage ?? page);
+    const from = pageToLoad * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    // base
+    let query = sb
+      .from("products")
+      .select(
+        "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock",
+        { count: "exact" }
+      )
+      .eq("store_id", store.id)
+      .eq("active", true)
+      .or("stock.is.null,stock.gt.0"); // disponibles
+
+    // category (server)
+    if (selectedCat) query = query.eq("category_id", selectedCat);
+
+    // search (server) — si quieres, puedes quitarlo y dejarlo local
+    const s = q.trim();
+    if (s.length >= 2) {
+      const safe = s.replace(/,/g, " ");
+      query = query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`);
+    }
+
+    // orden estable + rango
+    const { data, error, count } = await query
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) throw error;
+
+    const normalized: ProductRow[] = ((data as any[]) ?? [])
+      .map((p) => ({
+        ...p,
+        price_retail: Number(p.price_retail ?? 0),
+        price_wholesale: Number(p.price_wholesale ?? 0),
+        min_wholesale: p.min_wholesale == null ? null : Number(p.min_wholesale),
+        stock: p.stock === null || p.stock === undefined ? null : Number(p.stock),
+      }))
+      .filter((p) => p.stock === null || Number(p.stock) > 0);
+
+    setTotalCount(Number(count ?? 0));
+
+    if (opts.reset) {
+      setProducts(normalized);
+      setPage(0);
+    } else {
+      setProducts((prev) => [...prev, ...normalized]);
+    }
+
+    const loadedSoFar = (opts.reset ? normalized.length : products.length + normalized.length);
+    setHasMore(loadedSoFar < Number(count ?? 0));
+  }
+
+  // reset paging cuando cambian filtros
+  useEffect(() => {
+    if (!store?.id) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoadingMore(true);
+        setHasMore(false);
+        setPage(0);
+        await fetchProducts({ reset: true });
+      } catch (e: any) {
+        if (!cancelled) setMsg(e?.message ?? "Error cargando productos.");
+      } finally {
+        if (!cancelled) setLoadingMore(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store?.id, selectedCat, q]);
+
+  async function loadMore() {
+    if (!store?.id) return;
+    if (loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      await fetchProducts({ reset: false, nextPage: next });
+      setPage(next);
+    } catch (e: any) {
+      setMsg(e?.message ?? "Error cargando más productos.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   /* -------------------------
      Add to cart (with stock limits + ilimitado)
@@ -410,12 +479,8 @@ export default function StoreCatalogPage() {
   async function addToCartWithQty(p: ProductRow, price: number) {
     const isUnlimited = p.stock === null;
 
-    // si es ilimitado, no hay max real
-    const stockNum = isUnlimited
-      ? Infinity
-      : Math.max(0, Math.floor(Number(p.stock || 0)));
+    const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
 
-    // si NO es ilimitado y está agotado (igual por seguridad)
     if (!isUnlimited && stockNum <= 0) {
       await Swal.fire({
         icon: "info",
@@ -427,9 +492,7 @@ export default function StoreCatalogPage() {
       return;
     }
 
-    const min =
-      safeMode === "mayor" ? Math.max(1, Number(p.min_wholesale ?? 1)) : 1;
-
+    const min = safeMode === "mayor" ? Math.max(1, Number(p.min_wholesale ?? 1)) : 1;
     const start = min;
 
     const res = await Swal.fire({
@@ -458,11 +521,7 @@ export default function StoreCatalogPage() {
           />
 
           <div style="font-size:12px; opacity:.7; margin-top:6px;">
-            ${
-              isUnlimited
-                ? "* Sin límite de stock."
-                : "* No se permite pedir más que el stock disponible."
-            }
+            ${isUnlimited ? "* Sin límite de stock." : "* No se permite pedir más que el stock disponible."}
           </div>
         </div>
       `,
@@ -504,7 +563,7 @@ export default function StoreCatalogPage() {
           qty,
           minWholesale: p.min_wholesale ?? null,
         },
-        { openDrawer: false },
+        { openDrawer: false }
       );
     } catch {
       addItem({
@@ -527,39 +586,18 @@ export default function StoreCatalogPage() {
     });
   }
 
-  /* -------------------------
-     Filtering (ya vienen sin agotados)
-  ------------------------- */
-  const shownProductsBase = selectedCat
-    ? products.filter((p) => p.category_id === selectedCat)
-    : products;
-
-  const shownProducts = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return shownProductsBase;
-    return shownProductsBase.filter((p) => {
-      const a = String(p?.name ?? "").toLowerCase();
-      const b = String(p?.description ?? "").toLowerCase();
-      return a.includes(s) || b.includes(s);
-    });
-  }, [shownProductsBase, q]);
-
   /* =========================================================
      Render states
   ========================================================= */
   if (loading) {
     return (
-      <main
-        className="p-6"
-        style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
-      >
+      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <div
             className="rounded-3xl border p-5"
             style={{
               borderColor: "var(--t-border)",
-              background:
-                "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
+              background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
             }}
           >
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
@@ -573,10 +611,7 @@ export default function StoreCatalogPage() {
 
   if (!store) {
     return (
-      <main
-        className="p-6"
-        style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
-      >
+      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <p>{msg ?? "No se pudo cargar."}</p>
         </div>
@@ -589,26 +624,13 @@ export default function StoreCatalogPage() {
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
 
   return (
-    <main
-      className="min-h-screen"
-      style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}
-    >
-      {/* overlay SOLO si hay gradient (si solid, --t-bg = none por syncGlobalBodyBackground) */}
+    <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      {/* overlay SOLO si hay gradient */}
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div
-          className="absolute inset-0"
-          style={{ background: "var(--t-bg-base)" }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "var(--t-bg)",
-            opacity: 0.22,
-          }}
-        />
+        <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
+        <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)", opacity: 0.22 }} />
       </div>
 
-      {/* helpers */}
       <style jsx global>{`
         .t-glass {
           backdrop-filter: blur(16px);
@@ -616,14 +638,10 @@ export default function StoreCatalogPage() {
         }
         .t-ring:focus {
           outline: none;
-          box-shadow: 0 0 0 3px
-            color-mix(in oklab, var(--t-accent2) 35%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--t-accent2) 35%, transparent);
         }
         .t-card {
-          transition:
-            transform 220ms ease,
-            box-shadow 220ms ease,
-            border-color 220ms ease;
+          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
         }
         .t-card:hover {
           transform: translateY(-2px);
@@ -631,11 +649,7 @@ export default function StoreCatalogPage() {
           border-color: color-mix(in oklab, var(--t-border) 60%, white 15%);
         }
         .t-btn {
-          transition:
-            transform 180ms ease,
-            filter 180ms ease,
-            box-shadow 180ms ease,
-            opacity 180ms ease;
+          transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
         }
         .t-btn:active {
           transform: scale(0.99);
@@ -651,10 +665,7 @@ export default function StoreCatalogPage() {
       `}</style>
 
       {/* Topbar */}
-      <div
-        className="sticky top-0 z-40 border-b t-glass"
-        style={{ borderColor: "var(--t-border)", background: glassBg }}
-      >
+      <div className="sticky top-0 z-40 border-b t-glass" style={{ borderColor: "var(--t-border)", background: glassBg }}>
         <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -666,18 +677,13 @@ export default function StoreCatalogPage() {
                   style={{ borderColor: "var(--t-border)" }}
                 />
               ) : (
-                <div
-                  className="h-10 w-10 rounded-2xl border"
-                  style={{ borderColor: "var(--t-border)" }}
-                />
+                <div className="h-10 w-10 rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
               )}
 
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">{store.name}</p>
                 <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
-                  {safeMode === "detal"
-                    ? "Catálogo Detal"
-                    : "Catálogo Mayoristas"}
+                  {safeMode === "detal" ? "Catálogo Detal" : "Catálogo Mayoristas"}
                 </p>
               </div>
             </div>
@@ -687,22 +693,16 @@ export default function StoreCatalogPage() {
                 className="hidden sm:inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
                 style={{ borderColor: "var(--t-border)", background: glassBg2 }}
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: accentChipBg }}
-                />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
                 {safeMode === "detal" ? "DETAL" : "MAYOR"}
               </span>
 
               {safeMode === "detal" ? (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg2,
-                  }}
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   href={`https://wa.me/${store.whatsapp}?text=${encodeURIComponent(
-                    `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`,
+                    `Hola! Quiero acceso al catálogo MAYORISTA de ${store.name}.`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -712,10 +712,7 @@ export default function StoreCatalogPage() {
               ) : (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg2,
-                  }}
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   href={`/${store.slug}/detal`}
                 >
                   Ver Detal
@@ -728,21 +725,16 @@ export default function StoreCatalogPage() {
 
       {/* Header */}
       <header className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
-        <div
-          className="rounded-[28px] border p-5 t-glass"
-          style={{ borderColor: "var(--t-border)", background: glassBg }}
-        >
+        <div className="rounded-[28px] border p-5 t-glass" style={{ borderColor: "var(--t-border)", background: glassBg }}>
           <div className="min-w-0">
             <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
               {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} ·{" "}
-              {shownProducts.length} productos
+              <b style={{ color: "var(--t-text)" }}>{products.length}</b> de{" "}
+              <b style={{ color: "var(--t-text)" }}>{totalCount}</b> productos
             </p>
 
-            {profile?.headline ? (
-              <p className="mt-3 text-sm opacity-90">{profile.headline}</p>
-            ) : null}
-
+            {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
             {links.length ? (
               <div className="mt-4">
                 <SocialIconRow links={links} />
@@ -754,20 +746,13 @@ export default function StoreCatalogPage() {
         {/* Banner */}
         {store.banner_url ? (
           <div className="mt-5">
-            <div
-              className="relative overflow-hidden rounded-[28px] border"
-              style={{ borderColor: "var(--t-border)" }}
-            >
+            <div className="relative overflow-hidden rounded-[28px] border" style={{ borderColor: "var(--t-border)" }}>
               <img
                 src={store.banner_url}
                 alt="Banner"
-                className={cx(
-                  "h-56 w-full object-cover sm:h-64 md:h-80",
-                  imgLoaded ? "opacity-100" : "opacity-0",
-                )}
+                className={cx("h-56 w-full object-cover sm:h-64 md:h-80", imgLoaded ? "opacity-100" : "opacity-0")}
                 onLoad={() => setImgLoaded(true)}
               />
-
               {!imgLoaded ? (
                 <div
                   className="absolute inset-0 animate-pulse"
@@ -798,10 +783,7 @@ export default function StoreCatalogPage() {
               {selectedCat ? (
                 <button
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:text-sm"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg2,
-                  }}
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   onClick={() => setSelectedCat(null)}
                 >
                   Ver todo
@@ -816,15 +798,8 @@ export default function StoreCatalogPage() {
                   <button
                     key={c.id}
                     onClick={() => setSelectedCat(c.id)}
-                    className={cx(
-                      "t-btn shrink-0 rounded-2xl border p-2 text-left",
-                      active && "ring-2 ring-white/25",
-                    )}
-                    style={{
-                      width: 150,
-                      borderColor: "var(--t-border)",
-                      background: glassBg,
-                    }}
+                    className={cx("t-btn shrink-0 rounded-2xl border p-2 text-left", active && "ring-2 ring-white/25")}
+                    style={{ width: 150, borderColor: "var(--t-border)", background: glassBg }}
                   >
                     {c.image_url ? (
                       <img
@@ -835,43 +810,30 @@ export default function StoreCatalogPage() {
                         loading="lazy"
                       />
                     ) : (
-                      <div
-                        className="aspect-square w-full rounded-xl border"
-                        style={{ borderColor: "var(--t-border)" }}
-                      />
+                      <div className="aspect-square w-full rounded-xl border" style={{ borderColor: "var(--t-border)" }} />
                     )}
-                    <p className="mt-2 line-clamp-2 text-sm font-bold">
-                      {c.name}
-                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm font-bold">{c.name}</p>
                   </button>
                 );
               })}
             </div>
 
             {/* Buscador */}
-            <div
-              className="mt-4 rounded-2xl border p-3"
-              style={{ borderColor: "var(--t-border)", background: glassBg2 }}
-            >
-              <label
-                className="text-xs font-semibold"
-                style={{ color: "var(--t-muted)" }}
-              >
+            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+              <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                 Buscar producto
               </label>
               <input
                 className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
                 style={{
                   borderColor: "var(--t-border)",
-                  background:
-                    "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                  background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                   color: "var(--t-text)",
                 }}
                 placeholder="Ej: camiseta, bolso, perfume..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
-
               {q ? (
                 <button
                   type="button"
@@ -885,22 +847,15 @@ export default function StoreCatalogPage() {
             </div>
           </div>
         ) : (
-          <div
-            className="mt-2 rounded-2xl border p-3"
-            style={{ borderColor: "var(--t-border)", background: glassBg2 }}
-          >
-            <label
-              className="text-xs font-semibold"
-              style={{ color: "var(--t-muted)" }}
-            >
+          <div className="mt-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+            <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
               Buscar producto
             </label>
             <input
               className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
               style={{
                 borderColor: "var(--t-border)",
-                background:
-                  "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                 color: "var(--t-text)",
               }}
               placeholder="Ej: camiseta, bolso, perfume..."
@@ -915,7 +870,8 @@ export default function StoreCatalogPage() {
           <div>
             <h2 className="text-xl font-extrabold">Productos</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {shownProducts.length} disponibles{q ? ` · filtrados por “${q}”` : ""}
+              Mostrando {products.length} de {totalCount}
+              {q ? ` · filtrados por “${q}”` : ""}
             </p>
           </div>
 
@@ -923,173 +879,157 @@ export default function StoreCatalogPage() {
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
             style={{ borderColor: "var(--t-border)", background: glassBg2 }}
           >
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ background: accentChipBg }}
-            />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
             {safeMode === "detal" ? "DETAL" : "MAYOR"}
           </span>
         </div>
 
-        {shownProducts.length === 0 ? (
-          <div
-            className="mt-5 rounded-[28px] border p-6"
-            style={{ borderColor: "var(--t-border)", background: glassBg }}
-          >
+        {products.length === 0 && !loadingMore ? (
+          <div className="mt-5 rounded-[28px] border p-6" style={{ borderColor: "var(--t-border)", background: glassBg }}>
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
               No hay productos disponibles (o están agotados).
             </p>
           </div>
         ) : (
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {shownProducts.map((p) => {
-              const price =
-                safeMode === "detal" ? p.price_retail : p.price_wholesale;
+          <>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {products.map((p) => {
+                const price = safeMode === "detal" ? p.price_retail : p.price_wholesale;
 
-              const isUnlimited = p.stock === null;
-              const stockNum = isUnlimited
-                ? Infinity
-                : Math.max(0, Math.floor(Number(p.stock || 0)));
-              const isOut = !isUnlimited && stockNum <= 0;
+                const isUnlimited = p.stock === null;
+                const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
+                const isOut = !isUnlimited && stockNum <= 0;
 
-              const stockInfo = stockMeta(p.stock);
+                const stockInfo = stockMeta(p.stock);
 
-              const stockPill =
-                stockInfo.tone === "danger"
-                  ? {
-                      border: "color-mix(in oklab, red 35%, var(--t-border))",
-                      bg: "color-mix(in oklab, red 12%, transparent)",
-                      color: "color-mix(in oklab, white 92%, red 8%)",
-                    }
-                  : stockInfo.tone === "warn"
-                  ? {
-                      border: "color-mix(in oklab, orange 35%, var(--t-border))",
-                      bg: "color-mix(in oklab, orange 12%, transparent)",
-                      color: "color-mix(in oklab, white 92%, orange 8%)",
-                    }
-                  : {
-                      border: "color-mix(in oklab, lime 30%, var(--t-border))",
-                      bg: "color-mix(in oklab, lime 10%, transparent)",
-                      color: "color-mix(in oklab, white 92%, lime 8%)",
-                    };
+                const stockPill =
+                  stockInfo.tone === "danger"
+                    ? {
+                        border: "color-mix(in oklab, red 35%, var(--t-border))",
+                        bg: "color-mix(in oklab, red 12%, transparent)",
+                        color: "color-mix(in oklab, white 92%, red 8%)",
+                      }
+                    : stockInfo.tone === "warn"
+                    ? {
+                        border: "color-mix(in oklab, orange 35%, var(--t-border))",
+                        bg: "color-mix(in oklab, orange 12%, transparent)",
+                        color: "color-mix(in oklab, white 92%, orange 8%)",
+                      }
+                    : {
+                        border: "color-mix(in oklab, lime 30%, var(--t-border))",
+                        bg: "color-mix(in oklab, lime 10%, transparent)",
+                        color: "color-mix(in oklab, white 92%, lime 8%)",
+                      };
 
-              return (
-                <div
-                  key={p.id}
-                  className="t-card rounded-[28px] border p-4"
-                  style={{
-                    borderColor: "var(--t-border)",
-                    background: glassBg,
-                  }}
-                >
-                  {p.image_url ? (
-                    <img
-                      src={p.image_url}
-                      alt={p.name}
-                      loading="lazy"
-                      className="mb-3 aspect-square w-full rounded-2xl border object-cover"
-                      style={{ borderColor: "var(--t-border)" }}
-                    />
-                  ) : (
-                    <div
-                      className="mb-3 aspect-square w-full rounded-2xl border"
-                      style={{ borderColor: "var(--t-border)" }}
-                    />
-                  )}
+                return (
+                  <div
+                    key={p.id}
+                    className="t-card rounded-[28px] border p-4"
+                    style={{ borderColor: "var(--t-border)", background: glassBg }}
+                  >
+                    {p.image_url ? (
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        loading="lazy"
+                        className="mb-3 aspect-square w-full rounded-2xl border object-cover"
+                        style={{ borderColor: "var(--t-border)" }}
+                      />
+                    ) : (
+                      <div className="mb-3 aspect-square w-full rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
+                    )}
 
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-extrabold leading-tight">{p.name}</h3>
-                    <span
-                      className="rounded-full px-3 py-1 text-[11px] font-extrabold"
-                      style={{ background: accentChipBg, color: "#0b0b0b" }}
-                    >
-                      {safeMode === "detal" ? "DETAL" : "MAYOR"}
-                    </span>
-                  </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-extrabold leading-tight">{p.name}</h3>
+                      <span className="rounded-full px-3 py-1 text-[11px] font-extrabold" style={{ background: accentChipBg, color: "#0b0b0b" }}>
+                        {safeMode === "detal" ? "DETAL" : "MAYOR"}
+                      </span>
+                    </div>
 
-                  {/* Inventario */}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
-                      style={{
-                        borderColor: stockPill.border,
-                        background: stockPill.bg,
-                        color: stockPill.color,
-                      }}
-                      title="Inventario disponible"
-                    >
-                      {stockInfo.tone === "danger"
-                        ? "⛔"
-                        : stockInfo.tone === "warn"
-                        ? "⚠️"
-                        : "✅"}{" "}
-                      {stockInfo.label}
-                    </span>
-
-                    {safeMode === "mayor" && p.min_wholesale ? (
+                    {/* Inventario */}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span
                         className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
                         style={{
-                          borderColor:
-                            "color-mix(in oklab, var(--t-border) 80%, transparent)",
-                          background:
-                            "color-mix(in oklab, var(--t-card-bg) 62%, transparent)",
-                          color: "var(--t-muted)",
+                          borderColor: stockPill.border,
+                          background: stockPill.bg,
+                          color: stockPill.color,
                         }}
+                        title="Inventario disponible"
                       >
-                        Mínimo:{" "}
-                        <b style={{ color: "var(--t-text)" }}>
-                          {p.min_wholesale}
-                        </b>
+                        {stockInfo.tone === "danger" ? "⛔" : stockInfo.tone === "warn" ? "⚠️" : "✅"} {stockInfo.label}
                       </span>
-                    ) : null}
-                  </div>
 
-                  {p.description ? (
-                    <p
-                      className="mt-2 line-clamp-3 text-sm"
-                      style={{ color: "var(--t-muted)" }}
-                    >
-                      {p.description}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-4 flex items-end justify-between gap-3">
-                    <div>
-                      <p
-                        className="text-xs font-semibold"
-                        style={{ color: "var(--t-muted)" }}
-                      >
-                        Precio
-                      </p>
-                      <p className="text-lg font-black">{money(price)}</p>
+                      {safeMode === "mayor" && p.min_wholesale ? (
+                        <span
+                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
+                          style={{
+                            borderColor: "color-mix(in oklab, var(--t-border) 80%, transparent)",
+                            background: "color-mix(in oklab, var(--t-card-bg) 62%, transparent)",
+                            color: "var(--t-muted)",
+                          }}
+                        >
+                          Mínimo: <b style={{ color: "var(--t-text)" }}>{p.min_wholesale}</b>
+                        </span>
+                      ) : null}
                     </div>
 
-                    <button
-                      className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
-                      style={{
-                        background: "var(--t-cta)",
-                        color: "#0b0b0b",
-                        boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
-                      }}
-                      onClick={() => addToCartWithQty(p, Number(price ?? 0))}
-                      disabled={isOut}
-                      title={isOut ? "Producto agotado" : "Agregar al carrito"}
-                    >
-                      {isOut ? "Agotado" : "Agregar"}
-                    </button>
+                    {p.description ? (
+                      <p className="mt-2 line-clamp-3 text-sm" style={{ color: "var(--t-muted)" }}>
+                        {p.description}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-4 flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+                          Precio
+                        </p>
+                        <p className="text-lg font-black">{money(price)}</p>
+                      </div>
+
+                      <button
+                        className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
+                        style={{
+                          background: "var(--t-cta)",
+                          color: "#0b0b0b",
+                          boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                        }}
+                        onClick={() => addToCartWithQty(p, Number(price ?? 0))}
+                        disabled={isOut}
+                        title={isOut ? "Producto agotado" : "Agregar al carrito"}
+                      >
+                        {isOut ? "Agotado" : "Agregar"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+
+            {/* ✅ Cargar más */}
+            <div className="mt-6 flex items-center justify-center">
+              {hasMore ? (
+                <button
+                  type="button"
+                  className="t-btn rounded-2xl border px-5 py-3 text-sm font-extrabold"
+                  style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? "Cargando..." : `Cargar más (+${PAGE_SIZE})`}
+                </button>
+              ) : (
+                <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
+                  ✅ Ya no hay más productos.
+                </p>
+              )}
+            </div>
+          </>
         )}
 
         {/* Footer */}
-        <div
-          className="mt-10 border-t pt-6"
-          style={{ borderColor: "var(--t-border)" }}
-        >
+        <div className="mt-10 border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
           <div className="text-sm" style={{ color: "var(--t-muted)" }}>
             {profile?.address || profile?.city ? (
               <p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { ImageUpload } from "./ImageUpload";
@@ -47,13 +47,6 @@ type StoreLink = {
   icon_url: string | null;
 };
 
-/**
- * Tu catálogo usa vars:
- * --t-bg, --t-text, --t-muted, --t-border, --t-card-bg, --t-accent2, --t-cta
- *
- * En tu tabla themes.config tú manejas:
- * bg, card, card_border, text, muted, accent, accent2, success, cta, ctaA/ctaB (según como hayas seed)
- */
 type ThemeConfig = Partial<{
   bg: string;
   card: string;
@@ -85,10 +78,13 @@ const DEFAULT_PROFILE = (storeId: string): StoreProfile => ({
   policies: "",
 });
 
+/* =========================
+   Small helpers
+========================= */
 function normalizeLinks(arr: StoreLink[]) {
+  // reindex sort_order
   return arr.map((l, idx) => ({ ...l, sort_order: idx }));
 }
-
 function pick(v?: string, fallback?: string) {
   const s = (v ?? "").trim();
   return s || (fallback ?? "");
@@ -108,8 +104,6 @@ function themeConfigToVars(cfg?: ThemeConfig) {
   const text = pick(cfg?.text, "rgba(255,255,255,0.92)");
   const muted = pick(cfg?.muted, "rgba(255,255,255,0.70)");
   const accent2 = pick(cfg?.accent2, cfg?.accent || "#a855f7");
-
-  // CTA: si existe cta, o ctaA, si no usa accent2
   const cta = pick(cfg?.cta, pick(cfg?.ctaA, accent2));
 
   return {
@@ -125,12 +119,9 @@ function themeConfigToVars(cfg?: ThemeConfig) {
 
 /* =========================
    Preview REAL del catálogo
+   (optimizado: NO se monta si el usuario no lo abre)
 ========================= */
-function CatalogThemePreview({
-  theme,
-}: {
-  theme: ThemeRow;
-}) {
+function CatalogThemePreview({ theme }: { theme: ThemeRow }) {
   const vars = themeConfigToVars(theme.config);
 
   return (
@@ -140,9 +131,7 @@ function CatalogThemePreview({
           <p className="text-[11px] font-semibold tracking-[0.32em] text-white/60">
             VISTA PREVIA DEL CATÁLOGO
           </p>
-          <h3 className="mt-2 text-base font-semibold text-white">
-            {theme.name}
-          </h3>
+          <h3 className="mt-2 text-base font-semibold text-white">{theme.name}</h3>
           <p className="mt-1 text-xs text-white/60">
             ID: <span className="text-white/70">{theme.id}</span>
           </p>
@@ -162,7 +151,6 @@ function CatalogThemePreview({
         </div>
       </div>
 
-      {/* Marco preview */}
       <div
         className="mt-4 overflow-hidden rounded-3xl border"
         style={{
@@ -170,20 +158,18 @@ function CatalogThemePreview({
           boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
         }}
       >
-        {/* Esto simula tu <main> del catálogo */}
         <div style={vars} className="min-h-[520px]">
-          <main
-            className="min-h-[520px]"
-            style={{ background: "var(--t-bg)", color: "var(--t-text)" }}
-          >
-            {/* Header simulado */}
+          <main className="min-h-[520px]" style={{ background: "var(--t-bg)", color: "var(--t-text)" }}>
             <header className="border-b" style={{ borderColor: "var(--t-border)" }}>
               <div className="mx-auto max-w-[780px] p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div
                       className="h-12 w-12 rounded-2xl border"
-                      style={{ borderColor: "var(--t-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}
+                      style={{
+                        borderColor: "var(--t-border)",
+                        background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)",
+                      }}
                     />
                     <div>
                       <div className="text-lg font-bold leading-tight">Tu tienda</div>
@@ -207,8 +193,10 @@ function CatalogThemePreview({
                   </a>
                 </div>
 
-                <div className="mt-4 rounded-2xl border p-4"
-                     style={{ borderColor: "var(--t-border)", background: "var(--t-card-bg)" }}>
+                <div
+                  className="mt-4 rounded-2xl border p-4"
+                  style={{ borderColor: "var(--t-border)", background: "var(--t-card-bg)" }}
+                >
                   <div className="text-sm font-semibold">Headline / texto corto</div>
                   <div className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                     Aquí se ve el estilo de card, borde y texto.
@@ -226,9 +214,7 @@ function CatalogThemePreview({
               </div>
             </header>
 
-            {/* Body simulado */}
             <section className="mx-auto max-w-[780px] p-5">
-              {/* Categorías */}
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-lg font-semibold">Productos</div>
@@ -255,9 +241,7 @@ function CatalogThemePreview({
                   <button
                     key={c}
                     type="button"
-                    className={`rounded-2xl border p-2 text-left transition ${
-                      idx === 1 ? "ring-2 ring-white/30" : ""
-                    }`}
+                    className={`rounded-2xl border p-2 text-left transition ${idx === 1 ? "ring-2 ring-white/30" : ""}`}
                     style={{
                       borderColor: "var(--t-border)",
                       background: "var(--t-card-bg)",
@@ -267,8 +251,7 @@ function CatalogThemePreview({
                       className="aspect-square w-full rounded-xl border"
                       style={{
                         borderColor: "var(--t-border)",
-                        background:
-                          "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+                        background: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
                       }}
                     />
                     <p className="mt-2 line-clamp-2 text-sm font-semibold">{c}</p>
@@ -276,7 +259,6 @@ function CatalogThemePreview({
                 ))}
               </div>
 
-              {/* Productos */}
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {[1, 2, 3, 4].map((n) => (
                   <div
@@ -291,8 +273,7 @@ function CatalogThemePreview({
                       className="mb-3 aspect-square w-full rounded-xl border"
                       style={{
                         borderColor: "var(--t-border)",
-                        background:
-                          "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+                        background: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
                       }}
                     />
 
@@ -318,11 +299,7 @@ function CatalogThemePreview({
                         <p className="text-lg font-bold">$25.000</p>
                       </div>
 
-                      <button
-                        className="rounded-xl px-4 py-2 font-semibold"
-                        style={{ background: "var(--t-cta)", color: "#0b0b0b" }}
-                        type="button"
-                      >
+                      <button className="rounded-xl px-4 py-2 font-semibold" style={{ background: "var(--t-cta)", color: "#0b0b0b" }} type="button">
                         Agregar
                       </button>
                     </div>
@@ -344,27 +321,34 @@ function CatalogThemePreview({
 }
 
 /* =========================
-   Page
+   Page (Optimizada)
+   - NO monta Preview ni ImageUpload hasta que el usuario los abra
+   - Reduce requests guardando links con UPSERT + DELETE
 ========================= */
 export default function StoreSettingsPage() {
   const router = useRouter();
 
-  // UI state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // data state
   const [userId, setUserId] = useState<string | null>(null);
   const [themes, setThemes] = useState<ThemeRow[]>([]);
   const [store, setStore] = useState<Store | null>(null);
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [links, setLinks] = useState<StoreLink[]>([]);
+  const [deletedLinkIds, setDeletedLinkIds] = useState<string[]>([]);
 
-  // ---------------------------
-  // Load
-  // ---------------------------
+  // ✅ toggles: evita que se descarguen imágenes/preview si no los abres
+  const [showImages, setShowImages] = useState(false);
+  const [showThemePreview, setShowThemePreview] = useState(false);
+
+  /* ---------------------------
+     Load (mejor: paralelo)
+  --------------------------- */
   useEffect(() => {
+    let alive = true;
+
     (async () => {
       setLoading(true);
       setMsg(null);
@@ -372,7 +356,6 @@ export default function StoreSettingsPage() {
       try {
         const sb = supabaseBrowser();
 
-        // 1) auth user
         const { data: userRes, error: userErr } = await sb.auth.getUser();
         if (userErr) throw userErr;
 
@@ -382,31 +365,27 @@ export default function StoreSettingsPage() {
         }
 
         const uid = userRes.user.id;
+        if (!alive) return;
         setUserId(uid);
 
-        // 2) themes (include config)
-        const { data: th, error: thErr } = await sb
-          .from("themes")
-          .select("id,name,config")
-          .eq("active", true)
-          .order("sort_order", { ascending: true });
+        // themes + store en paralelo
+        const [themesRes, storeRes] = await Promise.all([
+          sb.from("themes").select("id,name,config").eq("active", true).order("sort_order", { ascending: true }),
+          sb
+            .from("stores")
+            .select("id,name,slug,whatsapp,phone,email,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url")
+            .eq("owner_id", uid)
+            .maybeSingle(),
+        ]);
 
-        if (thErr) throw thErr;
+        if (themesRes.error) throw themesRes.error;
+        if (storeRes.error) throw storeRes.error;
 
-        const themesList = (th as ThemeRow[]) ?? [];
+        const themesList = (themesRes.data as ThemeRow[]) ?? [];
+        if (!alive) return;
         setThemes(themesList);
 
-        // 3) store by owner_id
-        const { data: st, error: stErr } = await sb
-          .from("stores")
-          .select(
-            "id,name,slug,whatsapp,phone,email,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url"
-          )
-          .eq("owner_id", uid)
-          .maybeSingle();
-
-        if (stErr) throw stErr;
-
+        const st = storeRes.data as Store | null;
         if (!st) {
           setMsg("⚠️ Aún no tienes una tienda creada.");
           setStore(null);
@@ -415,63 +394,69 @@ export default function StoreSettingsPage() {
           return;
         }
 
-        // ✅ theme safe
         const themeExists = themesList.some((t) => t.id === (st as any).theme);
-        const safeTheme = themeExists
-          ? (st as any).theme
-          : (themesList[0]?.id ?? (st as any).theme);
+        const safeTheme = themeExists ? (st as any).theme : themesList[0]?.id ?? (st as any).theme;
 
         const safeStore: Store = { ...(st as Store), theme: safeTheme };
+        if (!alive) return;
         setStore(safeStore);
 
-        // 4) profile
-        const { data: pr, error: prErr } = await sb
-          .from("store_profiles")
-          .select("*")
-          .eq("store_id", safeStore.id)
-          .maybeSingle();
+        // profile + links en paralelo
+        const [profileRes, linksRes] = await Promise.all([
+          sb
+            .from("store_profiles")
+            .select("store_id,headline,description,address,city,department,google_maps_url,delivery_info,payment_methods,policies")
+            .eq("store_id", safeStore.id)
+            .maybeSingle(),
+          sb
+            .from("store_links")
+            .select("id,store_id,type,label,url,sort_order,active,icon_url")
+            .eq("store_id", safeStore.id)
+            .order("sort_order", { ascending: true }),
+        ]);
 
-        if (prErr) throw prErr;
-        setProfile((pr as StoreProfile) ?? DEFAULT_PROFILE(safeStore.id));
+        if (profileRes.error) throw profileRes.error;
+        if (linksRes.error) throw linksRes.error;
 
-        // 5) links
-        const { data: ln, error: lnErr } = await sb
-          .from("store_links")
-          .select("id,store_id,type,label,url,sort_order,active,icon_url")
-          .eq("store_id", safeStore.id)
-          .order("sort_order", { ascending: true });
-
-        if (lnErr) throw lnErr;
-        setLinks((ln as StoreLink[]) ?? []);
+        if (!alive) return;
+        setProfile((profileRes.data as StoreProfile) ?? DEFAULT_PROFILE(safeStore.id));
+        setLinks((linksRes.data as StoreLink[]) ?? []);
+        setDeletedLinkIds([]);
       } catch (e: any) {
+        if (!alive) return;
         setMsg("❌ Error cargando: " + (e?.message ?? "Error"));
       } finally {
+        if (!alive) return;
         setLoading(false);
       }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
-  // ---------------------------
-  // Helpers
-  // ---------------------------
+  /* ---------------------------
+     Helpers
+  --------------------------- */
   function setStoreField<K extends keyof Store>(key: K, value: Store[K]) {
     setStore((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  function setProfileField<K extends keyof StoreProfile>(
-    key: K,
-    value: StoreProfile[K]
-  ) {
+  function setProfileField<K extends keyof StoreProfile>(key: K, value: StoreProfile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function addLink() {
     if (!store) return;
 
+    // ✅ crea UUID REAL para poder upsert directo (sin prefijos raros)
+    const id = crypto.randomUUID();
+
     setLinks((prev) => [
       ...prev,
       {
-        id: "new-" + crypto.randomUUID(),
+        id,
         store_id: store.id,
         type: "instagram",
         label: "Instagram",
@@ -488,12 +473,17 @@ export default function StoreSettingsPage() {
   }
 
   function removeLink(id: string) {
+    // ✅ marca para borrar en DB al guardar
+    setDeletedLinkIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setLinks((prev) => prev.filter((l) => l.id !== id));
   }
 
-  // ---------------------------
-  // Save
-  // ---------------------------
+  /* ---------------------------
+     Save (optimizado)
+     - Store update
+     - Profile upsert
+     - Links: DELETE marcados + UPSERT masivo
+  --------------------------- */
   async function saveAll() {
     if (!store || !profile) return;
 
@@ -544,41 +534,31 @@ export default function StoreSettingsPage() {
 
       if (profErr) throw profErr;
 
-      // 3) links insert/update
-      const newOnes = normalizedLinks.filter(
-        (l) => l.id.startsWith("new-") && l.url.trim()
-      );
-      const existing = normalizedLinks.filter((l) => !l.id.startsWith("new-"));
-
-      if (newOnes.length) {
-        const payload = newOnes.map((l) => ({
-          store_id: store.id,
-          type: l.type,
-          label: (l.label ?? "").trim() || null,
-          url: l.url.trim(),
-          sort_order: l.sort_order,
-          active: l.active,
-          icon_url: l.icon_url ?? null,
-        }));
-
-        const { error } = await sb.from("store_links").insert(payload);
-        if (error) throw error;
+      // 3) delete links removed
+      if (deletedLinkIds.length) {
+        const { error: delErr } = await sb.from("store_links").delete().in("id", deletedLinkIds);
+        if (delErr) throw delErr;
       }
 
-      for (const l of existing) {
-        const { error } = await sb
-          .from("store_links")
-          .update({
+      // 4) upsert links (uno solo request)
+      if (normalizedLinks.length) {
+        const payload = normalizedLinks
+          .filter((l) => l.url.trim()) // si url vacío, no lo guardamos
+          .map((l) => ({
+            id: l.id,
+            store_id: store.id,
             type: l.type,
             label: (l.label ?? "").trim() || null,
             url: l.url.trim(),
             sort_order: l.sort_order,
             active: l.active,
             icon_url: l.icon_url ?? null,
-          })
-          .eq("id", l.id);
+          }));
 
-        if (error) throw error;
+        if (payload.length) {
+          const { error: upErr } = await sb.from("store_links").upsert(payload, { onConflict: "id" });
+          if (upErr) throw upErr;
+        }
       }
 
       // reload links
@@ -588,8 +568,10 @@ export default function StoreSettingsPage() {
         .eq("store_id", store.id)
         .order("sort_order", { ascending: true });
 
-      if (!reloadErr) setLinks((ln as StoreLink[]) ?? []);
+      if (reloadErr) throw reloadErr;
 
+      setLinks((ln as StoreLink[]) ?? []);
+      setDeletedLinkIds([]);
       setMsg("✅ Guardado correctamente.");
     } catch (e: any) {
       setMsg("❌ " + (e?.message ?? "Error guardando"));
@@ -598,9 +580,9 @@ export default function StoreSettingsPage() {
     }
   }
 
-  // ---------------------------
-  // UI Card
-  // ---------------------------
+  /* ---------------------------
+     UI Card
+  --------------------------- */
   function Card({
     title,
     subtitle,
@@ -626,9 +608,9 @@ export default function StoreSettingsPage() {
     );
   }
 
-  // ---------------------------
-  // Render states
-  // ---------------------------
+  /* ---------------------------
+     Render states
+  --------------------------- */
   if (loading) {
     return (
       <main className="min-h-screen px-6 py-10 text-white">
@@ -659,9 +641,7 @@ export default function StoreSettingsPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
             <h1 className="text-2xl font-semibold">Mi tienda</h1>
-            <p className="mt-1 text-sm text-white/70">
-              Configura tu perfil, enlaces y apariencia.
-            </p>
+            <p className="mt-1 text-sm text-white/70">Configura tu perfil, enlaces y apariencia.</p>
             {msg ? <p className="mt-2 text-sm">{msg}</p> : null}
           </div>
 
@@ -672,6 +652,12 @@ export default function StoreSettingsPage() {
           >
             {saving ? "Guardando..." : "Guardar cambios"}
           </button>
+        </div>
+
+        {/* Nota rápida para egress */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/70">
+          💡 Para ahorrar datos/egress: las secciones de <b>Imágenes</b> y <b>Vista previa</b> están cerradas por defecto.
+          Ábrelas solo cuando las necesites.
         </div>
 
         {/* Grid */}
@@ -757,15 +743,27 @@ export default function StoreSettingsPage() {
                 </div>
               </div>
 
-              {/* ✅ Preview real */}
+              {/* ✅ Preview: solo si se abre */}
               <div className="mt-4">
-                {selectedTheme ? (
-                  <CatalogThemePreview theme={selectedTheme} />
-                ) : (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                    No se encontró el theme seleccionado.
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
+                  onClick={() => setShowThemePreview((v) => !v)}
+                >
+                  {showThemePreview ? "Ocultar vista previa" : "Ver vista previa del catálogo"}
+                </button>
+
+                {showThemePreview ? (
+                  <div className="mt-4">
+                    {selectedTheme ? (
+                      <CatalogThemePreview theme={selectedTheme} />
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                        No se encontró el theme seleccionado.
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
               </div>
             </Card>
 
@@ -857,26 +855,40 @@ export default function StoreSettingsPage() {
 
           <div className="space-y-5">
             <Card title="Logo y banner" subtitle="Se verán en tu catálogo.">
-              {!userId ? (
-                <p className="text-sm text-white/70">Cargando usuario...</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  <ImageUpload
-                    label="Logo"
-                    currentUrl={store.logo_url}
-                    pathPrefix={`${userId}/`}
-                    fileName="logo.png"
-                    onUploaded={(url) => setStoreField("logo_url", url)}
-                  />
+              <button
+                type="button"
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
+                onClick={() => setShowImages((v) => !v)}
+              >
+                {showImages ? "Ocultar imágenes" : "Administrar imágenes (logo/banner)"}
+              </button>
 
-                  <ImageUpload
-                    label="Banner"
-                    currentUrl={store.banner_url}
-                    pathPrefix={`${userId}/`}
-                    fileName="banner.png"
-                    onUploaded={(url) => setStoreField("banner_url", url)}
-                  />
-                </div>
+              {showImages ? (
+                !userId ? (
+                  <p className="mt-3 text-sm text-white/70">Cargando usuario...</p>
+                ) : (
+                  <div className="mt-4 grid grid-cols-1 gap-4">
+                    <ImageUpload
+                      label="Logo"
+                      currentUrl={store.logo_url}
+                      pathPrefix={`${userId}/`}
+                      fileName="logo.png"
+                      onUploaded={(url) => setStoreField("logo_url", url)}
+                    />
+
+                    <ImageUpload
+                      label="Banner"
+                      currentUrl={store.banner_url}
+                      pathPrefix={`${userId}/`}
+                      fileName="banner.png"
+                      onUploaded={(url) => setStoreField("banner_url", url)}
+                    />
+                  </div>
+                )
+              ) : (
+                <p className="mt-3 text-xs text-white/60">
+                  (Cerrado para ahorrar datos. Al abrir, se mostrarán previews si existen.)
+                </p>
               )}
             </Card>
 
@@ -955,9 +967,7 @@ export default function StoreSettingsPage() {
 
                       {l.type === "other" && userId ? (
                         <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                          <p className="text-sm text-white/80 mb-2">
-                            Icono personalizado (solo “Otro”)
-                          </p>
+                          <p className="text-sm text-white/80 mb-2">Icono personalizado (solo “Otro”)</p>
                           <ImageUpload
                             label="Icono"
                             currentUrl={l.icon_url}
@@ -974,8 +984,8 @@ export default function StoreSettingsPage() {
             </Card>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/60">
-              💡 Recuerda: subes imágenes aquí, pero quedan guardadas cuando le das{" "}
-              <b>Guardar cambios</b>.
+              ✅ Consejo de rendimiento: el mayor consumo de egress casi siempre viene de <b>imágenes</b>.
+              Mantén estas secciones cerradas cuando no las estés usando.
             </div>
           </div>
         </div>
