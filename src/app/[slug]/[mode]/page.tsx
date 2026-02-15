@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
@@ -40,7 +39,7 @@ type ProductRow = {
   active: boolean;
   image_url: string | null;
   category_id: string | null;
-  stock: number | null; // null = ilimitado
+  stock: number | null; // ✅ inventario (null = ilimitado)
 };
 
 type CategoryRow = {
@@ -53,8 +52,7 @@ type CategoryRow = {
 /* =========================================================
    Helpers
 ========================================================= */
-const PAGE_SIZE = 25; // ✅ recomendado para móvil
-const SEARCH_DEBOUNCE_MS = 350;
+const PAGE_SIZE = 30;
 
 function isValidMode(x: any): x is Mode {
   return x === "detal" || x === "mayor";
@@ -93,102 +91,6 @@ function stockMeta(stock: number | null) {
   if (s <= 0) return { label: "Agotado", tone: "danger" as const };
   if (s <= 5) return { label: `Últimas ${s}`, tone: "warn" as const };
   return { label: `Disponible: ${s}`, tone: "ok" as const };
-}
-
-/* =========================
-   Debounce hook
-========================= */
-function useDebouncedValue<T>(value: T, delayMs: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
-}
-
-/* =========================
-   SmartImg (reintento + placeholder)
-   - Si falla: reintenta 1 vez con cache-bust
-   - Si vuelve a fallar: muestra fallback
-========================= */
-function SmartImg(props: {
-  src: string | null | undefined;
-  alt: string;
-  className?: string;
-  style?: React.CSSProperties;
-  loading?: "lazy" | "eager";
-  priority?: boolean; // para las primeras imágenes
-  borderColorVar?: string; // ej "var(--t-border)"
-}) {
-  const { src, alt, className, style, loading = "lazy", priority, borderColorVar } = props;
-
-  const [finalSrc, setFinalSrc] = useState<string | null>(src ?? null);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [retried, setRetried] = useState(false);
-
-  useEffect(() => {
-    setFinalSrc(src ?? null);
-    setLoaded(false);
-    setFailed(false);
-    setRetried(false);
-  }, [src]);
-
-  const borderColor = borderColorVar ?? "rgba(255,255,255,0.10)";
-
-  if (!finalSrc || failed) {
-    return (
-      <div
-        className={className}
-        style={{
-          ...style,
-          border: `1px solid ${borderColor}`,
-          background: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
-        }}
-        aria-label={alt}
-      />
-    );
-  }
-
-  return (
-    <div className="relative">
-      {/* skeleton */}
-      {!loaded ? (
-        <div
-          className={cx("absolute inset-0 animate-pulse rounded-2xl", className?.includes("rounded") ? "" : "")}
-          style={{
-            border: `1px solid ${borderColor}`,
-            background:
-              "linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06))",
-            borderRadius: (style as any)?.borderRadius,
-          }}
-        />
-      ) : null}
-
-      <img
-        src={finalSrc}
-        alt={alt}
-        className={cx(className, loaded ? "opacity-100" : "opacity-0")}
-        style={style}
-        loading={priority ? "eager" : loading}
-        decoding="async"
-        // fetchpriority no existe en TS DOM, lo ponemos como atributo HTML (string)
-        {...(priority ? ({ fetchpriority: "high" } as any) : ({ fetchpriority: "low" } as any))}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          // reintenta 1 vez para evitar cache de error / URL temporal
-          if (!retried) {
-            setRetried(true);
-            const sep = finalSrc.includes("?") ? "&" : "?";
-            setFinalSrc(`${finalSrc}${sep}cb=${Date.now()}`);
-            return;
-          }
-          setFailed(true);
-        }}
-      />
-    </div>
-  );
 }
 
 /* =========================================================
@@ -283,7 +185,9 @@ function syncGlobalBodyBackground(cfg?: ThemeConfig) {
 }
 
 /* =========================================================
-   Page
+   Page  ✅ PAGINADO 30 + BOTÓN "CARGAR MÁS"
+   - Carga imágenes normal (como antes)
+   - Pero NO trae todos los productos de golpe
 ========================================================= */
 export default function StoreCatalogPage() {
   const params = useParams<{ slug: string; mode: string }>();
@@ -302,23 +206,23 @@ export default function StoreCatalogPage() {
   const [profile, setProfile] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
 
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const dq = useDebouncedValue(q, SEARCH_DEBOUNCE_MS);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
-  const [products, setProducts] = useState<ProductRow[]>([]);
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
   const { initCart, addItem } = useCart();
 
   /* -------------------------
-     Load base
+     Load base (store/theme/profile/links/categories)
   ------------------------- */
   useEffect(() => {
     let cancelled = false;
@@ -335,6 +239,7 @@ export default function StoreCatalogPage() {
           return;
         }
 
+        // 1) store
         const { data: storeData, error: storeErr } = await sb
           .from("stores")
           .select("id,name,slug,whatsapp,active,catalog_retail,catalog_wholesale,theme,logo_url,banner_url,wholesale_key")
@@ -348,6 +253,7 @@ export default function StoreCatalogPage() {
 
         const st = storeData as StoreRow;
 
+        // mayorista key
         if (safeMode === "mayor") {
           if (!st.wholesale_key) {
             if (!cancelled) setMsg("❌ Este catálogo mayorista no está disponible.");
@@ -376,7 +282,7 @@ export default function StoreCatalogPage() {
 
         if (!cancelled) setStore(st);
 
-        // theme
+        // 2) theme
         const themeId = st.theme?.trim() || null;
         let cfg: ThemeConfig | undefined;
 
@@ -400,6 +306,7 @@ export default function StoreCatalogPage() {
         applyThemeToRoot(cfg);
         syncGlobalBodyBackground(cfg);
 
+        // init cart
         initCart({
           storeId: st.id,
           storeSlug: st.slug,
@@ -408,11 +315,11 @@ export default function StoreCatalogPage() {
           mode: safeMode,
         });
 
-        // profile
+        // 3) profile
         const { data: profData } = await sb.from("store_profiles").select("*").eq("store_id", st.id).maybeSingle();
         if (!cancelled) setProfile(profData ?? null);
 
-        // links
+        // 4) links
         const { data: linksData } = await sb
           .from("store_links")
           .select("id,type,label,url,active,sort_order,icon_url")
@@ -421,7 +328,7 @@ export default function StoreCatalogPage() {
           .order("sort_order", { ascending: true });
         if (!cancelled) setLinks(linksData ?? []);
 
-        // categories
+        // 5) categories
         const { data: catData } = await sb
           .from("product_categories")
           .select("id,name,image_url,sort_order")
@@ -442,7 +349,7 @@ export default function StoreCatalogPage() {
   }, [slug, mode, key, initCart, safeMode]);
 
   /* -------------------------
-     favicon (normal)
+     favicon (✅ sin cache-bust)
   ------------------------- */
   useEffect(() => {
     if (!store?.name) return;
@@ -459,63 +366,47 @@ export default function StoreCatalogPage() {
   }, [store]);
 
   /* -------------------------
-     Query builder
+     Load products (paged)
+     - 30 al inicio
+     - "Cargar más" suma 30
+     - Filtros (q + category) se aplican en el server
   ------------------------- */
-  function buildProductsQuery(sb: ReturnType<typeof supabaseBrowser>, storeId: string) {
+  async function fetchProducts(opts: { reset: boolean; nextPage?: number }) {
+    if (!store?.id) return;
+
+    const sb = supabaseBrowser();
+
+    const pageToLoad = opts.reset ? 0 : (opts.nextPage ?? page);
+    const from = pageToLoad * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    // base
     let query = sb
       .from("products")
-      .select("id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock")
-      .eq("store_id", storeId)
+      .select(
+        "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock",
+        { count: "exact" }
+      )
+      .eq("store_id", store.id)
       .eq("active", true)
-      .or("stock.is.null,stock.gt.0");
+      .or("stock.is.null,stock.gt.0"); // disponibles
 
+    // category (server)
     if (selectedCat) query = query.eq("category_id", selectedCat);
 
-    const s = (dq ?? "").trim();
+    // search (server) — si quieres, puedes quitarlo y dejarlo local
+    const s = q.trim();
     if (s.length >= 2) {
       const safe = s.replace(/,/g, " ");
       query = query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`);
     }
 
-    return query.order("name", { ascending: true }).order("id", { ascending: true });
-  }
+    // orden estable + rango
+    const { data, error, count } = await query
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  async function fetchCountEstimated() {
-    if (!store?.id) return;
-    try {
-      const sb = supabaseBrowser();
-
-      let q = sb
-        .from("products")
-        .select("id", { head: true, count: "estimated" })
-        .eq("store_id", store.id)
-        .eq("active", true)
-        .or("stock.is.null,stock.gt.0");
-
-      if (selectedCat) q = q.eq("category_id", selectedCat);
-
-      const s = (dq ?? "").trim();
-      if (s.length >= 2) {
-        const safe = s.replace(/,/g, " ");
-        q = q.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`);
-      }
-
-      const { count } = await q;
-      setTotalCount(typeof count === "number" ? count : null);
-    } catch {
-      setTotalCount(null);
-    }
-  }
-
-  async function fetchProductsPage(opts: { reset: boolean; pageIndex?: number }) {
-    if (!store?.id) return;
-
-    const sb = supabaseBrowser();
-    const pageIndex = opts.reset ? 0 : (opts.pageIndex ?? page);
-    const from = pageIndex * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    const { data, error } = await buildProductsQuery(sb, store.id).range(from, to);
     if (error) throw error;
 
     const normalized: ProductRow[] = ((data as any[]) ?? [])
@@ -528,29 +419,30 @@ export default function StoreCatalogPage() {
       }))
       .filter((p) => p.stock === null || Number(p.stock) > 0);
 
+    setTotalCount(Number(count ?? 0));
+
     if (opts.reset) {
       setProducts(normalized);
       setPage(0);
-      setHasMore(normalized.length === PAGE_SIZE);
     } else {
       setProducts((prev) => [...prev, ...normalized]);
-      setHasMore(normalized.length === PAGE_SIZE);
     }
+
+    const loadedSoFar = (opts.reset ? normalized.length : products.length + normalized.length);
+    setHasMore(loadedSoFar < Number(count ?? 0));
   }
 
-  // reset al cambiar filtros/busqueda (debounced)
+  // reset paging cuando cambian filtros
   useEffect(() => {
     if (!store?.id) return;
     let cancelled = false;
 
     (async () => {
-      setLoadingMore(true);
-      setHasMore(false);
-      setPage(0);
-
       try {
-        await fetchCountEstimated();
-        await fetchProductsPage({ reset: true });
+        setLoadingMore(true);
+        setHasMore(false);
+        setPage(0);
+        await fetchProducts({ reset: true });
       } catch (e: any) {
         if (!cancelled) setMsg(e?.message ?? "Error cargando productos.");
       } finally {
@@ -562,7 +454,7 @@ export default function StoreCatalogPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store?.id, selectedCat, dq]);
+  }, [store?.id, selectedCat, q]);
 
   async function loadMore() {
     if (!store?.id) return;
@@ -571,7 +463,7 @@ export default function StoreCatalogPage() {
     setLoadingMore(true);
     try {
       const next = page + 1;
-      await fetchProductsPage({ reset: false, pageIndex: next });
+      await fetchProducts({ reset: false, nextPage: next });
       setPage(next);
     } catch (e: any) {
       setMsg(e?.message ?? "Error cargando más productos.");
@@ -581,10 +473,11 @@ export default function StoreCatalogPage() {
   }
 
   /* -------------------------
-     Add to cart
+     Add to cart (with stock limits + ilimitado)
   ------------------------- */
   async function addToCartWithQty(p: ProductRow, price: number) {
     const isUnlimited = p.stock === null;
+
     const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
 
     if (!isUnlimited && stockNum <= 0) {
@@ -625,6 +518,10 @@ export default function StoreCatalogPage() {
             ${isUnlimited ? "" : `max="${stockNum}"`}
             style="margin-top:6px;"
           />
+
+          <div style="font-size:12px; opacity:.7; margin-top:6px;">
+            ${isUnlimited ? "* Sin límite de stock." : "* No se permite pedir más que el stock disponible."}
+          </div>
         </div>
       `,
       background: "#0b0b0b",
@@ -658,11 +555,23 @@ export default function StoreCatalogPage() {
 
     try {
       (addItem as any)(
-        { productId: p.id, name: p.name, price: Number(price ?? 0), qty, minWholesale: p.min_wholesale ?? null },
+        {
+          productId: p.id,
+          name: p.name,
+          price: Number(price ?? 0),
+          qty,
+          minWholesale: p.min_wholesale ?? null,
+        },
         { openDrawer: false }
       );
     } catch {
-      addItem({ productId: p.id, name: p.name, price: Number(price ?? 0), qty, minWholesale: p.min_wholesale ?? null } as any);
+      addItem({
+        productId: p.id,
+        name: p.name,
+        price: Number(price ?? 0),
+        qty,
+        minWholesale: p.min_wholesale ?? null,
+      } as any);
     }
 
     await Swal.fire({
@@ -677,7 +586,7 @@ export default function StoreCatalogPage() {
   }
 
   /* =========================================================
-     Render
+     Render states
   ========================================================= */
   if (loading) {
     return (
@@ -715,6 +624,7 @@ export default function StoreCatalogPage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      {/* overlay SOLO si hay gradient */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
         <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)", opacity: 0.22 }} />
@@ -758,15 +668,16 @@ export default function StoreCatalogPage() {
         <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <SmartImg
-                src={store.logo_url}
-                alt={store.name}
-                className="h-10 w-10 rounded-2xl border object-cover"
-                style={{ borderColor: "var(--t-border)" } as any}
-                loading="eager"
-                priority
-                borderColorVar="var(--t-border)"
-              />
+              {store.logo_url ? (
+                <img
+                  src={store.logo_url}
+                  alt={store.name}
+                  className="h-10 w-10 rounded-2xl border object-cover"
+                  style={{ borderColor: "var(--t-border)" }}
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
+              )}
 
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">{store.name}</p>
@@ -818,20 +729,11 @@ export default function StoreCatalogPage() {
             <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
               {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} ·{" "}
-              {totalCount != null ? (
-                <>
-                  Mostrando <b style={{ color: "var(--t-text)" }}>{products.length}</b> de{" "}
-                  <b style={{ color: "var(--t-text)" }}>{totalCount}</b>
-                </>
-              ) : (
-                <>
-                  Mostrando <b style={{ color: "var(--t-text)" }}>{products.length}</b>
-                </>
-              )}
+              <b style={{ color: "var(--t-text)" }}>{products.length}</b> de{" "}
+              <b style={{ color: "var(--t-text)" }}>{totalCount}</b> productos
             </p>
 
             {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
-
             {links.length ? (
               <div className="mt-4">
                 <SocialIconRow links={links} />
@@ -840,19 +742,25 @@ export default function StoreCatalogPage() {
           </div>
         </div>
 
-        {/* Banner (carga normal, pero con reintento y placeholder) */}
+        {/* Banner */}
         {store.banner_url ? (
           <div className="mt-5">
             <div className="relative overflow-hidden rounded-[28px] border" style={{ borderColor: "var(--t-border)" }}>
-              <SmartImg
+              <img
                 src={store.banner_url}
                 alt="Banner"
-                className="h-56 w-full rounded-[28px] object-cover sm:h-64 md:h-80"
-                style={{ borderColor: "var(--t-border)" } as any}
-                loading="eager"
-                priority
-                borderColorVar="var(--t-border)"
+                className={cx("h-56 w-full object-cover sm:h-64 md:h-80", imgLoaded ? "opacity-100" : "opacity-0")}
+                onLoad={() => setImgLoaded(true)}
               />
+              {!imgLoaded ? (
+                <div
+                  className="absolute inset-0 animate-pulse"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02), rgba(255,255,255,0.06))",
+                  }}
+                />
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -892,56 +800,84 @@ export default function StoreCatalogPage() {
                     className={cx("t-btn shrink-0 rounded-2xl border p-2 text-left", active && "ring-2 ring-white/25")}
                     style={{ width: 150, borderColor: "var(--t-border)", background: glassBg }}
                   >
-                    <SmartImg
-                      src={c.image_url}
-                      alt={c.name}
-                      className="aspect-square w-full rounded-xl border object-cover"
-                      style={{ borderColor: "var(--t-border)" } as any}
-                      loading="lazy"
-                      borderColorVar="var(--t-border)"
-                    />
+                    {c.image_url ? (
+                      <img
+                        src={c.image_url}
+                        alt={c.name}
+                        className="aspect-square w-full rounded-xl border object-cover"
+                        style={{ borderColor: "var(--t-border)" }}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="aspect-square w-full rounded-xl border" style={{ borderColor: "var(--t-border)" }} />
+                    )}
                     <p className="mt-2 line-clamp-2 text-sm font-bold">{c.name}</p>
                   </button>
                 );
               })}
             </div>
+
+            {/* Buscador */}
+            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+              <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+                Buscar producto
+              </label>
+              <input
+                className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+                style={{
+                  borderColor: "var(--t-border)",
+                  background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                  color: "var(--t-text)",
+                }}
+                placeholder="Ej: camiseta, bolso, perfume..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              {q ? (
+                <button
+                  type="button"
+                  className="mt-2 text-xs underline opacity-80"
+                  onClick={() => setQ("")}
+                  style={{ color: "var(--t-muted)" }}
+                >
+                  Limpiar búsqueda
+                </button>
+              ) : null}
+            </div>
           </div>
-        ) : null}
-
-        {/* Buscador */}
-        <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
-          <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-            Buscar producto (2+ letras)
-          </label>
-          <input
-            className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
-            style={{
-              borderColor: "var(--t-border)",
-              background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
-              color: "var(--t-text)",
-            }}
-            placeholder="Ej: cepillo, plancha, perfume..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-
-          {q ? (
-            <button type="button" className="mt-2 text-xs underline opacity-80" onClick={() => setQ("")} style={{ color: "var(--t-muted)" }}>
-              Limpiar búsqueda
-            </button>
-          ) : null}
-        </div>
+        ) : (
+          <div className="mt-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+            <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+              Buscar producto
+            </label>
+            <input
+              className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+              style={{
+                borderColor: "var(--t-border)",
+                background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+                color: "var(--t-text)",
+              }}
+              placeholder="Ej: camiseta, bolso, perfume..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Productos */}
         <div className="mt-7 flex items-end justify-between gap-4">
           <div>
             <h2 className="text-xl font-extrabold">Productos</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {products.length} cargados {totalCount != null ? `· aprox ${totalCount} total` : ""}
+              Mostrando {products.length} de {totalCount}
+              {q ? ` · filtrados por “${q}”` : ""}
             </p>
           </div>
 
-          <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+          <span
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
+            style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+          >
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
             {safeMode === "detal" ? "DETAL" : "MAYOR"}
           </span>
@@ -956,7 +892,7 @@ export default function StoreCatalogPage() {
         ) : (
           <>
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((p, idx) => {
+              {products.map((p) => {
                 const price = safeMode === "detal" ? p.price_retail : p.price_wholesale;
 
                 const isUnlimited = p.stock === null;
@@ -984,20 +920,23 @@ export default function StoreCatalogPage() {
                         color: "color-mix(in oklab, white 92%, lime 8%)",
                       };
 
-                // ✅ primeras 6 imágenes eager para que “se vea normal” rápido
-                const priority = idx < 6;
-
                 return (
-                  <div key={p.id} className="t-card rounded-[28px] border p-4" style={{ borderColor: "var(--t-border)", background: glassBg }}>
-                    <SmartImg
-                      src={p.image_url}
-                      alt={p.name}
-                      className="mb-3 aspect-square w-full rounded-2xl border object-cover"
-                      style={{ borderColor: "var(--t-border)" } as any}
-                      loading={priority ? "eager" : "lazy"}
-                      priority={priority}
-                      borderColorVar="var(--t-border)"
-                    />
+                  <div
+                    key={p.id}
+                    className="t-card rounded-[28px] border p-4"
+                    style={{ borderColor: "var(--t-border)", background: glassBg }}
+                  >
+                    {p.image_url ? (
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        loading="lazy"
+                        className="mb-3 aspect-square w-full rounded-2xl border object-cover"
+                        style={{ borderColor: "var(--t-border)" }}
+                      />
+                    ) : (
+                      <div className="mb-3 aspect-square w-full rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
+                    )}
 
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-extrabold leading-tight">{p.name}</h3>
@@ -1006,10 +945,16 @@ export default function StoreCatalogPage() {
                       </span>
                     </div>
 
+                    {/* Inventario */}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span
                         className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
-                        style={{ borderColor: stockPill.border, background: stockPill.bg, color: stockPill.color }}
+                        style={{
+                          borderColor: stockPill.border,
+                          background: stockPill.bg,
+                          color: stockPill.color,
+                        }}
+                        title="Inventario disponible"
                       >
                         {stockInfo.tone === "danger" ? "⛔" : stockInfo.tone === "warn" ? "⚠️" : "✅"} {stockInfo.label}
                       </span>
@@ -1044,9 +989,14 @@ export default function StoreCatalogPage() {
 
                       <button
                         className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
-                        style={{ background: "var(--t-cta)", color: "#0b0b0b", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}
+                        style={{
+                          background: "var(--t-cta)",
+                          color: "#0b0b0b",
+                          boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                        }}
                         onClick={() => addToCartWithQty(p, Number(price ?? 0))}
                         disabled={isOut}
+                        title={isOut ? "Producto agotado" : "Agregar al carrito"}
                       >
                         {isOut ? "Agotado" : "Agregar"}
                       </button>
@@ -1056,6 +1006,7 @@ export default function StoreCatalogPage() {
               })}
             </div>
 
+            {/* ✅ Cargar más */}
             <div className="mt-6 flex items-center justify-center">
               {hasMore ? (
                 <button
@@ -1069,13 +1020,14 @@ export default function StoreCatalogPage() {
                 </button>
               ) : (
                 <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
-                  ✅ Ya no hay más productos para cargar.
+                  ✅ Ya no hay más productos.
                 </p>
               )}
             </div>
           </>
         )}
 
+        {/* Footer */}
         <div className="mt-10 border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
           <div className="text-sm" style={{ color: "var(--t-muted)" }}>
             {profile?.address || profile?.city ? (
@@ -1090,6 +1042,7 @@ export default function StoreCatalogPage() {
         </div>
       </section>
 
+      {/* Toast */}
       {msg ? (
         <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md">
           <div
