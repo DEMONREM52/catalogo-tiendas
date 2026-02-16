@@ -44,8 +44,9 @@ export default function CategoriesPage() {
         await Swal.fire({
           icon: "error",
           title: "Debes iniciar sesión",
-          background: "#0b0b0b",
-          color: "#ffffff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#ef4444",
         });
         setLoading(false);
         return;
@@ -66,8 +67,9 @@ export default function CategoriesPage() {
         await Swal.fire({
           icon: "error",
           title: "No se encontró tu tienda",
-          background: "#0b0b0b",
-          color: "#ffffff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#ef4444",
         });
         setLoading(false);
         return;
@@ -91,8 +93,9 @@ export default function CategoriesPage() {
         icon: "error",
         title: "Error cargando",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     } finally {
       setLoading(false);
@@ -104,9 +107,7 @@ export default function CategoriesPage() {
   }, []);
 
   function updateCat(id: string, patch: Partial<Category>) {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
-    );
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
   async function createCategory() {
@@ -137,16 +138,17 @@ export default function CategoriesPage() {
         title: "Categoría creada",
         timer: 1100,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error creando",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     } finally {
       setSaving(false);
@@ -176,16 +178,17 @@ export default function CategoriesPage() {
         text: "Categoría actualizada correctamente.",
         timer: 1100,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error guardando",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     } finally {
       setSaving(false);
@@ -201,8 +204,8 @@ export default function CategoriesPage() {
       confirmButtonColor: "#ef4444",
       cancelButtonText: "Cancelar",
       confirmButtonText: "Sí, eliminar",
-      background: "#0b0b0b",
-      color: "#ffffff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
     });
 
     if (!res.isConfirmed) return;
@@ -221,10 +224,7 @@ export default function CategoriesPage() {
         // ignorar
       }
 
-      const { error } = await sb
-        .from("product_categories")
-        .delete()
-        .eq("id", c.id);
+      const { error } = await sb.from("product_categories").delete().eq("id", c.id);
 
       if (error) throw error;
 
@@ -235,31 +235,32 @@ export default function CategoriesPage() {
         title: "Eliminada",
         timer: 1100,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error eliminando",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#ffffff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <main className="p-6">Cargando categorías...</main>;
+  if (loading) return <main className="p-6" style={{ color: "var(--t-text)" }}>Cargando categorías...</main>;
 
   return (
-    <main className="p-6 space-y-6 panel-enter">
+    <main className="p-6 space-y-6 panel-enter" style={{ color: "var(--t-text)" }}>
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Categorías</h1>
-          <p className="text-sm opacity-80">
+          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
             Crea categorías con imagen para ordenar tus productos.
           </p>
         </div>
@@ -277,7 +278,12 @@ export default function CategoriesPage() {
       {/* Search */}
       <div className="glass p-4">
         <input
-          className="w-full md:max-w-md p-3"
+          className="w-full md:max-w-md rounded-2xl border px-4 py-3 text-sm outline-none backdrop-blur-xl"
+          style={{
+            borderColor: "var(--t-card-border)",
+            background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+            color: "var(--t-text)",
+          }}
           placeholder="Buscar categoría..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -293,31 +299,41 @@ export default function CategoriesPage() {
               <div className="lg:col-span-2 space-y-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <input
-                    className="w-full p-3 text-lg font-semibold"
+                    className="w-full rounded-2xl border px-4 py-3 text-lg font-semibold outline-none"
+                    style={{
+                      borderColor: "var(--t-card-border)",
+                      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                      color: "var(--t-text)",
+                    }}
                     value={c.name}
                     onChange={(e) => updateCat(c.id, { name: e.target.value })}
                   />
 
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-sm" style={{ color: "var(--t-muted)" }}>
                     <input
                       type="checkbox"
                       checked={c.active}
                       onChange={(e) => updateCat(c.id, { active: e.target.checked })}
                     />
-                    Activa
+                    <span style={{ color: "var(--t-text)" }}>Activa</span>
                   </label>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm opacity-80">Orden</label>
+                    <label className="text-sm" style={{ color: "var(--t-muted)" }}>
+                      Orden
+                    </label>
                     <input
                       type="number"
-                      className="mt-1 w-full p-3"
+                      className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{
+                        borderColor: "var(--t-card-border)",
+                        background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                        color: "var(--t-text)",
+                      }}
                       value={c.sort_order}
-                      onChange={(e) =>
-                        updateCat(c.id, { sort_order: Number(e.target.value) })
-                      }
+                      onChange={(e) => updateCat(c.id, { sort_order: Number(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -334,9 +350,9 @@ export default function CategoriesPage() {
                   <button
                     className="btn-soft px-4 py-2 font-semibold disabled:opacity-60"
                     style={{
-                      borderColor: "color-mix(in oklab, red 35%, transparent)",
+                      borderColor: "color-mix(in oklab, red 35%, var(--t-card-border))",
                       background: "color-mix(in oklab, red 10%, transparent)",
-                      color: "color-mix(in oklab, white 85%, red 15%)",
+                      color: "color-mix(in oklab, var(--t-text) 88%, red 12%)",
                     }}
                     onClick={() => deleteCategory(c)}
                     disabled={saving}
@@ -349,7 +365,9 @@ export default function CategoriesPage() {
               {/* Right */}
               <div className="glass-soft p-4">
                 <p className="font-semibold">Imagen de categoría</p>
-                <p className="text-sm opacity-80">Se verá en el catálogo.</p>
+                <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+                  Se verá en el catálogo.
+                </p>
 
                 {userId ? (
                   <div className="mt-3">
@@ -363,11 +381,13 @@ export default function CategoriesPage() {
                     />
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm">Cargando usuario...</p>
+                  <p className="mt-3 text-sm" style={{ color: "var(--t-muted)" }}>
+                    Cargando usuario...
+                  </p>
                 )}
 
-                <p className="mt-2 text-xs opacity-70">
-                  Luego presiona <b>Guardar</b>.
+                <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
+                  Luego presiona <b style={{ color: "var(--t-text)" }}>Guardar</b>.
                 </p>
               </div>
             </div>
@@ -375,7 +395,7 @@ export default function CategoriesPage() {
         ))}
 
         {filtered.length === 0 && (
-          <div className="glass p-4 text-sm opacity-80">
+          <div className="glass p-4 text-sm" style={{ color: "var(--t-muted)" }}>
             No hay categorías con ese filtro.
           </div>
         )}

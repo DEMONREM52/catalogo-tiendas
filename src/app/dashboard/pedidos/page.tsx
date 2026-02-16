@@ -21,14 +21,84 @@ function statusLabel(s: string) {
 
 type OrderStatus = "draft" | "sent" | "confirmed" | "completed";
 
+/** =========================
+ * ✅ Tokens (auto claro/oscuro por tu CSS)
+ * ========================= */
+function tokenCard() {
+  return "glass";
+}
+function tokenCardSoft() {
+  return "glass-soft";
+}
+
+function inputBase() {
+  // ✅ mejor en móvil: más alto, más legible, sin desbordes
+  // ✅ ahora usa tokens (fondo/borde/texto) desde CSS global
+  return "w-full rounded-2xl border px-4 py-3 text-sm outline-none backdrop-blur-xl";
+}
+function selectBase() {
+  return "w-full rounded-2xl border px-4 py-3 text-sm outline-none backdrop-blur-xl";
+}
+
+function btnSoft() {
+  // ✅ usa tokens globales (te quedan iguales en toda la app)
+  return "btn-soft px-4 py-2 text-sm font-semibold";
+}
+
+function btnCta() {
+  // ✅ usa tokens globales (cta) y auto tema
+  return "btn-cta px-4 py-2 text-sm font-semibold";
+}
+
+/** Badge por estado con tokens:
+ * - Para colores “semantic” (sky/emerald/indigo) uso color-mix sin hardcode a white/black.
+ * - En draft usa card tokens.
+ */
 function statusBadge(st: OrderStatus) {
   const base =
     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold";
 
-  if (st === "draft") return `${base} border-white/10 bg-white/5 text-white/80`;
-  if (st === "sent") return `${base} border-sky-400/30 bg-sky-400/10 text-sky-100`;
-  if (st === "confirmed") return `${base} border-emerald-400/30 bg-emerald-400/10 text-emerald-100`;
-  return `${base} border-indigo-400/30 bg-indigo-400/10 text-indigo-100`;
+  if (st === "draft")
+    return `${base}`;
+  if (st === "sent")
+    return `${base}`;
+  if (st === "confirmed")
+    return `${base}`;
+  return `${base}`;
+}
+
+/** estilos inline (tokens) para los badges, para que sean 100% auto tema */
+function statusBadgeStyle(st: OrderStatus): React.CSSProperties {
+  const borderBase = "var(--t-card-border)";
+  const bgBase = "color-mix(in oklab, var(--t-card-bg) 88%, transparent)";
+  const textBase = "color-mix(in oklab, var(--t-text) 88%, transparent)";
+
+  if (st === "draft") {
+    return {
+      borderColor: borderBase,
+      background: bgBase,
+      color: textBase,
+    };
+  }
+  if (st === "sent") {
+    return {
+      borderColor: "color-mix(in oklab, deepskyblue 35%, var(--t-card-border))",
+      background: "color-mix(in oklab, deepskyblue 12%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 88%, deepskyblue 12%)",
+    };
+  }
+  if (st === "confirmed") {
+    return {
+      borderColor: "color-mix(in oklab, lime 35%, var(--t-card-border))",
+      background: "color-mix(in oklab, lime 12%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 88%, lime 12%)",
+    };
+  }
+  return {
+    borderColor: "color-mix(in oklab, dodgerblue 35%, var(--t-card-border))",
+    background: "color-mix(in oklab, dodgerblue 12%, transparent)",
+    color: "color-mix(in oklab, var(--t-text) 88%, dodgerblue 12%)",
+  };
 }
 
 function cleanText(v: string | null | undefined) {
@@ -37,23 +107,6 @@ function cleanText(v: string | null | undefined) {
 
 function safeCustomer(v: string | null | undefined) {
   return cleanText(v) || "—";
-}
-
-function inputBase() {
-  // ✅ mejor en móvil: más alto, más legible, sin desbordes
-  return "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
-}
-
-function selectBase() {
-  return "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none backdrop-blur-xl";
-}
-
-function btnSoft() {
-  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
-}
-
-function btnCta() {
-  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed";
 }
 
 type OrderRow = {
@@ -102,8 +155,9 @@ export default function OrdersDashboardPage() {
         await Swal.fire({
           icon: "error",
           title: "Debes iniciar sesión",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#ef4444",
         });
         return;
       }
@@ -121,8 +175,9 @@ export default function OrdersDashboardPage() {
         await Swal.fire({
           icon: "error",
           title: "No se encontró tu tienda",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#ef4444",
         });
         return;
       }
@@ -146,8 +201,9 @@ export default function OrdersDashboardPage() {
         icon: "error",
         title: "Error cargando pedidos",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     } finally {
       setLoading(false);
@@ -236,8 +292,8 @@ export default function OrdersDashboardPage() {
       await Swal.fire({
         title: "Detalle del pedido",
         html,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
         width: 780,
         showConfirmButton: true,
         confirmButtonText: "Cerrar",
@@ -247,8 +303,9 @@ export default function OrdersDashboardPage() {
         icon: "error",
         title: "Error cargando items",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#ef4444",
       });
     }
   }
@@ -261,8 +318,8 @@ export default function OrdersDashboardPage() {
       showCancelButton: true,
       confirmButtonText: "Sí, cambiar",
       cancelButtonText: "Cancelar",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
       confirmButtonColor: "#22c55e",
     });
 
@@ -286,16 +343,16 @@ export default function OrdersDashboardPage() {
         text: "Estado actualizado correctamente.",
         timer: 1200,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo actualizar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
         confirmButtonColor: "#ef4444",
       });
     }
@@ -331,8 +388,8 @@ export default function OrdersDashboardPage() {
           </div>
         </div>
       `,
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
       showCancelButton: true,
       confirmButtonText: "Abrir",
       cancelButtonText: "Copiar link",
@@ -354,16 +411,16 @@ export default function OrdersDashboardPage() {
           text: "Se copió el link del comprobante.",
           timer: 1100,
           showConfirmButton: false,
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
         });
       } catch {
         await Swal.fire({
           icon: "info",
           title: "No se pudo copiar",
           text: "Tu navegador bloqueó el portapapeles. Copia el link manualmente.",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
         });
       }
     }
@@ -371,19 +428,19 @@ export default function OrdersDashboardPage() {
 
   if (loading) {
     return (
-      <main className="p-6">
-        <p>Cargando pedidos...</p>
+      <main className="p-6" style={{ color: "var(--t-text)" }}>
+        <p style={{ color: "var(--t-muted)" }}>Cargando pedidos...</p>
       </main>
     );
   }
 
   return (
-    <main className="p-4 sm:p-6 space-y-5 panel-enter">
+    <main className="p-4 sm:p-6 space-y-5 panel-enter" style={{ color: "var(--t-text)" }}>
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold">Pedidos</h1>
-          <p className="text-sm opacity-80">
+          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
             Aquí verás todos los pedidos que llegan por el carrito.
           </p>
         </div>
@@ -396,7 +453,7 @@ export default function OrdersDashboardPage() {
       </div>
 
       {/* Filtros (mejor móvil) */}
-      <div className="glass p-4 space-y-3">
+      <div className={`${tokenCard()} p-4 space-y-3`}>
         <input
           className={inputBase()}
           placeholder="Buscar: comprobante, nombre, whatsapp, obs, estado..."
@@ -413,7 +470,7 @@ export default function OrdersDashboardPage() {
             <option value="completed">Completado</option>
           </select>
 
-          <div className="glass-soft px-4 py-3 text-sm rounded-2xl">
+          <div className={`${tokenCardSoft()} px-4 py-3 text-sm rounded-2xl`}>
             Tienda: <b>{storeId ? "OK" : "—"}</b> · Pedidos: <b>{orders.length}</b>
           </div>
         </div>
@@ -424,9 +481,11 @@ export default function OrdersDashboardPage() {
          ========================= */}
       <div className="md:hidden space-y-3">
         {filtered.length === 0 ? (
-          <div className="glass p-5">
+          <div className={`${tokenCard()} p-5`}>
             <p className="font-semibold">Aún no hay pedidos.</p>
-            <p className="text-sm opacity-80 mt-1">Prueba cambiando filtros.</p>
+            <p className="text-sm mt-1" style={{ color: "var(--t-muted)" }}>
+              Prueba cambiando filtros.
+            </p>
           </div>
         ) : (
           filtered.map((o) => {
@@ -435,21 +494,23 @@ export default function OrdersDashboardPage() {
             const note = safeCustomer(o.customer_note);
 
             return (
-              <div key={o.id} className="glass p-4 space-y-3">
+              <div key={o.id} className={`${tokenCard()} p-4 space-y-3`}>
                 {/* top */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-semibold text-base">
                       Pedido #{o.receipt_no ?? "—"}
                     </div>
-                    <div className="text-xs opacity-75">
+                    <div className="text-xs" style={{ color: "var(--t-muted)" }}>
                       {new Date(o.created_at).toLocaleString("es-CO")}
                     </div>
                   </div>
 
                   <div className="shrink-0 flex flex-col items-end gap-2">
-                    <span className={statusBadge(o.status)}>{statusLabel(o.status)}</span>
-                    <span className="text-xs opacity-80">
+                    <span className={statusBadge(o.status)} style={statusBadgeStyle(o.status)}>
+                      {statusLabel(o.status)}
+                    </span>
+                    <span className="text-xs" style={{ color: "var(--t-muted)" }}>
                       {o.catalog_type === "retail" ? "Detal" : "Mayor"}
                     </span>
                   </div>
@@ -457,21 +518,23 @@ export default function OrdersDashboardPage() {
 
                 {/* total */}
                 <div className="flex items-center justify-between">
-                  <div className="text-sm opacity-80">Total</div>
+                  <div className="text-sm" style={{ color: "var(--t-muted)" }}>
+                    Total
+                  </div>
                   <div className="text-lg font-bold">{money(o.total)}</div>
                 </div>
 
                 {/* cliente */}
                 <div className="text-sm space-y-1">
-                  <div className="opacity-80">
-                    👤 <b className="opacity-100">{customerName}</b>
+                  <div style={{ color: "var(--t-muted)" }}>
+                    👤 <b style={{ color: "var(--t-text)" }}>{customerName}</b>
                   </div>
-                  <div className="opacity-80">
-                    📱 <b className="opacity-100">{customerWa}</b>
+                  <div style={{ color: "var(--t-muted)" }}>
+                    📱 <b style={{ color: "var(--t-text)" }}>{customerWa}</b>
                   </div>
                   {note !== "—" ? (
-                    <div className="opacity-80">
-                      📝 <span className="opacity-100">{note}</span>
+                    <div style={{ color: "var(--t-muted)" }}>
+                      📝 <span style={{ color: "var(--t-text)" }}>{note}</span>
                     </div>
                   ) : null}
                 </div>
@@ -486,11 +549,17 @@ export default function OrdersDashboardPage() {
                   </button>
 
                   {o.status !== "confirmed" ? (
-                    <button className={`${btnCta()} col-span-2`} onClick={() => setOrderStatus(o, "confirmed")}>
+                    <button
+                      className={`${btnCta()} col-span-2`}
+                      onClick={() => setOrderStatus(o, "confirmed")}
+                    >
                       Confirmar
                     </button>
                   ) : (
-                    <button className={`${btnCta()} col-span-2`} onClick={() => setOrderStatus(o, "completed")}>
+                    <button
+                      className={`${btnCta()} col-span-2`}
+                      onClick={() => setOrderStatus(o, "completed")}
+                    >
                       Completar
                     </button>
                   )}
@@ -504,10 +573,10 @@ export default function OrdersDashboardPage() {
       {/* =========================
           DESKTOP: Tabla (se mantiene)
          ========================= */}
-      <div className="hidden md:block glass overflow-hidden">
+      <div className={`hidden md:block ${tokenCard()} overflow-hidden`}>
         <div
-          className="grid grid-cols-12 gap-2 border-b p-3 text-sm opacity-80"
-          style={{ borderColor: "var(--t-card-border)" }}
+          className="grid grid-cols-12 gap-2 border-b p-3 text-sm"
+          style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}
         >
           <div className="col-span-2">Factura</div>
           <div className="col-span-2">Fecha</div>
@@ -518,7 +587,9 @@ export default function OrdersDashboardPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="p-6 text-sm opacity-80">Aún no hay pedidos.</div>
+          <div className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>
+            Aún no hay pedidos.
+          </div>
         ) : (
           filtered.map((o) => (
             <div
@@ -530,15 +601,17 @@ export default function OrdersDashboardPage() {
             >
               <div className="col-span-2 font-semibold">#{o.receipt_no ?? "—"}</div>
 
-              <div className="col-span-2 text-sm opacity-80">
+              <div className="col-span-2 text-sm" style={{ color: "var(--t-muted)" }}>
                 {new Date(o.created_at).toLocaleDateString("es-CO")}
               </div>
 
               <div className="col-span-2 text-sm">
-                <span className="opacity-90">{statusLabel(o.status)}</span>
+                <span style={{ color: "color-mix(in oklab, var(--t-text) 90%, transparent)" }}>
+                  {statusLabel(o.status)}
+                </span>
               </div>
 
-              <div className="col-span-2 text-sm opacity-80">
+              <div className="col-span-2 text-sm" style={{ color: "var(--t-muted)" }}>
                 {o.catalog_type === "retail" ? "Detal" : "Mayor"}
               </div>
 
@@ -559,7 +632,7 @@ export default function OrdersDashboardPage() {
                     style={{
                       borderColor: "color-mix(in oklab, lime 35%, var(--t-card-border))",
                       background: "color-mix(in oklab, lime 10%, transparent)",
-                      color: "color-mix(in oklab, white 85%, lime 15%)",
+                      color: "color-mix(in oklab, var(--t-text) 88%, lime 12%)",
                     }}
                     onClick={() => setOrderStatus(o, "confirmed")}
                   >
@@ -573,7 +646,7 @@ export default function OrdersDashboardPage() {
                     style={{
                       borderColor: "color-mix(in oklab, dodgerblue 35%, var(--t-card-border))",
                       background: "color-mix(in oklab, dodgerblue 10%, transparent)",
-                      color: "color-mix(in oklab, white 85%, dodgerblue 15%)",
+                      color: "color-mix(in oklab, var(--t-text) 88%, dodgerblue 12%)",
                     }}
                     onClick={() => setOrderStatus(o, "completed")}
                   >
@@ -586,7 +659,7 @@ export default function OrdersDashboardPage() {
         )}
       </div>
 
-      <p className="text-xs opacity-70">
+      <p className="text-xs" style={{ color: "var(--t-muted)" }}>
         Tip: el cliente puede editar mientras esté en <b>Enviado</b>. Si tú lo confirmas, ya no debería editarse.
       </p>
     </main>

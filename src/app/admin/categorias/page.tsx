@@ -17,14 +17,23 @@ type Cat = {
   created_at: string;
 };
 
+/* =========================================================
+   Theme tokens (auto light/dark)
+========================================================= */
+function swalTheme() {
+  return {
+    background: "var(--ap-bg-base)",
+    color: "var(--ap-text)",
+    confirmButtonColor: "var(--ap-cta)",
+  } as const;
+}
+
 function toastError(title: string, text?: string) {
   return Swal.fire({
     icon: "error",
     title,
     text: text ?? "Ocurrió un error",
-    background: "#0b0b16",
-    color: "#fff",
-    confirmButtonColor: "#a855f7",
+    ...swalTheme(),
   });
 }
 
@@ -34,8 +43,7 @@ function toastOk(title: string) {
     title,
     timer: 900,
     showConfirmButton: false,
-    background: "#0b0b16",
-    color: "#fff",
+    ...swalTheme(),
   });
 }
 
@@ -208,9 +216,9 @@ export default function AdminCategoriasPage() {
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#ef4444",
-      background: "#0b0b16",
-      color: "#fff",
+      confirmButtonColor: "var(--ap-danger)",
+      background: "var(--ap-bg-base)",
+      color: "var(--ap-text)",
     });
 
     if (!res.isConfirmed) return;
@@ -219,7 +227,11 @@ export default function AdminCategoriasPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb.from("product_categories").delete().eq("id", c.id);
+      const { error } = await sb
+        .from("product_categories")
+        .delete()
+        .eq("id", c.id);
+
       if (error) throw error;
 
       setCats((prev) => prev.filter((x) => x.id !== c.id));
@@ -235,20 +247,94 @@ export default function AdminCategoriasPage() {
   // UI
   // -----------------------------
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-[color:var(--ap-text)]">
+      {/* Theme tokens + small helpers (local, no rompe tu app) */}
+      <style jsx global>{`
+        :root {
+          --ap-text: rgba(255, 255, 255, 0.92);
+          --ap-muted: rgba(255, 255, 255, 0.7);
+          --ap-border: rgba(255, 255, 255, 0.12);
+          --ap-card: rgba(255, 255, 255, 0.06);
+          --ap-card-2: rgba(255, 255, 255, 0.045);
+          --ap-bg-base: #0b0b16;
+
+          --ap-cta: #a855f7;
+          --ap-danger: #ef4444;
+        }
+
+        @media (prefers-color-scheme: light) {
+          :root {
+            --ap-text: rgba(17, 24, 39, 0.92);
+            --ap-muted: rgba(17, 24, 39, 0.65);
+            --ap-border: rgba(17, 24, 39, 0.14);
+            --ap-card: rgba(255, 255, 255, 0.82);
+            --ap-card-2: rgba(255, 255, 255, 0.72);
+            --ap-bg-base: #f7f7fb;
+
+            --ap-cta: #7c3aed;
+            --ap-danger: #dc2626;
+          }
+        }
+
+        /* Fallbacks si tus clases glass ya existen, igual se verán bien */
+        .ap-card {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+        .ap-card-soft {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+
+        .ap-input {
+          width: 100%;
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          color: var(--ap-text);
+          border-radius: 16px;
+          outline: none;
+        }
+        .ap-input::placeholder {
+          color: color-mix(in oklab, var(--ap-text) 35%, transparent);
+        }
+
+        .ap-btn-ghost {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          color: var(--ap-text);
+        }
+
+        .ap-btn-primary {
+          border: 1px solid color-mix(in oklab, var(--ap-cta) 35%, var(--ap-border));
+          background: color-mix(in oklab, var(--ap-cta) 18%, transparent);
+          color: var(--ap-text);
+          box-shadow: 0 0 22px color-mix(in oklab, var(--ap-cta) 16%, transparent);
+        }
+
+        .ap-btn-danger {
+          border: 1px solid color-mix(in oklab, var(--ap-danger) 30%, var(--ap-border));
+          background: color-mix(in oklab, var(--ap-danger) 12%, transparent);
+          color: color-mix(in oklab, var(--ap-text) 70%, var(--ap-danger));
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="glass rounded-[28px] p-5 md:p-6">
+      <div className="ap-card rounded-[28px] p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl md:text-2xl font-semibold">Categorías</h2>
-            <p className="text-sm opacity-80">
+            <h2 className="text-xl font-semibold md:text-2xl">Categorías</h2>
+            <p className="text-sm" style={{ color: "var(--ap-muted)" }}>
               Administra categorías por tienda: nombre, imagen, orden y estado.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <button
-              className="glass-soft ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              className="ap-btn-ghost ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
               onClick={() => storeId && loadCats(storeId)}
               disabled={saving || !storeId}
             >
@@ -256,7 +342,7 @@ export default function AdminCategoriasPage() {
             </button>
 
             <button
-              className="btn-gradient ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              className="ap-btn-primary ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
               onClick={create}
               disabled={saving || !storeId}
             >
@@ -268,9 +354,11 @@ export default function AdminCategoriasPage() {
         {/* Filters */}
         <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
           <div>
-            <label className="text-xs opacity-70">Tienda</label>
+            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+              Tienda
+            </label>
             <select
-              className="ring-focus mt-1 w-full p-3"
+              className="ap-input ring-focus mt-1 p-3"
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
             >
@@ -283,9 +371,11 @@ export default function AdminCategoriasPage() {
           </div>
 
           <div>
-            <label className="text-xs opacity-70">Buscar</label>
+            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+              Buscar
+            </label>
             <input
-              className="ring-focus mt-1 w-full p-3"
+              className="ap-input ring-focus mt-1 p-3"
               placeholder="Buscar categoría..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -296,27 +386,29 @@ export default function AdminCategoriasPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="glass rounded-[28px] p-6">
-          <p className="opacity-80">Cargando...</p>
+        <div className="ap-card rounded-[28px] p-6">
+          <p style={{ color: "var(--ap-muted)" }}>Cargando...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass rounded-[28px] p-6">
+        <div className="ap-card rounded-[28px] p-6">
           <p className="font-semibold">No hay categorías</p>
-          <p className="text-sm opacity-80 mt-1">
+          <p className="mt-1 text-sm" style={{ color: "var(--ap-muted)" }}>
             Crea una nueva categoría o cambia la tienda seleccionada.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {filtered.map((c) => (
-            <div key={c.id} className="glass rounded-[28px] p-5 md:p-6">
+            <div key={c.id} className="ap-card rounded-[28px] p-5 md:p-6">
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 {/* Left: Form */}
-                <div className="lg:col-span-2 space-y-3">
+                <div className="space-y-3 lg:col-span-2">
                   <div>
-                    <label className="text-xs opacity-70">Nombre</label>
+                    <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                      Nombre
+                    </label>
                     <input
-                      className="ring-focus mt-1 w-full p-3"
+                      className="ap-input ring-focus mt-1 p-3"
                       value={c.name}
                       onChange={(e) => patch(c.id, { name: e.target.value })}
                     />
@@ -324,32 +416,35 @@ export default function AdminCategoriasPage() {
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <div>
-                      <label className="text-xs opacity-70">Orden</label>
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                        Orden
+                      </label>
                       <input
                         type="number"
-                        className="ring-focus mt-1 w-full p-3"
+                        className="ap-input ring-focus mt-1 p-3"
                         value={c.sort_order}
-                        onChange={(e) =>
-                          patch(c.id, { sort_order: Number(e.target.value) })
-                        }
+                        onChange={(e) => patch(c.id, { sort_order: Number(e.target.value) })}
                       />
                     </div>
 
-                    <div className="md:col-span-2 flex items-end">
+                    <div className="flex items-end md:col-span-2">
                       <label className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={c.active}
                           onChange={(e) => patch(c.id, { active: e.target.checked })}
                         />
-                        Activa (visible en el catálogo)
+                        <span style={{ color: "var(--ap-text)" }}>
+                          Activa{" "}
+                          <span style={{ color: "var(--ap-muted)" }}>(visible en el catálogo)</span>
+                        </span>
                       </label>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
-                      className="btn-gradient ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                      className="ap-btn-primary ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
                       onClick={() => save(c)}
                       disabled={saving}
                     >
@@ -357,12 +452,7 @@ export default function AdminCategoriasPage() {
                     </button>
 
                     <button
-                      className="ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                      style={{
-                        background: "rgba(239, 68, 68, 0.14)",
-                        border: "1px solid rgba(239, 68, 68, 0.28)",
-                        color: "rgba(255,255,255,0.92)",
-                      }}
+                      className="ap-btn-danger ring-focus rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
                       onClick={() => removeCat(c)}
                       disabled={saving}
                     >
@@ -370,15 +460,15 @@ export default function AdminCategoriasPage() {
                     </button>
                   </div>
 
-                  <p className="text-xs opacity-70">
+                  <p className="text-xs" style={{ color: "var(--ap-muted)" }}>
                     Tip: primero sube la imagen y luego presiona <b>Guardar cambios</b>.
                   </p>
                 </div>
 
                 {/* Right: Image */}
-                <div className="glass-soft rounded-[22px] p-4">
+                <div className="ap-card-soft rounded-[22px] p-4">
                   <p className="font-semibold">Imagen de categoría</p>
-                  <p className="text-sm opacity-80">
+                  <p className="text-sm" style={{ color: "var(--ap-muted)" }}>
                     Esta imagen se muestra en el catálogo.
                   </p>
 
@@ -393,7 +483,7 @@ export default function AdminCategoriasPage() {
                     />
                   </div>
 
-                  <div className="mt-3 text-xs opacity-70">
+                  <div className="mt-3 text-xs" style={{ color: "var(--ap-muted)" }}>
                     Recomendado: imagen cuadrada (1:1) y liviana.
                   </div>
                 </div>

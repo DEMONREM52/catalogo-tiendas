@@ -8,18 +8,54 @@ import { ImageUpload } from "../../store/ImageUpload";
 
 type Category = { id: string; name: string };
 
-function clsWrap() {
-  return "rounded-[24px] border border-white/10 bg-white/5 backdrop-blur-xl";
+// ✅ Helpers de estilo (tokens CSS → auto claro/oscuro por sistema)
+function wrapProps() {
+  return {
+    className: "rounded-[24px] border backdrop-blur-xl",
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "var(--t-card-bg)",
+      boxShadow: "var(--t-shadow)",
+    } as React.CSSProperties,
+  };
 }
-function clsInput() {
-  return "w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm outline-none placeholder:text-white/40";
+
+function inputProps(extraClassName = "") {
+  return {
+    className: `w-full rounded-2xl border p-3 text-sm outline-none ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+      color: "var(--t-text)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnSoft() {
-  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+
+function btnSoftProps() {
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnPrimary() {
-  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+
+function btnPrimaryProps() {
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+    style: {
+      borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)",
+      background: "color-mix(in oklab, var(--t-accent) 18%, transparent)",
+      color: "var(--t-text)",
+      boxShadow: "0 0 22px color-mix(in oklab, var(--t-accent) 14%, transparent)",
+    } as React.CSSProperties,
+  };
 }
+
 function digitsOnlyToNumber(raw: string, fallback = 0) {
   const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return fallback;
@@ -68,7 +104,12 @@ export default function CreateProductPage() {
       const { data: userData, error: userErr } = await sb.auth.getUser();
       if (userErr) throw userErr;
       if (!userData.user) {
-        await Swal.fire({ icon: "error", title: "Debes iniciar sesión", background: "#0b0b0b", color: "#fff" });
+        await Swal.fire({
+          icon: "error",
+          title: "Debes iniciar sesión",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+        });
         return;
       }
       setUserId(userData.user.id);
@@ -81,7 +122,12 @@ export default function CreateProductPage() {
 
       if (storeErr) throw storeErr;
       if (!storeData) {
-        await Swal.fire({ icon: "error", title: "No se encontró tu tienda", background: "#0b0b0b", color: "#fff" });
+        await Swal.fire({
+          icon: "error",
+          title: "No se encontró tu tienda",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+        });
         return;
       }
       setStoreId(storeData.id);
@@ -96,7 +142,13 @@ export default function CreateProductPage() {
       if (catsErr) throw catsErr;
       setCategories((cats as any[]) ?? []);
     } catch (e: any) {
-      await Swal.fire({ icon: "error", title: "Error", text: e?.message ?? "Error", background: "#0b0b0b", color: "#fff" });
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: e?.message ?? "Error",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
     } finally {
       setLoading(false);
     }
@@ -112,7 +164,12 @@ export default function CreateProductPage() {
 
     const n = name.trim();
     if (!n) {
-      await Swal.fire({ icon: "warning", title: "Falta el nombre", background: "#0b0b0b", color: "#fff" });
+      await Swal.fire({
+        icon: "warning",
+        title: "Falta el nombre",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
       return;
     }
 
@@ -133,23 +190,19 @@ export default function CreateProductPage() {
         category_id: categoryId || null,
       };
 
-      const { data, error } = await sb
-        .from("products")
-        .insert(payload)
-        .select("id")
-        .single();
-
+      const { data, error } = await sb.from("products").insert(payload).select("id").single();
       if (error) throw error;
 
       await Swal.fire({
         icon: "success",
         title: "Producto creado",
         text: "Ahora puedes editarlo o volver a la lista.",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
         confirmButtonText: "Ir a editar",
         showCancelButton: true,
         cancelButtonText: "Volver a lista",
+        confirmButtonColor: "var(--t-accent)",
       }).then((r) => {
         if (r.isConfirmed && data?.id) {
           window.location.href = `/dashboard/products/${data.id}`;
@@ -158,87 +211,162 @@ export default function CreateProductPage() {
         }
       });
     } catch (e: any) {
-      await Swal.fire({ icon: "error", title: "No se pudo crear", text: e?.message ?? "Error", background: "#0b0b0b", color: "#fff" });
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo crear",
+        text: e?.message ?? "Error",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
+    const w = wrapProps();
     return (
-      <main className="p-4 sm:p-6">
-        <div className={`${clsWrap()} p-6 text-sm text-white/70`}>Cargando…</div>
+      <main className="p-4 sm:p-6" style={{ color: "var(--t-text)" }}>
+        <div {...w} className={`${w.className} p-6 text-sm`} style={w.style}>
+          <span style={{ color: "var(--t-muted)" }}>Cargando…</span>
+        </div>
       </main>
     );
   }
 
+  const wMain = wrapProps();
+  const wRight = wrapProps();
+  const wCard = wrapProps();
+
+  const soft = btnSoftProps();
+  const primary = btnPrimaryProps();
+
   return (
-    <main className="p-4 sm:p-6 space-y-4">
+    <main className="p-4 sm:p-6 space-y-4" style={{ color: "var(--t-text)" }}>
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Crear producto</h1>
-          <p className="text-sm text-white/70">Fácil, rápido y bonito 🙂</p>
+          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+            Fácil, rápido y bonito 🙂
+          </p>
         </div>
 
-        <Link className={clsBtnSoft()} href="/dashboard/products">
+        <Link {...soft} href="/dashboard/products" className={soft.className} style={soft.style}>
           ← Volver
         </Link>
       </div>
 
-      <div className={`${clsWrap()} p-4 sm:p-6 space-y-4`}>
+      <div {...wMain} className={`${wMain.className} p-4 sm:p-6 space-y-4`} style={wMain.style}>
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
           {/* Left */}
           <div className="space-y-4">
             <div>
-              <label className="text-xs text-white/70">Nombre</label>
-              <input className={clsInput()} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Reloj inteligente Ultra 10 Pro" />
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Nombre
+              </label>
+              <input
+                {...inputProps()}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Reloj inteligente Ultra 10 Pro"
+                style={{
+                  ...inputProps().style,
+                }}
+              />
             </div>
 
             <div>
-              <label className="text-xs text-white/70">Descripción</label>
-              <textarea className={`${clsInput()} min-h-[110px]`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descripción corta para vender mejor..." />
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Descripción
+              </label>
+              <textarea
+                {...inputProps("min-h-[110px]")}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descripción corta para vender mejor..."
+                style={{
+                  ...inputProps().style,
+                }}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-white/70">Precio detal</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio detal
+                </label>
                 <input
-                  className={clsInput()}
+                  {...inputProps()}
                   inputMode="numeric"
                   value={String(priceRetail)}
                   onChange={(e) => setPriceRetail(digitsOnlyToNumber(e.target.value, 0))}
+                  style={{
+                    ...inputProps().style,
+                  }}
                 />
               </div>
               <div>
-                <label className="text-xs text-white/70">Precio mayor</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio mayor
+                </label>
                 <input
-                  className={clsInput()}
+                  {...inputProps()}
                   inputMode="numeric"
                   value={String(priceWholesale)}
                   onChange={(e) => setPriceWholesale(digitsOnlyToNumber(e.target.value, 0))}
+                  style={{
+                    ...inputProps().style,
+                  }}
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-xs text-white/70">Mínimo mayor</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Mínimo mayor
+                </label>
                 <input
-                  className={clsInput()}
+                  {...inputProps()}
                   inputMode="numeric"
                   value={String(minWholesale)}
                   onChange={(e) => setMinWholesale(Math.max(1, digitsOnlyToNumber(e.target.value, 1)))}
+                  style={{
+                    ...inputProps().style,
+                  }}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-white/70">Stock (vacío = ilimitado)</label>
-                <input className={clsInput()} inputMode="numeric" value={stockRaw} onChange={(e) => setStockRaw(e.target.value.replace(/[^\d]/g, ""))} placeholder="Ej: 10" />
-                <p className="mt-1 text-[11px] text-white/55">Actual: <b>{computedStock === null ? "Ilimitado" : computedStock}</b></p>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Stock (vacío = ilimitado)
+                </label>
+                <input
+                  {...inputProps()}
+                  inputMode="numeric"
+                  value={stockRaw}
+                  onChange={(e) => setStockRaw(e.target.value.replace(/[^\d]/g, ""))}
+                  placeholder="Ej: 10"
+                  style={{
+                    ...inputProps().style,
+                  }}
+                />
+                <p className="mt-1 text-[11px]" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
+                  Actual: <b>{computedStock === null ? "Ilimitado" : computedStock}</b>
+                </p>
               </div>
 
               <div>
-                <label className="text-xs text-white/70">Categoría</label>
-                <select className={clsInput()} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Categoría
+                </label>
+                <select
+                  {...inputProps()}
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  style={{
+                    ...inputProps().style,
+                  }}
+                >
                   <option value="">Sin categoría</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -247,7 +375,14 @@ export default function CreateProductPage() {
                   ))}
                 </select>
 
-                <label className="mt-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm">
+                <label
+                  className="mt-3 flex items-center gap-2 rounded-2xl border p-3 text-sm"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                    color: "var(--t-text)",
+                  }}
+                >
                   <input type="checkbox" checked={active} onChange={() => setActive((v) => !v)} />
                   Producto activo
                 </label>
@@ -255,19 +390,27 @@ export default function CreateProductPage() {
             </div>
 
             <div className="pt-2 flex flex-col sm:flex-row gap-2">
-              <button className={clsBtnPrimary()} onClick={() => void createNow()} disabled={saving || !storeId}>
+              <button
+                {...primary}
+                onClick={() => void createNow()}
+                disabled={saving || !storeId}
+                className={primary.className}
+                style={primary.style}
+              >
                 Crear producto
               </button>
-              <Link className={clsBtnSoft()} href="/dashboard/products">
+              <Link {...soft} href="/dashboard/products" className={soft.className} style={soft.style}>
                 Cancelar
               </Link>
             </div>
           </div>
 
           {/* Right */}
-          <div className={`${clsWrap()} p-4`}>
+          <div {...wRight} className={`${wRight.className} p-4`} style={wRight.style}>
             <p className="font-semibold">Imagen</p>
-            <p className="text-sm text-white/70">Opcional, pero ayuda a vender.</p>
+            <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+              Opcional, pero ayuda a vender.
+            </p>
 
             <div className="mt-3">
               {userId ? (
@@ -280,11 +423,13 @@ export default function CreateProductPage() {
                   onUploaded={(url) => setImageUrl(url)}
                 />
               ) : (
-                <div className="text-sm text-white/60">Cargando usuario…</div>
+                <div className="text-sm" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
+                  Cargando usuario…
+                </div>
               )}
             </div>
 
-            <p className="mt-2 text-xs text-white/55">
+            <p className="mt-2 text-xs" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
               La imagen se guarda cuando presionas <b>Crear producto</b>.
             </p>
           </div>

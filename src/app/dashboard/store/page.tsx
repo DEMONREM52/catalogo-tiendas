@@ -118,34 +118,95 @@ function themeConfigToVars(cfg?: ThemeConfig) {
 }
 
 /* =========================
+   ✅ UI helpers (tokens globales)
+========================= */
+function cardProps(extraClassName = "") {
+  return {
+    className: `rounded-[28px] border backdrop-blur-xl ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "var(--t-card-bg)",
+      boxShadow: "var(--t-shadow)",
+      color: "var(--t-text)",
+    } as React.CSSProperties,
+  };
+}
+function inputProps(extraClassName = "") {
+  return {
+    className: `w-full rounded-2xl border p-3 outline-none ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+      color: "var(--t-text)",
+    } as React.CSSProperties,
+  };
+}
+function btnSoftProps(extraClassName = "") {
+  return {
+    className: `rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition hover:brightness-110 disabled:opacity-60 ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 92%, transparent)",
+    } as React.CSSProperties,
+  };
+}
+function btnPrimaryProps(extraClassName = "") {
+  return {
+    className: `rounded-2xl border px-5 py-2.5 text-sm font-semibold transition hover:brightness-110 disabled:opacity-60 ${extraClassName}`,
+    style: {
+      borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))",
+      background: "var(--t-cta)",
+      color: "#0b0b0b",
+      boxShadow: "0 16px 40px color-mix(in oklab, var(--t-accent) 28%, transparent)",
+    } as React.CSSProperties,
+  };
+}
+function mutedStyle() {
+  return { color: "var(--t-muted)" } as React.CSSProperties;
+}
+function faintStyle() {
+  return { color: "color-mix(in oklab, var(--t-text) 60%, transparent)" } as React.CSSProperties;
+}
+
+/* =========================
    Preview REAL del catálogo
    (optimizado: NO se monta si el usuario no lo abre)
 ========================= */
 function CatalogThemePreview({ theme }: { theme: ThemeRow }) {
   const vars = themeConfigToVars(theme.config);
 
+  const outer = cardProps("p-4");
   return (
-    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+    <div {...outer}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.32em] text-white/60">
+          <p className="text-[11px] font-semibold tracking-[0.32em]" style={faintStyle()}>
             VISTA PREVIA DEL CATÁLOGO
           </p>
-          <h3 className="mt-2 text-base font-semibold text-white">{theme.name}</h3>
-          <p className="mt-1 text-xs text-white/60">
-            ID: <span className="text-white/70">{theme.id}</span>
+          <h3 className="mt-2 text-base font-semibold" style={{ color: "var(--t-text)" }}>
+            {theme.name}
+          </h3>
+          <p className="mt-1 text-xs" style={faintStyle()}>
+            ID: <span style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{theme.id}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <span
-            className="h-4 w-4 rounded-full border border-white/10"
-            style={{ background: (theme.config?.accent2 ?? theme.config?.accent ?? "#a855f7") as any }}
+            className="h-4 w-4 rounded-full border"
+            style={{
+              borderColor: "var(--t-card-border)",
+              background: (theme.config?.accent2 ?? theme.config?.accent ?? "#a855f7") as any,
+            }}
             title="accent2"
           />
           <span
-            className="h-4 w-4 rounded-full border border-white/10"
-            style={{ background: (theme.config?.cta ?? theme.config?.ctaA ?? theme.config?.accent2 ?? "#d946ef") as any }}
+            className="h-4 w-4 rounded-full border"
+            style={{
+              borderColor: "var(--t-card-border)",
+              background: (theme.config?.cta ?? theme.config?.ctaA ?? theme.config?.accent2 ?? "#d946ef") as any,
+            }}
             title="cta"
           />
         </div>
@@ -154,8 +215,8 @@ function CatalogThemePreview({ theme }: { theme: ThemeRow }) {
       <div
         className="mt-4 overflow-hidden rounded-3xl border"
         style={{
-          borderColor: "rgba(255,255,255,0.10)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+          borderColor: "var(--t-card-border)",
+          boxShadow: "0 20px 60px color-mix(in oklab, #000 35%, transparent)",
         }}
       >
         <div style={vars} className="min-h-[520px]">
@@ -299,7 +360,11 @@ function CatalogThemePreview({ theme }: { theme: ThemeRow }) {
                         <p className="text-lg font-bold">$25.000</p>
                       </div>
 
-                      <button className="rounded-xl px-4 py-2 font-semibold" style={{ background: "var(--t-cta)", color: "#0b0b0b" }} type="button">
+                      <button
+                        className="rounded-xl px-4 py-2 font-semibold"
+                        style={{ background: "var(--t-cta)", color: "#0b0b0b" }}
+                        type="button"
+                      >
                         Agregar
                       </button>
                     </div>
@@ -594,12 +659,19 @@ export default function StoreSettingsPage() {
     right?: React.ReactNode;
     children: React.ReactNode;
   }) {
+    const c = cardProps("p-5");
     return (
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
+      <section {...c}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">{title}</h2>
-            {subtitle ? <p className="mt-1 text-sm text-white/70">{subtitle}</p> : null}
+            <h2 className="text-lg font-semibold" style={{ color: "var(--t-text)" }}>
+              {title}
+            </h2>
+            {subtitle ? (
+              <p className="mt-1 text-sm" style={mutedStyle()}>
+                {subtitle}
+              </p>
+            ) : null}
           </div>
           {right}
         </div>
@@ -612,21 +684,31 @@ export default function StoreSettingsPage() {
      Render states
   --------------------------- */
   if (loading) {
+    const shell = cardProps("p-6");
     return (
-      <main className="min-h-screen px-6 py-10 text-white">
-        <div className="mx-auto max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-6">
-          <p className="text-sm text-white/70">Cargando...</p>
+      <main className="min-h-screen px-6 py-10" style={{ color: "var(--t-text)" }}>
+        <div className="mx-auto max-w-4xl">
+          <div {...shell}>
+            <p className="text-sm" style={mutedStyle()}>
+              Cargando...
+            </p>
+          </div>
         </div>
       </main>
     );
   }
 
   if (!store || !profile) {
+    const shell = cardProps("p-6");
     return (
-      <main className="min-h-screen px-6 py-10 text-white">
-        <div className="mx-auto max-w-4xl rounded-[28px] border border-white/10 bg-white/5 p-6">
-          <h1 className="text-2xl font-semibold">Mi tienda</h1>
-          <p className="mt-3 text-sm text-white/70">{msg ?? "No hay tienda."}</p>
+      <main className="min-h-screen px-6 py-10" style={{ color: "var(--t-text)" }}>
+        <div className="mx-auto max-w-4xl">
+          <div {...shell}>
+            <h1 className="text-2xl font-semibold">Mi tienda</h1>
+            <p className="mt-3 text-sm" style={mutedStyle()}>
+              {msg ?? "No hay tienda."}
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -634,19 +716,31 @@ export default function StoreSettingsPage() {
 
   const selectedTheme = themes.find((t) => t.id === store.theme) ?? null;
 
+  const headerCard = cardProps("p-5");
+  const infoCard = cardProps("p-4");
+  const saveBtn = btnPrimaryProps("");
+  const toggleBtn = btnSoftProps("");
+  const softBtn = btnSoftProps("");
+  const input = inputProps("");
+
   return (
-    <main className="min-h-screen text-white">
+    <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8 space-y-5">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
-            <h1 className="text-2xl font-semibold">Mi tienda</h1>
-            <p className="mt-1 text-sm text-white/70">Configura tu perfil, enlaces y apariencia.</p>
+          <div {...headerCard}>
+            <h1 className="text-2xl font-semibold" style={{ color: "var(--t-text)" }}>
+              Mi tienda
+            </h1>
+            <p className="mt-1 text-sm" style={mutedStyle()}>
+              Configura tu perfil, enlaces y apariencia.
+            </p>
             {msg ? <p className="mt-2 text-sm">{msg}</p> : null}
           </div>
 
           <button
-            className="rounded-2xl bg-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(217,70,239,0.35)] transition hover:brightness-110 disabled:opacity-60"
+            className={saveBtn.className}
+            style={saveBtn.style}
             onClick={saveAll}
             disabled={saving}
           >
@@ -655,7 +749,7 @@ export default function StoreSettingsPage() {
         </div>
 
         {/* Nota rápida para egress */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/70">
+        <div {...infoCard} style={{ ...infoCard.style, fontSize: 12 }}>
           💡 Para ahorrar datos/egress: las secciones de <b>Imágenes</b> y <b>Vista previa</b> están cerradas por defecto.
           Ábrelas solo cuando las necesites.
         </div>
@@ -666,36 +760,48 @@ export default function StoreSettingsPage() {
             <Card title="Datos básicos" subtitle="Nombre, WhatsApp y contacto.">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label className="text-sm text-white/70">Nombre</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Nombre
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={store.name}
                     onChange={(e) => setStoreField("name", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">WhatsApp (57...)</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    WhatsApp (57...)
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={store.whatsapp}
                     onChange={(e) => setStoreField("whatsapp", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Teléfono</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Teléfono
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={store.phone ?? ""}
                     onChange={(e) => setStoreField("phone", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Email</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Email
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={store.email ?? ""}
                     onChange={(e) => setStoreField("email", e.target.value)}
                   />
@@ -705,7 +811,13 @@ export default function StoreSettingsPage() {
 
             <Card title="Catálogos y apariencia" subtitle="Activa/desactiva y elige tema.">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <label
+                  className="flex items-center gap-3 rounded-2xl border p-3"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={store.catalog_retail}
@@ -714,7 +826,13 @@ export default function StoreSettingsPage() {
                   <span className="text-sm">Catálogo Detal</span>
                 </label>
 
-                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <label
+                  className="flex items-center gap-3 rounded-2xl border p-3"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={store.catalog_wholesale}
@@ -723,10 +841,19 @@ export default function StoreSettingsPage() {
                   <span className="text-sm">Catálogo Mayor</span>
                 </label>
 
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <label className="text-sm text-white/70">Tema</label>
+                <div
+                  className="rounded-2xl border p-3"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                  }}
+                >
+                  <label className="text-sm" style={mutedStyle()}>
+                    Tema
+                  </label>
                   <select
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={store.theme}
                     onChange={(e) => setStoreField("theme", e.target.value)}
                   >
@@ -747,7 +874,8 @@ export default function StoreSettingsPage() {
               <div className="mt-4">
                 <button
                   type="button"
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
+                  className={toggleBtn.className}
+                  style={toggleBtn.style}
                   onClick={() => setShowThemePreview((v) => !v)}
                 >
                   {showThemePreview ? "Ocultar vista previa" : "Ver vista previa del catálogo"}
@@ -758,8 +886,10 @@ export default function StoreSettingsPage() {
                     {selectedTheme ? (
                       <CatalogThemePreview theme={selectedTheme} />
                     ) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                        No se encontró el theme seleccionado.
+                      <div {...cardProps("p-4")} style={{ ...cardProps("p-4").style }}>
+                        <div className="text-sm" style={mutedStyle()}>
+                          No se encontró el theme seleccionado.
+                        </div>
                       </div>
                     )}
                   </div>
@@ -770,81 +900,108 @@ export default function StoreSettingsPage() {
             <Card title="Perfil público" subtitle="Texto que se verá en tu catálogo.">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="md:col-span-2">
-                  <label className="text-sm text-white/70">Headline</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Headline
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={profile.headline ?? ""}
                     onChange={(e) => setProfileField("headline", e.target.value)}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-sm text-white/70">Descripción</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Descripción
+                  </label>
                   <textarea
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[120px]"
+                    className={`mt-1 ${inputProps("min-h-[120px]").className}`}
+                    style={input.style}
                     value={profile.description ?? ""}
                     onChange={(e) => setProfileField("description", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Dirección</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Dirección
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={profile.address ?? ""}
                     onChange={(e) => setProfileField("address", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Ciudad</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Ciudad
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={profile.city ?? ""}
                     onChange={(e) => setProfileField("city", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Departamento</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Departamento
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={profile.department ?? ""}
                     onChange={(e) => setProfileField("department", e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/70">Google Maps</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Google Maps
+                  </label>
                   <input
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                    className={`mt-1 ${input.className}`}
+                    style={input.style}
                     value={profile.google_maps_url ?? ""}
                     onChange={(e) => setProfileField("google_maps_url", e.target.value)}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-sm text-white/70">Envíos</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Envíos
+                  </label>
                   <textarea
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    className={`mt-1 ${inputProps("min-h-[90px]").className}`}
+                    style={input.style}
                     value={profile.delivery_info ?? ""}
                     onChange={(e) => setProfileField("delivery_info", e.target.value)}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-sm text-white/70">Métodos de pago</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Métodos de pago
+                  </label>
                   <textarea
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    className={`mt-1 ${inputProps("min-h-[90px]").className}`}
+                    style={input.style}
                     value={profile.payment_methods ?? ""}
                     onChange={(e) => setProfileField("payment_methods", e.target.value)}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-sm text-white/70">Políticas</label>
+                  <label className="text-sm" style={mutedStyle()}>
+                    Políticas
+                  </label>
                   <textarea
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 p-3 outline-none min-h-[90px]"
+                    className={`mt-1 ${inputProps("min-h-[90px]").className}`}
+                    style={input.style}
                     value={profile.policies ?? ""}
                     onChange={(e) => setProfileField("policies", e.target.value)}
                   />
@@ -857,7 +1014,8 @@ export default function StoreSettingsPage() {
             <Card title="Logo y banner" subtitle="Se verán en tu catálogo.">
               <button
                 type="button"
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold transition hover:bg-white/10"
+                className={btnSoftProps("").className}
+                style={btnSoftProps("").style}
                 onClick={() => setShowImages((v) => !v)}
               >
                 {showImages ? "Ocultar imágenes" : "Administrar imágenes (logo/banner)"}
@@ -865,7 +1023,9 @@ export default function StoreSettingsPage() {
 
               {showImages ? (
                 !userId ? (
-                  <p className="mt-3 text-sm text-white/70">Cargando usuario...</p>
+                  <p className="mt-3 text-sm" style={mutedStyle()}>
+                    Cargando usuario...
+                  </p>
                 ) : (
                   <div className="mt-4 grid grid-cols-1 gap-4">
                     <ImageUpload
@@ -886,7 +1046,7 @@ export default function StoreSettingsPage() {
                   </div>
                 )
               ) : (
-                <p className="mt-3 text-xs text-white/60">
+                <p className="mt-3 text-xs" style={faintStyle()}>
                   (Cerrado para ahorrar datos. Al abrir, se mostrarán previews si existen.)
                 </p>
               )}
@@ -897,7 +1057,8 @@ export default function StoreSettingsPage() {
               subtitle="Instagram, TikTok, web, etc."
               right={
                 <button
-                  className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
+                  className={btnSoftProps("px-3 py-2").className}
+                  style={btnSoftProps("px-3 py-2").style}
                   onClick={addLink}
                 >
                   + Agregar
@@ -905,17 +1066,29 @@ export default function StoreSettingsPage() {
               }
             >
               {links.length === 0 ? (
-                <p className="text-sm text-white/70">
+                <p className="text-sm" style={mutedStyle()}>
                   Aún no tienes enlaces. Agrega Instagram, Facebook, TikTok, web, etc.
                 </p>
               ) : (
                 <div className="space-y-3">
                   {links.map((l, idx) => (
-                    <div key={l.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div
+                      key={l.id}
+                      className="rounded-2xl border p-4"
+                      style={{
+                        borderColor: "var(--t-card-border)",
+                        background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                      }}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-semibold">Enlace #{idx + 1}</p>
                         <button
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs transition hover:bg-white/10"
+                          className="rounded-xl border px-3 py-2 text-xs transition hover:brightness-110"
+                          style={{
+                            borderColor: "var(--t-card-border)",
+                            background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+                            color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
+                          }}
                           onClick={() => removeLink(l.id)}
                         >
                           Eliminar
@@ -924,7 +1097,8 @@ export default function StoreSettingsPage() {
 
                       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
                         <select
-                          className="rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          className={input.className}
+                          style={input.style}
                           value={l.type}
                           onChange={(e) => updateLink(l.id, { type: e.target.value })}
                         >
@@ -938,14 +1112,16 @@ export default function StoreSettingsPage() {
                         </select>
 
                         <input
-                          className="rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          className={input.className}
+                          style={input.style}
                           placeholder="Etiqueta (opcional)"
                           value={l.label ?? ""}
                           onChange={(e) => updateLink(l.id, { label: e.target.value })}
                         />
 
                         <input
-                          className="md:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3 outline-none"
+                          className={`md:col-span-2 ${input.className}`}
+                          style={input.style}
                           placeholder="URL"
                           value={l.url}
                           onChange={(e) => updateLink(l.id, { url: e.target.value })}
@@ -953,7 +1129,7 @@ export default function StoreSettingsPage() {
                       </div>
 
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                        <label className="flex items-center gap-2 text-sm text-white/80">
+                        <label className="flex items-center gap-2 text-sm" style={{ color: "color-mix(in oklab, var(--t-text) 85%, transparent)" }}>
                           <input
                             type="checkbox"
                             checked={l.active}
@@ -962,12 +1138,16 @@ export default function StoreSettingsPage() {
                           Activo
                         </label>
 
-                        <div className="text-xs text-white/60">Orden: {l.sort_order}</div>
+                        <div className="text-xs" style={faintStyle()}>
+                          Orden: {l.sort_order}
+                        </div>
                       </div>
 
                       {l.type === "other" && userId ? (
-                        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                          <p className="text-sm text-white/80 mb-2">Icono personalizado (solo “Otro”)</p>
+                        <div {...cardProps("mt-3 p-4")} style={{ ...cardProps("mt-3 p-4").style }}>
+                          <p className="text-sm mb-2" style={{ color: "color-mix(in oklab, var(--t-text) 85%, transparent)" }}>
+                            Icono personalizado (solo “Otro”)
+                          </p>
                           <ImageUpload
                             label="Icono"
                             currentUrl={l.icon_url}
@@ -983,9 +1163,8 @@ export default function StoreSettingsPage() {
               )}
             </Card>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/60">
-              ✅ Consejo de rendimiento: el mayor consumo de egress casi siempre viene de <b>imágenes</b>.
-              Mantén estas secciones cerradas cuando no las estés usando.
+            <div {...cardProps("p-4")} style={{ ...cardProps("p-4").style, fontSize: 12 }}>
+              ✅ Consejo de rendimiento: el mayor consumo de egress casi siempre viene de <b>imágenes</b>. Mantén estas secciones cerradas cuando no las estés usando.
             </div>
           </div>
         </div>

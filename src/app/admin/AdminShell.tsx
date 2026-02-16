@@ -2,14 +2,26 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import AdminBell from "./AdminBell";
 
-function classNames(...s: Array<string | false | null | undefined>) {
+/* =========================================================
+   ✅ Context: evita doble AdminShell
+========================================================= */
+const AdminShellContext = createContext<boolean>(false);
+export function useInsideAdminShell() {
+  return useContext(AdminShellContext);
+}
+
+function cx(...s: Array<string | false | null | undefined>) {
   return s.filter(Boolean).join(" ");
 }
 
+/* =========================================================
+   Nav item
+========================================================= */
 function NavItem({
   href,
   label,
@@ -28,21 +40,32 @@ function NavItem({
     <Link
       href={href}
       onClick={onClick}
-      className={classNames(
+      className={cx(
         "group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
-        "border backdrop-blur-xl",
-        active
-          ? "border-fuchsia-400/40 bg-fuchsia-500/15 text-white shadow-[0_0_0_1px_rgba(217,70,239,0.15)]"
-          : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white"
+        "border backdrop-blur-xl"
       )}
+      style={{
+        borderColor: active
+          ? "color-mix(in oklab, var(--t-cta) 40%, var(--t-card-border))"
+          : "var(--t-card-border)",
+        background: active
+          ? "color-mix(in oklab, var(--t-cta) 20%, transparent)"
+          : "color-mix(in oklab, var(--t-card-bg) 78%, transparent)",
+        color: active ? "var(--t-text)" : "color-mix(in oklab, var(--t-text) 80%, transparent)",
+        boxShadow: active ? "0 0 0 1px color-mix(in oklab, var(--t-cta) 18%, transparent)" : "none",
+      }}
     >
       <span
-        className={classNames(
-          "grid h-9 w-9 place-items-center rounded-2xl border text-[16px] transition",
-          active
-            ? "border-fuchsia-300/40 bg-fuchsia-500/20 shadow-[0_0_18px_rgba(217,70,239,0.18)]"
-            : "border-white/10 bg-white/5 group-hover:bg-white/10"
-        )}
+        className={cx("grid h-9 w-9 place-items-center rounded-2xl border text-[16px] transition")}
+        style={{
+          borderColor: active
+            ? "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))"
+            : "var(--t-card-border)",
+          background: active
+            ? "color-mix(in oklab, var(--t-cta) 22%, transparent)"
+            : "color-mix(in oklab, var(--t-card-bg) 78%, transparent)",
+          boxShadow: active ? "0 0 18px color-mix(in oklab, var(--t-cta) 25%, transparent)" : "none",
+        }}
       >
         {emoji}
       </span>
@@ -50,19 +73,138 @@ function NavItem({
       <span className="font-medium">{label}</span>
 
       {active ? (
-        <span className="ml-auto h-2.5 w-2.5 rounded-full bg-fuchsia-400 shadow-[0_0_14px_rgba(217,70,239,0.75)]" />
+        <span
+          className="ml-auto h-2.5 w-2.5 rounded-full"
+          style={{
+            background: "var(--t-cta)",
+            boxShadow: "0 0 14px color-mix(in oklab, var(--t-cta) 70%, transparent)",
+          }}
+        />
       ) : (
-        <span className="ml-auto h-2.5 w-2.5 rounded-full bg-white/10 opacity-0 transition group-hover:opacity-100" />
+        <span
+          className="ml-auto h-2.5 w-2.5 rounded-full opacity-0 transition group-hover:opacity-100"
+          style={{ background: "color-mix(in oklab, var(--t-text) 12%, transparent)" }}
+        />
       )}
     </Link>
   );
 }
 
+/* =========================================================
+   Burger
+========================================================= */
+function BurgerButton({ hidden, onClick }: { hidden: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Menú"
+      className={cx(
+        "fixed left-4 top-4 z-[60] md:hidden",
+        "rounded-2xl border px-3 py-2",
+        "shadow-lg backdrop-blur-xl",
+        "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "active:scale-[0.98]",
+        hidden && "pointer-events-none opacity-0 scale-90 -translate-y-1"
+      )}
+      style={{
+        borderColor: "var(--t-card-border)",
+        background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+        color: "color-mix(in oklab, var(--t-text) 88%, transparent)",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+        WebkitBackdropFilter: "blur(14px)",
+      }}
+    >
+      ☰
+    </button>
+  );
+}
+
+/* =========================================================
+   Admin Menu (✅ NO repetir header en mobile)
+========================================================= */
+function AdminMenu({ onNav, showHeader = true }: { onNav?: () => void; showHeader?: boolean }) {
+  return (
+    <>
+      {showHeader ? (
+        <div className="mb-3 px-2">
+          <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: "var(--t-muted)" }}>
+            MENÚ
+          </p>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <NavItem href="/admin" emoji="🏠" label="Resumen" onClick={onNav} />
+        <NavItem href="/admin/tiendas" emoji="🏪" label="Tiendas" onClick={onNav} />
+        <NavItem href="/admin/pedidos" emoji="🧾" label="Pedidos" onClick={onNav} />
+        <NavItem href="/admin/productos" emoji="📦" label="Productos" onClick={onNav} />
+        <NavItem href="/admin/categorias" emoji="🗂️" label="Categorías" onClick={onNav} />
+        <NavItem href="/admin/usuarios" emoji="👤" label="Usuarios / Roles" onClick={onNav} />
+        <NavItem href="/admin/themes" emoji="🎨" label="Themes" onClick={onNav} />
+      </div>
+
+      <div className="my-4 h-px" style={{ background: "color-mix(in oklab, var(--t-text) 12%, transparent)" }} />
+
+      <div
+        className="rounded-2xl border p-4"
+        style={{
+          borderColor: "var(--t-card-border)",
+          background: "color-mix(in oklab, var(--t-card-bg) 78%, transparent)",
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">💜 Demo para inversores</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+              Recorre: <b>Tienda</b> → <b>Catálogo</b> → <b>Pedido</b> → <b>Factura PDF</b>.
+            </p>
+          </div>
+
+          <div
+            className="mt-0.5 rounded-2xl border px-3 py-2 text-[11px]"
+            style={{
+              borderColor: "color-mix(in oklab, var(--t-cta) 25%, var(--t-card-border))",
+              background: "color-mix(in oklab, var(--t-cta) 14%, transparent)",
+              color: "var(--t-text)",
+            }}
+          >
+            Tip
+          </div>
+        </div>
+
+        <div
+          className="mt-3 rounded-2xl border p-3 text-xs"
+          style={{
+            borderColor: "color-mix(in oklab, var(--t-cta) 25%, var(--t-card-border))",
+            background: "color-mix(in oklab, var(--t-cta) 14%, transparent)",
+            color: "color-mix(in oklab, var(--t-text) 92%, transparent)",
+          }}
+        >
+          Confirma un pedido y genera la factura para mostrar el flujo completo.
+        </div>
+      </div>
+
+      <div className="mt-4 text-[11px]" style={{ color: "color-mix(in oklab, var(--t-muted) 80%, transparent)" }}>
+        Tip: también puedes presionar <b>ESC</b> para cerrar.
+      </div>
+    </>
+  );
+}
+
+/* =========================================================
+   AdminShell
+========================================================= */
 export default function AdminShell({ children }: { children: React.ReactNode }) {
+  const alreadyInside = useInsideAdminShell();
+
+  // ✅ Si ya hay un AdminShell arriba, NO lo vuelvas a renderizar.
+  if (alreadyInside) return <>{children}</>;
+
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState<string>("");
 
-  // Drawer (montaje + animación)
+  // Drawer
   const [drawerMounted, setDrawerMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -77,7 +219,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
 
-  // -------- auth/role check ----------
   useEffect(() => {
     (async () => {
       const sb = supabaseBrowser();
@@ -101,8 +242,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           icon: "error",
           title: "Acceso denegado",
           text: "No tienes permisos de administrador.",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
           confirmButtonColor: "#ef4444",
         });
         router.replace("/dashboard");
@@ -113,13 +254,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     })();
   }, [router]);
 
-  // Cierra al cambiar ruta
   useEffect(() => {
     closeDrawer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Lock scroll cuando abre
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -129,7 +268,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     };
   }, [drawerOpen]);
 
-  // ESC para cerrar
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -139,7 +277,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
-  // Medir ancho del panel
   useEffect(() => {
     if (!drawerMounted) return;
     const el = panelRef.current;
@@ -174,7 +311,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     else openDrawer();
   }
 
-  // Swipe close SOLO desde el handle
   function scheduleDrag(next: number) {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => setDragX(next));
@@ -190,7 +326,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   function onHandlePointerMove(e: React.PointerEvent) {
     if (!isDragging) return;
 
-    const dx = e.clientX - startXRef.current; // negativo si va a la izquierda
+    const dx = e.clientX - startXRef.current;
     const w = panelWRef.current || 360;
 
     const next = Math.max(0, Math.min(w, -dx));
@@ -217,228 +353,227 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     router.replace("/login");
   }
 
+  const w = panelWRef.current || 360;
+  const dragProgress = w ? Math.max(0, Math.min(1, dragX / w)) : 0;
+  const panelTranslateX = drawerOpen ? -dragX : -18;
+  const overlayOpacity = drawerOpen ? 1 - dragProgress * 0.9 : 0;
+  const burgerHidden = drawerMounted && drawerOpen;
+
   if (!ready) {
     return (
-      <main className="min-h-screen px-6 py-10 text-white">
+      <main className="min-h-screen px-6 py-10" style={{ color: "var(--t-text)" }}>
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-            <p className="text-sm text-white/80">Cargando panel admin...</p>
+          <div className="rounded-[28px] border p-6" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando panel admin...</p>
           </div>
         </div>
       </main>
     );
   }
 
-  const w = panelWRef.current || 360;
-  const dragProgress = w ? Math.max(0, Math.min(1, dragX / w)) : 0;
-
-  const panelTranslateX = drawerOpen ? -dragX : -18;
-  const overlayOpacity = drawerOpen ? 1 - dragProgress * 0.9 : 0;
-
-  // Oculta hamburguesa cuando está abierto
-  const burgerHidden = drawerMounted && drawerOpen;
-
   return (
-    <main className="min-h-screen text-white">
-      {/* Fondo premium */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#07060d]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(168,85,247,0.45),transparent_48%),radial-gradient(circle_at_82%_18%,rgba(217,70,239,0.28),transparent_52%),radial-gradient(circle_at_50%_92%,rgba(99,102,241,0.20),transparent_58%)]" />
-        <div className="absolute inset-0 opacity-[0.10] [background-image:radial-gradient(#ffffff_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/35 to-transparent" />
-      </div>
+    <AdminShellContext.Provider value={true}>
+      <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
+        {/* ✅ Theme auto según sistema */}
+        <style jsx global>{`
+          :root {
+            --t-text: rgba(255, 255, 255, 0.92);
+            --t-muted: rgba(255, 255, 255, 0.7);
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-        {/* Top bar */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">Panel Administrador</h1>
-              <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/15 px-3 py-1 text-xs font-semibold text-fuchsia-100 shadow-[0_0_16px_rgba(217,70,239,0.18)]">
-                Admin
-              </span>
-            </div>
+            --t-bg-base: #07060d;
+            --t-card-bg: rgba(255, 255, 255, 0.06);
+            --t-card-border: rgba(255, 255, 255, 0.1);
 
-            <p className="mt-1 text-sm text-white/70">
-              Control total de tiendas, pedidos, productos y categorías.
-            </p>
+            --t-accent: #a855f7;
+            --t-cta: #d946ef;
 
-            {email ? (
-              <p className="mt-2 text-xs text-white/55">
-                Sesión: <span className="text-white/75">{email}</span>
-              </p>
-            ) : null}
-          </div>
+            --t-bg: radial-gradient(circle at 18% 12%, rgba(168, 85, 247, 0.45), transparent 48%),
+                    radial-gradient(circle at 82% 18%, rgba(217, 70, 239, 0.28), transparent 52%),
+                    radial-gradient(circle at 50% 92%, rgba(99, 102, 241, 0.2), transparent 58%),
+                    var(--t-bg-base);
+          }
 
-          <button
-            className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.16)] backdrop-blur-xl transition hover:bg-fuchsia-500/25 active:scale-[0.99]"
-            onClick={logout}
-          >
-            Cerrar sesión
-          </button>
+          @media (prefers-color-scheme: light) {
+            :root {
+              --t-text: rgba(17, 24, 39, 0.92);
+              --t-muted: rgba(17, 24, 39, 0.7);
+
+              --t-bg-base: #f7f7fb;
+              --t-card-bg: rgba(255, 255, 255, 0.78);
+              --t-card-border: rgba(17, 24, 39, 0.12);
+
+              --t-accent: #7c3aed;
+              --t-cta: #db2777;
+
+              --t-bg: radial-gradient(circle at 18% 12%, rgba(124, 58, 237, 0.18), transparent 48%),
+                      radial-gradient(circle at 82% 18%, rgba(219, 39, 119, 0.14), transparent 52%),
+                      radial-gradient(circle at 50% 92%, rgba(59, 130, 246, 0.12), transparent 58%),
+                      var(--t-bg-base);
+            }
+          }
+
+          /* Tus clases existentes, ahora theme-aware */
+          .glass {
+            border: 1px solid var(--t-card-border);
+            background: var(--t-card-bg);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+          }
+          .glass-soft {
+            border: 1px solid var(--t-card-border);
+            background: color-mix(in oklab, var(--t-card-bg) 80%, transparent);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+          }
+        `}</style>
+
+        {/* Fondo */}
+        <div className="pointer-events-none fixed inset-0 -z-10">
+          <div className="absolute inset-0" style={{ background: "var(--t-bg)" }} />
+          <div className="absolute inset-x-0 top-0 h-40" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.18), transparent)" }} />
         </div>
 
-        {/* Layout */}
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
-          {/* Sidebar Desktop */}
-          <aside className="hidden rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl md:block">
-            <div className="mb-3 px-2">
-              <p className="text-[11px] font-semibold tracking-[0.32em] text-white/60">
-                MENÚ
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <NavItem href="/admin" emoji="🏠" label="Resumen" />
-              <NavItem href="/admin/tiendas" emoji="🏪" label="Tiendas" />
-              <NavItem href="/admin/pedidos" emoji="🧾" label="Pedidos" />
-              <NavItem href="/admin/productos" emoji="📦" label="Productos" />
-              <NavItem href="/admin/categorias" emoji="🗂️" label="Categorías" />
-              <NavItem href="/admin/usuarios" emoji="👤" label="Usuarios / Roles" />
-              <NavItem href="/admin/themes" emoji="🎨" label="Themes" />
-            </div>
-
-            <div className="my-4 h-px bg-white/10" />
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold">💜 Demo para inversores</p>
-              <p className="mt-1 text-xs text-white/70">
-                Recorre: <b>Tienda</b> → <b>Catálogo</b> → <b>Pedido</b> →{" "}
-                <b>Factura PDF</b>.
-              </p>
-
-              <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-3 text-xs text-fuchsia-100/90">
-                Tip: confirma un pedido y genera la factura para mostrar el flujo completo.
-              </div>
-            </div>
-          </aside>
-
-          {/* Content */}
-          <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 md:p-6 backdrop-blur-xl">
-            {children}
-          </section>
-        </div>
-      </div>
-
-      {/* Botón hamburguesa flotante */}
-      <button
-        type="button"
-        onClick={toggleDrawer}
-        aria-label="Menú"
-        className={classNames(
-          "fixed left-4 top-4 z-[60] md:hidden",
-          "rounded-2xl border border-white/10 bg-black/55 px-3 py-2",
-          "text-white/85 shadow-lg shadow-black/40 backdrop-blur-xl",
-          "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          "active:scale-[0.98] hover:bg-black/60",
-          burgerHidden && "pointer-events-none opacity-0 scale-90 -translate-y-1"
-        )}
-        style={{ WebkitBackdropFilter: "blur(14px)" }}
-      >
-        ☰
-      </button>
-
-      {/* Drawer iPhone */}
-      {drawerMounted ? (
-        <div className="fixed inset-0 z-50 md:hidden">
-          {/* Overlay */}
-          <div
-            className="absolute inset-0 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-            style={{
-              opacity: overlayOpacity,
-              background: "rgba(0,0,0,0.45)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-            }}
-            onClick={closeDrawer}
-          />
-
-          {/* Panel */}
-          <div
-            ref={panelRef}
-            className={classNames(
-              "absolute left-0 top-0 h-full w-[86%] max-w-[360px]",
-              "border-r border-white/10 bg-black/70 p-4",
-              isDragging
-                ? "transition-none"
-                : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-            )}
-            style={{
-              transform: drawerOpen
-                ? `translateX(${panelTranslateX}px)`
-                : "translateX(-18px)",
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
-              boxShadow: "18px 0 70px rgba(0,0,0,0.55)",
-            }}
-          >
-            {/* Header + X bonita */}
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold tracking-[0.32em] text-white/70">
-                MENÚ
-              </p>
-
-              <button
-                type="button"
-                onClick={closeDrawer}
-                aria-label="Cerrar menú"
-                className={classNames(
-                  "inline-flex h-10 w-10 items-center justify-center rounded-full",
-                  "border border-white/10 bg-white/5 text-white/85",
-                  "shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl",
-                  "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  "hover:bg-white/10 active:scale-[0.96]"
-                )}
-              >
-                <span className="text-[18px] leading-none translate-y-[0.5px]">
-                  ✕
+        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+          {/* Top bar */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="glass rounded-[28px] p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold">Panel Administrador</h1>
+                <span
+                  className="rounded-full border px-3 py-1 text-xs font-semibold"
+                  style={{
+                    borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))",
+                    background: "color-mix(in oklab, var(--t-cta) 18%, transparent)",
+                  }}
+                >
+                  Admin
                 </span>
+              </div>
+
+              <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+                Control total de tiendas, pedidos, productos y categorías.
+              </p>
+
+              {email ? (
+                <p className="mt-2 text-xs" style={{ color: "color-mix(in oklab, var(--t-muted) 85%, transparent)" }}>
+                  Sesión: <span style={{ color: "color-mix(in oklab, var(--t-text) 85%, transparent)" }}>{email}</span>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <AdminBell />
+              <button
+                className="rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition hover:brightness-110 active:scale-[0.99]"
+                style={{
+                  borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))",
+                  background: "color-mix(in oklab, var(--t-cta) 18%, transparent)",
+                }}
+                onClick={logout}
+              >
+                Cerrar sesión
               </button>
             </div>
+          </div>
 
-            {/* Handle para swipe (sin texto) */}
-            <div
-              className="mt-3 flex items-center justify-center"
-              onPointerDown={onHandlePointerDown}
-              onPointerMove={onHandlePointerMove}
-              onPointerUp={onHandlePointerUp}
-              onPointerCancel={onHandlePointerUp}
-              style={{ touchAction: "none" }}
-            >
-              <div className="h-1.5 w-14 rounded-full bg-white/20" />
-            </div>
+          {/* Layout */}
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
+            <aside className="glass hidden rounded-[28px] p-4 md:block">
+              <AdminMenu showHeader />
+            </aside>
 
-            {/* Links */}
-            <div className="mt-4 space-y-2">
-              <NavItem href="/admin" emoji="🏠" label="Resumen" onClick={closeDrawer} />
-              <NavItem href="/admin/tiendas" emoji="🏪" label="Tiendas" onClick={closeDrawer} />
-              <NavItem href="/admin/pedidos" emoji="🧾" label="Pedidos" onClick={closeDrawer} />
-              <NavItem href="/admin/productos" emoji="📦" label="Productos" onClick={closeDrawer} />
-              <NavItem href="/admin/categorias" emoji="🗂️" label="Categorías" onClick={closeDrawer} />
-              <NavItem href="/admin/usuarios" emoji="👤" label="Usuarios / Roles" onClick={closeDrawer} />
-              <NavItem href="/admin/themes" emoji="🎨" label="Themes" onClick={closeDrawer} />
-            </div>
-
-            <div className="my-4 h-px bg-white/10" />
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold">💜 Demo para inversores</p>
-              <p className="mt-1 text-xs text-white/70">
-                Recorre: <b>Tienda</b> → <b>Catálogo</b> → <b>Pedido</b> →{" "}
-                <b>Factura PDF</b>.
-              </p>
-
-              <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-3 text-xs text-fuchsia-100/90">
-                Tip: confirma un pedido y genera la factura para mostrar el flujo completo.
-              </div>
-            </div>
-
-            <div className="mt-4 text-[11px] text-white/45">
-              Tip: también puedes presionar <b>ESC</b> para cerrar.
-            </div>
+            <section className="glass rounded-[28px] p-4 md:p-6">
+              {children}
+            </section>
           </div>
         </div>
-      ) : null}
-    </main>
+
+        {/* Burger */}
+        <BurgerButton hidden={burgerHidden} onClick={toggleDrawer} />
+
+        {/* Drawer */}
+        {drawerMounted ? (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div
+              className="absolute inset-0 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{
+                opacity: overlayOpacity,
+                background: "rgba(0,0,0,0.45)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+              }}
+              onClick={closeDrawer}
+            />
+
+            <div
+              ref={panelRef}
+              className={cx(
+                "absolute left-0 top-0 h-full w-[86%] max-w-[360px] p-4 border-r",
+                isDragging ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              )}
+              style={{
+                borderColor: "var(--t-card-border)",
+                background: "color-mix(in oklab, var(--t-bg-base) 75%, transparent)",
+                transform: drawerOpen ? `translateX(${panelTranslateX}px)` : "translateX(-18px)",
+                backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
+                boxShadow: "18px 0 70px rgba(0,0,0,0.40)",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold tracking-[0.32em]" style={{ color: "var(--t-muted)" }}>
+                  MENÚ
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <AdminBell />
+                  <button
+                    type="button"
+                    onClick={closeDrawer}
+                    aria-label="Cerrar menú"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border"
+                    style={{
+                      borderColor: "var(--t-card-border)",
+                      background: "color-mix(in oklab, var(--t-card-bg) 68%, transparent)",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className="mt-3 flex items-center justify-center"
+                onPointerDown={onHandlePointerDown}
+                onPointerMove={onHandlePointerMove}
+                onPointerUp={onHandlePointerUp}
+                onPointerCancel={onHandlePointerUp}
+                style={{ touchAction: "none" }}
+              >
+                <div className="h-1.5 w-14 rounded-full" style={{ background: "color-mix(in oklab, var(--t-text) 18%, transparent)" }} />
+              </div>
+
+              {/* ✅ Menú SIN header para que NO se repita */}
+              <div className="mt-4">
+                <AdminMenu onNav={closeDrawer} showHeader={false} />
+              </div>
+
+              <div className="mt-4">
+                <button
+                  className="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
+                  style={{
+                    borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))",
+                    background: "color-mix(in oklab, var(--t-cta) 18%, transparent)",
+                  }}
+                  onClick={logout}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </main>
+    </AdminShellContext.Provider>
   );
 }

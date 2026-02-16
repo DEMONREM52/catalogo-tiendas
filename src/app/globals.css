@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
 /* =========================================================
-   ✅ THEME TOKENS (DINÁMICOS)
+   ✅ THEME TOKENS (AUTO: SISTEMA OSCURO / CLARO)
+   - Usa prefers-color-scheme para detectar el tema del sistema.
+   - Si además usas Tailwind dark: (class="dark"), puedes forzar con [data-theme="dark"].
    ========================================================= */
 
+/* Base (por defecto: CLARO) */
 :root {
+  color-scheme: light;
+
   /* Texto / bordes */
-  --t-text: #ffffff;
-  --t-muted: rgba(255, 255, 255, 0.72);
-  --t-border: rgba(255, 255, 255, 0.14);
+  --t-text: #0f172a;               /* slate-900 */
+  --t-muted: rgba(15, 23, 42, 0.72);
+  --t-border: rgba(15, 23, 42, 0.12);
 
   /* Cards / glass */
-  --t-card-bg: rgba(8, 2, 24, 0.58);
-  --t-card-bg-soft: rgba(255, 255, 255, 0.07);
-  --t-card-border: rgba(255, 255, 255, 0.14);
+  --t-card-bg: rgba(255, 255, 255, 0.72);
+  --t-card-bg-soft: rgba(15, 23, 42, 0.04);
+  --t-card-border: rgba(15, 23, 42, 0.12);
 
   /* Accents */
   --t-accent: #a855f7;
@@ -23,30 +28,101 @@
 
   /* Radios / glow */
   --t-radius: 24; /* px */
-  --t-glow: 60;   /* 0-100 */
+  --t-glow: 45;   /* 0-100 */
 
-  /* Base oscura */
-  --t-bg-base: #070014;
+  /* Base clara */
+  --t-bg-base: #f8fafc; /* slate-50 */
 
-  /* Glows morados */
-  --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
-          radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
-          radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.18), transparent 62%);
+  /* Glows (light) */
+  --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.14), transparent 62%),
+          radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.10), transparent 62%),
+          radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.10), transparent 62%);
 
   /* CTA dinámico */
   --t-cta: linear-gradient(90deg, #ec4899, #a855f7, #4f46e5);
 
-  /* Sombras */
-  --t-shadow: 0 26px 85px rgba(0, 0, 0, 0.55);
+  /* Sombras (más suave en claro) */
+  --t-shadow: 0 26px 85px rgba(2, 6, 23, 0.16);
 
   /* Tipografía */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* ✅ Layout tokens (nuevo) */
-  --app-max: 1180px;      /* ancho max pro */
-  --app-pad: 16px;        /* padding base */
-  --app-pad-lg: 24px;     /* padding desktop */
+  /* ✅ Layout tokens */
+  --app-max: 1180px;
+  --app-pad: 16px;
+  --app-pad-lg: 24px;
+}
+
+/* Auto oscuro por sistema */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --t-text: #ffffff;
+    --t-muted: rgba(255, 255, 255, 0.72);
+    --t-border: rgba(255, 255, 255, 0.14);
+
+    --t-card-bg: rgba(8, 2, 24, 0.58);
+    --t-card-bg-soft: rgba(255, 255, 255, 0.07);
+    --t-card-border: rgba(255, 255, 255, 0.14);
+
+    --t-glow: 60;
+    --t-bg-base: #070014;
+
+    --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
+            radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
+            radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.18), transparent 62%);
+
+    --t-shadow: 0 26px 85px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ✅ Override opcional (si quieres forzar por atributo/clase)
+   - Ej: <html data-theme="dark"> o <html class="dark">
+*/
+:root[data-theme="dark"],
+html.dark :root {
+  color-scheme: dark;
+
+  --t-text: #ffffff;
+  --t-muted: rgba(255, 255, 255, 0.72);
+  --t-border: rgba(255, 255, 255, 0.14);
+
+  --t-card-bg: rgba(8, 2, 24, 0.58);
+  --t-card-bg-soft: rgba(255, 255, 255, 0.07);
+  --t-card-border: rgba(255, 255, 255, 0.14);
+
+  --t-glow: 60;
+  --t-bg-base: #070014;
+
+  --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
+          radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
+          radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.18), transparent 62%);
+
+  --t-shadow: 0 26px 85px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"],
+html.light :root {
+  color-scheme: light;
+
+  --t-text: #0f172a;
+  --t-muted: rgba(15, 23, 42, 0.72);
+  --t-border: rgba(15, 23, 42, 0.12);
+
+  --t-card-bg: rgba(255, 255, 255, 0.72);
+  --t-card-bg-soft: rgba(15, 23, 42, 0.04);
+  --t-card-border: rgba(15, 23, 42, 0.12);
+
+  --t-glow: 45;
+  --t-bg-base: #f8fafc;
+
+  --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.14), transparent 62%),
+          radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.10), transparent 62%),
+          radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.10), transparent 62%);
+
+  --t-shadow: 0 26px 85px rgba(2, 6, 23, 0.16);
 }
 
 /* =========================================================
@@ -89,7 +165,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* ✅ Capa de estrellas global */
+/* ✅ Capa de estrellas global (se ajusta por tema) */
 body::before {
   content: "";
   position: fixed;
@@ -97,18 +173,39 @@ body::before {
   pointer-events: none;
   z-index: -2;
 
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  /* en claro: estrellas más sutiles */
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--t-text) 55%, transparent) 1px,
+    transparent 1px
+  );
   background-size: 44px 44px;
   background-position: 0 0;
 
   mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
   -webkit-mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
 
-  opacity: 0.55; /* ✅ un poquito menos para legibilidad */
+  opacity: 0.28;
   animation: stars-drift 18s linear infinite;
 }
 
-/* ✅ Vignette suave */
+/* en oscuro: un poco más visibles */
+@media (prefers-color-scheme: dark) {
+  body::before {
+    opacity: 0.55;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  }
+}
+:root[data-theme="dark"] body::before,
+html.dark body::before {
+  opacity: 0.55;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+}
+:root[data-theme="light"] body::before,
+html.light body::before {
+  opacity: 0.28;
+}
+
+/* ✅ Vignette suave (dark fuerte, light suave) */
 body::after {
   content: "";
   position: fixed;
@@ -117,11 +214,29 @@ body::after {
   z-index: -1;
 
   background:
+    radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.18), transparent 70%),
+    radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.20), transparent 70%),
+    linear-gradient(to bottom, rgba(0,0,0,0.12), transparent 22%),
+    linear-gradient(to top, rgba(0,0,0,0.14), transparent 32%);
+  opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  body::after {
+    background:
+      radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.38), transparent 70%),
+      radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.45), transparent 70%),
+      linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 22%),
+      linear-gradient(to top, rgba(0,0,0,0.40), transparent 32%);
+  }
+}
+:root[data-theme="dark"] body::after,
+html.dark body::after {
+  background:
     radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.38), transparent 70%),
     radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.45), transparent 70%),
     linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 22%),
     linear-gradient(to top, rgba(0,0,0,0.40), transparent 32%);
-  opacity: 1;
 }
 
 /* Selection */
@@ -136,10 +251,8 @@ a {
 }
 
 /* =========================================================
-   ✅ HELPERS PRO (NUEVO)
+   ✅ HELPERS PRO
    ========================================================= */
-
-/* ✅ Contenedor estándar para páginas/dashboard */
 .container-app {
   width: 100%;
   max-width: var(--app-max);
@@ -156,7 +269,6 @@ a {
   }
 }
 
-/* ✅ Animación suave al entrar */
 .panel-enter {
   animation: panelEnter 260ms ease both;
 }
@@ -166,17 +278,15 @@ a {
   to { opacity: 1; transform: translateY(0px); }
 }
 
-/* ✅ hover pro para cards */
 .card-hover {
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.58);
+  box-shadow: var(--t-shadow);
   border-color: color-mix(in oklab, var(--t-card-border) 65%, white 10%);
 }
 
-/* ✅ grids listos para dashboards */
 .dash-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -184,7 +294,7 @@ a {
 }
 @media (min-width: 1024px) {
   .dash-grid {
-    grid-template-columns: 1fr 360px; /* data | imagen */
+    grid-template-columns: 1fr 360px;
     gap: 18px;
   }
 }
@@ -206,15 +316,29 @@ a {
 }
 
 /* =========================================================
-   STARFIELD (si aún lo quieres como clase extra)
+   STARFIELD (clase extra)
    ========================================================= */
 .starfield {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--t-text) 55%, transparent) 1px,
+    transparent 1px
+  );
   background-size: 44px 44px;
   background-position: 0 0;
   mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
   -webkit-mask-image: radial-gradient(circle at 50% 20%, #000 30%, transparent 70%);
   animation: stars-drift 18s linear infinite;
+  opacity: 0.28;
+}
+@media (prefers-color-scheme: dark) {
+  .starfield {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+    opacity: 0.55;
+  }
+}
+:root[data-theme="dark"] .starfield,
+html.dark .starfield {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
   opacity: 0.55;
 }
 
@@ -224,7 +348,7 @@ a {
 }
 
 /* =========================================================
-   PREMIUM UI HELPERS (MEJORADOS)
+   PREMIUM UI HELPERS
    ========================================================= */
 .glass {
   background: var(--t-card-bg);
@@ -294,14 +418,14 @@ a {
   transform: none;
 }
 
-/* Focus ring (para inputs y utilidades) */
+/* Focus ring */
 .ring-focus:focus {
   outline: none;
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--t-accent) 28%, transparent);
 }
 
 /* =========================================================
-   ✅ INPUTS BONITOS (MEJORADOS)
+   ✅ INPUTS BONITOS (ADAPTAN CLARO/OSCURO)
    ========================================================= */
 input,
 select,
@@ -312,11 +436,9 @@ textarea {
   border-radius: calc((var(--t-radius) - 10) * 1px);
   outline: none;
 
-  /* ✅ tamaño consistente (evita inputs feos en PC) */
   min-height: 44px;
   padding: 10px 12px;
 
-  /* ✅ tipografía consistente */
   font-size: 14px;
   line-height: 1.2;
 }
@@ -338,12 +460,12 @@ textarea:focus {
   border-color: color-mix(in oklab, var(--t-accent) 55%, var(--t-card-border));
 }
 
-/* ✅ Mejor look en selects */
+/* ✅ Mejor look en selects (flecha cambia por tema) */
 select {
   appearance: none;
   background-image:
-    linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.65) 50%),
-    linear-gradient(135deg, rgba(255,255,255,0.65) 50%, transparent 50%);
+    linear-gradient(45deg, transparent 50%, color-mix(in oklab, var(--t-text) 65%, transparent) 50%),
+    linear-gradient(135deg, color-mix(in oklab, var(--t-text) 65%, transparent) 50%, transparent 50%);
   background-position:
     calc(100% - 18px) calc(50% - 3px),
     calc(100% - 12px) calc(50% - 3px);
@@ -353,7 +475,7 @@ select {
 }
 
 /* =========================================================
-   SCROLLBAR (morado)
+   SCROLLBAR (adaptable)
    ========================================================= */
 * {
   scrollbar-width: thin;

@@ -10,26 +10,39 @@ type UserProfile = {
   created_at: string;
 };
 
+/** =========================
+ * Theme-aware UI helpers
+ * - Sin cambiar estructura/lógica
+ * - Usa CSS vars (auto según tema del sistema)
+ * ========================= */
 function inputBase() {
-  return "rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+  return "rounded-2xl border p-3 text-sm outline-none placeholder:opacity-60 backdrop-blur-xl";
 }
 
 function buttonGhost() {
-  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+  return "rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition hover:brightness-110 disabled:opacity-60";
 }
 
 function buttonPrimary() {
-  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+  return "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-[0_0_22px_rgba(0,0,0,0.12)] transition hover:brightness-110 disabled:opacity-60";
 }
 
 function buttonDanger() {
-  return "rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60";
+  return "rounded-2xl border px-4 py-2 text-sm font-semibold transition hover:brightness-110 disabled:opacity-60";
 }
 
 function rolePill(role: "admin" | "store") {
-  return role === "admin"
-    ? "border-fuchsia-400/30 bg-fuchsia-500/15 text-fuchsia-100"
-    : "border-sky-400/30 bg-sky-500/10 text-sky-100";
+  // Solo clases base; colores se ponen con style inline para ser theme-aware
+  return role === "admin" ? "border" : "border";
+}
+
+function swalBase() {
+  // SweetAlert no respeta Tailwind; usamos tokens por inline style
+  return {
+    background: "var(--t-bg-base)",
+    color: "var(--t-text)",
+    confirmButtonColor: "#22c55e",
+  };
 }
 
 async function swalError(title: string, text?: string) {
@@ -37,8 +50,8 @@ async function swalError(title: string, text?: string) {
     icon: "error",
     title,
     text: text ?? "Error",
-    background: "#0b0b0b",
-    color: "#fff",
+    background: "var(--t-bg-base)",
+    color: "var(--t-text)",
     confirmButtonColor: "#ef4444",
   });
 }
@@ -98,14 +111,12 @@ export default function AdminUsuariosPage() {
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
       confirmButtonColor: "#a855f7",
       preConfirm: () => {
         const user_id = (document.getElementById("uid") as HTMLInputElement).value.trim();
-        const role = (document.getElementById("role") as HTMLSelectElement).value as
-          | "admin"
-          | "store";
+        const role = (document.getElementById("role") as HTMLSelectElement).value as "admin" | "store";
 
         if (!user_id) {
           Swal.showValidationMessage("Escribe un user_id.");
@@ -139,8 +150,8 @@ export default function AdminUsuariosPage() {
         title: "Rol actualizado",
         timer: 1000,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await swalError("No se pudo guardar", e?.message);
@@ -158,8 +169,8 @@ export default function AdminUsuariosPage() {
       confirmButtonText: "Eliminar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#ef4444",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
     });
     if (!res.isConfirmed) return;
 
@@ -177,8 +188,8 @@ export default function AdminUsuariosPage() {
         title: "Eliminado",
         timer: 900,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await swalError("No se pudo eliminar", e?.message);
@@ -197,8 +208,8 @@ export default function AdminUsuariosPage() {
       showCancelButton: true,
       confirmButtonText: "Sí, cambiar",
       cancelButtonText: "Cancelar",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
       confirmButtonColor: "#a855f7",
     });
 
@@ -208,24 +219,19 @@ export default function AdminUsuariosPage() {
     try {
       const sb = supabaseBrowser();
 
-      const { error } = await sb
-        .from("user_profiles")
-        .update({ role: nextRole })
-        .eq("user_id", r.user_id);
+      const { error } = await sb.from("user_profiles").update({ role: nextRole }).eq("user_id", r.user_id);
 
       if (error) throw error;
 
-      setRows((prev) =>
-        prev.map((x) => (x.user_id === r.user_id ? { ...x, role: nextRole } : x))
-      );
+      setRows((prev) => prev.map((x) => (x.user_id === r.user_id ? { ...x, role: nextRole } : x)));
 
       await Swal.fire({
         icon: "success",
         title: "Actualizado",
         timer: 900,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await swalError("Error", e?.message);
@@ -235,31 +241,56 @@ export default function AdminUsuariosPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-[color:var(--t-text)]">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold">👤 Usuarios / Roles</h2>
-          <p className="text-sm text-white/70">
+          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
             Administrar <b>user_profiles</b> (admin / store).
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button className={buttonGhost()} onClick={load} disabled={saving}>
+          <button
+            className={buttonGhost()}
+            onClick={load}
+            disabled={saving}
+            style={{
+              borderColor: "var(--t-card-border)",
+              background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+              color: "var(--t-text)",
+            }}
+          >
             Recargar
           </button>
 
-          <button className={buttonPrimary()} onClick={upsertUser} disabled={saving}>
+          <button
+            className={buttonPrimary()}
+            onClick={upsertUser}
+            disabled={saving}
+            style={{
+              borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))",
+              background: "color-mix(in oklab, var(--t-cta) 22%, transparent)",
+              color: "var(--t-text)",
+            }}
+          >
             + Asignar rol
           </button>
         </div>
       </div>
 
       {/* Search */}
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+      <div
+        className="rounded-[28px] border p-3 backdrop-blur-xl"
+        style={{
+          borderColor: "var(--t-card-border)",
+          background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+        }}
+      >
         <input
-          className="w-full bg-transparent outline-none placeholder:text-white/45"
+          className="w-full bg-transparent outline-none placeholder:opacity-60"
+          style={{ color: "var(--t-text)" }}
           placeholder="Buscar por uuid o rol..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -268,46 +299,94 @@ export default function AdminUsuariosPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+        <div
+          className="rounded-[28px] border p-6 text-sm"
+          style={{
+            borderColor: "var(--t-card-border)",
+            background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+            color: "var(--t-muted)",
+          }}
+        >
           Cargando...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+        <div
+          className="rounded-[28px] border p-6"
+          style={{
+            borderColor: "var(--t-card-border)",
+            background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+          }}
+        >
           <p className="font-semibold">No hay perfiles</p>
-          <p className="mt-1 text-sm text-white/70">Crea uno con “+ Asignar rol”.</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+            Crea uno con “+ Asignar rol”.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((r) => (
             <div
               key={r.user_id}
-              className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl"
+              className="rounded-[28px] border p-4 backdrop-blur-xl"
+              style={{
+                borderColor: "var(--t-card-border)",
+                background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+              }}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-white/90">{r.user_id}</p>
+                    <p className="text-sm font-semibold" style={{ color: "var(--t-text)" }}>
+                      {r.user_id}
+                    </p>
 
                     <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolePill(
-                        r.role
-                      )}`}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolePill(r.role)}`}
+                      style={{
+                        borderColor:
+                          r.role === "admin"
+                            ? "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))"
+                            : "color-mix(in oklab, var(--t-accent2, var(--t-accent)) 35%, var(--t-card-border))",
+                        background:
+                          r.role === "admin"
+                            ? "color-mix(in oklab, var(--t-cta) 18%, transparent)"
+                            : "color-mix(in oklab, var(--t-accent2, var(--t-accent)) 16%, transparent)",
+                        color: "var(--t-text)",
+                      }}
                     >
                       {r.role}
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-white/50">
+                  <p className="mt-1 text-xs" style={{ color: "color-mix(in oklab, var(--t-muted) 85%, transparent)" }}>
                     Creado: {new Date(r.created_at).toLocaleString("es-CO")}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button className={buttonGhost()} onClick={() => toggleRole(r)} disabled={saving}>
+                  <button
+                    className={buttonGhost()}
+                    onClick={() => toggleRole(r)}
+                    disabled={saving}
+                    style={{
+                      borderColor: "var(--t-card-border)",
+                      background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+                      color: "var(--t-text)",
+                    }}
+                  >
                     Cambiar a {r.role === "admin" ? "store" : "admin"}
                   </button>
 
-                  <button className={buttonDanger()} onClick={() => removeUser(r)} disabled={saving}>
+                  <button
+                    className={buttonDanger()}
+                    onClick={() => removeUser(r)}
+                    disabled={saving}
+                    style={{
+                      borderColor: "color-mix(in oklab, var(--t-danger, #ef4444) 35%, var(--t-card-border))",
+                      background: "color-mix(in oklab, var(--t-danger, #ef4444) 12%, transparent)",
+                      color: "var(--t-text)",
+                    }}
+                  >
                     Eliminar perfil
                   </button>
                 </div>
@@ -315,13 +394,20 @@ export default function AdminUsuariosPage() {
             </div>
           ))}
 
-          <p className="text-xs text-white/50">
+          <p className="text-xs" style={{ color: "var(--t-muted)" }}>
             Mostrando {filtered.length} perfil(es).
           </p>
         </div>
       )}
 
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 text-xs text-white/60 backdrop-blur-xl">
+      <div
+        className="rounded-[28px] border p-4 text-xs backdrop-blur-xl"
+        style={{
+          borderColor: "var(--t-card-border)",
+          background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)",
+          color: "var(--t-muted)",
+        }}
+      >
         <b>Nota:</b> aquí manejas roles por UUID. Para ver emails necesitas backend con Service Role.
       </div>
     </div>

@@ -89,7 +89,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 /** Convierte lo que venga en config a ThemeConfig completo */
 function normalizeConfig(raw: any): ThemeConfig {
-  const o = (raw && typeof raw === "object") ? raw : {};
+  const o = raw && typeof raw === "object" ? raw : {};
   return {
     ...DEFAULT_CFG,
     ...o,
@@ -100,6 +100,16 @@ function normalizeConfig(raw: any): ThemeConfig {
     bgMode: o.bgMode === "solid" ? "solid" : "gradient",
     ctaMode: o.ctaMode === "solid" ? "solid" : "gradient",
   };
+}
+
+/** =========================
+ * Theme tokens (auto light/dark)
+ * ========================= */
+function swalTheme() {
+  return {
+    background: "var(--ap-bg-base)",
+    color: "var(--ap-text)",
+  } as const;
 }
 
 function Preview({ cfg }: { cfg: ThemeConfig }) {
@@ -117,7 +127,7 @@ function Preview({ cfg }: { cfg: ThemeConfig }) {
   const glowB = hexToRgba(cfg.accent2, (cfg.glow / 100) * 0.75);
 
   return (
-    <div className="rounded-[28px] border border-white/10 overflow-hidden bg-black/30">
+    <div className="rounded-[28px] border overflow-hidden ap-card">
       <div className="relative p-5" style={{ background: bg, color: cfg.text }}>
         <div
           className="pointer-events-none absolute inset-0"
@@ -135,9 +145,7 @@ function Preview({ cfg }: { cfg: ThemeConfig }) {
         />
 
         <div className="relative">
-          <p className="text-xs font-semibold tracking-[0.24em] opacity-80">
-            PREVIEW
-          </p>
+          <p className="text-xs font-semibold tracking-[0.24em] opacity-80">PREVIEW</p>
 
           <div
             className="mt-4 rounded-[24px] p-4"
@@ -173,9 +181,7 @@ function Preview({ cfg }: { cfg: ThemeConfig }) {
                     color: cfg.mutedText,
                   }}
                 >
-                  <p className="text-white/90 font-semibold text-[11px]">
-                    {t}
-                  </p>
+                  <p className="text-white/90 font-semibold text-[11px]">{t}</p>
                   <p className="mt-1 opacity-80 leading-tight">UI limpia</p>
                 </div>
               ))}
@@ -240,8 +246,8 @@ export default function AdminThemesPage() {
         icon: "error",
         title: "Error cargando themes",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
+        confirmButtonColor: "var(--ap-danger)",
       });
     } finally {
       setLoading(false);
@@ -295,16 +301,15 @@ export default function AdminThemesPage() {
         text: "Theme guardado con su configuración.",
         timer: 1100,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo guardar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
+        confirmButtonColor: "var(--ap-danger)",
       });
     } finally {
       setSaving(false);
@@ -321,8 +326,8 @@ export default function AdminThemesPage() {
       showCancelButton: true,
       confirmButtonText: "Crear",
       cancelButtonText: "Cancelar",
-      background: "#0b0b0b",
-      color: "#fff",
+      ...swalTheme(),
+      confirmButtonColor: "var(--ap-cta)",
       preConfirm: () => {
         const id = (document.getElementById("id") as HTMLInputElement).value.trim();
         const name = (document.getElementById("name") as HTMLInputElement).value.trim();
@@ -365,16 +370,15 @@ export default function AdminThemesPage() {
         title: "Theme creado",
         timer: 900,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo crear",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
+        confirmButtonColor: "var(--ap-danger)",
       });
     } finally {
       setSaving(false);
@@ -389,9 +393,8 @@ export default function AdminThemesPage() {
       showCancelButton: true,
       confirmButtonText: "Eliminar",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#ef4444",
-      background: "#0b0b0b",
-      color: "#fff",
+      confirmButtonColor: "var(--ap-danger)",
+      ...swalTheme(),
     });
     if (!res.isConfirmed) return;
 
@@ -411,29 +414,84 @@ export default function AdminThemesPage() {
         icon: "error",
         title: "No se pudo eliminar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        ...swalTheme(),
+        confirmButtonColor: "var(--ap-danger)",
       });
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <p className="text-white/80">Cargando themes...</p>;
+  if (loading) return <p style={{ color: "var(--ap-muted)" }}>Cargando themes...</p>;
 
   return (
-    <div className="text-white">
+    <div className="text-[color:var(--ap-text)]">
+      {/* ✅ Tokens globales (solo visual) */}
+      <style jsx global>{`
+        :root {
+          --ap-text: rgba(255, 255, 255, 0.92);
+          --ap-muted: rgba(255, 255, 255, 0.7);
+          --ap-border: rgba(255, 255, 255, 0.12);
+          --ap-card: rgba(255, 255, 255, 0.06);
+          --ap-bg-base: #0b0b0b;
+
+          --ap-cta: #a855f7;
+          --ap-danger: #ef4444;
+          --ap-success: #22c55e;
+          --ap-info: #38bdf8;
+        }
+
+        @media (prefers-color-scheme: light) {
+          :root {
+            --ap-text: rgba(17, 24, 39, 0.92);
+            --ap-muted: rgba(17, 24, 39, 0.65);
+            --ap-border: rgba(17, 24, 39, 0.14);
+            --ap-card: rgba(255, 255, 255, 0.86);
+            --ap-bg-base: #f7f7fb;
+
+            --ap-cta: #7c3aed;
+            --ap-danger: #dc2626;
+            --ap-success: #16a34a;
+            --ap-info: #0284c7;
+          }
+        }
+
+        .ap-card {
+          border-color: var(--ap-border) !important;
+          background: var(--ap-card) !important;
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+
+        /* Inputs del swal2 (para que se vean bien en light/dark) */
+        .swal2-popup {
+          background: var(--ap-bg-base) !important;
+          color: var(--ap-text) !important;
+        }
+        .swal2-input {
+          border: 1px solid var(--ap-border) !important;
+          background: color-mix(in oklab, var(--ap-card) 72%, transparent) !important;
+          color: var(--ap-text) !important;
+          border-radius: 14px !important;
+        }
+      `}</style>
+
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Themes</h2>
-          <p className="text-sm text-white/70">
+          <p className="text-sm" style={{ color: "var(--ap-muted)" }}>
             Selecciona un theme y edita sus colores. Cada theme guarda su propio config.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <button
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+            className="rounded-2xl border px-4 py-2 text-sm font-semibold"
+            style={{
+              borderColor: "var(--ap-border)",
+              background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+              color: "var(--ap-text)",
+            }}
             onClick={load}
             disabled={saving}
           >
@@ -441,7 +499,13 @@ export default function AdminThemesPage() {
           </button>
 
           <button
-            className="rounded-2xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-black hover:bg-fuchsia-400 disabled:opacity-60"
+            className="rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            style={{
+              background: "color-mix(in oklab, var(--ap-cta) 22%, transparent)",
+              border: "1px solid color-mix(in oklab, var(--ap-cta) 40%, var(--ap-border))",
+              color: "var(--ap-text)",
+              boxShadow: "0 0 22px color-mix(in oklab, var(--ap-cta) 14%, transparent)",
+            }}
             onClick={createTheme}
             disabled={saving}
           >
@@ -452,9 +516,12 @@ export default function AdminThemesPage() {
 
       <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(520px,1fr)_minmax(360px,440px)]">
         {/* Lista */}
-        <aside className="rounded-[28px] border border-white/10 bg-white/5 p-3">
+        <aside className="rounded-[28px] border p-3 ap-card">
           <div className="mb-2 px-2">
-            <p className="text-xs font-semibold tracking-[0.22em] text-white/60">
+            <p
+              className="text-xs font-semibold tracking-[0.22em]"
+              style={{ color: "color-mix(in oklab, var(--ap-text) 65%, transparent)" }}
+            >
               THEMES
             </p>
           </div>
@@ -468,23 +535,37 @@ export default function AdminThemesPage() {
                   onClick={() => setSelectedId(t.id)}
                   className={cx(
                     "w-full rounded-2xl border px-3 py-3 text-left transition",
-                    activeSel
-                      ? "border-fuchsia-400/40 bg-fuchsia-500/15"
-                      : "border-white/10 bg-white/5 hover:bg-white/10",
+                    activeSel ? "ap-selected" : "ap-item",
                   )}
+                  style={{
+                    borderColor: activeSel
+                      ? "color-mix(in oklab, var(--ap-cta) 45%, var(--ap-border))"
+                      : "var(--ap-border)",
+                    background: activeSel
+                      ? "color-mix(in oklab, var(--ap-cta) 14%, transparent)"
+                      : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                    color: "var(--ap-text)",
+                  }}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{t.name}</p>
-                      <p className="truncate text-xs text-white/60">{t.id}</p>
+                      <p className="truncate text-xs" style={{ color: "var(--ap-muted)" }}>
+                        {t.id}
+                      </p>
                     </div>
+
                     <span
-                      className={cx(
-                        "rounded-full px-2 py-1 text-[11px] font-semibold border",
-                        t.active
-                          ? "bg-emerald-400/15 text-emerald-200 border-emerald-400/20"
-                          : "bg-white/10 text-white/70 border-white/10",
-                      )}
+                      className="rounded-full px-2 py-1 text-[11px] font-semibold border"
+                      style={{
+                        borderColor: t.active
+                          ? "color-mix(in oklab, var(--ap-success) 40%, var(--ap-border))"
+                          : "var(--ap-border)",
+                        background: t.active
+                          ? "color-mix(in oklab, var(--ap-success) 14%, transparent)"
+                          : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                        color: "var(--ap-text)",
+                      }}
                     >
                       {t.active ? "Activo" : "Inactivo"}
                     </span>
@@ -496,29 +577,55 @@ export default function AdminThemesPage() {
         </aside>
 
         {/* Editor */}
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 max-h-[72vh] overflow-auto pr-1">
+        <section className="rounded-[28px] border p-4 max-h-[72vh] overflow-auto pr-1 ap-card">
           {!selected ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+            <div
+              className="rounded-2xl border p-4 text-sm"
+              style={{
+                borderColor: "var(--ap-border)",
+                background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                color: "var(--ap-muted)",
+              }}
+            >
               Selecciona un theme de la izquierda.
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div
+                className="rounded-2xl border p-4"
+                style={{
+                  borderColor: "var(--ap-border)",
+                  background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                }}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold">Theme</p>
-                    <p className="text-xs text-white/60">ID: {selected.id}</p>
+                    <p className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                      ID: {selected.id}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold hover:bg-white/10"
+                      className="rounded-2xl border px-3 py-2 text-sm font-semibold"
+                      style={{
+                        borderColor: "var(--ap-border)",
+                        background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                        color: "var(--ap-text)",
+                      }}
                       onClick={() => removeTheme(selected)}
                       disabled={saving}
                     >
                       Eliminar
                     </button>
+
                     <button
-                      className="rounded-2xl bg-emerald-400 px-3 py-2 text-sm font-semibold text-black hover:bg-emerald-300 disabled:opacity-60"
+                      className="rounded-2xl px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                      style={{
+                        background: "color-mix(in oklab, var(--ap-success) 18%, transparent)",
+                        border: "1px solid color-mix(in oklab, var(--ap-success) 40%, var(--ap-border))",
+                        color: "var(--ap-text)",
+                      }}
                       onClick={saveSelected}
                       disabled={saving}
                     >
@@ -529,26 +636,36 @@ export default function AdminThemesPage() {
 
                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
-                    <label className="text-xs text-white/60">Nombre</label>
+                    <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                      Nombre
+                    </label>
                     <input
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
+                      className="mt-1 w-full rounded-2xl border px-3 py-2 outline-none"
+                      style={{
+                        borderColor: "var(--ap-border)",
+                        background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                        color: "var(--ap-text)",
+                      }}
                       value={selected.name}
-                      onChange={(e) =>
-                        patchRow(selected.id, { name: e.target.value })
-                      }
+                      onChange={(e) => patchRow(selected.id, { name: e.target.value })}
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-white/60">Orden</label>
+                    <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                      Orden
+                    </label>
                     <input
                       type="number"
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 outline-none"
+                      className="mt-1 w-full rounded-2xl border px-3 py-2 outline-none"
+                      style={{
+                        borderColor: "var(--ap-border)",
+                        background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                        color: "var(--ap-text)",
+                      }}
                       value={selected.sort_order}
                       onChange={(e) =>
-                        patchRow(selected.id, {
-                          sort_order: Number(e.target.value),
-                        })
+                        patchRow(selected.id, { sort_order: Number(e.target.value) })
                       }
                     />
                   </div>
@@ -557,9 +674,7 @@ export default function AdminThemesPage() {
                     <input
                       type="checkbox"
                       checked={selected.active}
-                      onChange={(e) =>
-                        patchRow(selected.id, { active: e.target.checked })
-                      }
+                      onChange={(e) => patchRow(selected.id, { active: e.target.checked })}
                     />
                     <span className="text-sm">Activo</span>
                   </div>
@@ -567,44 +682,56 @@ export default function AdminThemesPage() {
               </div>
 
               {/* Editor dinámico */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div
+                className="rounded-2xl border p-4"
+                style={{
+                  borderColor: "var(--ap-border)",
+                  background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                }}
+              >
                 <p className="text-sm font-semibold">🎨 Colores</p>
-                <p className="mt-1 text-xs text-white/60">
+                <p className="mt-1 text-xs" style={{ color: "var(--ap-muted)" }}>
                   Cambia el theme, y verás colores diferentes (porque se cargan de la BD).
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs font-semibold text-white/80">Básico</p>
+                  <div
+                    className="rounded-2xl border p-4"
+                    style={{
+                      borderColor: "var(--ap-border)",
+                      background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                    }}
+                  >
+                    <p className="text-xs font-semibold" style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>
+                      Básico
+                    </p>
 
                     <div className="mt-3 grid grid-cols-2 gap-3">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Accent
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.accent}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, accent: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, accent: e.target.value }))}
                         />
                       </label>
 
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Accent 2
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.accent2}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, accent2: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, accent2: e.target.value }))}
                         />
                       </label>
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Radio: {cfg.radius}px
                       </label>
                       <input
@@ -620,7 +747,7 @@ export default function AdminThemesPage() {
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Glow: {cfg.glow}%
                       </label>
                       <input
@@ -639,28 +766,49 @@ export default function AdminThemesPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs font-semibold text-white/80">Fondo</p>
+                  <div
+                    className="rounded-2xl border p-4"
+                    style={{
+                      borderColor: "var(--ap-border)",
+                      background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                    }}
+                  >
+                    <p className="text-xs font-semibold" style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>
+                      Fondo
+                    </p>
 
                     <div className="mt-3 flex gap-2">
                       <button
-                        className={cx(
-                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
-                          cfg.bgMode === "gradient"
-                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
-                            : "border-white/10 bg-white/5 hover:bg-white/10",
-                        )}
+                        className="rounded-2xl border px-3 py-2 text-xs font-semibold"
+                        style={{
+                          borderColor:
+                            cfg.bgMode === "gradient"
+                              ? "color-mix(in oklab, var(--ap-cta) 45%, var(--ap-border))"
+                              : "var(--ap-border)",
+                          background:
+                            cfg.bgMode === "gradient"
+                              ? "color-mix(in oklab, var(--ap-cta) 14%, transparent)"
+                              : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                          color: "var(--ap-text)",
+                        }}
                         onClick={() => setCfg((p) => ({ ...p, bgMode: "gradient" }))}
                       >
                         Gradient
                       </button>
+
                       <button
-                        className={cx(
-                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
-                          cfg.bgMode === "solid"
-                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
-                            : "border-white/10 bg-white/5 hover:bg-white/10",
-                        )}
+                        className="rounded-2xl border px-3 py-2 text-xs font-semibold"
+                        style={{
+                          borderColor:
+                            cfg.bgMode === "solid"
+                              ? "color-mix(in oklab, var(--ap-cta) 45%, var(--ap-border))"
+                              : "var(--ap-border)",
+                          background:
+                            cfg.bgMode === "solid"
+                              ? "color-mix(in oklab, var(--ap-cta) 14%, transparent)"
+                              : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                          color: "var(--ap-text)",
+                        }}
                         onClick={() => setCfg((p) => ({ ...p, bgMode: "solid" }))}
                       >
                         Solid
@@ -668,33 +816,31 @@ export default function AdminThemesPage() {
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Gradient A
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.bgGradA}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, bgGradA: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, bgGradA: e.target.value }))}
                         />
                       </label>
 
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Gradient B
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.bgGradB}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, bgGradB: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, bgGradB: e.target.value }))}
                         />
                       </label>
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Ángulo: {cfg.bgAngle}°
                       </label>
                       <input
@@ -710,28 +856,49 @@ export default function AdminThemesPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:col-span-2">
-                    <p className="text-xs font-semibold text-white/80">Botón (CTA)</p>
+                  <div
+                    className="rounded-2xl border p-4 md:col-span-2"
+                    style={{
+                      borderColor: "var(--ap-border)",
+                      background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                    }}
+                  >
+                    <p className="text-xs font-semibold" style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>
+                      Botón (CTA)
+                    </p>
 
                     <div className="mt-3 flex gap-2">
                       <button
-                        className={cx(
-                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
-                          cfg.ctaMode === "gradient"
-                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
-                            : "border-white/10 bg-white/5 hover:bg-white/10",
-                        )}
+                        className="rounded-2xl border px-3 py-2 text-xs font-semibold"
+                        style={{
+                          borderColor:
+                            cfg.ctaMode === "gradient"
+                              ? "color-mix(in oklab, var(--ap-cta) 45%, var(--ap-border))"
+                              : "var(--ap-border)",
+                          background:
+                            cfg.ctaMode === "gradient"
+                              ? "color-mix(in oklab, var(--ap-cta) 14%, transparent)"
+                              : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                          color: "var(--ap-text)",
+                        }}
                         onClick={() => setCfg((p) => ({ ...p, ctaMode: "gradient" }))}
                       >
                         Gradient
                       </button>
+
                       <button
-                        className={cx(
-                          "rounded-2xl border px-3 py-2 text-xs font-semibold",
-                          cfg.ctaMode === "solid"
-                            ? "border-fuchsia-400/40 bg-fuchsia-500/15"
-                            : "border-white/10 bg-white/5 hover:bg-white/10",
-                        )}
+                        className="rounded-2xl border px-3 py-2 text-xs font-semibold"
+                        style={{
+                          borderColor:
+                            cfg.ctaMode === "solid"
+                              ? "color-mix(in oklab, var(--ap-cta) 45%, var(--ap-border))"
+                              : "var(--ap-border)",
+                          background:
+                            cfg.ctaMode === "solid"
+                              ? "color-mix(in oklab, var(--ap-cta) 14%, transparent)"
+                              : "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                          color: "var(--ap-text)",
+                        }}
                         onClick={() => setCfg((p) => ({ ...p, ctaMode: "solid" }))}
                       >
                         Solid
@@ -739,45 +906,42 @@ export default function AdminThemesPage() {
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         CTA A
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.ctaA}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, ctaA: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, ctaA: e.target.value }))}
                         />
                       </label>
 
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         CTA B
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.ctaB}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, ctaB: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, ctaB: e.target.value }))}
                         />
                       </label>
 
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         CTA Solid
                         <input
                           type="color"
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-transparent"
+                          className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                          style={{ borderColor: "var(--ap-border)" }}
                           value={cfg.ctaSolid}
-                          onChange={(e) =>
-                            setCfg((p) => ({ ...p, ctaSolid: e.target.value }))
-                          }
+                          onChange={(e) => setCfg((p) => ({ ...p, ctaSolid: e.target.value }))}
                         />
                       </label>
                     </div>
 
                     <div className="mt-4">
-                      <label className="text-xs text-white/60">
+                      <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                         Ángulo CTA: {cfg.ctaAngle}°
                       </label>
                       <input
@@ -794,14 +958,26 @@ export default function AdminThemesPage() {
 
                     <div className="mt-5 flex flex-wrap gap-2">
                       <button
-                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+                        className="rounded-2xl border px-4 py-2 text-sm font-semibold"
+                        style={{
+                          borderColor: "var(--ap-border)",
+                          background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                          color: "var(--ap-text)",
+                        }}
                         onClick={() => setCfg(DEFAULT_CFG)}
                         type="button"
                       >
                         Reset
                       </button>
+
                       <button
-                        className="rounded-2xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-black hover:bg-fuchsia-400 disabled:opacity-60"
+                        className="rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                        style={{
+                          background: "color-mix(in oklab, var(--ap-cta) 22%, transparent)",
+                          border: "1px solid color-mix(in oklab, var(--ap-cta) 40%, var(--ap-border))",
+                          color: "var(--ap-text)",
+                          boxShadow: "0 0 22px color-mix(in oklab, var(--ap-cta) 14%, transparent)",
+                        }}
                         onClick={saveSelected}
                         disabled={saving}
                         type="button"
@@ -822,10 +998,12 @@ export default function AdminThemesPage() {
             <Preview cfg={cfg} />
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 text-sm text-white/70 max-w-[440px] xl:max-w-none">
-            <p className="font-semibold text-white">✅ Ahora sí funciona</p>
-            <p className="mt-1">
-              Cambias de theme → se carga su config desde BD.  
+          <div className="rounded-[28px] border p-4 text-sm ap-card max-w-[440px] xl:max-w-none">
+            <p className="font-semibold" style={{ color: "var(--ap-text)" }}>
+              ✅ Ahora sí funciona
+            </p>
+            <p className="mt-1" style={{ color: "var(--ap-muted)" }}>
+              Cambias de theme → se carga su config desde BD. <br />
               Editas → Guardar → se guarda en themes.config.
             </p>
           </div>

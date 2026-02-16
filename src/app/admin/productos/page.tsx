@@ -36,27 +36,26 @@ type StatusFilter = "all" | "active" | "inactive" | "out";
    UI helpers (classes)
 ========================= */
 function clsWrap() {
-  return "rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl";
+  return "ap-wrap rounded-[22px]";
 }
 function inputBase() {
-  return "rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl";
+  // ✅ más limpio + consistente + theme-aware
+  return "ap-input rounded-2xl p-3 text-sm outline-none";
 }
 function buttonGhost() {
-  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+  return "ap-btn ap-btn-ghost rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
 }
 function buttonPrimary() {
-  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+  return "ap-btn ap-btn-primary rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
 }
 function buttonDanger() {
-  return "rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60";
+  return "ap-btn ap-btn-danger rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
 }
 function clsChip() {
-  return "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold";
+  return "ap-chip inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold";
 }
 function badgeActive(active: boolean) {
-  return active
-    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
-    : "border-white/10 bg-white/5 text-white/70";
+  return active ? "ap-pill ap-pill-on" : "ap-pill ap-pill-off";
 }
 
 /* =========================
@@ -113,14 +112,8 @@ function hashToIndex(seed: string, mod: number) {
   return h % mod;
 }
 function avatarClass(seed: string) {
-  const palette = [
-    "bg-fuchsia-500/15 border-fuchsia-400/25 text-fuchsia-100",
-    "bg-emerald-500/15 border-emerald-400/25 text-emerald-100",
-    "bg-sky-500/15 border-sky-400/25 text-sky-100",
-    "bg-amber-500/15 border-amber-400/25 text-amber-100",
-    "bg-rose-500/15 border-rose-400/25 text-rose-100",
-    "bg-violet-500/15 border-violet-400/25 text-violet-100",
-  ];
+  // ✅ Ahora es theme-aware (usa CSS vars)
+  const palette = ["ap-av-1", "ap-av-2", "ap-av-3", "ap-av-4", "ap-av-5", "ap-av-6"];
   return palette[hashToIndex(seed, palette.length)];
 }
 function firstLetter(name: string) {
@@ -295,8 +288,8 @@ export default function AdminProductosPage() {
         icon: "error",
         title: "Error cargando más",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } finally {
       setLoadingMore(false);
@@ -321,8 +314,8 @@ export default function AdminProductosPage() {
           icon: "error",
           title: "Error",
           text: e?.message ?? "Error cargando tiendas",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--ap-bg-base)",
+          color: "var(--ap-text)",
         });
       }
     })();
@@ -339,8 +332,8 @@ export default function AdminProductosPage() {
           icon: "error",
           title: "Error",
           text: e?.message ?? "Error cargando productos",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--ap-bg-base)",
+          color: "var(--ap-text)",
         });
         setLoading(false);
       }
@@ -388,16 +381,16 @@ export default function AdminProductosPage() {
         title: "Producto creado",
         timer: 900,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo crear",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } finally {
       setSavingId(null);
@@ -441,16 +434,16 @@ export default function AdminProductosPage() {
         title: "Guardado",
         timer: 800,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error al guardar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
         confirmButtonColor: "#ef4444",
       });
     } finally {
@@ -467,8 +460,8 @@ export default function AdminProductosPage() {
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#ef4444",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--ap-bg-base)",
+      color: "var(--ap-text)",
     });
     if (!res.isConfirmed) return;
 
@@ -485,8 +478,8 @@ export default function AdminProductosPage() {
         icon: "error",
         title: "No se pudo eliminar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } finally {
       setDeletingId(null);
@@ -501,16 +494,16 @@ export default function AdminProductosPage() {
         title: "ID copiado",
         timer: 650,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     } catch {
       await Swal.fire({
         icon: "error",
         title: "No se pudo copiar",
         text: "Copia manualmente el ID.",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
       });
     }
   }
@@ -546,27 +539,146 @@ export default function AdminProductosPage() {
   /* =========================
      UI (header fijo)
   ========================= */
-  const HEADER_H = 210;
+  const HEADER_H = 0;
 
   return (
-    <main className="px-3 py-3 sm:p-6">
+    <main className="px-3 py-3 sm:p-6 text-[color:var(--ap-text)]">
+      {/* ✅ Theme auto (si ya lo tienes en AdminShell, esto actúa como fallback seguro) */}
+      <style jsx global>{`
+        :root {
+          --ap-text: rgba(255, 255, 255, 0.92);
+          --ap-muted: rgba(255, 255, 255, 0.7);
+          --ap-border: rgba(255, 255, 255, 0.12);
+          --ap-card: rgba(255, 255, 255, 0.06);
+          --ap-card-2: rgba(255, 255, 255, 0.045);
+          --ap-bg-base: #0b0b0b;
+
+          --ap-cta: #d946ef;
+          --ap-cta2: #a855f7;
+
+          --ap-danger: #ef4444;
+          --ap-success: #10b981;
+          --ap-warn: #f59e0b;
+        }
+
+        @media (prefers-color-scheme: light) {
+          :root {
+            --ap-text: rgba(17, 24, 39, 0.92);
+            --ap-muted: rgba(17, 24, 39, 0.65);
+            --ap-border: rgba(17, 24, 39, 0.14);
+            --ap-card: rgba(255, 255, 255, 0.82);
+            --ap-card-2: rgba(255, 255, 255, 0.72);
+            --ap-bg-base: #f7f7fb;
+
+            --ap-cta: #db2777;
+            --ap-cta2: #7c3aed;
+
+            --ap-danger: #dc2626;
+            --ap-success: #059669;
+            --ap-warn: #d97706;
+          }
+        }
+
+        .ap-wrap {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+
+        .ap-input {
+          width: 100%;
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          color: var(--ap-text);
+          border-radius: 16px;
+        }
+        .ap-input::placeholder {
+          color: color-mix(in oklab, var(--ap-text) 35%, transparent);
+        }
+
+        .ap-btn {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          color: var(--ap-text);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
+        .ap-btn:hover {
+          filter: brightness(1.04);
+        }
+
+        .ap-btn-primary {
+          border-color: color-mix(in oklab, var(--ap-cta) 35%, var(--ap-border));
+          background: color-mix(in oklab, var(--ap-cta) 18%, transparent);
+          box-shadow: 0 0 22px color-mix(in oklab, var(--ap-cta) 18%, transparent);
+        }
+
+        .ap-btn-danger {
+          border-color: color-mix(in oklab, var(--ap-danger) 30%, var(--ap-border));
+          background: color-mix(in oklab, var(--ap-danger) 12%, transparent);
+          color: color-mix(in oklab, var(--ap-text) 70%, var(--ap-danger));
+        }
+
+        .ap-chip {
+          border-color: var(--ap-border);
+          background: color-mix(in oklab, var(--ap-card) 70%, transparent);
+          color: color-mix(in oklab, var(--ap-text) 82%, transparent);
+        }
+
+        .ap-pill {
+          border: 1px solid var(--ap-border);
+          background: var(--ap-card-2);
+          color: var(--ap-text);
+        }
+        .ap-pill-on {
+          border-color: color-mix(in oklab, var(--ap-success) 35%, var(--ap-border));
+          background: color-mix(in oklab, var(--ap-success) 14%, transparent);
+          color: color-mix(in oklab, var(--ap-text) 75%, var(--ap-success));
+        }
+        .ap-pill-off {
+          border-color: var(--ap-border);
+          background: var(--ap-card-2);
+          color: color-mix(in oklab, var(--ap-text) 70%, transparent);
+        }
+
+        /* Avatars */
+        .ap-av-1 { background: color-mix(in oklab, var(--ap-cta) 16%, transparent); border-color: color-mix(in oklab, var(--ap-cta) 25%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-2 { background: color-mix(in oklab, var(--ap-success) 14%, transparent); border-color: color-mix(in oklab, var(--ap-success) 22%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-3 { background: color-mix(in oklab, #0ea5e9 14%, transparent); border-color: color-mix(in oklab, #0ea5e9 22%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-4 { background: color-mix(in oklab, var(--ap-warn) 14%, transparent); border-color: color-mix(in oklab, var(--ap-warn) 22%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-5 { background: color-mix(in oklab, #fb7185 14%, transparent); border-color: color-mix(in oklab, #fb7185 22%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-6 { background: color-mix(in oklab, var(--ap-cta2) 14%, transparent); border-color: color-mix(in oklab, var(--ap-cta2) 22%, var(--ap-border)); color: var(--ap-text); }
+      `}</style>
+
       {/* HEADER FIJO */}
-      <div className="fixed top-0 left-0 right-0 z-50">
-        <div className="bg-[#0b0b0b]/92 backdrop-blur-2xl px-3 py-3 sm:px-6 sm:py-6">
+      <div className="top-0 left-0 right-0 z-50">
+        <div
+          className="backdrop-blur-2xl px-3 py-3 sm:px-6 sm:py-6 "
+          style={{
+            background: "color-mix(in oklab, var(--ap-bg-base) 88%, transparent)",
+          }}
+        >
           <div className={`${clsWrap()} p-3 sm:p-5`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-2xl font-bold leading-tight">Admin · Productos</h2>
-                <p className="text-[11px] sm:text-sm text-white/70">
+                <p className="text-[11px] sm:text-sm" style={{ color: "var(--ap-muted)" }}>
                   Tienda:{" "}
-                  <b className="text-white/90">{currentStore ? `${currentStore.name} (${currentStore.slug})` : "—"}</b>{" "}
-                  · Cargados: <b className="text-white/90">{products.length}</b> · Mostrando:{" "}
-                  <b className="text-white/90">{filtered.length}</b>
+                  <b style={{ color: "var(--ap-text)" }}>
+                    {currentStore ? `${currentStore.name} (${currentStore.slug})` : "—"}
+                  </b>{" "}
+                  · Cargados: <b style={{ color: "var(--ap-text)" }}>{products.length}</b> · Mostrando:{" "}
+                  <b style={{ color: "var(--ap-text)" }}>{filtered.length}</b>
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button className={buttonGhost()} onClick={reloadStoreData} disabled={!storeId || loading || loadingMore}>
+                <button
+                  className={buttonGhost()}
+                  onClick={reloadStoreData}
+                  disabled={!storeId || loading || loadingMore}
+                >
                   Recargar
                 </button>
 
@@ -594,8 +706,13 @@ export default function AdminProductosPage() {
               </div>
             </div>
 
-            {/* filtros */}
-            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+            {/* ✅ filtros adaptativos al ancho disponible */}
+            <div
+              className="mt-3 grid gap-2"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+              }}
+            >
               <select className={inputBase()} value={storeId} onChange={(e) => setStoreId(e.target.value)}>
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -613,17 +730,26 @@ export default function AdminProductosPage() {
                 ))}
               </select>
 
-              <select className={inputBase()} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+              <select
+                className={inputBase()}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              >
                 <option value="all">Estado: Todos</option>
                 <option value="active">Estado: Activos</option>
                 <option value="inactive">Estado: Inactivos</option>
                 <option value="out">Stock: Agotados</option>
               </select>
 
-              <input className={inputBase()} placeholder="Buscar (nombre o descripción)..." value={q} onChange={(e) => setQ(e.target.value)} />
+              <input
+                className={inputBase()}
+                placeholder="Buscar (nombre o descripción)..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
 
-            <p className="mt-2 text-[11px] sm:text-xs text-white/60">
+            <p className="mt-2 text-[11px] sm:text-xs" style={{ color: "var(--ap-muted)" }}>
               Cargando en bloques de {PAGE_SIZE}. Usa “Cargar más” al final.
             </p>
           </div>
@@ -635,11 +761,15 @@ export default function AdminProductosPage() {
 
       {/* BODY */}
       {loading ? (
-        <div className={`${clsWrap()} p-6 text-sm text-white/70`}>Cargando…</div>
+        <div className={`${clsWrap()} p-6 text-sm`} style={{ color: "var(--ap-muted)" }}>
+          Cargando…
+        </div>
       ) : filtered.length === 0 ? (
         <div className={`${clsWrap()} p-6`}>
           <p className="font-semibold">No hay productos</p>
-          <p className="mt-1 text-sm text-white/70">Crea un producto o cambia los filtros.</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--ap-muted)" }}>
+            Crea un producto o cambia los filtros.
+          </p>
         </div>
       ) : (
         <div className={`${clsWrap()} overflow-hidden`}>
@@ -652,7 +782,7 @@ export default function AdminProductosPage() {
             const letter = firstLetter(p.name);
 
             return (
-              <div key={p.id} className="border-b border-white/10">
+              <div key={p.id} className="border-b" style={{ borderColor: "var(--ap-border)" }}>
                 {/* ROW compacta */}
                 <div className="px-3 py-3 flex items-center gap-3">
                   <div className={`h-12 w-12 rounded-2xl border flex items-center justify-center shrink-0 ${avatarClass(p.id)}`}>
@@ -664,37 +794,49 @@ export default function AdminProductosPage() {
                       <p className="font-semibold truncate">{p.name}</p>
 
                       {!p.active ? (
-                        <span className={`${clsChip()} border-white/10 bg-white/10 text-white/70`}>Inactivo</span>
+                        <span className={`${clsChip()}`} style={{ opacity: 0.85 }}>
+                          Inactivo
+                        </span>
                       ) : null}
 
                       <span
-                        className={`${clsChip()} ${
-                          out
-                            ? "border-red-400/30 bg-red-500/10 text-red-100"
-                            : "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
-                        }`}
+                        className={`${clsChip()}`}
+                        style={{
+                          borderColor: out
+                            ? "color-mix(in oklab, var(--ap-danger) 30%, var(--ap-border))"
+                            : "color-mix(in oklab, var(--ap-success) 30%, var(--ap-border))",
+                          background: out
+                            ? "color-mix(in oklab, var(--ap-danger) 12%, transparent)"
+                            : "color-mix(in oklab, var(--ap-success) 12%, transparent)",
+                          color: out
+                            ? "color-mix(in oklab, var(--ap-text) 70%, var(--ap-danger))"
+                            : "color-mix(in oklab, var(--ap-text) 70%, var(--ap-success))",
+                        }}
                       >
                         {stockLabel(p.stock)}
                       </span>
 
-                      {dirtyActive ? <span className="text-[11px] text-white/50">(cambios sin guardar)</span> : null}
+                      {dirtyActive ? (
+                        <span className="text-[11px]" style={{ color: "var(--ap-muted)" }}>
+                          (cambios sin guardar)
+                        </span>
+                      ) : null}
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--ap-muted)" }}>
                       <span>
-                        Mayorista: <b className="text-white/90">{money(Number(p.price_wholesale ?? 0))}</b>
+                        Mayorista: <b style={{ color: "var(--ap-text)" }}>{money(Number(p.price_wholesale ?? 0))}</b>
                       </span>
-                      <span className="text-white/30">·</span>
+                      <span style={{ opacity: 0.35 }}>·</span>
                       <span>
-                        Detal: <b className="text-white/90">{money(Number(p.price_retail ?? 0))}</b>
+                        Detal: <b style={{ color: "var(--ap-text)" }}>{money(Number(p.price_retail ?? 0))}</b>
                       </span>
-                      <span className="text-white/30">·</span>
-                      <span className="text-white/60">{formatDate(p.created_at)}</span>
+                      <span style={{ opacity: 0.35 }}>·</span>
+                      <span style={{ opacity: 0.85 }}>{formatDate(p.created_at)}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* ✅ link con [id] */}
                     <Link className={buttonGhost()} href={`/admin/productos/${p.id}`}>
                       Abrir →
                     </Link>
@@ -710,80 +852,96 @@ export default function AdminProductosPage() {
                   <div className="px-3 pb-4">
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
                       {/* Left */}
-                      <div className="rounded-[22px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl space-y-3">
+                      <div className={`${clsWrap()} p-4 space-y-3`}>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <div className="sm:col-span-2">
-                            <label className="text-xs text-white/70">Nombre</label>
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Nombre
+                            </label>
                             <input
-                              className={`mt-1 w-full ${inputBase()}`}
+                              className={`mt-1 ${inputBase()}`}
                               value={p.name}
                               onChange={(e) => patch(p.id, { name: e.target.value })}
                             />
                           </div>
 
                           <div className="sm:col-span-2">
-                            <label className="text-xs text-white/70">Descripción</label>
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Descripción
+                            </label>
                             <textarea
-                              className="mt-1 min-h-[90px] w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-sm outline-none placeholder:text-white/40 backdrop-blur-xl"
+                              className={`mt-1 min-h-[90px] ${inputBase()}`}
                               value={p.description ?? ""}
                               onChange={(e) => patch(p.id, { description: e.target.value })}
                             />
                           </div>
 
                           <div>
-                            <label className="text-xs text-white/70">Precio Detal</label>
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Precio Detal
+                            </label>
                             <input
                               type="text"
                               inputMode="numeric"
-                              className={`mt-1 w-full ${inputBase()}`}
+                              className={`mt-1 ${inputBase()}`}
                               value={String(p.price_retail ?? 0)}
                               onChange={(e) => patch(p.id, { price_retail: digitsOnlyToNumber(e.target.value, 0) })}
                             />
                           </div>
 
                           <div>
-                            <label className="text-xs text-white/70">Precio Mayor</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className={`mt-1 w-full ${inputBase()}`}
-                              value={String(p.price_wholesale ?? 0)}
-                              onChange={(e) => patch(p.id, { price_wholesale: digitsOnlyToNumber(e.target.value, 0) })}
-                            />
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="text-xs text-white/70">Mínimo Mayor</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className={`mt-1 w-full ${inputBase()}`}
-                              value={String(p.min_wholesale ?? 1)}
-                              onChange={(e) => patch(p.id, { min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)) })}
-                            />
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="text-xs text-white/70">
-                              Stock <span className="text-white/40">(vacío = ilimitado)</span>
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Precio Mayor
                             </label>
                             <input
                               type="text"
                               inputMode="numeric"
-                              className={`mt-1 w-full ${inputBase()}`}
-                              value={p.stock ?? ""}
+                              className={`mt-1 ${inputBase()}`}
+                              value={String(p.price_wholesale ?? 0)}
+                              onChange={(e) =>
+                                patch(p.id, { price_wholesale: digitsOnlyToNumber(e.target.value, 0) })
+                              }
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Mínimo Mayor
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className={`mt-1 ${inputBase()}`}
+                              value={String(p.min_wholesale ?? 1)}
+                              onChange={(e) =>
+                                patch(p.id, { min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)) })
+                              }
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Stock <span style={{ opacity: 0.55 }}>(vacío = ilimitado)</span>
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className={`mt-1 ${inputBase()}`}
+                              value={(p.stock ?? "") as any}
                               placeholder="Ej: 10 o vacío"
                               onChange={(e) => setStockWithRule(p.id, safeIntOrNull(e.target.value))}
                             />
-                            <p className="mt-2 text-[11px] text-white/50">
+                            <p className="mt-2 text-[11px]" style={{ color: "var(--ap-muted)" }}>
                               Si el stock llega a <b>0</b>, se marca <b>inactivo (sin guardar)</b>.
                             </p>
                           </div>
 
                           <div className="sm:col-span-2">
-                            <label className="text-xs text-white/70">Categoría</label>
+                            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                              Categoría
+                            </label>
                             <select
-                              className={`mt-1 w-full ${inputBase()}`}
+                              className={`mt-1 ${inputBase()}`}
                               value={p.category_id ?? ""}
                               onChange={(e) => patch(p.id, { category_id: e.target.value || null })}
                             >
@@ -799,11 +957,15 @@ export default function AdminProductosPage() {
 
                         {/* Active draft */}
                         <div className="flex items-center gap-2">
-                          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${badgeActive(uiActive)}`}>
+                          <div
+                            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold border ${badgeActive(
+                              uiActive
+                            )}`}
+                          >
                             <input type="checkbox" checked={uiActive} onChange={() => toggleActiveDraft(p.id)} />
                             {uiActive ? "Activo" : "Inactivo"}
                           </div>
-                          <span className="text-xs text-white/50">
+                          <span className="text-xs" style={{ color: "var(--ap-muted)" }}>
                             (Se aplica al guardar)
                           </span>
                         </div>
@@ -822,16 +984,18 @@ export default function AdminProductosPage() {
                             Copiar ID
                           </button>
 
-                          <span className="ml-auto text-xs text-white/45">
-                            ID: <span className="text-white/70">{p.id}</span>
+                          <span className="ml-auto text-xs" style={{ color: "var(--ap-muted)" }}>
+                            ID: <span style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>{p.id}</span>
                           </span>
                         </div>
                       </div>
 
                       {/* Right image */}
-                      <div className="rounded-[22px] border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+                      <div className={`${clsWrap()} p-4`}>
                         <p className="font-semibold">Imagen principal</p>
-                        <p className="text-sm text-white/70">Sube la imagen y luego presiona Guardar.</p>
+                        <p className="text-sm" style={{ color: "var(--ap-muted)" }}>
+                          Sube la imagen y luego presiona Guardar.
+                        </p>
 
                         <div className="mt-3">
                           <ImageUpload
@@ -858,7 +1022,9 @@ export default function AdminProductosPage() {
                 {loadingMore ? "Cargando…" : "Cargar más"}
               </button>
             ) : (
-              <div className="text-xs text-white/50">No hay más productos por cargar.</div>
+              <div className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                No hay más productos por cargar.
+              </div>
             )}
           </div>
         </div>

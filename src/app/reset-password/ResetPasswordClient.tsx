@@ -99,25 +99,72 @@ export default function ResetPasswordClient() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black/20 p-6">
+    <main
+      className="min-h-screen flex items-center justify-center p-6 text-[color:var(--t-text)]"
+      style={{
+        background: "var(--t-bg-base)",
+      }}
+    >
+      {/* Fondo (auto claro/oscuro con tokens) */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
+        <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)" }} />
+        <div className="absolute inset-0 starfield opacity-[0.55]" />
+        <div
+          className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full blur-3xl opacity-[0.18]"
+          style={{
+            background:
+              "radial-gradient(circle, color-mix(in oklab, var(--t-accent) 55%, transparent), transparent 62%)",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 top-0 h-44"
+          style={{
+            background:
+              "linear-gradient(to bottom, color-mix(in oklab, var(--t-bg-base) 0%, black 22%), transparent)",
+          }}
+        />
+      </div>
+
+      <div
+        className="w-full max-w-md rounded-2xl border p-6 backdrop-blur-xl"
+        style={{
+          borderColor: "var(--t-card-border)",
+          background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
+          boxShadow: "0 24px 70px color-mix(in oklab, black 42%, transparent)",
+        }}
+      >
         <h1 className="text-2xl font-bold">Crear nueva contraseña</h1>
-        <p className="mt-2 text-sm opacity-80">
+        <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
           Abre esta página desde el enlace que llegó a tu correo.
         </p>
 
         {!ready ? (
-          <div className="mt-6 rounded-xl border border-white/10 p-4 text-sm">
+          <div
+            className="mt-6 rounded-xl border p-4 text-sm"
+            style={{
+              borderColor: "var(--t-card-border)",
+              background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+              color: "var(--t-text)",
+            }}
+          >
             {msg ?? "Validando enlace..."}
           </div>
         ) : (
           <form onSubmit={updatePass} className="mt-6 space-y-3">
             <div>
-              <label className="text-sm opacity-80">Nueva contraseña</label>
+              <label className="text-sm" style={{ color: "var(--t-muted)" }}>
+                Nueva contraseña
+              </label>
 
               <div className="mt-1 flex gap-2">
                 <input
-                  className="w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+                  className="w-full rounded-xl border p-3 outline-none"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                    color: "var(--t-text)",
+                  }}
                   placeholder="Nueva contraseña"
                   type={show ? "text" : "password"}
                   value={password}
@@ -125,9 +172,15 @@ export default function ResetPasswordClient() {
                   required
                   minLength={6}
                 />
+
                 <button
                   type="button"
-                  className="rounded-xl border border-white/10 px-3"
+                  className="rounded-xl border px-3 backdrop-blur-xl"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
+                    color: "var(--t-text)",
+                  }}
                   onClick={() => setShow((s) => !s)}
                 >
                   {show ? "🙈" : "👁️"}
@@ -135,22 +188,42 @@ export default function ResetPasswordClient() {
               </div>
 
               <div className="mt-2">
-                <div className="h-2 w-full rounded-full bg-white/10">
+                <div
+                  className="h-2 w-full rounded-full"
+                  style={{
+                    background: "color-mix(in oklab, var(--t-card-border) 40%, transparent)",
+                  }}
+                >
                   <div
-                    className="h-2 rounded-full bg-white/60"
-                    style={{ width: `${(strength / 6) * 100}%` }}
+                    className="h-2 rounded-full"
+                    style={{
+                      width: `${(strength / 6) * 100}%`,
+                      background: "var(--t-cta)",
+                      boxShadow: "0 0 0 6px color-mix(in oklab, var(--t-cta) 14%, transparent)",
+                    }}
                   />
                 </div>
-                <p className="mt-1 text-xs opacity-80">
-                  Seguridad: <b>{strengthLabel(strength)}</b> (usa mayúsculas, números y símbolos)
+
+                <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                  Seguridad:{" "}
+                  <b style={{ color: "var(--t-text)" }}>{strengthLabel(strength)}</b> (usa mayúsculas, números y
+                  símbolos)
                 </p>
               </div>
             </div>
 
             <div>
-              <label className="text-sm opacity-80">Repite la contraseña</label>
+              <label className="text-sm" style={{ color: "var(--t-muted)" }}>
+                Repite la contraseña
+              </label>
+
               <input
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 p-3 outline-none"
+                className="mt-1 w-full rounded-xl border p-3 outline-none"
+                style={{
+                  borderColor: "var(--t-card-border)",
+                  background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                  color: "var(--t-text)",
+                }}
                 placeholder="Repite la contraseña"
                 type={show ? "text" : "password"}
                 value={password2}
@@ -160,18 +233,37 @@ export default function ResetPasswordClient() {
               />
 
               {password2.length > 0 && (
-                <p className="mt-1 text-xs">{same ? "✅ Coinciden" : "❌ No coinciden"}</p>
+                <p
+                  className="mt-1 text-xs"
+                  style={{
+                    color: same
+                      ? "color-mix(in oklab, var(--t-success, #22c55e) 70%, var(--t-text))"
+                      : "color-mix(in oklab, var(--t-danger, #ef4444) 70%, var(--t-text))",
+                  }}
+                >
+                  {same ? "✅ Coinciden" : "❌ No coinciden"}
+                </p>
               )}
             </div>
 
             <button
               disabled={loading}
-              className="w-full rounded-xl bg-white text-black p-3 font-semibold disabled:opacity-60"
+              className="w-full rounded-xl border p-3 font-semibold disabled:opacity-60"
+              style={{
+                borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))",
+                background: "color-mix(in oklab, var(--t-cta) 22%, transparent)",
+                color: "color-mix(in oklab, var(--t-text) 95%, transparent)",
+                boxShadow: "0 18px 45px color-mix(in oklab, var(--t-cta) 18%, transparent)",
+              }}
             >
               {loading ? "Guardando..." : "Cambiar contraseña"}
             </button>
 
-            {msg && <p className="text-sm">{msg}</p>}
+            {msg && (
+              <p className="text-sm" style={{ color: "var(--t-text)" }}>
+                {msg}
+              </p>
+            )}
           </form>
         )}
       </div>

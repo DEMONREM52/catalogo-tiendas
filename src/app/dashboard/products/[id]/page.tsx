@@ -26,22 +26,83 @@ type Product = {
   stock: number | null; // null = ilimitado
 };
 
-function clsInputSoft() {
-  return "w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm outline-none placeholder:text-white/40";
+// ✅ Styles con tokens (auto claro/oscuro por sistema)
+function inputSoftProps(extraClassName = "") {
+  return {
+    className: `w-full rounded-2xl border p-3 text-sm outline-none ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+      color: "var(--t-text)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnSoft() {
-  return "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur-xl transition hover:bg-white/10 disabled:opacity-60";
+function btnSoftProps() {
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnPrimary() {
-  return "rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(217,70,239,0.15)] transition hover:bg-fuchsia-500/25 disabled:opacity-60";
+function btnPrimaryProps() {
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+    style: {
+      borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)",
+      background: "color-mix(in oklab, var(--t-accent) 18%, transparent)",
+      color: "var(--t-text)",
+      boxShadow: "0 0 22px color-mix(in oklab, var(--t-accent) 14%, transparent)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnDanger() {
-  return "rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60";
+function btnDangerProps() {
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+    style: {
+      borderColor: "color-mix(in oklab, #ef4444 45%, var(--t-card-border))",
+      background: "color-mix(in oklab, #ef4444 14%, transparent)",
+      color: "var(--t-text)",
+    } as React.CSSProperties,
+  };
 }
-function clsBtnToggle(active: boolean) {
-  return active
-    ? "rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:opacity-60"
-    : "rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10 disabled:opacity-60";
+function btnToggleProps(active: boolean) {
+  if (active) {
+    return {
+      className:
+        "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+      style: {
+        borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))",
+        background: "color-mix(in oklab, #10b981 14%, transparent)",
+        color: "var(--t-text)",
+      } as React.CSSProperties,
+    };
+  }
+  return {
+    className:
+      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
+      color: "color-mix(in oklab, var(--t-text) 80%, transparent)",
+    } as React.CSSProperties,
+  };
+}
+
+function panelProps(extraClassName = "") {
+  return {
+    className: `rounded-[22px] border backdrop-blur-xl ${extraClassName}`,
+    style: {
+      borderColor: "var(--t-card-border)",
+      background: "var(--t-card-bg)",
+      boxShadow: "var(--t-shadow)",
+    } as React.CSSProperties,
+  };
 }
 
 function clampNum(raw: any, fallback = 0) {
@@ -93,8 +154,8 @@ export default function EditProductPage() {
         icon: "error",
         title: "ID inválido",
         text: `No se pudo leer el ID del producto: "${String(id)}"`,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
       router.push("/dashboard/products");
       return;
@@ -111,8 +172,8 @@ export default function EditProductPage() {
         await Swal.fire({
           icon: "error",
           title: "Debes iniciar sesión",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
         });
         router.push("/login");
         return;
@@ -130,8 +191,8 @@ export default function EditProductPage() {
         await Swal.fire({
           icon: "error",
           title: "No se encontró tu tienda",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
         });
         router.push("/dashboard/products");
         return;
@@ -164,8 +225,8 @@ export default function EditProductPage() {
           icon: "error",
           title: "No encontrado",
           text: "Ese producto no existe o no pertenece a tu tienda.",
-          background: "#0b0b0b",
-          color: "#fff",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
         });
         router.push("/dashboard/products");
         return;
@@ -189,8 +250,8 @@ export default function EditProductPage() {
         icon: "error",
         title: "Error",
         text: e?.message ?? "Error cargando producto",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
       router.push("/dashboard/products");
     } finally {
@@ -222,12 +283,7 @@ export default function EditProductPage() {
         category_id: draft.category_id || null,
       };
 
-      const { error } = await sb
-        .from("products")
-        .update(payload)
-        .eq("id", draft.id)
-        .eq("store_id", storeId);
-
+      const { error } = await sb.from("products").update(payload).eq("id", draft.id).eq("store_id", storeId);
       if (error) throw error;
 
       setProduct({ ...draft });
@@ -237,16 +293,16 @@ export default function EditProductPage() {
         title: "Guardado",
         timer: 900,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
         title: "Error al guardar",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } finally {
       setSaving(false);
@@ -264,20 +320,15 @@ export default function EditProductPage() {
       confirmButtonColor: "#ef4444",
       cancelButtonText: "Cancelar",
       confirmButtonText: "Sí, eliminar",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
     });
     if (!res.isConfirmed) return;
 
     setSaving(true);
     try {
       const sb = supabaseBrowser();
-      const { error } = await sb
-        .from("products")
-        .delete()
-        .eq("id", draft.id)
-        .eq("store_id", storeId);
-
+      const { error } = await sb.from("products").delete().eq("id", draft.id).eq("store_id", storeId);
       if (error) throw error;
 
       await Swal.fire({
@@ -285,8 +336,8 @@ export default function EditProductPage() {
         title: "Eliminado",
         timer: 850,
         showConfirmButton: false,
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
 
       router.push("/dashboard/products");
@@ -295,8 +346,8 @@ export default function EditProductPage() {
         icon: "error",
         title: "Error eliminando",
         text: e?.message ?? "Error",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
     } finally {
       setSaving(false);
@@ -316,22 +367,32 @@ export default function EditProductPage() {
       confirmButtonText: "Salir",
       cancelButtonText: "Seguir editando",
       confirmButtonColor: "#ef4444",
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
     });
     if (res.isConfirmed) router.push("/dashboard/products");
   }
 
+  const headerPanel = panelProps("p-4 sm:p-6");
+  const loadingPanel = panelProps("p-6");
+  const leftPanel = panelProps("p-4 sm:p-6 space-y-3");
+  const rightPanel = panelProps("p-4 sm:p-6");
+
+  const softBtn = btnSoftProps();
+  const primaryBtn = btnPrimaryProps();
+  const dangerBtn = btnDangerProps();
+  const toggleBtn = btnToggleProps(!!draft?.active);
+
   return (
-    <main className="px-3 py-3 sm:p-6 space-y-3 panel-enter">
+    <main className="px-3 py-3 sm:p-6 space-y-3 panel-enter" style={{ color: "var(--t-text)" }}>
       {/* Header */}
-      <div className="rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl p-4 sm:p-6">
+      <div {...headerPanel}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold truncate">
               Editar producto {draft?.name ? `· ${draft.name}` : ""}
             </h1>
-            <p className="text-sm text-white/70 mt-1">
+            <p className="text-sm mt-1" style={{ color: "var(--t-muted)" }}>
               {isDirty ? "Tienes cambios sin guardar." : "Sin cambios."}
             </p>
           </div>
@@ -339,7 +400,8 @@ export default function EditProductPage() {
           {/* ✅ Botonera arriba a la derecha (incluye Activo/Inactivo) */}
           <div className="flex flex-wrap gap-2 sm:justify-end">
             <button
-              className={clsBtnToggle(!!draft?.active)}
+              className={toggleBtn.className}
+              style={toggleBtn.style}
               type="button"
               disabled={saving || loading || !draft}
               onClick={() => draft && setDraft({ ...draft, active: !draft.active })}
@@ -348,12 +410,13 @@ export default function EditProductPage() {
               {draft?.active ? "Activo ✅" : "Inactivo ⛔"}
             </button>
 
-            <button className={clsBtnSoft()} type="button" onClick={() => void goBack()}>
+            <button className={softBtn.className} style={softBtn.style} type="button" onClick={() => void goBack()}>
               Volver
             </button>
 
             <button
-              className={clsBtnPrimary()}
+              className={primaryBtn.className}
+              style={primaryBtn.style}
               type="button"
               disabled={saving || loading || !draft}
               onClick={() => void save()}
@@ -362,7 +425,8 @@ export default function EditProductPage() {
             </button>
 
             <button
-              className={clsBtnDanger()}
+              className={dangerBtn.className}
+              style={dangerBtn.style}
               type="button"
               disabled={saving || loading || !draft}
               onClick={() => void remove()}
@@ -375,25 +439,31 @@ export default function EditProductPage() {
 
       {/* Body */}
       {loading || !draft ? (
-        <div className="rounded-[22px] border border-white/10 bg-white/5 p-6 text-sm text-white/70">
-          Cargando…
+        <div {...loadingPanel} className={`${loadingPanel.className} text-sm`} style={loadingPanel.style}>
+          <span style={{ color: "var(--t-muted)" }}>Cargando…</span>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-3">
-          <div className="rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl p-4 sm:p-6 space-y-3">
+          <div {...leftPanel}>
             <div>
-              <label className="text-xs text-white/70">Nombre</label>
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Nombre
+              </label>
               <input
-                className={`mt-1 ${clsInputSoft()}`}
+                className={`mt-1 ${inputSoftProps().className}`}
+                style={inputSoftProps().style}
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
             </div>
 
             <div>
-              <label className="text-xs text-white/70">Descripción</label>
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Descripción
+              </label>
               <textarea
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm outline-none min-h-[120px]"
+                className={`mt-1 ${inputSoftProps("min-h-[120px]").className}`}
+                style={inputSoftProps().style}
                 value={draft.description ?? ""}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
@@ -401,22 +471,26 @@ export default function EditProductPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-white/70">Precio Detal</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio Detal
+                </label>
                 <input
-                  className={`mt-1 ${clsInputSoft()}`}
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
                   type="text"
                   inputMode="numeric"
                   value={String(draft.price_retail ?? 0)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })
-                  }
+                  onChange={(e) => setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })}
                 />
               </div>
 
               <div>
-                <label className="text-xs text-white/70">Precio Mayor</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio Mayor
+                </label>
                 <input
-                  className={`mt-1 ${clsInputSoft()}`}
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
                   type="text"
                   inputMode="numeric"
                   value={String(draft.price_wholesale ?? 0)}
@@ -427,9 +501,12 @@ export default function EditProductPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="text-xs text-white/70">Mínimo Mayor</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Mínimo Mayor
+                </label>
                 <input
-                  className={`mt-1 ${clsInputSoft()}`}
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
                   type="text"
                   inputMode="numeric"
                   value={String(draft.min_wholesale ?? 1)}
@@ -443,9 +520,12 @@ export default function EditProductPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="text-xs text-white/70">Stock (vacío = ilimitado)</label>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Stock (vacío = ilimitado)
+                </label>
                 <input
-                  className={`mt-1 ${clsInputSoft()}`}
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
                   type="text"
                   inputMode="numeric"
                   value={draft.stock ?? ""}
@@ -457,7 +537,8 @@ export default function EditProductPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                className={clsBtnSoft()}
+                className={softBtn.className}
+                style={softBtn.style}
                 type="button"
                 onClick={() => setDraft({ ...draft, stock: null })}
               >
@@ -465,7 +546,8 @@ export default function EditProductPage() {
               </button>
 
               <button
-                className={clsBtnSoft()}
+                className={softBtn.className}
+                style={softBtn.style}
                 type="button"
                 onClick={() => setDraft({ ...draft, stock: 0 })}
               >
@@ -474,9 +556,12 @@ export default function EditProductPage() {
             </div>
 
             <div>
-              <label className="text-xs text-white/70">Categoría</label>
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Categoría
+              </label>
               <select
-                className={`mt-1 ${clsInputSoft()}`}
+                className={`mt-1 ${inputSoftProps().className}`}
+                style={inputSoftProps().style}
                 value={draft.category_id ?? ""}
                 onChange={(e) => setDraft({ ...draft, category_id: e.target.value || null })}
               >
@@ -489,14 +574,14 @@ export default function EditProductPage() {
               </select>
             </div>
 
-            <p className="text-xs text-white/50 pt-2">
-              ID: <span className="text-white/70">{draft.id}</span>
+            <p className="text-xs pt-2" style={{ color: "color-mix(in oklab, var(--t-text) 60%, transparent)" }}>
+              ID: <span style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{draft.id}</span>
             </p>
           </div>
 
-          <div className="rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl p-4 sm:p-6">
+          <div {...rightPanel}>
             <p className="font-semibold">Imagen principal</p>
-            <p className="text-sm text-white/70 mt-1">
+            <p className="text-sm mt-1" style={{ color: "var(--t-muted)" }}>
               Se guarda cuando presionas Guardar.
             </p>
 
@@ -511,7 +596,9 @@ export default function EditProductPage() {
                   onUploaded={(url) => setDraft({ ...draft, image_url: url })}
                 />
               ) : (
-                <div className="text-xs text-white/60">Cargando usuario…</div>
+                <div className="text-xs" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
+                  Cargando usuario…
+                </div>
               )}
             </div>
           </div>
