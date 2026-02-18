@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -26,11 +26,7 @@ type StatusFilter = "all" | "active" | "inactive";
 type StockFilter = "all" | "in" | "out" | "unlimited";
 type SortBy = "newest" | "name" | "price" | "stock";
 
-/* ========= UI (✅ soporta tema oscuro y claro) =========
-   Requisito: "las letras sean negras en el tema claro"
-   - Usamos text-slate-900 (claro) y dark:text-white (oscuro)
-   - Igual para inputs, botones, chips, bordes y header fijo
-======================================================= */
+/* ========= UI ========= */
 function clsWrap() {
   return [
     "rounded-[22px] border backdrop-blur-xl",
@@ -55,9 +51,7 @@ function clsBtnSoft() {
 function clsBtnPrimary() {
   return [
     "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    // claro
     "border-fuchsia-300 bg-fuchsia-100 text-slate-900 hover:bg-fuchsia-200",
-    // oscuro
     "dark:border-fuchsia-400/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-100 dark:hover:bg-fuchsia-500/25",
     "dark:shadow-[0_0_22px_rgba(217,70,239,0.15)]",
   ].join(" ");
@@ -103,10 +97,7 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced;
 }
 
-/* ========= Avatar (letra + color bonito) =========
-   ✅ En tema claro: letra NEGRA
-   ✅ En tema oscuro: letra clara
-=================================================== */
+/* ========= Avatar (miniatura + fallback letra) ========= */
 function hashToIndex(seed: string, mod: number) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -114,7 +105,6 @@ function hashToIndex(seed: string, mod: number) {
 }
 function avatarClass(seed: string) {
   const palette = [
-    // claro -> text-slate-900 ; oscuro -> text-fuchsia-100, etc.
     "bg-fuchsia-200/70 border-fuchsia-300 text-slate-900 dark:bg-fuchsia-500/15 dark:border-fuchsia-400/25 dark:text-fuchsia-100",
     "bg-emerald-200/70 border-emerald-300 text-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/25 dark:text-emerald-100",
     "bg-sky-200/70 border-sky-300 text-slate-900 dark:bg-sky-500/15 dark:border-sky-400/25 dark:text-sky-100",
@@ -129,32 +119,81 @@ function firstLetter(name: string) {
   return (t[0] || "?").toUpperCase();
 }
 
-/* ========= Paging helpers ========= */
-const PAGE_SIZE = 20;
+/* ========= Paging ========= */
+const PAGE_SIZE = 20;   // normal (sin búsqueda)
+const SEARCH_PAGE = 50; // ✅ búsqueda pro
 
-// Cursor por created_at (ISO). Para evitar duplicados si hay mismos created_at, también pedimos id.
 type Cursor = { created_at: string; id: string } | null;
 
 export default function ProductsListPage() {
+  // carga inicial
   const [loading, setLoading] = useState(true);
+
+  // buscando (sin bloquear input)
+  const [searching, setSearching] = useState(false);
+
+  // cargar más (modo normal)
   const [loadingMore, setLoadingMore] = useState(false);
 
   const [storeId, setStoreId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
-  // pagination state
+  // paginación normal
   const [cursor, setCursor] = useState<Cursor>(null);
   const [hasMore, setHasMore] = useState(true);
 
-  // filters
+  // paginación búsqueda pro
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [hasMoreSearch, setHasMoreSearch] = useState(false);
+
+  // filtros
   const [q, setQ] = useState("");
   const dq = useDebouncedValue(q, 250);
+  const isSearchMode = dq.trim().length > 0;
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
+
+  // cancelar requests viejos cuando el usuario sigue escribiendo
+  const reqIdRef = useRef(0);
+
+  function normalizeProducts(rows: any[]): Product[] {
+    return (rows ?? []).map((p) => ({
+      ...p,
+      price_retail: clampNum(p.price_retail, 0),
+      price_wholesale: clampNum(p.price_wholesale, 0),
+      min_wholesale: Math.max(1, clampNum(p.min_wholesale, 1)),
+      stock:
+        p.stock === null || p.stock === undefined
+          ? null
+          : Math.max(0, Math.floor(clampNum(p.stock, 0))),
+    }));
+  }
+
+  function computeNextCursor(list: Product[]): Cursor {
+    if (!list.length) return null;
+    const last = list[list.length - 1];
+    return { created_at: String(last.created_at), id: String(last.id) };
+  }
+
+  function passStockFilter(p: Product) {
+    const out = p.stock !== null && p.stock <= 0;
+    const unlimited = p.stock === null;
+
+    if (stockFilter === "in") {
+      if (!unlimited && (p.stock ?? 0) <= 0) return false;
+    }
+    if (stockFilter === "out") {
+      if (!out) return false;
+    }
+    if (stockFilter === "unlimited") {
+      if (!unlimited) return false;
+    }
+    return true;
+  }
 
   async function ensureAuthAndStore() {
     const sb = supabaseBrowser();
@@ -205,25 +244,7 @@ export default function ProductsListPage() {
     setCategories((cats as any[]) ?? []);
   }
 
-  function normalizeProducts(rows: any[]): Product[] {
-    return (rows ?? []).map((p) => ({
-      ...p,
-      price_retail: clampNum(p.price_retail, 0),
-      price_wholesale: clampNum(p.price_wholesale, 0),
-      min_wholesale: Math.max(1, clampNum(p.min_wholesale, 1)),
-      stock:
-        p.stock === null || p.stock === undefined
-          ? null
-          : Math.max(0, Math.floor(clampNum(p.stock, 0))),
-    }));
-  }
-
-  function computeNextCursor(list: Product[]): Cursor {
-    if (!list.length) return null;
-    const last = list[list.length - 1];
-    return { created_at: String(last.created_at), id: String(last.id) };
-  }
-
+  // ✅ carga normal inicial (20)
   async function loadFirstPage() {
     setLoading(true);
     try {
@@ -245,10 +266,9 @@ export default function ProductsListPage() {
 
       if (error) throw error;
 
-      const normalized = normalizeProducts((data as any[]) ?? []);
+      const normalized = normalizeProducts((data as any[]) ?? []).filter(passStockFilter);
       setProducts(normalized);
 
-      // hasMore si vino lleno
       setHasMore(normalized.length === PAGE_SIZE);
       setCursor(computeNextCursor(normalized));
     } catch (e: any) {
@@ -264,16 +284,15 @@ export default function ProductsListPage() {
     }
   }
 
+  // ✅ cargar más (modo normal)
   async function loadMore() {
-    if (loadingMore || !hasMore || !storeId) return;
-    if (!cursor) return;
+    if (isSearchMode) return;
+    if (loadingMore || !hasMore || !storeId || !cursor) return;
 
     setLoadingMore(true);
     try {
       const sb = supabaseBrowser();
 
-      // Traemos la siguiente página: created_at más viejo que el cursor.
-      // O si created_at igual, id menor (para evitar duplicados).
       const { data, error } = await sb
         .from("products")
         .select(
@@ -287,20 +306,15 @@ export default function ProductsListPage() {
 
       if (error) throw error;
 
-      const next = normalizeProducts((data as any[]) ?? []);
+      const next = normalizeProducts((data as any[]) ?? []).filter(passStockFilter);
 
       setProducts((prev) => {
         const seen = new Set(prev.map((x) => x.id));
-        const merged = [...prev, ...next.filter((x) => !seen.has(x.id))];
-        return merged;
+        return [...prev, ...next.filter((x) => !seen.has(x.id))];
       });
 
       setHasMore(next.length === PAGE_SIZE);
-
-      // Actualiza cursor al último de "next" (si vino vacío, ya no hay más)
-      if (next.length > 0) {
-        setCursor(computeNextCursor(next));
-      }
+      if (next.length > 0) setCursor(computeNextCursor(next));
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -315,65 +329,152 @@ export default function ProductsListPage() {
   }
 
   async function reloadAll() {
-    // Reset paginación y vuelve a cargar
+    reqIdRef.current += 1; // cancela búsquedas
+    setSearching(false);
+
     setProducts([]);
     setCursor(null);
     setHasMore(true);
+
+    setSearchOffset(0);
+    setHasMoreSearch(false);
+
     await loadFirstPage();
   }
 
+  /* ==========================================================
+     ✅ BUSCADOR PRO (RPC): search_products_pro
+     - requiere que hayas creado el SQL del RPC en Supabase
+     - trae 50 por página, ranking pro, tolera typos y multi-palabras
+  ========================================================== */
+  async function runProSearchPage(offset: number, append: boolean) {
+    if (!storeId) return;
+
+    const sb = supabaseBrowser();
+    const myReq = ++reqIdRef.current;
+
+    setSearching(true);
+
+    const query = dq.trim();
+
+    const { data, error } = await sb.rpc("search_products_pro", {
+      p_store_id: storeId,
+      p_query: query,
+      p_limit: SEARCH_PAGE,
+      p_offset: offset,
+      p_status: statusFilter, // 'all'|'active'|'inactive'
+      p_category_id: categoryFilter === "all" ? null : categoryFilter,
+    });
+
+    if (reqIdRef.current !== myReq) return; // cancelado por escribir más
+
+    if (error) {
+      setSearching(false);
+      throw error;
+    }
+
+    const rows = (data ?? []) as any[];
+
+    // mapea numeric -> number
+    let mapped: Product[] = rows.map((r) => ({
+      id: String(r.id),
+      store_id: String(r.store_id),
+      created_at: String(r.created_at),
+      name: String(r.name ?? ""),
+      description: r.description == null ? null : String(r.description),
+      price_retail: Number(r.price_retail ?? 0),
+      price_wholesale: Number(r.price_wholesale ?? 0),
+      min_wholesale: Number(r.min_wholesale ?? 1),
+      active: !!r.active,
+      image_url: r.image_url == null ? null : String(r.image_url),
+      category_id: r.category_id == null ? null : String(r.category_id),
+      stock: r.stock === null || r.stock === undefined ? null : Number(r.stock),
+    }));
+
+    // stock filter final (por si acaso)
+    mapped = mapped.filter(passStockFilter);
+
+    // sort extra opcional (para que el usuario cambie orden)
+    if (sortBy === "newest") {
+      mapped.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    } else if (sortBy === "name") {
+      mapped.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "price") {
+      mapped.sort((a, b) => Number(a.price_retail ?? 0) - Number(b.price_retail ?? 0));
+    } else if (sortBy === "stock") {
+      mapped.sort((a, b) => {
+        const sa = a.stock === null ? Number.POSITIVE_INFINITY : Number(a.stock ?? 0);
+        const sb2 = b.stock === null ? Number.POSITIVE_INFINITY : Number(b.stock ?? 0);
+        return sb2 - sa;
+      });
+    }
+
+    setProducts((prev) => (append ? [...prev, ...mapped] : mapped));
+    setSearchOffset(offset + SEARCH_PAGE);
+    setHasMoreSearch(rows.length === SEARCH_PAGE);
+
+    // modo búsqueda no usa paginado normal
+    setHasMore(false);
+
+    setSearching(false);
+  }
+
+  async function loadMoreSearch() {
+    if (!isSearchMode) return;
+    if (!hasMoreSearch || searching) return;
+    await runProSearchPage(searchOffset, true);
+  }
+
+  // init
   useEffect(() => {
     loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = useMemo(() => {
-    const s = dq.trim().toLowerCase();
+  // búsqueda dinámica PRO: cuando cambia texto o filtros
+  useEffect(() => {
+    if (!storeId) return;
 
-    let arr = products.filter((p) => {
-      if (statusFilter === "active" && !p.active) return false;
-      if (statusFilter === "inactive" && p.active) return false;
+    (async () => {
+      const s = dq.trim();
 
-      const out = p.stock !== null && p.stock <= 0;
-      const unlimited = p.stock === null;
+      // cancela request anterior y reinicia paginación de búsqueda
+      reqIdRef.current += 1;
+      setSearching(false);
+      setSearchOffset(0);
+      setHasMoreSearch(false);
 
-      if (stockFilter === "in") {
-        if (!unlimited && (p.stock ?? 0) <= 0) return false;
+      try {
+        if (s) {
+          await runProSearchPage(0, false);
+        } else {
+          await reloadAll();
+        }
+      } catch (e: any) {
+        setSearching(false);
+
+        await Swal.fire({
+          icon: "error",
+          title: "Error buscando",
+          text:
+            e?.message ??
+            "Si este error dice que no existe search_products_pro, primero debes pegar el SQL del RPC en Supabase.",
+          background: "#0b0b0b",
+          color: "#fff",
+        });
       }
-      if (stockFilter === "out") {
-        if (!out) return false;
-      }
-      if (stockFilter === "unlimited") {
-        if (!unlimited) return false;
-      }
+    })();
 
-      if (categoryFilter !== "all" && p.category_id !== categoryFilter) return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, dq, statusFilter, categoryFilter, stockFilter, sortBy]);
 
-      if (!s) return true;
-      const txt = `${p.name} ${p.description ?? ""}`.toLowerCase();
-      return txt.includes(s);
-    });
+  const filtered = useMemo(() => products, [products]);
 
-    arr = [...arr];
-    arr.sort((a, b) => {
-      if (sortBy === "newest") return String(b.created_at).localeCompare(String(a.created_at));
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "price") return Number(a.price_retail ?? 0) - Number(b.price_retail ?? 0);
-
-      const sa = a.stock === null ? Number.POSITIVE_INFINITY : Number(a.stock ?? 0);
-      const sb2 = b.stock === null ? Number.POSITIVE_INFINITY : Number(b.stock ?? 0);
-      return sb2 - sa;
-    });
-
-    return arr;
-  }, [products, dq, statusFilter, stockFilter, categoryFilter, sortBy]);
-
-  // ✅ Altura del header (para dejar espacio arriba). Ajusta si quieres.
   const HEADER_H = 230;
 
   return (
     <main className="px-3 py-3 sm:p-6 text-slate-900 dark:text-white">
-      {/* ✅ HEADER FIJO */}
+      {/* HEADER FIJO */}
       <div className="fixed left-0 right-0 top-0 z-50">
         <div className="bg-white/85 text-slate-900 backdrop-blur-2xl px-3 py-3 sm:px-6 sm:py-6 dark:bg-[#0b0b0b]/92 dark:text-white">
           <div className={`${clsWrap()} p-3 sm:p-5`}>
@@ -383,6 +484,11 @@ export default function ProductsListPage() {
                 <p className="text-[11px] text-slate-600 sm:text-sm dark:text-white/70">
                   Cargados: <b className="text-slate-900 dark:text-white/90">{products.length}</b> · Mostrando:{" "}
                   <b className="text-slate-900 dark:text-white/90">{filtered.length}</b>
+                  {searching ? (
+                    <span className="ml-2">
+                      · <b>Buscando…</b>
+                    </span>
+                  ) : null}
                 </p>
               </div>
 
@@ -390,7 +496,7 @@ export default function ProductsListPage() {
                 <button
                   className={clsBtnSoft()}
                   onClick={reloadAll}
-                  disabled={loading || loadingMore}
+                  disabled={loading || loadingMore || searching}
                   type="button"
                   style={{ padding: "8px 10px", fontSize: 12 }}
                 >
@@ -410,18 +516,12 @@ export default function ProductsListPage() {
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_220px]">
               <input
                 className={clsInput()}
-                placeholder="Buscar (nombre o descripción)…"
+                placeholder='Busca tipo WhatsApp: "zapatera" / "belleza secador"'
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                disabled={loading}
               />
 
-              <select
-                className={clsInput()}
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                disabled={loading}
-              >
+              <select className={clsInput()} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
                 <option value="newest">Más nuevos</option>
                 <option value="name">Nombre</option>
                 <option value="price">Precio detal</option>
@@ -430,35 +530,20 @@ export default function ProductsListPage() {
             </div>
 
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <select
-                className={clsInput()}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                disabled={loading}
-              >
+              <select className={clsInput()} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
                 <option value="all">Estado: Todos</option>
                 <option value="active">Estado: Activos</option>
                 <option value="inactive">Estado: Inactivos</option>
               </select>
 
-              <select
-                className={clsInput()}
-                value={stockFilter}
-                onChange={(e) => setStockFilter(e.target.value as any)}
-                disabled={loading}
-              >
+              <select className={clsInput()} value={stockFilter} onChange={(e) => setStockFilter(e.target.value as any)}>
                 <option value="all">Stock: Todos</option>
                 <option value="in">Stock: Con stock</option>
                 <option value="out">Stock: Agotados</option>
                 <option value="unlimited">Stock: Ilimitados</option>
               </select>
 
-              <select
-                className={clsInput()}
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                disabled={loading}
-              >
+              <select className={clsInput()} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                 <option value="all">Categoría: Todas</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -469,16 +554,17 @@ export default function ProductsListPage() {
             </div>
 
             <p className="mt-2 text-[11px] text-slate-600 sm:text-xs dark:text-white/60">
-              (Cargando en bloques de {PAGE_SIZE}. Usa “Cargar más” al final)
+              {isSearchMode
+                ? "Búsqueda PRO: corrige palabras, permite varias palabras y rankea resultados. (50 por página)"
+                : `(Cargando en bloques de ${PAGE_SIZE}. Usa “Cargar más” al final)`}
             </p>
           </div>
         </div>
       </div>
 
-      {/* espacio arriba */}
       <div style={{ height: HEADER_H }} />
 
-      {/* List */}
+      {/* LISTA */}
       <div className="space-y-3">
         {loading ? (
           <div className={`${clsWrap()} p-6 text-sm text-slate-700 dark:text-white/70`}>Cargando productos…</div>
@@ -496,15 +582,29 @@ export default function ProductsListPage() {
               return (
                 <div key={p.id} className="border-b border-slate-200/70 dark:border-white/10">
                   <div className="flex w-full items-center gap-3 px-3 py-3">
-                    {/* Avatar letra */}
+                    {/* Miniatura */}
                     <div
-                      className={`h-12 w-12 shrink-0 rounded-2xl border flex items-center justify-center ${avatarClass(
+                      className={`h-12 w-12 shrink-0 rounded-2xl border overflow-hidden flex items-center justify-center ${avatarClass(
                         p.id
                       )}`}
                       title={p.name}
                       aria-hidden="true"
                     >
-                      <span className="text-base font-extrabold">{letter}</span>
+                      {p.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.image_url}
+                          alt={p.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <span className="text-base font-extrabold">{letter}</span>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -555,9 +655,17 @@ export default function ProductsListPage() {
               );
             })}
 
-            {/* ✅ BOTÓN CARGAR MÁS */}
+            {/* FOOTER */}
             <div className="flex items-center justify-center p-3">
-              {hasMore ? (
+              {isSearchMode ? (
+                hasMoreSearch ? (
+                  <button className={clsBtnPrimary()} type="button" onClick={loadMoreSearch} disabled={searching}>
+                    {searching ? "Cargando…" : "Cargar más resultados"}
+                  </button>
+                ) : (
+                  <div className="text-xs text-slate-500 dark:text-white/50">No hay más resultados de búsqueda.</div>
+                )
+              ) : hasMore ? (
                 <button className={clsBtnPrimary()} type="button" onClick={loadMore} disabled={loadingMore}>
                   {loadingMore ? "Cargando…" : "Cargar más"}
                 </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -39,7 +39,6 @@ function clsWrap() {
   return "ap-wrap rounded-[22px]";
 }
 function inputBase() {
-  // ✅ más limpio + consistente + theme-aware
   return "ap-input rounded-2xl p-3 text-sm outline-none";
 }
 function buttonGhost() {
@@ -112,7 +111,6 @@ function hashToIndex(seed: string, mod: number) {
   return h % mod;
 }
 function avatarClass(seed: string) {
-  // ✅ Ahora es theme-aware (usa CSS vars)
   const palette = ["ap-av-1", "ap-av-2", "ap-av-3", "ap-av-4", "ap-av-5", "ap-av-6"];
   return palette[hashToIndex(seed, palette.length)];
 }
@@ -122,9 +120,34 @@ function firstLetter(name: string) {
 }
 
 /* =========================
+   Normalización de búsqueda
+========================= */
+function norm(s: string) {
+  return (s ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/* =========================
+   Debounce
+========================= */
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+/* =========================
    Pagination
 ========================= */
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 20; // modo normal
+const SEARCH_PAGE = 50; // ✅ búsqueda pro/paginada
 type Cursor = { created_at: string; id: string } | null;
 
 export default function AdminProductosPage() {
@@ -139,12 +162,23 @@ export default function AdminProductosPage() {
   const [products, setProducts] = useState<Product[]>([]);
 
   const [q, setQ] = useState("");
+  const dq = useDebouncedValue(q, 250);
+
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
+  // paginado normal
   const [cursor, setCursor] = useState<Cursor>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // paginado búsqueda
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [hasMoreSearch, setHasMoreSearch] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  // cancelar requests viejos cuando el usuario sigue escribiendo
+  const reqIdRef = useRef(0);
 
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -152,6 +186,8 @@ export default function AdminProductosPage() {
     () => stores.find((s) => s.id === storeId) ?? null,
     [stores, storeId]
   );
+
+  const isSearchMode = useMemo(() => dq.trim().length > 0, [dq]);
 
   function patch(id: string, p: Partial<Product>) {
     setProducts((prev) => prev.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -256,6 +292,7 @@ export default function AdminProductosPage() {
   }
 
   async function loadMore() {
+    if (isSearchMode) return;
     if (!storeId || !hasMore || loadingMore) return;
     if (!cursor) return;
 
@@ -298,13 +335,90 @@ export default function AdminProductosPage() {
 
   async function reloadStoreData() {
     if (!storeId) return;
+
+    // reset estados
+    reqIdRef.current += 1; // cancela búsquedas previas
+    setSearching(false);
+    setSearchOffset(0);
+    setHasMoreSearch(false);
+
     setProducts([]);
     setCursor(null);
     setHasMore(true);
     setOpenId(null);
+
     await Promise.all([loadCats(storeId), loadFirstPage(storeId)]);
   }
 
+  /* ==========================================================
+     ✅ BÚSQUEDA PRO (tipo WhatsApp) con RPC
+     - requiere la función: public.search_products_pro(...)
+     - trae 50 por página y rankea por similitud
+  ========================================================== */
+  async function runProSearchPage(sid: string, query: string, offset: number, append: boolean) {
+    const sb = supabaseBrowser();
+    const myReq = ++reqIdRef.current;
+
+    setSearching(true);
+
+    const { data, error } = await sb.rpc("search_products_pro", {
+      p_store_id: sid,
+      p_query: query,
+      p_limit: SEARCH_PAGE,
+      p_offset: offset,
+      p_status: statusFilter, // 'all'|'active'|'inactive'
+      p_category_id: categoryFilter === "all" ? null : categoryFilter,
+    });
+
+    // si ya cambió la búsqueda, ignorar este resultado
+    if (reqIdRef.current !== myReq) return;
+
+    if (error) {
+      setSearching(false);
+      throw error;
+    }
+
+    let rows = normalizeRows((data as any[]) ?? []);
+
+    // statusFilter === "out" se filtra aquí (RPC no tiene este estado)
+    if (statusFilter === "out") rows = rows.filter((p) => isOutOfStock(p.stock));
+
+    setProducts((prev) => (append ? [...prev, ...rows] : rows));
+    setSearchOffset(offset + SEARCH_PAGE);
+    setHasMoreSearch(((data as any[]) ?? []).length === SEARCH_PAGE);
+
+    // en modo búsqueda no usamos paginado normal
+    setHasMore(false);
+    setCursor(null);
+
+    setSearching(false);
+    setOpenId(null);
+  }
+
+  async function loadMoreSearch() {
+    if (!storeId) return;
+    if (!isSearchMode) return;
+    if (searching || !hasMoreSearch) return;
+
+    try {
+      await runProSearchPage(storeId, dq.trim(), searchOffset, true);
+    } catch (e: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Error cargando más resultados",
+        text:
+          e?.message ??
+          "Si el error dice que no existe search_products_pro, pega el SQL del RPC en Supabase primero.",
+        background: "var(--ap-bg-base)",
+        color: "var(--ap-text)",
+      });
+      setSearching(false);
+    }
+  }
+
+  /* =========================
+     Effects
+  ========================= */
   useEffect(() => {
     (async () => {
       try {
@@ -340,6 +454,47 @@ export default function AdminProductosPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  // ✅ Búsqueda dinámica PRO: cuando cambia texto o filtros
+  useEffect(() => {
+    if (!storeId) return;
+
+    (async () => {
+      const s = dq.trim();
+
+      // cancelar request anterior y reset búsqueda
+      reqIdRef.current += 1;
+      setSearching(false);
+      setSearchOffset(0);
+      setHasMoreSearch(false);
+
+      try {
+        if (s) {
+          // modo búsqueda pro
+          setLoading(true);
+          await runProSearchPage(storeId, s, 0, false);
+          setLoading(false);
+        } else {
+          // modo normal
+          await reloadStoreData();
+        }
+      } catch (e: any) {
+        setLoading(false);
+        setSearching(false);
+        await Swal.fire({
+          icon: "error",
+          title: "Error buscando",
+          text:
+            e?.message ??
+            "Si el error dice que no existe search_products_pro, primero debes pegar el SQL del RPC en Supabase.",
+          background: "var(--ap-bg-base)",
+          color: "var(--ap-text)",
+        });
+      }
+    })();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, dq, categoryFilter, statusFilter]);
 
   /* =========================
      CRUD
@@ -509,10 +664,13 @@ export default function AdminProductosPage() {
   }
 
   /* =========================
-     Filtering (usa ACTIVE REAL, no draft)
+     Filtrado local (solo para modo normal)
+     En modo búsqueda, ya viene filtrado desde RPC + out
   ========================= */
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    if (isSearchMode) return products;
+
+    const s = norm(q);
 
     return products.filter((p) => {
       if (categoryFilter !== "all" && p.category_id !== categoryFilter) return false;
@@ -531,19 +689,14 @@ export default function AdminProductosPage() {
       }
 
       if (!s) return true;
-
-      return p.name.toLowerCase().includes(s) || (p.description ?? "").toLowerCase().includes(s);
+      return norm(p.name).includes(s) || norm(p.description ?? "").includes(s);
     });
-  }, [products, q, categoryFilter, statusFilter]);
+  }, [products, q, categoryFilter, statusFilter, isSearchMode]);
 
-  /* =========================
-     UI (header fijo)
-  ========================= */
   const HEADER_H = 0;
 
   return (
     <main className="px-3 py-3 sm:p-6 text-[color:var(--ap-text)]">
-      {/* ✅ Theme auto (si ya lo tienes en AdminShell, esto actúa como fallback seguro) */}
       <style jsx global>{`
         :root {
           --ap-text: rgba(255, 255, 255, 0.92);
@@ -620,6 +773,10 @@ export default function AdminProductosPage() {
           color: color-mix(in oklab, var(--ap-text) 70%, var(--ap-danger));
         }
 
+        .ap-btn-ghost {
+          /* mismo base ap-btn */
+        }
+
         .ap-chip {
           border-color: var(--ap-border);
           background: color-mix(in oklab, var(--ap-card) 70%, transparent);
@@ -642,16 +799,39 @@ export default function AdminProductosPage() {
           color: color-mix(in oklab, var(--ap-text) 70%, transparent);
         }
 
-        /* Avatars */
-        .ap-av-1 { background: color-mix(in oklab, var(--ap-cta) 16%, transparent); border-color: color-mix(in oklab, var(--ap-cta) 25%, var(--ap-border)); color: var(--ap-text); }
-        .ap-av-2 { background: color-mix(in oklab, var(--ap-success) 14%, transparent); border-color: color-mix(in oklab, var(--ap-success) 22%, var(--ap-border)); color: var(--ap-text); }
-        .ap-av-3 { background: color-mix(in oklab, #0ea5e9 14%, transparent); border-color: color-mix(in oklab, #0ea5e9 22%, var(--ap-border)); color: var(--ap-text); }
-        .ap-av-4 { background: color-mix(in oklab, var(--ap-warn) 14%, transparent); border-color: color-mix(in oklab, var(--ap-warn) 22%, var(--ap-border)); color: var(--ap-text); }
-        .ap-av-5 { background: color-mix(in oklab, #fb7185 14%, transparent); border-color: color-mix(in oklab, #fb7185 22%, var(--ap-border)); color: var(--ap-text); }
-        .ap-av-6 { background: color-mix(in oklab, var(--ap-cta2) 14%, transparent); border-color: color-mix(in oklab, var(--ap-cta2) 22%, var(--ap-border)); color: var(--ap-text); }
+        .ap-av-1 {
+          background: color-mix(in oklab, var(--ap-cta) 16%, transparent);
+          border-color: color-mix(in oklab, var(--ap-cta) 25%, var(--ap-border));
+          color: var(--ap-text);
+        }
+        .ap-av-2 {
+          background: color-mix(in oklab, var(--ap-success) 14%, transparent);
+          border-color: color-mix(in oklab, var(--ap-success) 22%, var(--ap-border));
+          color: var(--ap-text);
+        }
+        .ap-av-3 {
+          background: color-mix(in oklab, #0ea5e9 14%, transparent);
+          border-color: color-mix(in oklab, #0ea5e9 22%, var(--ap-border));
+          color: var(--ap-text);
+        }
+        .ap-av-4 {
+          background: color-mix(in oklab, var(--ap-warn) 14%, transparent);
+          border-color: color-mix(in oklab, var(--ap-warn) 22%, var(--ap-border));
+          color: var(--ap-text);
+        }
+        .ap-av-5 {
+          background: color-mix(in oklab, #fb7185 14%, transparent);
+          border-color: color-mix(in oklab, #fb7185 22%, var(--ap-border));
+          color: var(--ap-text);
+        }
+        .ap-av-6 {
+          background: color-mix(in oklab, var(--ap-cta2) 14%, transparent);
+          border-color: color-mix(in oklab, var(--ap-cta2) 22%, var(--ap-border));
+          color: var(--ap-text);
+        }
       `}</style>
 
-      {/* HEADER FIJO */}
+      {/* HEADER */}
       <div className="top-0 left-0 right-0 z-50">
         <div
           className="backdrop-blur-2xl px-3 py-3 sm:px-6 sm:py-6 "
@@ -670,6 +850,11 @@ export default function AdminProductosPage() {
                   </b>{" "}
                   · Cargados: <b style={{ color: "var(--ap-text)" }}>{products.length}</b> · Mostrando:{" "}
                   <b style={{ color: "var(--ap-text)" }}>{filtered.length}</b>
+                  {isSearchMode ? (
+                    <span style={{ marginLeft: 8, opacity: 0.85 }}>
+                      · <b>{searching ? "Buscando…" : "Búsqueda PRO"}</b>
+                    </span>
+                  ) : null}
                 </p>
               </div>
 
@@ -677,7 +862,7 @@ export default function AdminProductosPage() {
                 <button
                   className={buttonGhost()}
                   onClick={reloadStoreData}
-                  disabled={!storeId || loading || loadingMore}
+                  disabled={!storeId || loading || loadingMore || searching}
                 >
                   Recargar
                 </button>
@@ -706,7 +891,7 @@ export default function AdminProductosPage() {
               </div>
             </div>
 
-            {/* ✅ filtros adaptativos al ancho disponible */}
+            {/* filtros */}
             <div
               className="mt-3 grid gap-2"
               style={{
@@ -721,7 +906,11 @@ export default function AdminProductosPage() {
                 ))}
               </select>
 
-              <select className={inputBase()} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <select
+                className={inputBase()}
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
                 <option value="all">Todas las categorías</option>
                 {cats.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -743,20 +932,21 @@ export default function AdminProductosPage() {
 
               <input
                 className={inputBase()}
-                placeholder="Buscar (nombre o descripción)..."
+                placeholder='Buscar tipo WhatsApp: "zapatera" / "belleza secador"...'
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
             <p className="mt-2 text-[11px] sm:text-xs" style={{ color: "var(--ap-muted)" }}>
-              Cargando en bloques de {PAGE_SIZE}. Usa “Cargar más” al final.
+              {isSearchMode
+                ? "Búsqueda PRO: corrige palabras, permite varias palabras y rankea resultados. (50 por página)"
+                : `Cargando en bloques de ${PAGE_SIZE}. Usa “Cargar más” al final.`}
             </p>
           </div>
         </div>
       </div>
 
-      {/* espacio para no tapar */}
       <div style={{ height: HEADER_H }} />
 
       {/* BODY */}
@@ -785,8 +975,28 @@ export default function AdminProductosPage() {
               <div key={p.id} className="border-b" style={{ borderColor: "var(--ap-border)" }}>
                 {/* ROW compacta */}
                 <div className="px-3 py-3 flex items-center gap-3">
-                  <div className={`h-12 w-12 rounded-2xl border flex items-center justify-center shrink-0 ${avatarClass(p.id)}`}>
-                    <span className="text-base font-extrabold">{letter}</span>
+                  {/* ✅ MINIATURA */}
+                  <div
+                    className={`h-12 w-12 rounded-2xl border overflow-hidden flex items-center justify-center shrink-0 ${avatarClass(
+                      p.id
+                    )}`}
+                    style={{ borderColor: "var(--ap-border)" }}
+                  >
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-base font-extrabold">{letter}</span>
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -823,9 +1033,13 @@ export default function AdminProductosPage() {
                       ) : null}
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--ap-muted)" }}>
+                    <div
+                      className="mt-1 flex flex-wrap items-center gap-2 text-[11px]"
+                      style={{ color: "var(--ap-muted)" }}
+                    >
                       <span>
-                        Mayorista: <b style={{ color: "var(--ap-text)" }}>{money(Number(p.price_wholesale ?? 0))}</b>
+                        Mayorista:{" "}
+                        <b style={{ color: "var(--ap-text)" }}>{money(Number(p.price_wholesale ?? 0))}</b>
                       </span>
                       <span style={{ opacity: 0.35 }}>·</span>
                       <span>
@@ -985,7 +1199,10 @@ export default function AdminProductosPage() {
                           </button>
 
                           <span className="ml-auto text-xs" style={{ color: "var(--ap-muted)" }}>
-                            ID: <span style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>{p.id}</span>
+                            ID:{" "}
+                            <span style={{ color: "color-mix(in oklab, var(--ap-text) 85%, transparent)" }}>
+                              {p.id}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -1017,7 +1234,17 @@ export default function AdminProductosPage() {
 
           {/* footer: cargar más */}
           <div className="p-3 flex items-center justify-center">
-            {hasMore ? (
+            {isSearchMode ? (
+              hasMoreSearch ? (
+                <button className={buttonPrimary()} type="button" onClick={loadMoreSearch} disabled={searching}>
+                  {searching ? "Cargando…" : "Cargar más resultados"}
+                </button>
+              ) : (
+                <div className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                  {searching ? "Buscando…" : "No hay más resultados de búsqueda."}
+                </div>
+              )
+            ) : hasMore ? (
               <button className={buttonPrimary()} type="button" onClick={loadMore} disabled={loadingMore}>
                 {loadingMore ? "Cargando…" : "Cargar más"}
               </button>
