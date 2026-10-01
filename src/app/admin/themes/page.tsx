@@ -38,6 +38,7 @@ type ThemeRow = {
   sort_order: number;
   config: any; // viene de supabase como json
 };
+type StoreThemeRow = { id: string; name: string; slug: string; theme: string | null };
 
 const DEFAULT_CFG: ThemeConfig = {
   text: "#ffffff",
@@ -210,7 +211,11 @@ export default function AdminThemesPage() {
   const [saving, setSaving] = useState(false);
 
   const [rows, setRows] = useState<ThemeRow[]>([]);
+  const [stores, setStores] = useState<StoreThemeRow[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [themeSearch, setThemeSearch] = useState("");
+  const [themeStatus, setThemeStatus] = useState<"all" | "active" | "inactive">("all");
 
   // Este cfg SÍ cambia por theme seleccionado
   const [cfg, setCfg] = useState<ThemeConfig>(DEFAULT_CFG);
@@ -219,22 +224,33 @@ export default function AdminThemesPage() {
     () => rows.find((x) => x.id === selectedId) ?? null,
     [rows, selectedId],
   );
+  const visibleThemes = useMemo(() => {
+    const query = themeSearch.trim().toLocaleLowerCase("es-CO");
+    return rows.filter((theme) =>
+      (themeStatus === "all" || (theme.active ? "active" : "inactive") === themeStatus) &&
+      (!query || `${theme.name} ${theme.id}`.toLocaleLowerCase("es-CO").includes(query))
+    );
+  }, [rows, themeSearch, themeStatus]);
 
   async function load() {
     setLoading(true);
     try {
       const sb = supabaseBrowser();
 
-      // ✅ IMPORTANTE: ahora traemos config
-      const { data, error } = await sb
-        .from("themes")
-        .select("id,name,active,sort_order,config")
-        .order("sort_order", { ascending: true });
-
+      const [{ data, error }, { data: storeData, error: storeError }] = await Promise.all([
+        sb.from("themes").select("id,name,active,sort_order,config").order("sort_order", { ascending: true }),
+        sb.from("stores").select("id,name,slug,theme").order("created_at", { ascending: false }),
+      ]);
       if (error) throw error;
+      if (storeError) throw storeError;
 
       const arr = (data as ThemeRow[]) ?? [];
       setRows(arr);
+      const availableStores = (storeData as StoreThemeRow[]) ?? [];
+      setStores(availableStores);
+      const requestedStore = new URLSearchParams(window.location.search).get("store");
+      const initialStore = availableStores.find((store) => store.id === requestedStore) ?? availableStores[0];
+      if (!selectedStoreId && initialStore) setSelectedStoreId(initialStore.id);
 
       // Seleccionar el primero si no hay
       if (!selectedId && arr[0]) {
@@ -311,6 +327,35 @@ export default function AdminThemesPage() {
         ...swalTheme(),
         confirmButtonColor: "var(--ap-danger)",
       });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function assignThemeToStore() {
+    if (!selected || !selectedStoreId) return;
+    const store = stores.find((item) => item.id === selectedStoreId);
+    if (!store || store.theme === selected.id) return;
+    const confirmation = await Swal.fire({
+      icon: "question",
+      title: "Aplicar tema a tienda",
+      text: `¿Asignar "${selected.name}" a ${store.name}?`,
+      showCancelButton: true,
+      confirmButtonText: "Aplicar",
+      cancelButtonText: "Cancelar",
+      ...swalTheme(),
+      confirmButtonColor: "var(--ap-cta)",
+    });
+    if (!confirmation.isConfirmed) return;
+    setSaving(true);
+    try {
+      const sb = supabaseBrowser();
+      const { error } = await sb.from("stores").update({ theme: selected.id }).eq("id", selectedStoreId);
+      if (error) throw error;
+      setStores((current) => current.map((item) => item.id === selectedStoreId ? { ...item, theme: selected.id } : item));
+      await Swal.fire({ icon: "success", title: "Tema asignado", timer: 1000, showConfirmButton: false, ...swalTheme() });
+    } catch (error: unknown) {
+      await Swal.fire({ icon: "error", title: "No se pudo asignar el tema", text: String((error as Error)?.message ?? error), ...swalTheme() });
     } finally {
       setSaving(false);
     }
@@ -514,20 +559,26 @@ export default function AdminThemesPage() {
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(520px,1fr)_minmax(360px,440px)]">
+      <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-[minmax(220px,0.75fr)_minmax(320px,1.3fr)_minmax(240px,0.95fr)]">
         {/* Lista */}
-        <aside className="rounded-[28px] border p-3 ap-card">
-          <div className="mb-2 px-2">
-            <p
-              className="text-xs font-semibold tracking-[0.22em]"
-              style={{ color: "color-mix(in oklab, var(--ap-text) 65%, transparent)" }}
-            >
-              THEMES
-            </p>
+        <aside className="min-w-0 rounded-[28px] border p-3 ap-card">
+          <div className="mb-3 px-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold tracking-[0.22em]" style={{ color: "color-mix(in oklab, var(--ap-text) 65%, transparent)" }}>
+                THEMES DISPONIBLES
+              </p>
+              <span className="rounded-full border px-2 py-1 text-[11px]" style={{ borderColor: "var(--ap-border)", color: "var(--ap-muted)" }}>{rows.length}</span>
+            </div>
+            <input className="mt-3 w-full rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--ap-border)", background: "var(--ap-card)", color: "var(--ap-text)" }} placeholder="Buscar por nombre o ID" value={themeSearch} onChange={(event) => setThemeSearch(event.target.value)} />
+            <select className="mt-2 w-full rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--ap-border)", background: "var(--ap-card)", color: "var(--ap-text)" }} value={themeStatus} onChange={(event) => setThemeStatus(event.target.value as typeof themeStatus)}>
+              <option value="all">Activos e inactivos</option>
+              <option value="active">Solo activos</option>
+              <option value="inactive">Solo inactivos</option>
+            </select>
           </div>
 
-          <div className="max-h-[72vh] overflow-auto pr-1 space-y-2">
-            {rows.map((t) => {
+          <div className="max-h-[45vh] space-y-2 overflow-auto pr-1 xl:max-h-[65vh]">
+            {visibleThemes.map((t) => {
               const activeSel = t.id === selectedId;
               return (
                 <button
@@ -570,14 +621,18 @@ export default function AdminThemesPage() {
                       {t.active ? "Activo" : "Inactivo"}
                     </span>
                   </div>
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--ap-muted)" }}>
+                    Usado por {stores.filter((store) => store.theme === t.id).length} tienda(s)
+                  </p>
                 </button>
               );
             })}
+            {!visibleThemes.length ? <p className="p-3 text-sm" style={{ color: "var(--ap-muted)" }}>No hay temas que coincidan con estos filtros.</p> : null}
           </div>
         </aside>
 
         {/* Editor */}
-        <section className="rounded-[28px] border p-4 max-h-[72vh] overflow-auto pr-1 ap-card">
+        <section className="min-w-0 rounded-[28px] border p-4 ap-card">
           {!selected ? (
             <div
               className="rounded-2xl border p-4 text-sm"
@@ -993,12 +1048,12 @@ export default function AdminThemesPage() {
         </section>
 
         {/* Preview */}
-        <aside className="space-y-3 xl:sticky xl:top-6">
-          <div className="max-w-[440px] xl:max-w-none">
+        <aside className="min-w-0 space-y-3 xl:col-span-2 2xl:sticky 2xl:top-6 2xl:col-span-1 2xl:self-start">
+          <div className="max-w-[560px] 2xl:max-w-none">
             <Preview cfg={cfg} />
           </div>
 
-          <div className="rounded-[28px] border p-4 text-sm ap-card max-w-[440px] xl:max-w-none">
+          <div className="rounded-[28px] border p-4 text-sm ap-card max-w-[560px] 2xl:max-w-none">
             <p className="font-semibold" style={{ color: "var(--ap-text)" }}>
               ✅ Ahora sí funciona
             </p>
@@ -1006,6 +1061,19 @@ export default function AdminThemesPage() {
               Cambias de theme → se carga su config desde BD. <br />
               Editas → Guardar → se guarda en themes.config.
             </p>
+          </div>
+          <div className="max-w-[560px] rounded-[28px] border p-4 ap-card 2xl:max-w-none">
+            <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+              Tienda donde aplicar el tema
+              <select className="mt-1 w-full rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--ap-border)", background: "var(--ap-card)", color: "var(--ap-text)" }} value={selectedStoreId} onChange={(event) => setSelectedStoreId(event.target.value)}>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name} · /{store.slug}{store.theme ? ` · tema: ${store.theme}` : ""}</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="mt-3 w-full rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50" style={{ borderColor: "color-mix(in oklab, var(--ap-cta) 40%, var(--ap-border))", background: "color-mix(in oklab, var(--ap-cta) 20%, transparent)", color: "var(--ap-text)" }} onClick={assignThemeToStore} disabled={!selected || !selectedStoreId || saving || stores.find((store) => store.id === selectedStoreId)?.theme === selected?.id}>
+              {stores.find((store) => store.id === selectedStoreId)?.theme === selected?.id ? "Este tema ya está aplicado" : "Aplicar tema a tienda"}
+            </button>
           </div>
         </aside>
       </div>

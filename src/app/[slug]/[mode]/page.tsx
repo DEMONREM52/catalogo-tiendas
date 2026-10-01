@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Swal from "sweetalert2";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { ShareProductButton } from "@/components/ShareProductButton";
+import { buildProductShareText, hasProductLanding } from "@/lib/product-details";
 import { SocialIconRow } from "./socials";
 import { useCart } from "@/lib/cart/CartProvider";
 import { CartDrawer } from "@/lib/cart/CartDrawer";
 
-import { applyThemeToRoot, type ThemeConfig } from "@/lib/themes/applyTheme";
+import { applyThemeToElement, type ThemeConfig } from "@/lib/themes/applyTheme";
 
 /* =========================================================
    Types
@@ -40,6 +43,7 @@ type ProductRow = {
   image_url: string | null;
   category_id: string | null;
   stock: number | null; // ✅ inventario (null = ilimitado)
+  product_details: unknown;
 };
 
 type CategoryRow = {
@@ -164,26 +168,6 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
   return cfg;
 }
 
-function syncGlobalBodyBackground(cfg?: ThemeConfig) {
-  if (typeof document === "undefined") return;
-
-  const r = document.documentElement;
-  const isSolid = cfg?.bgMode === "solid" && !!cfg?.bgSolid;
-
-  if (isSolid) {
-    r.style.setProperty("--t-bg-base", cfg!.bgSolid!);
-    r.style.setProperty("--t-bg", "none");
-    return;
-  }
-
-  r.style.setProperty("--t-bg-base", "#070014");
-
-  const raw = (cfg as any)?.__rawBg as string | undefined;
-  if (raw && /gradient\(/i.test(raw)) {
-    r.style.setProperty("--t-bg", raw);
-  }
-}
-
 /* =========================================================
    Page  ✅ PAGINADO 30 + BOTÓN "CARGAR MÁS"
    - Carga imágenes normal (como antes)
@@ -203,11 +187,11 @@ export default function StoreCatalogPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const [store, setStore] = useState<StoreRow | null>(null);
+  const [catalogTheme, setCatalogTheme] = useState<ThemeConfig>();
   const [profile, setProfile] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
 
   const [products, setProducts] = useState<ProductRow[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
@@ -303,8 +287,7 @@ export default function StoreCatalogPage() {
           cfg = mapDbThemeToApplyTheme(fallback?.config);
         }
 
-        applyThemeToRoot(cfg);
-        syncGlobalBodyBackground(cfg);
+        if (!cancelled) setCatalogTheme(cfg);
 
         // init cart
         initCart({
@@ -348,6 +331,11 @@ export default function StoreCatalogPage() {
     };
   }, [slug, mode, key, initCart, safeMode]);
 
+  useEffect(() => {
+    const catalog = document.querySelector<HTMLElement>("[data-store-catalog]");
+    if (catalog) applyThemeToElement(catalogTheme, catalog);
+  }, [catalogTheme, loading, store]);
+
   /* -------------------------
      favicon (✅ sin cache-bust)
   ------------------------- */
@@ -384,7 +372,7 @@ export default function StoreCatalogPage() {
     let query = sb
       .from("products")
       .select(
-        "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock",
+        "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details",
         { count: "exact" }
       )
       .eq("store_id", store.id)
@@ -419,8 +407,6 @@ export default function StoreCatalogPage() {
       }))
       .filter((p) => p.stock === null || Number(p.stock) > 0);
 
-    setTotalCount(Number(count ?? 0));
-
     if (opts.reset) {
       setProducts(normalized);
       setPage(0);
@@ -428,8 +414,7 @@ export default function StoreCatalogPage() {
       setProducts((prev) => [...prev, ...normalized]);
     }
 
-    const loadedSoFar = (opts.reset ? normalized.length : products.length + normalized.length);
-    setHasMore(loadedSoFar < Number(count ?? 0));
+    setHasMore(to + 1 < Number(count ?? 0));
   }
 
   // reset paging cuando cambian filtros
@@ -485,8 +470,8 @@ export default function StoreCatalogPage() {
         icon: "info",
         title: "Producto agotado",
         text: "Este producto no tiene unidades disponibles por ahora.",
-        background: "#0b0b0b",
-        color: "#fff",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
       });
       return;
     }
@@ -524,8 +509,8 @@ export default function StoreCatalogPage() {
           </div>
         </div>
       `,
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
       showCancelButton: true,
       confirmButtonText: "Agregar",
       cancelButtonText: "Cancelar",
@@ -580,8 +565,8 @@ export default function StoreCatalogPage() {
       text: `Se agregó ${qty} × ${p.name} al carrito.`,
       timer: 950,
       showConfirmButton: false,
-      background: "#0b0b0b",
-      color: "#fff",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
     });
   }
 
@@ -590,7 +575,7 @@ export default function StoreCatalogPage() {
   ========================================================= */
   if (loading) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      <main data-store-catalog className="min-h-screen p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <div
             className="rounded-3xl border p-5"
@@ -610,7 +595,7 @@ export default function StoreCatalogPage() {
 
   if (!store) {
     return (
-      <main className="p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+      <main data-store-catalog className="min-h-screen p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
         <div className="mx-auto max-w-6xl">
           <p>{msg ?? "No se pudo cargar."}</p>
         </div>
@@ -618,16 +603,15 @@ export default function StoreCatalogPage() {
     );
   }
 
-  const accentChipBg = "color-mix(in oklab, var(--t-accent2) 70%, white 0%)";
   const glassBg = "color-mix(in oklab, var(--t-card-bg) 78%, transparent)";
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+    <main data-store-catalog className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
       {/* overlay SOLO si hay gradient */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
-        <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)", opacity: 0.22 }} />
+        <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)", opacity: "var(--t-store-bg-opacity, 0.14)" }} />
       </div>
 
       <style jsx global>{`
@@ -644,8 +628,8 @@ export default function StoreCatalogPage() {
         }
         .t-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 22px 55px rgba(0, 0, 0, 0.28);
-          border-color: color-mix(in oklab, var(--t-border) 60%, white 15%);
+          box-shadow: var(--t-shadow);
+          border-color: color-mix(in oklab, var(--t-border) 70%, var(--t-accent) 30%);
         }
         .t-btn {
           transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
@@ -681,21 +665,10 @@ export default function StoreCatalogPage() {
 
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">{store.name}</p>
-                <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
-                  {safeMode === "detal" ? "Catálogo Detal" : "Catálogo Mayoristas"}
-                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span
-                className="hidden sm:inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-                style={{ borderColor: "var(--t-border)", background: glassBg2 }}
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
-                {safeMode === "detal" ? "DETAL" : "MAYOR"}
-              </span>
-
               {safeMode === "detal" ? (
                 <a
                   className="t-btn rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"
@@ -706,7 +679,7 @@ export default function StoreCatalogPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Solicitar mayoristas
+                  Contactar
                 </a>
               ) : (
                 <a
@@ -714,7 +687,7 @@ export default function StoreCatalogPage() {
                   style={{ borderColor: "var(--t-border)", background: glassBg2 }}
                   href={`/${store.slug}/detal`}
                 >
-                  Ver Detal
+                  Catálogo público
                 </a>
               )}
             </div>
@@ -728,9 +701,7 @@ export default function StoreCatalogPage() {
           <div className="min-w-0">
             <h1 className="text-2xl font-black tracking-tight">{store.name}</h1>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {safeMode === "detal" ? "Compra al detal" : "Compra al por mayor"} ·{" "}
-              <b style={{ color: "var(--t-text)" }}>{products.length}</b> de{" "}
-              <b style={{ color: "var(--t-text)" }}>{totalCount}</b> productos
+              Explora los productos disponibles
             </p>
 
             {profile?.headline ? <p className="mt-3 text-sm opacity-90">{profile.headline}</p> : null}
@@ -869,25 +840,31 @@ export default function StoreCatalogPage() {
           <div>
             <h2 className="text-xl font-extrabold">Productos</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              Mostrando {products.length} de {totalCount}
+              {products.length} productos mostrados
               {q ? ` · filtrados por “${q}”` : ""}
             </p>
           </div>
 
-          <span
-            className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-            style={{ borderColor: "var(--t-border)", background: glassBg2 }}
-          >
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: accentChipBg }} />
-            {safeMode === "detal" ? "DETAL" : "MAYOR"}
-          </span>
         </div>
 
         {products.length === 0 && !loadingMore ? (
           <div className="mt-5 rounded-[28px] border p-6" style={{ borderColor: "var(--t-border)", background: glassBg }}>
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-              No hay productos disponibles (o están agotados).
+              No encontramos productos con esos filtros. Prueba otra búsqueda o categoría.
             </p>
+            {q || selectedCat ? (
+              <button
+                type="button"
+                className="t-btn mt-3 rounded-xl border px-3 py-2 text-sm font-semibold"
+                style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                onClick={() => {
+                  setQ("");
+                  setSelectedCat(null);
+                }}
+              >
+                Limpiar filtros
+              </button>
+            ) : null}
           </div>
         ) : (
           <>
@@ -898,6 +875,7 @@ export default function StoreCatalogPage() {
                 const isUnlimited = p.stock === null;
                 const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
                 const isOut = !isUnlimited && stockNum <= 0;
+                const productPageUrl = `/${store.slug}/producto/${p.id}`;
 
                 const stockInfo = stockMeta(p.stock);
 
@@ -905,19 +883,19 @@ export default function StoreCatalogPage() {
                   stockInfo.tone === "danger"
                     ? {
                         border: "color-mix(in oklab, red 35%, var(--t-border))",
-                        bg: "color-mix(in oklab, red 12%, transparent)",
-                        color: "color-mix(in oklab, white 92%, red 8%)",
+                        bg: "color-mix(in oklab, red 12%, var(--t-card-bg))",
+                        color: "var(--t-text)",
                       }
                     : stockInfo.tone === "warn"
                     ? {
                         border: "color-mix(in oklab, orange 35%, var(--t-border))",
-                        bg: "color-mix(in oklab, orange 12%, transparent)",
-                        color: "color-mix(in oklab, white 92%, orange 8%)",
+                        bg: "color-mix(in oklab, orange 12%, var(--t-card-bg))",
+                        color: "var(--t-text)",
                       }
                     : {
                         border: "color-mix(in oklab, lime 30%, var(--t-border))",
-                        bg: "color-mix(in oklab, lime 10%, transparent)",
-                        color: "color-mix(in oklab, white 92%, lime 8%)",
+                        bg: "color-mix(in oklab, lime 10%, var(--t-card-bg))",
+                        color: "var(--t-text)",
                       };
 
                 return (
@@ -940,9 +918,6 @@ export default function StoreCatalogPage() {
 
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-extrabold leading-tight">{p.name}</h3>
-                      <span className="rounded-full px-3 py-1 text-[11px] font-extrabold" style={{ background: accentChipBg, color: "#0b0b0b" }}>
-                        {safeMode === "detal" ? "DETAL" : "MAYOR"}
-                      </span>
                     </div>
 
                     {/* Inventario */}
@@ -979,6 +954,35 @@ export default function StoreCatalogPage() {
                       </p>
                     ) : null}
 
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(safeMode === "detal" || store.catalog_retail) &&
+                      hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url }) ? (
+                        <Link
+                          href={productPageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="t-btn rounded-2xl border px-4 py-2 text-sm font-bold"
+                          style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                        >
+                          Ver más
+                        </Link>
+                      ) : null}
+                      {safeMode === "detal" &&
+                      hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url }) ? (
+                        <ShareProductButton
+                          title={p.name}
+                          text={buildProductShareText({
+                            name: p.name,
+                            price: p.price_retail,
+                            description: p.description,
+                            stock: p.stock,
+                            imageUrl: p.image_url,
+                            details: p.product_details,
+                          })}
+                        />
+                      ) : null}
+                    </div>
+
                     <div className="mt-4 flex items-end justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
@@ -991,7 +995,7 @@ export default function StoreCatalogPage() {
                         className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
                         style={{
                           background: "var(--t-cta)",
-                          color: "#0b0b0b",
+                          color: "var(--t-text)",
                           boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
                         }}
                         onClick={() => addToCartWithQty(p, Number(price ?? 0))}
@@ -1049,8 +1053,8 @@ export default function StoreCatalogPage() {
             className="rounded-2xl border px-4 py-3 text-sm t-glass"
             style={{
               borderColor: "var(--t-border)",
-              background: "rgba(0,0,0,0.55)",
-              color: "rgba(255,255,255,0.92)",
+              background: "var(--t-card-bg)",
+              color: "var(--t-text)",
               boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
             }}
           >

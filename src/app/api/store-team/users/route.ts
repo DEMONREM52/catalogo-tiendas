@@ -25,6 +25,7 @@ type StoreAccess = {
 type ManagerAccess = {
   store: StoreAccess;
   isOwner: boolean;
+  isAdmin: boolean;
   role: string | null;
   permissions: string[];
 };
@@ -73,8 +74,25 @@ async function requireStoreManager(
   if (storeError) throw new ApiError(storeError.message, 500);
   if (!store) throw new ApiError("No se encontró la tienda.", 404);
 
+  const { data: profile, error: profileError } = await admin
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (profileError) throw new ApiError(profileError.message, 500);
+
+  if (profile?.role === "admin") {
+    return {
+      store: store as StoreAccess,
+      isOwner: false,
+      isAdmin: true,
+      role: "store_admin",
+      permissions: [...STORE_MENU_PERMISSIONS],
+    };
+  }
+
   if (store.owner_id === userId) {
-    return { store: store as StoreAccess, isOwner: true, role: "store_admin", permissions: [...STORE_MENU_PERMISSIONS] };
+    return { store: store as StoreAccess, isOwner: true, isAdmin: false, role: "store_admin", permissions: [...STORE_MENU_PERMISSIONS] };
   }
 
   const { data: membership, error: membershipError } = await admin
@@ -94,6 +112,7 @@ async function requireStoreManager(
   return {
     store: store as StoreAccess,
     isOwner: false,
+    isAdmin: false,
     role: membership.role,
     permissions: membership.permissions ?? [],
   };
@@ -154,7 +173,8 @@ export async function POST(request: Request) {
     const username = normalizeStoreUsername(String(body.username ?? ""));
     const password = String(body.password ?? "");
     const displayName = String(body.display_name ?? "").trim();
-    const permissions = normalizePermissions(body.permissions);
+    const requestedRole = String(body.role ?? "seller");
+    const requestedPermissions = normalizePermissions(body.permissions);
 
     if (!storeId) throw new ApiError("Falta seleccionar la tienda.", 400);
     if (!isValidStoreUsername(username)) {
@@ -164,9 +184,18 @@ export async function POST(request: Request) {
       throw new ApiError("La contraseña debe tener al menos 8 caracteres.", 400);
     }
     if (displayName.length > 100) throw new ApiError("El nombre visible no puede superar 100 caracteres.", 400);
+    const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
+    if (!allowedRoles.includes(requestedRole as (typeof allowedRoles)[number])) {
+      throw new ApiError("El rol seleccionado no es válido.", 400);
+    }
 
     const manager = await requireStoreManager(admin, userId, storeId);
+    const permissions =
+      requestedRole === "store_admin" ? [...STORE_MENU_PERMISSIONS] : requestedPermissions;
     assertCanGrantPermissions(manager, permissions);
+    if (requestedRole === "store_admin" && !manager.isOwner && !manager.isAdmin) {
+      throw new ApiError("Solo el dueño o administrador global puede crear otro administrador de tienda.", 403);
+    }
     const store = manager.store;
     const { data: duplicate, error: duplicateError } = await admin
       .from("store_users")
@@ -198,7 +227,7 @@ export async function POST(request: Request) {
       user_id: userIdCreated,
       username,
       display_name: displayName || username,
-      role: "seller",
+      role: requestedRole,
       permissions,
       active: true,
     });
@@ -228,7 +257,7 @@ export async function POST(request: Request) {
         user_id: userIdCreated,
         username,
         display_name: displayName || username,
-        role: "seller",
+        role: requestedRole,
         permissions,
         active: true,
         created_at: created.user.created_at,
@@ -259,16 +288,27 @@ export async function PATCH(request: Request) {
       .maybeSingle();
     if (targetError) throw new ApiError(targetError.message, 500);
     if (!target) throw new ApiError("El usuario no pertenece a esta tienda.", 404);
-    if (target.role === "store_admin" && store.owner_id !== userId) {
+    if (target.role === "store_admin" && store.owner_id !== userId && !manager.isAdmin) {
       throw new ApiError("Solo el dueño puede administrar el acceso de otro administrador.", 403);
     }
 
-    const patch: { permissions?: string[]; active?: boolean } = {};
+    const patch: { permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
     if (body.permissions !== undefined) {
       patch.permissions = normalizePermissions(body.permissions);
       assertCanGrantPermissions(manager, patch.permissions);
     }
     if (typeof body.active === "boolean") patch.active = body.active;
+    if (body.role !== undefined) {
+      const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
+      if (!allowedRoles.includes(body.role)) throw new ApiError("El rol seleccionado no es válido.", 400);
+      if (!manager.isOwner && !manager.isAdmin && manager.role !== "store_admin") {
+        throw new ApiError("Solo el dueño o administrador de tienda puede cambiar roles.", 403);
+      }
+      if (body.role === "store_admin" && !manager.isOwner && !manager.isAdmin) {
+        throw new ApiError("Solo el dueño o administrador global puede asignar otro administrador de tienda.", 403);
+      }
+      patch.role = body.role;
+    }
     const newPassword = body.new_password === undefined ? null : String(body.new_password);
     if (newPassword !== null && newPassword.length < 8) {
       throw new ApiError("La nueva contraseña debe tener al menos 8 caracteres.", 400);

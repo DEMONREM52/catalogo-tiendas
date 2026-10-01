@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 
 /** =========================
  * Helpers
@@ -20,6 +20,7 @@ type OrderRow = {
   store_id: string;
   catalog_type: "retail" | "wholesale";
   status: OrderStatus;
+  payment_status?: string | null;
   total: number;
   token: string;
   receipt_no: number | null;
@@ -31,6 +32,9 @@ type OrderRow = {
 
   stores?: { name: string; slug: string } | null;
 };
+
+const ORDER_PAGE_SIZE = 1000;
+const ORDERS_PER_PAGE = 20;
 
 function statusLabel(st: OrderStatus) {
   if (st === "draft") return "Borrador";
@@ -112,6 +116,11 @@ export default function AdminPedidosPage() {
   const [q, setQ] = useState("");
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "paid" | "pending">("all");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "retail" | "wholesale">("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   /** =========================
    * Load
@@ -119,28 +128,25 @@ export default function AdminPedidosPage() {
   async function load() {
     setLoading(true);
     try {
-      const sb = supabaseBrowser();
+      const st = await fetchAdminData<StoreMini[]>(new URLSearchParams({ resource: "stores" }));
+      setStores(st);
+      const requestedStore = new URLSearchParams(window.location.search).get("store");
+      if (requestedStore && st.some((store) => store.id === requestedStore)) {
+        setStoreFilter(requestedStore);
+      }
 
-      // Tiendas
-      const { data: st, error: stErr } = await sb
-        .from("stores")
-        .select("id,name,slug")
-        .order("created_at", { ascending: false });
-
-      if (stErr) throw stErr;
-      setStores((st as StoreMini[]) ?? []);
-
-      // Pedidos (últimos 200)
-      const { data, error } = await sb
-        .from("orders")
-        .select(
-          "id,store_id,catalog_type,status,total,token,receipt_no,created_at,customer_name,customer_whatsapp,customer_note,stores(name,slug)"
-        )
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (error) throw error;
-      setOrders((data as any) ?? []);
+      const allOrders: OrderRow[] = [];
+      for (let from = 0; ; from += ORDER_PAGE_SIZE) {
+        const params = new URLSearchParams({
+          resource: "orders",
+          offset: String(from),
+          limit: String(ORDER_PAGE_SIZE),
+        });
+        const page = await fetchAdminData<OrderRow[]>(params);
+        allOrders.push(...page);
+        if (page.length < ORDER_PAGE_SIZE) break;
+      }
+      setOrders(allOrders);
     } catch (err: any) {
       await Swal.fire({
         icon: "error",
@@ -168,6 +174,11 @@ export default function AdminPedidosPage() {
     return orders.filter((o) => {
       if (storeFilter !== "all" && o.store_id !== storeFilter) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (paymentFilter !== "all" && (o.payment_status === "paid" ? "paid" : "pending") !== paymentFilter) return false;
+      if (catalogFilter !== "all" && o.catalog_type !== catalogFilter) return false;
+      const orderDate = new Date(o.created_at);
+      if (startDate && orderDate < new Date(`${startDate}T00:00:00`)) return false;
+      if (endDate && orderDate > new Date(`${endDate}T23:59:59.999`)) return false;
 
       if (!s) return true;
 
@@ -180,7 +191,15 @@ export default function AdminPedidosPage() {
 
       return txt.includes(s);
     });
-  }, [orders, q, storeFilter, statusFilter]);
+  }, [orders, q, storeFilter, statusFilter, paymentFilter, catalogFilter, startDate, endDate]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+  const visiblePage = Math.min(currentPage, pageCount);
+  const pageOrders = filtered.slice((visiblePage - 1) * ORDERS_PER_PAGE, visiblePage * ORDERS_PER_PAGE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q, storeFilter, statusFilter, paymentFilter, catalogFilter, startDate, endDate]);
 
   /** =========================
    * Actions
@@ -287,9 +306,10 @@ export default function AdminPedidosPage() {
 
     setSaving(true);
     try {
-      const sb = supabaseBrowser();
-      const { error } = await sb.from("orders").update({ status: next }).eq("id", o.id);
-      if (error) throw error;
+      await requestAdmin("/api/admin/catalog", {
+        method: "PATCH",
+        body: JSON.stringify({ resource: "orders", id: o.id, status: next }),
+      });
 
       setOrders((prev) =>
         prev.map((x) => (x.id === o.id ? { ...x, status: next } : x))
@@ -443,7 +463,7 @@ export default function AdminPedidosPage() {
           onChange={(e) => setQ(e.target.value)}
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <select
             className={inputBase()}
             value={statusFilter}
@@ -468,6 +488,27 @@ export default function AdminPedidosPage() {
               </option>
             ))}
           </select>
+
+          <select className={inputBase()} value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)}>
+            <option value="all">Todos los pagos</option>
+            <option value="paid">Pagados</option>
+            <option value="pending">Pendientes / sin pago</option>
+          </select>
+
+          <select className={inputBase()} value={catalogFilter} onChange={(e) => setCatalogFilter(e.target.value as typeof catalogFilter)}>
+            <option value="all">Detal y mayor</option>
+            <option value="retail">Catálogo detal</option>
+            <option value="wholesale">Catálogo mayor</option>
+          </select>
+
+          <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+            Desde
+            <input type="date" className={`${inputBase()} mt-1`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
+            Hasta
+            <input type="date" className={`${inputBase()} mt-1`} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
         </div>
 
         <div className="text-xs" style={{ color: "var(--ap-muted)" }}>
@@ -477,7 +518,7 @@ export default function AdminPedidosPage() {
               ? "Todas"
               : stores.find((x) => x.id === storeFilter)?.name ?? "Filtrada"}
           </b>{" "}
-          · Pedidos: <b style={{ color: "var(--ap-text)" }}>{filtered.length}</b>
+          · Coinciden: <b style={{ color: "var(--ap-text)" }}>{filtered.length}</b> de {orders.length}
         </div>
       </div>
 
@@ -497,7 +538,7 @@ export default function AdminPedidosPage() {
         <>
           {/* ✅ MOBILE: Cards */}
           <div className="md:hidden space-y-3">
-            {filtered.map((o) => {
+            {pageOrders.map((o) => {
               const storeName = o.stores?.name ?? "Tienda";
               const typeLabel = o.catalog_type === "retail" ? "Detal" : "Mayor";
               const created = formatDate(o.created_at);
@@ -596,7 +637,7 @@ export default function AdminPedidosPage() {
 
           {/* ✅ DESKTOP */}
           <div className="hidden md:block space-y-3">
-            {filtered.map((o) => {
+            {pageOrders.map((o) => {
               const storeName = o.stores?.name ?? "Tienda";
               const typeLabel = o.catalog_type === "retail" ? "Detal" : "Mayor";
               const created = formatDate(o.created_at);
@@ -672,12 +713,30 @@ export default function AdminPedidosPage() {
               );
             })}
 
-            <p className="text-xs" style={{ color: "var(--ap-muted)" }}>
-              Mostrando últimos 200 pedidos.
-            </p>
           </div>
         </>
       )}
+      {!loading && filtered.length > ORDERS_PER_PAGE ? (
+        <div className="ap-card flex items-center justify-between gap-3 rounded-2xl p-3">
+          <button
+            className={btnSoft()}
+            disabled={visiblePage === 1}
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+          >
+            ← Anterior
+          </button>
+          <span className="text-xs" style={{ color: "var(--ap-muted)" }}>
+            Página {visiblePage} de {pageCount} · {filtered.length} pedidos
+          </span>
+          <button
+            className={btnSoft()}
+            disabled={visiblePage === pageCount}
+            onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+          >
+            Siguiente →
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

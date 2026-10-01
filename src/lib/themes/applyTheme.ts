@@ -42,10 +42,8 @@ function pickStr(v: any) {
   return s || undefined;
 }
 
-export function applyThemeToRoot(cfg?: ThemeConfig) {
-  if (typeof document === "undefined") return;
-
-  const r = document.documentElement;
+export function applyThemeToElement(cfg: ThemeConfig | undefined, element: HTMLElement) {
+  const r = element;
 
   // ---------- BG ----------
   // Prioridad:
@@ -53,7 +51,9 @@ export function applyThemeToRoot(cfg?: ThemeConfig) {
   // 2) nuevo bgMode solid/gradient
   // 3) default
   const legacyBg = pickStr((cfg as any)?.bg);
+  const rawBg = pickStr((cfg as any)?.__rawBg);
   const bg =
+    rawBg ??
     legacyBg ??
     (cfg?.bgMode === "solid"
       ? (cfg?.bgSolid ?? "#07060d")
@@ -112,9 +112,14 @@ export function applyThemeToRoot(cfg?: ThemeConfig) {
   // ---------- RADIUS / GLOW ----------
   const radius = String((cfg as any)?.radius ?? 24);
   const glow = String((cfg as any)?.glow ?? 60);
+  const bgBase =
+    cfg?.bgMode === "solid" && cfg.bgSolid
+      ? cfg.bgSolid
+      : "#070014";
 
-  // ✅ Variables que usa tu catálogo
+  // Store theme tokens stay scoped to the catalog element.
   r.style.setProperty("--t-bg", bg);
+  r.style.setProperty("--t-bg-base", bgBase);
   r.style.setProperty("--t-cta", cta);
 
   r.style.setProperty("--t-text", text);
@@ -130,4 +135,5 @@ export function applyThemeToRoot(cfg?: ThemeConfig) {
 
   r.style.setProperty("--t-radius", radius);
   r.style.setProperty("--t-glow", glow);
+  r.style.setProperty("--t-store-bg-opacity", String(Math.min(0.3, Math.max(0.08, Number(glow) / 300))));
 }

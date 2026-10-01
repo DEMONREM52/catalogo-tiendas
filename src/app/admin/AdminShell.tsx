@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import AdminBell from "./AdminBell";
@@ -198,9 +198,11 @@ function AdminMenu({ onNav, showHeader = true }: { onNav?: () => void; showHeade
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const alreadyInside = useInsideAdminShell();
 
-  // ✅ Si ya hay un AdminShell arriba, NO lo vuelvas a renderizar.
   if (alreadyInside) return <>{children}</>;
+  return <AdminShellRoot>{children}</AdminShellRoot>;
+}
 
+function AdminShellRoot({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState<string>("");
 
@@ -210,6 +212,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   // Swipe close SOLO desde el handle
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelWidth, setPanelWidth] = useState(360);
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef(0);
@@ -218,6 +221,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const router = useRouter();
   const pathname = usePathname();
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setIsDragging(false);
+    setDragX(0);
+    window.setTimeout(() => setDrawerMounted(false), 320);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -255,9 +265,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }, [router]);
 
   useEffect(() => {
-    closeDrawer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    const frame = requestAnimationFrame(closeDrawer);
+    return () => cancelAnimationFrame(frame);
+  }, [closeDrawer, pathname]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -275,7 +285,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawerOpen]);
+  }, [drawerOpen, closeDrawer]);
 
   useEffect(() => {
     if (!drawerMounted) return;
@@ -283,7 +293,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     if (!el) return;
 
     const measure = () => {
-      panelWRef.current = el.getBoundingClientRect().width || 360;
+      const width = el.getBoundingClientRect().width || 360;
+      panelWRef.current = width;
+      setPanelWidth(width);
     };
     measure();
 
@@ -297,13 +309,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     setDragX(0);
     setIsDragging(false);
     requestAnimationFrame(() => setDrawerOpen(true));
-  }
-
-  function closeDrawer() {
-    setDrawerOpen(false);
-    setIsDragging(false);
-    setDragX(0);
-    window.setTimeout(() => setDrawerMounted(false), 320);
   }
 
   function toggleDrawer() {
@@ -327,7 +332,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     if (!isDragging) return;
 
     const dx = e.clientX - startXRef.current;
-    const w = panelWRef.current || 360;
+    const w = panelWidth || 360;
 
     const next = Math.max(0, Math.min(w, -dx));
     scheduleDrag(next);
@@ -337,7 +342,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     if (!isDragging) return;
     setIsDragging(false);
 
-    const w = panelWRef.current || 360;
+    const w = panelWidth || 360;
     const progress = dragX / w;
 
     if (progress > 0.35) {
@@ -353,7 +358,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     router.replace("/login");
   }
 
-  const w = panelWRef.current || 360;
+  const w = panelWidth || 360;
   const dragProgress = w ? Math.max(0, Math.min(1, dragX / w)) : 0;
   const panelTranslateX = drawerOpen ? -dragX : -18;
   const overlayOpacity = drawerOpen ? 1 - dragProgress * 0.9 : 0;
@@ -477,12 +482,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           </div>
 
           {/* Layout */}
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
+          <div className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:gap-4 md:grid-cols-[minmax(210px,260px)_minmax(0,1fr)]">
             <aside className="glass hidden rounded-[28px] p-4 md:block">
               <AdminMenu showHeader />
             </aside>
 
-            <section className="glass rounded-[28px] p-4 md:p-6">
+            <section className="glass min-w-0 rounded-[24px] p-3 sm:rounded-[28px] sm:p-4 md:p-6">
               {children}
             </section>
           </div>

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Swal from "sweetalert2";
+import { fetchAdminData } from "@/lib/admin-data";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Store = {
@@ -126,32 +128,23 @@ export default function AdminTiendasPage() {
   const [saving, setSaving] = useState(false);
 
   const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [stores, setStores] = useState<Store[]>([]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return stores;
     return stores.filter((x) =>
-      `${x.name} ${x.slug} ${x.whatsapp} ${x.owner_id}`.toLowerCase().includes(s)
+      (statusFilter === "all" || (isStoreActiveNow(x) ? "active" : "inactive") === statusFilter) &&
+      (!s || `${x.name} ${x.slug} ${x.whatsapp} ${x.owner_id}`.toLowerCase().includes(s))
     );
-  }, [q, stores]);
+  }, [q, stores, statusFilter]);
 
   async function load() {
     setLoading(true);
     try {
-      const sb = supabaseBrowser();
-
-      const { data, error } = await sb
-        .from("stores")
-        .select(
-          "id,name,slug,whatsapp,owner_id,active,active_until,catalog_retail,catalog_wholesale,wholesale_key,created_at"
-        )
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
+      const data = await fetchAdminData<Store[]>(new URLSearchParams({ resource: "stores" }));
       // ✅ Aplicamos auto-off de catálogos en el estado (si está expirada/inactiva)
-      const normalized = ((data as Store[]) ?? []).map(applyCatalogAutoOff);
+      const normalized = data.map(applyCatalogAutoOff);
       setStores(normalized);
     } catch (e: any) {
       await Swal.fire({
@@ -471,6 +464,20 @@ export default function AdminTiendasPage() {
     window.open(url, "_blank");
   }
 
+  async function copyWholesaleLink(s: Store) {
+    if (!s.wholesale_key) {
+      await Swal.fire({ icon: "info", title: "Falta clave mayorista", text: "Configura la llave secreta antes de copiar el enlace.", ...swalTheme() });
+      return;
+    }
+    const url = `${window.location.origin}/${s.slug}/mayor?key=${encodeURIComponent(s.wholesale_key)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      await Swal.fire({ icon: "success", title: "Enlace mayorista copiado", timer: 1000, showConfirmButton: false, ...swalTheme() });
+    } catch {
+      await Swal.fire({ icon: "error", title: "No se pudo copiar el enlace", text: "El navegador bloqueó el portapapeles.", ...swalTheme() });
+    }
+  }
+
   return (
     <div className="space-y-4 text-[color:var(--ap-text)]">
       {/* Theme tokens + local UI helpers */}
@@ -583,14 +590,15 @@ export default function AdminTiendasPage() {
       </div>
 
       {/* Search */}
-      <div className="ap-card rounded-[28px] p-3">
-        <input
-          className="w-full bg-transparent outline-none"
-          style={{ color: "var(--ap-text)" }}
-          placeholder="Buscar por nombre, slug, whatsapp, owner..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      <div className="ap-card grid grid-cols-1 gap-3 rounded-[28px] p-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+        <div>
+          <input
+            className="w-full bg-transparent outline-none"
+            style={{ color: "var(--ap-text)" }}
+            placeholder="Buscar por nombre, slug, WhatsApp u owner..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
         {q ? (
           <div className="mt-2 text-xs" style={{ color: "var(--ap-muted)" }}>
             Tip: si escribes el nombre, te sugiero slug:{" "}
@@ -599,6 +607,12 @@ export default function AdminTiendasPage() {
             </span>
           </div>
         ) : null}
+        </div>
+        <select className={inputBase()} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} aria-label="Filtrar tiendas por estado">
+          <option value="all">Todas las tiendas ({stores.length})</option>
+          <option value="active">Activas ({stores.filter(isStoreActiveNow).length})</option>
+          <option value="inactive">Inactivas / vencidas ({stores.filter((store) => !isStoreActiveNow(store)).length})</option>
+        </select>
       </div>
 
       {/* Content */}
@@ -705,6 +719,10 @@ export default function AdminTiendasPage() {
                       title={!effectiveWholesale ? "Mayor desactivado" : ""}
                     >
                       Abrir Mayor
+                    </button>
+
+                    <button className={buttonGhost()} onClick={() => copyWholesaleLink(s)} disabled={!s.wholesale_key}>
+                      Copiar link Mayor
                     </button>
 
                     <button className={buttonPrimary()} onClick={() => saveStore(s)} disabled={saving}>
@@ -903,6 +921,23 @@ export default function AdminTiendasPage() {
                     />
                     Catálogo Mayor
                   </label>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: "var(--ap-border)" }}>
+                  {[
+                    { href: "/admin/pedidos", label: "Pedidos" },
+                    { href: "/admin/productos", label: "Productos" },
+                    { href: "/admin/categorias", label: "Categorías" },
+                    { href: "/admin/usuarios", label: "Usuarios y roles" },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={`${item.href}?store=${encodeURIComponent(s.id)}`}
+                      className="ap-btn-ghost rounded-xl px-3 py-2 text-xs font-semibold transition hover:brightness-110"
+                    >
+                      {item.label} de {s.name} →
+                    </Link>
+                  ))}
                 </div>
 
                 {/* Danger zone */}

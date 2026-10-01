@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(html.dark, html.dark *));
 
 /* =========================================================
    ✅ THEME TOKENS (AUTO: SISTEMA OSCURO / CLARO)
@@ -32,6 +33,8 @@
 
   /* Base clara */
   --t-bg-base: #f8fafc; /* slate-50 */
+  --t-vignette: rgba(15, 23, 42, 0.06);
+  --t-store-bg-opacity: 0.10;
 
   /* Glows (light) */
   --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.14), transparent 62%),
@@ -69,6 +72,8 @@
 
     --t-glow: 60;
     --t-bg-base: #070014;
+    --t-vignette: rgba(0, 0, 0, 0.24);
+    --t-store-bg-opacity: 0.22;
 
     --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
             radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
@@ -95,6 +100,8 @@ html.dark :root {
 
   --t-glow: 60;
   --t-bg-base: #070014;
+  --t-vignette: rgba(0, 0, 0, 0.24);
+  --t-store-bg-opacity: 0.22;
 
   --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.22), transparent 62%),
           radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.18), transparent 62%),
@@ -117,12 +124,517 @@ html.light :root {
 
   --t-glow: 45;
   --t-bg-base: #f8fafc;
+  --t-vignette: rgba(15, 23, 42, 0.06);
+  --t-store-bg-opacity: 0.10;
 
   --t-bg: radial-gradient(900px 600px at 20% 10%, rgba(168, 85, 247, 0.14), transparent 62%),
           radial-gradient(900px 600px at 80% 20%, rgba(236, 72, 153, 0.10), transparent 62%),
           radial-gradient(900px 700px at 50% 100%, rgba(79, 70, 229, 0.10), transparent 62%);
 
   --t-shadow: 0 26px 85px rgba(2, 6, 23, 0.16);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --t-text: #172033 !important;
+    --t-muted: rgba(23, 32, 51, 0.78) !important;
+    --t-border: rgba(23, 32, 51, 0.16) !important;
+    --t-card-bg: rgba(255, 255, 255, 0.96) !important;
+    --t-card-bg-soft: rgba(23, 32, 51, 0.045) !important;
+    --t-card-border: rgba(23, 32, 51, 0.15) !important;
+    --t-bg-base: #f7f6fb !important;
+    --t-vignette: rgba(15, 23, 42, 0.06) !important;
+    --t-store-bg-opacity: 0.08 !important;
+    --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.1), transparent 65%),
+      radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.08), transparent 65%) !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --t-text: #f8f7ff !important;
+    --t-muted: rgba(248, 247, 255, 0.78) !important;
+    --t-border: rgba(248, 247, 255, 0.2) !important;
+    --t-card-bg: rgba(22, 17, 34, 0.96) !important;
+    --t-card-bg-soft: rgba(248, 247, 255, 0.075) !important;
+    --t-card-border: rgba(248, 247, 255, 0.18) !important;
+    --t-bg-base: #100b18 !important;
+    --t-vignette: rgba(0, 0, 0, 0.24) !important;
+    --t-store-bg-opacity: 0.18 !important;
+    --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.15), transparent 65%),
+      radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.11), transparent 65%) !important;
+  }
+}
+
+:root[data-theme="light"],
+html.light {
+  color-scheme: light;
+  --t-text: #172033 !important;
+  --t-muted: rgba(23, 32, 51, 0.78) !important;
+  --t-border: rgba(23, 32, 51, 0.16) !important;
+  --t-card-bg: rgba(255, 255, 255, 0.96) !important;
+  --t-card-bg-soft: rgba(23, 32, 51, 0.045) !important;
+  --t-card-border: rgba(23, 32, 51, 0.15) !important;
+  --t-bg-base: #f7f6fb !important;
+  --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.1), transparent 65%),
+    radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.08), transparent 65%) !important;
+}
+
+:root[data-theme="dark"],
+html.dark {
+  color-scheme: dark;
+  --t-text: #f8f7ff !important;
+  --t-muted: rgba(248, 247, 255, 0.78) !important;
+  --t-border: rgba(248, 247, 255, 0.2) !important;
+  --t-card-bg: rgba(22, 17, 34, 0.96) !important;
+  --t-card-bg-soft: rgba(248, 247, 255, 0.075) !important;
+  --t-card-border: rgba(248, 247, 255, 0.18) !important;
+  --t-bg-base: #100b18 !important;
+  --t-vignette: rgba(0, 0, 0, 0.24) !important;
+  --t-store-bg-opacity: 0.18 !important;
+  --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.15), transparent 65%),
+    radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.11), transparent 65%) !important;
+}
+
+.theme-control-trigger,
+.theme-control-menu {
+  border-color: var(--t-card-border);
+  background: var(--t-card-bg);
+  color: var(--t-text);
+}
+
+.theme-control-trigger {
+  box-shadow: 0 12px 36px rgba(15, 10, 30, 0.18);
+}
+
+.theme-control-logo {
+  transition: transform 220ms ease, filter 220ms ease;
+}
+
+.theme-control-trigger:hover .theme-control-logo {
+  transform: rotate(-12deg) scale(1.08);
+  filter: saturate(1.2);
+}
+
+.product-landing-card {
+  color: var(--t-text);
+  background: var(--t-card-bg);
+  border-color: var(--t-card-border);
+}
+
+.product-landing-topbar,
+.product-landing-section,
+.product-landing-tutorial {
+  color: var(--t-text);
+  background: color-mix(in oklab, var(--t-card-bg) 92%, transparent);
+  border-color: var(--t-card-border);
+}
+
+.product-landing-page {
+  color: var(--t-text);
+  background: var(--t-bg-base);
+  background-image: var(--t-bg);
+  background-attachment: fixed;
+}
+
+.product-landing-gallery {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--t-accent) 16%, var(--t-bg-base)),
+    color-mix(in oklab, var(--t-accent2) 12%, var(--t-bg-base))
+  );
+}
+
+.product-showcase-main {
+  background: var(--t-card-bg-soft);
+  box-shadow: 0 18px 48px color-mix(in oklab, var(--t-accent) 16%, transparent);
+  overflow: visible;
+}
+
+.product-showcase-image-button {
+  background: var(--t-card-bg-soft);
+  border-radius: inherit;
+}
+
+.product-showcase-image {
+  display: block;
+  animation: productImageEnter 260ms ease both;
+}
+
+.product-showcase-expand,
+.product-showcase-zoom-label {
+  color: var(--t-text);
+  background: var(--t-card-bg);
+  backdrop-filter: blur(12px);
+}
+
+.product-showcase-zoom-lens {
+  z-index: 8;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  border-radius: 50%;
+  clip-path: circle(50%);
+  isolation: isolate;
+  border: 4px solid rgba(255, 255, 255, 0.96);
+  background-color: var(--t-card-bg);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.38),
+    0 0 0 6px color-mix(in oklab, var(--t-accent) 60%, transparent),
+    0 0 30px color-mix(in oklab, var(--t-accent2) 44%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  animation: zoomLensEnter 120ms ease-out both;
+}
+
+.product-showcase-zoom-lens::after {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.product-showcase-zoom-image {
+  display: block;
+  max-width: none;
+  pointer-events: none;
+}
+
+.product-showcase-zoom-label {
+  z-index: 2;
+  padding: 0.35rem 0.7rem;
+  color: #fff;
+  background: rgba(17, 14, 24, 0.84);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.product-showcase-tutorial {
+  color: var(--t-text);
+  background: linear-gradient(
+    115deg,
+    color-mix(in oklab, var(--t-accent) 14%, var(--t-card-bg)),
+    color-mix(in oklab, var(--t-accent2) 10%, var(--t-card-bg))
+  );
+  border-color: color-mix(in oklab, var(--t-accent) 24%, var(--t-card-border));
+  box-shadow: 0 12px 30px color-mix(in oklab, var(--t-accent) 8%, transparent);
+}
+
+.product-showcase-tutorial:hover {
+  box-shadow: 0 18px 38px color-mix(in oklab, var(--t-accent) 14%, transparent);
+}
+
+.product-showcase-tutorial-kicker {
+  color: var(--t-accent);
+}
+
+.product-showcase-tutorial-icon {
+  color: var(--t-accent);
+  background: var(--t-card-bg);
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--t-accent) 12%, transparent);
+}
+
+.product-lightbox {
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(8, 6, 15, 0.92);
+  backdrop-filter: blur(18px);
+  animation: lightboxFadeIn 180ms ease both;
+}
+
+.product-lightbox-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  max-width: none;
+  border-radius: 0;
+  color: #f8f7ff;
+  background: rgba(21, 18, 30, 0.98);
+  border: 0;
+  box-shadow: none;
+  animation: lightboxFadeIn 180ms ease both;
+}
+
+.product-lightbox-control {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.product-lightbox-control:hover {
+  background: color-mix(in oklab, var(--t-accent) 55%, rgba(255, 255, 255, 0.18));
+  transform: scale(1.05);
+}
+
+.product-lightbox-image {
+  display: block;
+  flex: 0 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  animation: productImageEnter 180ms ease both;
+}
+
+.product-lightbox-stage {
+  display: flex;
+  flex: 1 1 0%;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.product-showcase-empty {
+  background: linear-gradient(135deg, var(--t-card-bg-soft), color-mix(in oklab, var(--t-accent) 12%, var(--t-card-bg)));
+  color: var(--t-accent);
+}
+
+.product-showcase-shade {
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.22));
+}
+
+.product-showcase-arrow {
+  color: var(--t-text);
+  background: var(--t-card-bg);
+}
+
+.product-showcase-counter {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(12px);
+}
+
+.product-showcase-thumb {
+  border-color: var(--t-card-border);
+  opacity: 0.7;
+}
+
+.product-showcase-thumb:hover,
+.product-showcase-thumb.is-active {
+  border-color: var(--t-accent);
+  opacity: 1;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--t-accent) 24%, transparent);
+}
+
+.product-video-preview {
+  color: var(--t-text);
+  background: color-mix(in oklab, var(--t-card-bg) 88%, var(--t-accent) 12%);
+  border: 1px solid var(--t-card-border);
+}
+
+.product-video-reset,
+.product-landing-category {
+  color: var(--t-text);
+  background: var(--t-card-bg-soft);
+}
+
+.product-video-overlay {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.48), transparent 72%);
+}
+
+.product-video-fallback {
+  background:
+    radial-gradient(circle at 70% 30%, color-mix(in oklab, var(--t-accent2) 45%, transparent), transparent 35%),
+    linear-gradient(135deg, var(--t-bg-base), color-mix(in oklab, var(--t-accent) 45%, var(--t-bg-base)));
+}
+
+.product-video-play {
+  color: var(--t-accent);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.product-landing-kicker,
+.product-landing-accent,
+.product-landing-price {
+  color: var(--t-accent);
+}
+
+.product-landing-pill {
+  color: color-mix(in oklab, var(--t-text) 22%, #15803d);
+  background: color-mix(in oklab, #22c55e 12%, var(--t-card-bg));
+}
+
+.product-landing-stock {
+  color: var(--t-muted);
+}
+
+.product-landing-stock-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px color-mix(in oklab, #22c55e 18%, transparent);
+}
+
+.product-landing-share-note,
+.product-landing-footer {
+  color: var(--t-muted);
+}
+
+.product-share-button,
+.product-landing-tutorial-link {
+  color: var(--t-text);
+  background: linear-gradient(120deg, color-mix(in oklab, var(--t-accent) 24%, var(--t-card-bg)), color-mix(in oklab, var(--t-accent2) 20%, var(--t-card-bg)));
+  border: 1px solid color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border));
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--t-accent) 14%, transparent);
+}
+
+.product-row-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 12px;
+  line-height: 1;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.product-row-action:hover {
+  transform: translateY(-1px);
+}
+
+.product-row-action:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--t-accent) 75%, white);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .product-row-action {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
+}
+
+.product-share-button.product-row-action {
+  color: color-mix(in oklab, var(--t-accent) 82%, var(--t-text));
+  border-color: color-mix(in oklab, var(--t-accent) 28%, var(--t-card-border));
+  background: color-mix(in oklab, var(--t-accent) 9%, var(--t-card-bg));
+  box-shadow: none;
+}
+
+.product-share-button.product-row-action:hover {
+  background: color-mix(in oklab, var(--t-accent) 16%, var(--t-card-bg));
+  box-shadow: 0 5px 14px color-mix(in oklab, var(--t-accent) 10%, transparent);
+}
+
+.product-whatsapp-button {
+  color: #fff;
+  background: #128c55;
+  box-shadow: 0 10px 26px rgba(18, 140, 85, 0.18);
+}
+
+.product-whatsapp-button:hover {
+  background: #0f7548;
+}
+
+.product-landing-highlight {
+  color: var(--t-text);
+  background: color-mix(in oklab, var(--t-accent) 8%, var(--t-card-bg));
+  border: 1px solid color-mix(in oklab, var(--t-accent) 10%, var(--t-card-border));
+}
+
+.product-landing-highlight-icon,
+.product-landing-help-icon {
+  color: var(--t-accent);
+  background: color-mix(in oklab, var(--t-accent) 14%, var(--t-card-bg));
+}
+
+.product-landing-spec {
+  color: var(--t-text);
+  background: color-mix(in oklab, var(--t-card-bg) 88%, var(--t-accent) 12%);
+  border-color: var(--t-card-border);
+}
+
+.product-landing-tutorial-link:hover {
+  filter: brightness(1.06);
+}
+
+@keyframes productImageEnter {
+  from { opacity: 0.65; transform: scale(1.01); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes zoomLensEnter {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes lightboxFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lightboxPanelEnter {
+  from { opacity: 0; transform: scale(0.985) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .product-showcase-zoom-lens {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-showcase-image,
+  .product-showcase-zoom-lens,
+  .product-lightbox,
+  .product-lightbox-panel,
+  .product-lightbox-image {
+    animation: none;
+  }
+}
+
+.product-landing-gallery-placeholder {
+  border-color: var(--t-card-border);
+  background: var(--t-card-bg-soft);
+  color: var(--t-accent);
+}
+
+.product-landing-image {
+  border-color: var(--t-card-border);
+}
+
+.product-landing-store-badge {
+  background: color-mix(in oklab, var(--t-accent) 15%, var(--t-card-bg));
+  color: var(--t-text);
+}
+
+.product-landing-accent {
+  color: var(--t-accent);
+}
+
+.product-landing-availability {
+  color: color-mix(in oklab, var(--t-text) 74%, #15803d 26%);
+}
+
+.product-landing-highlight {
+  background: color-mix(in oklab, var(--t-accent) 9%, var(--t-card-bg));
+}
+
+.product-landing-specifications > div {
+  border-color: var(--t-card-border);
 }
 
 /* =========================================================
@@ -165,6 +677,40 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Fluid behavior shared across dashboards and storefronts; colors remain theme-driven. */
+button,
+input,
+select,
+textarea {
+  min-width: 0;
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--t-accent) 78%, white);
+  outline-offset: 2px;
+}
+
+:where([class*="grid-cols"]) > * {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  body {
+    background-attachment: scroll;
+  }
+}
+
 /* ✅ Capa de estrellas global (se ajusta por tema) */
 body::before {
   content: "";
@@ -173,7 +719,6 @@ body::before {
   pointer-events: none;
   z-index: -2;
 
-  /* en claro: estrellas más sutiles */
   background-image: radial-gradient(
     color-mix(in oklab, var(--t-text) 55%, transparent) 1px,
     transparent 1px
@@ -188,17 +733,14 @@ body::before {
   animation: stars-drift 18s linear infinite;
 }
 
-/* en oscuro: un poco más visibles */
 @media (prefers-color-scheme: dark) {
   body::before {
     opacity: 0.55;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
   }
 }
 :root[data-theme="dark"] body::before,
 html.dark body::before {
   opacity: 0.55;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
 }
 :root[data-theme="light"] body::before,
 html.light body::before {
@@ -214,29 +756,11 @@ body::after {
   z-index: -1;
 
   background:
-    radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.18), transparent 70%),
-    radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.20), transparent 70%),
-    linear-gradient(to bottom, rgba(0,0,0,0.12), transparent 22%),
-    linear-gradient(to top, rgba(0,0,0,0.14), transparent 32%);
+    radial-gradient(900px 600px at 50% 0%, var(--t-vignette), transparent 70%),
+    radial-gradient(900px 700px at 50% 110%, var(--t-vignette), transparent 70%),
+    linear-gradient(to bottom, var(--t-vignette), transparent 22%),
+    linear-gradient(to top, var(--t-vignette), transparent 32%);
   opacity: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-  body::after {
-    background:
-      radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.38), transparent 70%),
-      radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.45), transparent 70%),
-      linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 22%),
-      linear-gradient(to top, rgba(0,0,0,0.40), transparent 32%);
-  }
-}
-:root[data-theme="dark"] body::after,
-html.dark body::after {
-  background:
-    radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.38), transparent 70%),
-    radial-gradient(900px 700px at 50% 110%, rgba(0,0,0,0.45), transparent 70%),
-    linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 22%),
-    linear-gradient(to top, rgba(0,0,0,0.40), transparent 32%);
 }
 
 /* Selection */
@@ -332,14 +856,22 @@ a {
 }
 @media (prefers-color-scheme: dark) {
   .starfield {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
     opacity: 0.55;
   }
 }
 :root[data-theme="dark"] .starfield,
 html.dark .starfield {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px);
   opacity: 0.55;
+}
+:root[data-theme="light"] .starfield,
+html.light .starfield {
+  opacity: 0.28;
+}
+
+@media (max-width: 640px) {
+  .product-landing-page {
+    background-attachment: scroll;
+  }
 }
 
 @keyframes stars-drift {

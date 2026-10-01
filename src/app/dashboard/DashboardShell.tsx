@@ -406,6 +406,7 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/pos") ? "pos" :
       pathname.startsWith("/dashboard/clientes") ? "clients" :
       pathname.startsWith("/dashboard/products") ? "products" :
+      pathname.startsWith("/dashboard/social") ? "products" :
       pathname.startsWith("/dashboard/categories") ? "categories" :
       pathname.startsWith("/dashboard/pedidos") ? "orders" :
       null;
@@ -514,6 +515,12 @@ export default function DashboardShell({
         href: "/dashboard/products",
         emoji: "📦",
         label: "Productos",
+        show: canAccessStorePages && canOpen("products"),
+      },
+      {
+        href: "/dashboard/social",
+        emoji: "📣",
+        label: "RemHub Social",
         show: canAccessStorePages && canOpen("products"),
       },
       {
@@ -634,7 +641,7 @@ export default function DashboardShell({
         />
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto w-full max-w-[1800px] px-6 py-3 sm:px-10 md:px-12 md:py-5">
         {/* Top bar */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div
@@ -897,7 +904,7 @@ export default function DashboardShell({
 
           {/* Content */}
           <section
-            className="rounded-[28px] border p-4 md:p-6 backdrop-blur-xl"
+            className="min-w-0 rounded-2xl border p-2.5 sm:p-3 md:p-4 backdrop-blur-xl"
             style={{
               borderColor: "var(--t-card-border)",
               background: "var(--t-card-bg)",

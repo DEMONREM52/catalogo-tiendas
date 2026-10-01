@@ -6,6 +6,18 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ImageUpload } from "../../store/ImageUpload";
+import ProductDetailsFields from "../ProductDetailsFields";
+import {
+  EMPTY_PRODUCT_DETAILS,
+  type ProductDetails,
+} from "@/lib/product-details";
+import {
+  createSocialCaption,
+  reviewProductForPost,
+  SOCIAL_PLATFORMS,
+  type SocialPlatform,
+  type SocialProduct,
+} from "@/lib/social-content";
 
 type Category = { id: string; name: string };
 
@@ -97,6 +109,11 @@ export default function CreateProductPage() {
   const [categoryId, setCategoryId] = useState<string>("");
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [productDetails, setProductDetails] = useState<ProductDetails>({ ...EMPTY_PRODUCT_DETAILS });
+  const [prepareSocial, setPrepareSocial] = useState(false);
+  const [platforms, setPlatforms] = useState<SocialPlatform[]>(["instagram"]);
+  const [socialStyle, setSocialStyle] = useState("cercano");
+  const [socialObjective, setSocialObjective] = useState("conversaciones");
 
   const computedStock = useMemo(() => clampIntOrNull(stockRaw), [stockRaw]);
 
@@ -138,12 +155,12 @@ export default function CreateProductPage() {
         .order("sort_order", { ascending: true });
 
       if (catsErr) throw catsErr;
-      setCategories((cats as any[]) ?? []);
-    } catch (e: any) {
+      setCategories(cats ?? []);
+    } catch (e: unknown) {
       await Swal.fire({
         icon: "error",
         title: "Error",
-        text: e?.message ?? "Error",
+        text: e instanceof Error ? e.message : "Error",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
@@ -154,7 +171,6 @@ export default function CreateProductPage() {
 
   useEffect(() => {
     loadBase();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function createNow() {
@@ -193,13 +209,60 @@ export default function CreateProductPage() {
         category_id: categoryId || null,
       };
 
-      const { data, error } = await sb.from("products").insert(payload).select("id").single();
+      const { data, error } = await sb.from("products").insert({
+        ...payload,
+        product_details: productDetails,
+      }).select("id").single();
       if (error) throw error;
 
+      let socialError: string | null = null;
+      if (prepareSocial && platforms.length && data?.id && storeId) {
+        const socialProduct: SocialProduct = {
+          id: data.id,
+          name: n,
+          description: payload.description,
+          price_retail: payload.price_retail,
+          image_url: imageUrl,
+          stock: computedStock,
+          active,
+          details: productDetails,
+        };
+        const { error: postError } = await sb.from("store_social_posts").insert(
+          platforms.map((platform) => ({
+            store_id: storeId,
+            product_id: data.id,
+            platform,
+            status: "draft",
+            title: n,
+            caption: createSocialCaption(socialProduct, platform, {
+              style: socialStyle,
+              objective: socialObjective,
+            }),
+            image_urls: [imageUrl, ...productDetails.gallery_urls].filter(Boolean),
+            product_snapshot: {
+              name: n,
+              description: socialProduct.description,
+              price_retail: socialProduct.price_retail,
+              image_url: imageUrl,
+              stock: computedStock,
+              product_details: productDetails,
+              style: socialStyle,
+              objective: socialObjective,
+            },
+            policy_warnings: reviewProductForPost(socialProduct),
+          })),
+        );
+        if (postError) socialError = postError.message;
+      }
+
       await Swal.fire({
-        icon: "success",
-        title: "Producto creado",
-        text: "Ahora puedes editarlo o volver a la lista.",
+        icon: socialError ? "warning" : "success",
+        title: socialError ? "Producto creado; borradores pendientes" : "Producto creado",
+        text: socialError
+          ? `El producto quedó guardado, pero no se pudieron guardar los borradores: ${socialError}`
+          : prepareSocial && platforms.length
+            ? "Se guardaron los borradores seleccionados. Revísalos en RemHub Social antes de compartirlos."
+            : "Tu producto y su página de catálogo están listos.",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
         confirmButtonText: "Ir a editar",
@@ -213,11 +276,11 @@ export default function CreateProductPage() {
           window.location.href = `/dashboard/products`;
         }
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       await Swal.fire({
         icon: "error",
         title: "No se pudo crear",
-        text: e?.message ?? "Error",
+        text: e instanceof Error ? e.message : "Error",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
@@ -239,7 +302,6 @@ export default function CreateProductPage() {
 
   const wMain = wrapProps();
   const wRight = wrapProps();
-  const wCard = wrapProps();
 
   const soft = btnSoftProps();
   const primary = btnPrimaryProps();
@@ -479,6 +541,81 @@ export default function CreateProductPage() {
             </p>
           </div>
         </div>
+
+        <ProductDetailsFields
+          details={productDetails}
+          onChange={setProductDetails}
+          userId={userId}
+        />
+
+        <section className="space-y-3 rounded-[22px] border p-4 sm:p-5" style={wrapProps().style}>
+          <label className="flex items-start gap-3 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={prepareSocial}
+              onChange={(event) => setPrepareSocial(event.target.checked)}
+            />
+            <span>
+              Preparar borradores para redes al crear el producto
+              <span className="mt-1 block text-xs font-normal opacity-70">
+                Se guardarán como borradores; publicarás manualmente después de revisarlos.
+              </span>
+            </span>
+          </label>
+          {prepareSocial ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {SOCIAL_PLATFORMS.map((platform) => (
+                  <label key={platform.id} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={platforms.includes(platform.id)}
+                      onChange={(event) =>
+                        setPlatforms((current) =>
+                          event.target.checked
+                            ? [...current, platform.id]
+                            : current.filter((item) => item !== platform.id),
+                        )
+                      }
+                    />
+                    {platform.label}
+                  </label>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm">
+                  Estilo
+                  <select
+                    {...inputProps()}
+                    value={socialStyle}
+                    onChange={(event) => setSocialStyle(event.target.value)}
+                  >
+                    <option value="cercano">Cercano</option>
+                    <option value="directo">Directo</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Objetivo
+                  <select
+                    {...inputProps()}
+                    value={socialObjective}
+                    onChange={(event) => setSocialObjective(event.target.value)}
+                  >
+                    <option value="conversaciones">Recibir consultas</option>
+                    <option value="visitas">Visitar el catálogo</option>
+                    <option value="informacion">Compartir información</option>
+                  </select>
+                </label>
+              </div>
+              {!platforms.length ? (
+                <p className="text-sm text-amber-600">Selecciona al menos una plataforma o desactiva la opción.</p>
+              ) : null}
+              <p className="text-xs opacity-70">
+                El borrador solo usa datos guardados en este producto. No inventa beneficios, descuentos ni certificaciones.
+              </p>
+            </>
+          ) : null}
+        </section>
       </div>
     </main>
   );

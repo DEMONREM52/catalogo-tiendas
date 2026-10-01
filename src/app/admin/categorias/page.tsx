@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { fetchAdminData } from "@/lib/admin-data";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";
 
 type StoreMini = { id: string; name: string; slug: string };
@@ -70,20 +71,12 @@ export default function AdminCategoriasPage() {
   // Load Stores
   // -----------------------------
   async function loadStores() {
-    const sb = supabaseBrowser();
-
-    const { data, error } = await sb
-      .from("stores")
-      .select("id,name,slug")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    const arr = (data as StoreMini[]) ?? [];
+    const arr = await fetchAdminData<StoreMini[]>(new URLSearchParams({ resource: "stores" }));
     setStores(arr);
 
-    // auto select first store
-    if (!storeId && arr[0]) setStoreId(arr[0].id);
+    const requestedStore = new URLSearchParams(window.location.search).get("store");
+    const initialStore = arr.find((store) => store.id === requestedStore) ?? arr[0];
+    if (!storeId && initialStore) setStoreId(initialStore.id);
   }
 
   // -----------------------------
@@ -92,17 +85,9 @@ export default function AdminCategoriasPage() {
   async function loadCats(sid: string) {
     setLoading(true);
     try {
-      const sb = supabaseBrowser();
-
-      const { data, error } = await sb
-        .from("product_categories")
-        .select("id,store_id,name,image_url,sort_order,active,created_at")
-        .eq("store_id", sid)
-        .order("sort_order", { ascending: true });
-
-      if (error) throw error;
-
-      setCats((data as Cat[]) ?? []);
+      const params = new URLSearchParams({ resource: "categories", storeId: sid });
+      const data = await fetchAdminData<Cat[]>(params);
+      setCats(data);
     } finally {
       setLoading(false);
     }
@@ -352,7 +337,7 @@ export default function AdminCategoriasPage() {
         </div>
 
         {/* Filters */}
-        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
               Tienda
@@ -364,7 +349,7 @@ export default function AdminCategoriasPage() {
             >
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.slug})
+                  {s.name} · /{s.slug}
                 </option>
               ))}
             </select>
@@ -382,6 +367,24 @@ export default function AdminCategoriasPage() {
             />
           </div>
         </div>
+        {storeId ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { href: "/admin/productos", label: "Ver productos de esta tienda" },
+              { href: "/admin/pedidos", label: "Ver pedidos de esta tienda" },
+              { href: "/admin/usuarios", label: "Ver usuarios de esta tienda" },
+            ].map((item) => (
+              <a
+                key={item.href}
+                href={`${item.href}?store=${encodeURIComponent(storeId)}`}
+                className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:brightness-110"
+                style={{ borderColor: "var(--ap-border)", background: "var(--ap-card-2)", color: "var(--ap-text)" }}
+              >
+                {item.label} →
+              </a>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Content */}

@@ -6,6 +6,12 @@ import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../../store/ImageUpload";
 import { getDashboardStore } from "@/lib/store-utils";
+import ProductDetailsFields from "../ProductDetailsFields";
+import {
+  normalizeProductDetails,
+  type ProductDetails,
+} from "@/lib/product-details";
+import Link from "next/link";
 
 type Category = { id: string; name: string };
 
@@ -30,6 +36,16 @@ type Product = {
   category_id: string | null;
 
   stock: number | null; // null = ilimitado
+  product_details: ProductDetails;
+};
+
+type RelatedPost = {
+  id: string;
+  platform: string;
+  status: string;
+  title: string;
+  product_snapshot: Record<string, unknown>;
+  created_at: string;
 };
 
 // ✅ Styles con tokens (auto claro/oscuro por sistema)
@@ -46,7 +62,7 @@ function inputSoftProps(extraClassName = "") {
 function btnSoftProps() {
   return {
     className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
+      "rounded-xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
     style: {
       borderColor: "var(--t-card-border)",
       background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
@@ -57,7 +73,7 @@ function btnSoftProps() {
 function btnPrimaryProps() {
   return {
     className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+      "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
     style: {
       borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)",
       background: "color-mix(in oklab, var(--t-accent) 18%, transparent)",
@@ -66,22 +82,11 @@ function btnPrimaryProps() {
     } as React.CSSProperties,
   };
 }
-function btnDangerProps() {
-  return {
-    className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    style: {
-      borderColor: "color-mix(in oklab, #ef4444 45%, var(--t-card-border))",
-      background: "color-mix(in oklab, #ef4444 14%, transparent)",
-      color: "var(--t-text)",
-    } as React.CSSProperties,
-  };
-}
 function btnToggleProps(active: boolean) {
   if (active) {
     return {
       className:
-        "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+        "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
       style: {
         borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))",
         background: "color-mix(in oklab, #10b981 14%, transparent)",
@@ -91,7 +96,7 @@ function btnToggleProps(active: boolean) {
   }
   return {
     className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
+      "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
     style: {
       borderColor: "var(--t-card-border)",
       background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
@@ -148,6 +153,7 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
   const [draft, setDraft] = useState<Product | null>(null);
+  const [relatedPosts, setRelatedPosts] = useState<RelatedPost[]>([]);
 
   const isDirty = useMemo(() => {
     if (!product || !draft) return false;
@@ -212,7 +218,7 @@ export default function EditProductPage() {
       const { data: p, error: pErr } = await sb
         .from("products")
         .select(
-          "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock"
+          "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
         )
         .eq("id", id)
         .eq("store_id", access.store.id)
@@ -246,10 +252,23 @@ export default function EditProductPage() {
           (p as any).stock === null || (p as any).stock === undefined
             ? null
             : Math.max(0, Math.floor(clampNum((p as any).stock, 0))),
+        product_details: normalizeProductDetails((p as any).product_details),
       };
 
       setProduct(normalized);
       setDraft({ ...normalized });
+      const { data: posts, error: postsError } = await sb
+        .from("store_social_posts")
+        .select("id,platform,status,title,product_snapshot,created_at")
+        .eq("store_id", access.store.id)
+        .eq("product_id", id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (postsError) {
+        if (postsError.code !== "42P01" && postsError.code !== "PGRST205") throw postsError;
+      } else {
+        setRelatedPosts((posts ?? []) as RelatedPost[]);
+      }
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -291,6 +310,7 @@ export default function EditProductPage() {
         active: !!draft.active,
         image_url: draft.image_url,
         category_id: draft.category_id || null,
+        product_details: draft.product_details,
       };
 
       const { error } = await sb.from("products").update(payload).eq("id", draft.id).eq("store_id", storeId);
@@ -310,51 +330,6 @@ export default function EditProductPage() {
       await Swal.fire({
         icon: "error",
         title: "Error al guardar",
-        text: e?.message ?? "Error",
-        background: "var(--t-bg-base)",
-        color: "var(--t-text)",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove() {
-    if (!draft || !storeId) return;
-
-    const res = await Swal.fire({
-      icon: "warning",
-      title: "¿Eliminar producto?",
-      text: `Se eliminará "${draft.name}"`,
-      showCancelButton: true,
-      confirmButtonColor: "#ef4444",
-      cancelButtonText: "Cancelar",
-      confirmButtonText: "Sí, eliminar",
-      background: "var(--t-bg-base)",
-      color: "var(--t-text)",
-    });
-    if (!res.isConfirmed) return;
-
-    setSaving(true);
-    try {
-      const sb = supabaseBrowser();
-      const { error } = await sb.from("products").delete().eq("id", draft.id).eq("store_id", storeId);
-      if (error) throw error;
-
-      await Swal.fire({
-        icon: "success",
-        title: "Eliminado",
-        timer: 850,
-        showConfirmButton: false,
-        background: "var(--t-bg-base)",
-        color: "var(--t-text)",
-      });
-
-      router.push("/dashboard/products");
-    } catch (e: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "Error eliminando",
         text: e?.message ?? "Error",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
@@ -390,7 +365,6 @@ export default function EditProductPage() {
 
   const softBtn = btnSoftProps();
   const primaryBtn = btnPrimaryProps();
-  const dangerBtn = btnDangerProps();
   const toggleBtn = btnToggleProps(!!draft?.active);
 
   return (
@@ -434,15 +408,6 @@ export default function EditProductPage() {
               Guardar
             </button>
 
-            <button
-              className={dangerBtn.className}
-              style={dangerBtn.style}
-              type="button"
-              disabled={saving || loading || !draft}
-              onClick={() => void remove()}
-            >
-              Eliminar
-            </button>
           </div>
         </div>
       </div>
@@ -614,6 +579,64 @@ export default function EditProductPage() {
           </div>
         </div>
       )}
+
+      {!loading && draft ? (
+        <>
+          <ProductDetailsFields
+            details={draft.product_details}
+            onChange={(product_details) => setDraft({ ...draft, product_details })}
+            userId={userId}
+            productId={draft.id}
+          />
+          <section {...panelProps("space-y-3 p-4 sm:p-5")}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">📣 Publicaciones y redes sociales</h2>
+                <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+                  Los textos preparados guardan una copia de los datos originales.
+                </p>
+              </div>
+              <Link
+                href={`/dashboard/social?product=${encodeURIComponent(draft.id)}`}
+                className={primaryBtn.className}
+                style={primaryBtn.style}
+              >
+                Preparar publicación
+              </Link>
+            </div>
+            {relatedPosts.map((post) => {
+              const snapshot = post.product_snapshot ?? {};
+              const outdated =
+                String(snapshot.name ?? "") !== draft.name ||
+                String(snapshot.description ?? "") !== String(draft.description ?? "") ||
+                Number(snapshot.price_retail ?? 0) !== Number(draft.price_retail) ||
+                String(snapshot.image_url ?? "") !== String(draft.image_url ?? "") ||
+                JSON.stringify(snapshot.product_details ?? {}) !== JSON.stringify(draft.product_details);
+              return (
+                <div key={post.id} className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold">{post.title || post.platform}</p>
+                    <span className="rounded-full border px-3 py-1 text-xs">{post.status}</span>
+                  </div>
+                  <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+                    {post.platform} · {new Date(post.created_at).toLocaleDateString("es-CO")}
+                  </p>
+                  {outdated && !["published", "failed"].includes(post.status) ? (
+                    <p className="mt-2 text-sm text-amber-600">
+                      Este producto ha cambiado desde que preparaste la publicación. Revisa el contenido antes de publicarlo.
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+            {!relatedPosts.length ? (
+              <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+                Todavía no hay publicaciones para este producto. Puedes preparar borradores desde RemHub Social.
+              </p>
+            ) : null}
+          </section>
+        </>
+      ) : null}
     </main>
   );
 }

@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { fetchAdminData } from "@/lib/admin-data";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";
 
-type StoreMini = { id: string; name: string; slug: string };
+type StoreMini = { id: string; name: string; slug: string; wholesale_key: string | null };
 type Cat = { id: string; name: string };
 
 type Product = {
@@ -36,19 +37,16 @@ type StatusFilter = "all" | "active" | "inactive" | "out";
    UI helpers (classes)
 ========================= */
 function clsWrap() {
-  return "ap-wrap rounded-[22px]";
+  return "ap-wrap rounded-[18px]";
 }
 function inputBase() {
-  return "ap-input rounded-2xl p-3 text-sm outline-none";
+  return "ap-input rounded-xl p-3 text-sm outline-none";
 }
 function buttonGhost() {
-  return "ap-btn ap-btn-ghost rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
+  return "ap-btn ap-btn-ghost rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
 }
 function buttonPrimary() {
-  return "ap-btn ap-btn-primary rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
-}
-function buttonDanger() {
-  return "ap-btn ap-btn-danger rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
+  return "ap-btn ap-btn-primary rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-60";
 }
 function clsChip() {
   return "ap-chip inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold";
@@ -153,7 +151,6 @@ type Cursor = { created_at: string; id: string } | null;
 export default function AdminProductosPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [stores, setStores] = useState<StoreMini[]>([]);
   const [storeId, setStoreId] = useState<string>("");
@@ -238,50 +235,26 @@ export default function AdminProductosPage() {
      Loaders
   ========================= */
   async function loadStores() {
-    const sb = supabaseBrowser();
-    const { data, error } = await sb
-      .from("stores")
-      .select("id,name,slug")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    const arr = (data as StoreMini[]) ?? [];
+    const arr = await fetchAdminData<StoreMini[]>(new URLSearchParams({ resource: "stores" }));
     setStores(arr);
-    if (!storeId && arr[0]) setStoreId(arr[0].id);
+    const requestedStore = new URLSearchParams(window.location.search).get("store");
+    const initialStore = arr.find((store) => store.id === requestedStore) ?? arr[0];
+    if (!storeId && initialStore) setStoreId(initialStore.id);
   }
 
   async function loadCats(sid: string) {
-    const sb = supabaseBrowser();
-    const { data, error } = await sb
-      .from("product_categories")
-      .select("id,name")
-      .eq("store_id", sid)
-      .eq("active", true)
-      .order("sort_order", { ascending: true });
-
-    if (error) throw error;
-    setCats((data as Cat[]) ?? []);
+    const params = new URLSearchParams({ resource: "categories", storeId: sid, activeOnly: "true" });
+    const data = await fetchAdminData<Cat[]>(params);
+    setCats(data);
   }
 
   async function loadFirstPage(sid: string) {
     setLoading(true);
     try {
-      const sb = supabaseBrowser();
-
-      const { data, error } = await sb
-        .from("products")
-        .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,stock,active,image_url,category_id"
-        )
-        .eq("store_id", sid)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(PAGE_SIZE);
-
-      if (error) throw error;
-
-      const normalized = normalizeRows((data as any[]) ?? []);
+      const data = await fetchAdminData<unknown[]>(
+        new URLSearchParams({ resource: "products", storeId: sid, limit: String(PAGE_SIZE) }),
+      );
+      const normalized = normalizeRows(data);
       setProducts(normalized);
       setCursor(computeCursor(normalized));
       setHasMore(normalized.length === PAGE_SIZE);
@@ -298,21 +271,16 @@ export default function AdminProductosPage() {
 
     setLoadingMore(true);
     try {
-      const sb = supabaseBrowser();
-      const { data, error } = await sb
-        .from("products")
-        .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,stock,active,image_url,category_id"
-        )
-        .eq("store_id", storeId)
-        .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(PAGE_SIZE);
-
-      if (error) throw error;
-
-      const next = normalizeRows((data as any[]) ?? []);
+      const data = await fetchAdminData<unknown[]>(
+        new URLSearchParams({
+          resource: "products",
+          storeId,
+          limit: String(PAGE_SIZE),
+          createdAt: cursor.created_at,
+          id: cursor.id,
+        }),
+      );
+      const next = normalizeRows(data);
       setProducts((prev) => {
         const seen = new Set(prev.map((x) => x.id));
         return [...prev, ...next.filter((x) => !seen.has(x.id))];
@@ -356,36 +324,33 @@ export default function AdminProductosPage() {
      - trae 50 por página y rankea por similitud
   ========================================================== */
   async function runProSearchPage(sid: string, query: string, offset: number, append: boolean) {
-    const sb = supabaseBrowser();
     const myReq = ++reqIdRef.current;
 
     setSearching(true);
 
-    const { data, error } = await sb.rpc("search_products_pro", {
-      p_store_id: sid,
-      p_query: query,
-      p_limit: SEARCH_PAGE,
-      p_offset: offset,
-      p_status: statusFilter, // 'all'|'active'|'inactive'
-      p_category_id: categoryFilter === "all" ? null : categoryFilter,
-    });
+    const data = await fetchAdminData<unknown[]>(
+      new URLSearchParams({
+        resource: "products",
+        storeId: sid,
+        search: query,
+        limit: String(SEARCH_PAGE),
+        offset: String(offset),
+        status: statusFilter,
+        categoryId: categoryFilter,
+      }),
+    );
 
     // si ya cambió la búsqueda, ignorar este resultado
     if (reqIdRef.current !== myReq) return;
 
-    if (error) {
-      setSearching(false);
-      throw error;
-    }
-
-    let rows = normalizeRows((data as any[]) ?? []);
+    let rows = normalizeRows(data);
 
     // statusFilter === "out" se filtra aquí (RPC no tiene este estado)
     if (statusFilter === "out") rows = rows.filter((p) => isOutOfStock(p.stock));
 
     setProducts((prev) => (append ? [...prev, ...rows] : rows));
     setSearchOffset(offset + SEARCH_PAGE);
-    setHasMoreSearch(((data as any[]) ?? []).length === SEARCH_PAGE);
+    setHasMoreSearch(data.length === SEARCH_PAGE);
 
     // en modo búsqueda no usamos paginado normal
     setHasMore(false);
@@ -603,41 +568,6 @@ export default function AdminProductosPage() {
       });
     } finally {
       setSavingId(null);
-    }
-  }
-
-  async function remove(p: Product) {
-    const res = await Swal.fire({
-      icon: "warning",
-      title: "Eliminar producto",
-      text: `Se eliminará "${p.name}".`,
-      showCancelButton: true,
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
-      confirmButtonColor: "#ef4444",
-      background: "var(--ap-bg-base)",
-      color: "var(--ap-text)",
-    });
-    if (!res.isConfirmed) return;
-
-    setDeletingId(p.id);
-    try {
-      const sb = supabaseBrowser();
-      const { error } = await sb.from("products").delete().eq("id", p.id);
-      if (error) throw error;
-
-      setProducts((prev) => prev.filter((x) => x.id !== p.id));
-      if (openId === p.id) setOpenId(null);
-    } catch (e: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "No se pudo eliminar",
-        text: e?.message ?? "Error",
-        background: "var(--ap-bg-base)",
-        color: "var(--ap-text)",
-      });
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -877,10 +807,14 @@ export default function AdminProductosPage() {
                 </a>
 
                 <a
-                  href={`/${currentStore?.slug ?? ""}/mayor`}
+                  href={currentStore?.wholesale_key
+                    ? `/${currentStore.slug}/mayor?key=${encodeURIComponent(currentStore.wholesale_key)}`
+                    : `/${currentStore?.slug ?? ""}/mayor`}
                   target="_blank"
                   rel="noreferrer"
                   className={buttonGhost()}
+                  aria-disabled={!currentStore?.wholesale_key}
+                  title={!currentStore?.wholesale_key ? "Configura la llave mayorista en Tiendas para abrir este enlace" : "Abrir catálogo mayorista con su llave"}
                 >
                   Ver Mayor
                 </a>
@@ -901,7 +835,7 @@ export default function AdminProductosPage() {
               <select className={inputBase()} value={storeId} onChange={(e) => setStoreId(e.target.value)}>
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.slug})
+                    {s.name} · /{s.slug}
                   </option>
                 ))}
               </select>
@@ -937,6 +871,24 @@ export default function AdminProductosPage() {
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
+            {storeId ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  { href: "/admin/categorias", label: "Categorías" },
+                  { href: "/admin/pedidos", label: "Pedidos" },
+                  { href: "/admin/usuarios", label: "Usuarios y roles" },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={`${item.href}?store=${encodeURIComponent(storeId)}`}
+                    className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:brightness-110"
+                    style={{ borderColor: "var(--ap-border)", background: "var(--ap-card-2)", color: "var(--ap-text)" }}
+                  >
+                    {item.label} de esta tienda →
+                  </a>
+                ))}
+              </div>
+            ) : null}
 
             <p className="mt-2 text-[11px] sm:text-xs" style={{ color: "var(--ap-muted)" }}>
               {isSearchMode
@@ -1188,10 +1140,6 @@ export default function AdminProductosPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button className={buttonPrimary()} onClick={() => save(p)} disabled={savingId === p.id}>
                             {savingId === p.id ? "Guardando…" : "Guardar"}
-                          </button>
-
-                          <button className={buttonDanger()} onClick={() => remove(p)} disabled={deletingId === p.id}>
-                            {deletingId === p.id ? "Eliminando…" : "Eliminar"}
                           </button>
 
                           <button className={buttonGhost()} type="button" onClick={() => copyId(p.id)}>
