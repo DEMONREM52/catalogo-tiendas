@@ -79,6 +79,7 @@ function normalizeStoreSlug(value: string) {
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/[._-]{2,}/g, "-")
     .replace(/-+/g, "-")
     .replace(/^[._-]+|[._-]+$/g, "");
 }
@@ -299,7 +300,7 @@ export default function StoreSettings() {
     };
   }, []);
 
-  const slugPreview = useMemo(() => store?.slug || "", [store?.slug]);
+  const slugPreview = useMemo(() => normalizeStoreSlug(store?.slug ?? ""), [store?.slug]);
   const selectedTheme = themes.find((theme) => theme.id === store?.theme);
   const preview = themePreview(selectedTheme);
 
@@ -510,7 +511,7 @@ export default function StoreSettings() {
       return;
     }
     if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(cleanSlug)) {
-      await Swal.fire({ icon: "warning", title: "Enlace inválido", text: "Usa letras sin acentos, números, puntos, guiones o guion bajo, sin espacios ni barras. Ejemplo: lavitrina.com.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+      await Swal.fire({ icon: "warning", title: "Enlace inválido", text: "No se pudo convertir el texto en una dirección pública segura. Prueba con otro nombre.", background: "var(--t-bg-base)", color: "var(--t-text)" });
       return;
     }
     if (!cleanChannels.some((channel) => channel.id === "primary") ||
@@ -732,9 +733,9 @@ export default function StoreSettings() {
             <Field label="Nombre de la tienda">
               <input className={inputClass()} style={inputStyle} value={store.name} onChange={(event) => patchStore({ name: event.target.value })} />
             </Field>
-            <Field label="Dirección pública de la tienda" hint="Escribe el nombre que irá después del dominio. Puedes usar un punto, por ejemplo: lavitrina.com. No incluyas espacios, barras ni https://.">
+            <Field label="Dirección pública de la tienda" hint="Puedes escribir espacios, tildes y símbolos; al guardar se convertirán automáticamente en una dirección web segura.">
               <div className="flex gap-2">
-                <input className={`${inputClass()} min-w-0`} style={inputStyle} value={store.slug} onChange={(event) => patchStore({ slug: normalizeStoreSlug(event.target.value) })} placeholder="lavitrina.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                <input className={`${inputClass()} min-w-0`} style={inputStyle} value={store.slug} onChange={(event) => patchStore({ slug: event.target.value })} placeholder="Nombre de tu tienda" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
                 <button type="button" className="btn-soft mt-1 shrink-0 rounded-xl px-3 text-xs font-bold" onClick={() => patchStore({ slug: normalizeStoreSlug(store.name) })}>Usar nombre</button>
               </div>
               <span className="mt-2 block break-all rounded-lg border px-3 py-2 font-mono text-xs font-normal" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
