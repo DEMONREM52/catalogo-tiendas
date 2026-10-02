@@ -13,6 +13,9 @@ export type DashboardStore = {
   catalog_wholesale: boolean;
   wholesale_key: string | null;
   owner_id: string;
+  theme: string | null;
+  logo_url: string | null;
+  banner_url: string | null;
 };
 
 export type StoreMembership = {
@@ -43,7 +46,7 @@ export async function getDashboardStore() {
   const profileRole = profile?.role as string | null;
 
   const storeColumns =
-    "id,slug,name,whatsapp,active,active_until,catalog_retail,catalog_wholesale,wholesale_key,owner_id";
+    "id,slug,name,whatsapp,active,active_until,catalog_retail,catalog_wholesale,wholesale_key,owner_id,theme,logo_url,banner_url";
   const { data: ownerStore, error: ownerErr } = await sb
     .from("stores")
     .select(storeColumns)

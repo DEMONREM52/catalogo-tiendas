@@ -387,6 +387,24 @@ export default function DashboardShell({
     })();
   }, [router]);
 
+  useEffect(() => {
+    const refreshStoreSettings = () => {
+      void getDashboardStore()
+        .then((access) => setStore(access.store))
+        .catch((error: unknown) => {
+          void Swal.fire({
+            icon: "error",
+            title: "No se pudo actualizar la tienda",
+            text: error instanceof Error ? error.message : String(error),
+            background: "var(--t-bg-base)",
+            color: "var(--t-text)",
+          });
+        });
+    };
+    window.addEventListener("remhub-store-settings-updated", refreshStoreSettings);
+    return () => window.removeEventListener("remhub-store-settings-updated", refreshStoreSettings);
+  }, []);
+
   const isStoreAdmin = storeMemberRole === "store_admin";
   const canOpen = useMemo(
     () => (permission: string) =>
@@ -480,7 +498,7 @@ export default function DashboardShell({
 
   const menu = useMemo(() => {
     return [
-      { href: "/dashboard", emoji: "🏠", label: "Resumen", show: true },
+      { href: "/dashboard", emoji: "⚡", label: "Acceso rápido", show: true },
       {
         href: "/dashboard/store",
         emoji: "🏪",

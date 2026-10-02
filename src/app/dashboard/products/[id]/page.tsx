@@ -11,7 +11,6 @@ import {
   normalizeProductDetails,
   type ProductDetails,
 } from "@/lib/product-details";
-import Link from "next/link";
 
 type Category = { id: string; name: string };
 
@@ -37,15 +36,6 @@ type Product = {
 
   stock: number | null; // null = ilimitado
   product_details: ProductDetails;
-};
-
-type RelatedPost = {
-  id: string;
-  platform: string;
-  status: string;
-  title: string;
-  product_snapshot: Record<string, unknown>;
-  created_at: string;
 };
 
 // ✅ Styles con tokens (auto claro/oscuro por sistema)
@@ -153,7 +143,6 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
   const [draft, setDraft] = useState<Product | null>(null);
-  const [relatedPosts, setRelatedPosts] = useState<RelatedPost[]>([]);
 
   const isDirty = useMemo(() => {
     if (!product || !draft) return false;
@@ -257,18 +246,6 @@ export default function EditProductPage() {
 
       setProduct(normalized);
       setDraft({ ...normalized });
-      const { data: posts, error: postsError } = await sb
-        .from("store_social_posts")
-        .select("id,platform,status,title,product_snapshot,created_at")
-        .eq("store_id", access.store.id)
-        .eq("product_id", id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (postsError) {
-        if (postsError.code !== "42P01" && postsError.code !== "PGRST205") throw postsError;
-      } else {
-        setRelatedPosts((posts ?? []) as RelatedPost[]);
-      }
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -588,53 +565,6 @@ export default function EditProductPage() {
             userId={userId}
             productId={draft.id}
           />
-          <section {...panelProps("space-y-3 p-4 sm:p-5")}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold">📣 Publicaciones y redes sociales</h2>
-                <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                  Los textos preparados guardan una copia de los datos originales.
-                </p>
-              </div>
-              <Link
-                href={`/dashboard/social?product=${encodeURIComponent(draft.id)}`}
-                className={primaryBtn.className}
-                style={primaryBtn.style}
-              >
-                Preparar publicación
-              </Link>
-            </div>
-            {relatedPosts.map((post) => {
-              const snapshot = post.product_snapshot ?? {};
-              const outdated =
-                String(snapshot.name ?? "") !== draft.name ||
-                String(snapshot.description ?? "") !== String(draft.description ?? "") ||
-                Number(snapshot.price_retail ?? 0) !== Number(draft.price_retail) ||
-                String(snapshot.image_url ?? "") !== String(draft.image_url ?? "") ||
-                JSON.stringify(snapshot.product_details ?? {}) !== JSON.stringify(draft.product_details);
-              return (
-                <div key={post.id} className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold">{post.title || post.platform}</p>
-                    <span className="rounded-full border px-3 py-1 text-xs">{post.status}</span>
-                  </div>
-                  <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                    {post.platform} · {new Date(post.created_at).toLocaleDateString("es-CO")}
-                  </p>
-                  {outdated && !["published", "failed"].includes(post.status) ? (
-                    <p className="mt-2 text-sm text-amber-600">
-                      Este producto ha cambiado desde que preparaste la publicación. Revisa el contenido antes de publicarlo.
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-            {!relatedPosts.length ? (
-              <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                Todavía no hay publicaciones para este producto. Puedes preparar borradores desde RemHub Social.
-              </p>
-            ) : null}
-          </section>
         </>
       ) : null}
     </main>

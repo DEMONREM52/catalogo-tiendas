@@ -8,7 +8,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import {
   getYoutubeEmbedUrl,
   buildProductShareText,
-  hasProductLanding,
   isSafeHttpUrl,
   normalizeProductDetails,
 } from "@/lib/product-details";
@@ -40,10 +39,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .or("stock.is.null,stock.gt.0")
     .maybeSingle();
   if (productError) throw new Error(`No se pudo cargar el producto: ${productError.message}`);
-  if (!product || !hasProductLanding(product.product_details, {
-    description: product.description,
-    imageUrl: product.image_url,
-  })) {
+  if (!product) {
     return { title: "Producto no disponible · RemHub", robots: { index: false, follow: false } };
   }
 
@@ -94,10 +90,7 @@ export default async function PublicProductPage({ params }: PageProps) {
     .or("stock.is.null,stock.gt.0")
     .maybeSingle();
   if (productError) throw new Error(`No se pudo cargar el producto: ${productError.message}`);
-  if (!product || !hasProductLanding(product.product_details, {
-    description: product.description,
-    imageUrl: product.image_url,
-  })) notFound();
+  if (!product) notFound();
 
   let categoryName: string | null = null;
   if (product.category_id) {

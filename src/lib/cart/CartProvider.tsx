@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 import { CartItem, CartMode, CartState } from "./types";
 import { clearCart, loadCart, saveCart } from "./storage";
+import type { StoreContactChannel } from "@/lib/store-contacts";
 
 type CartCtx = {
   cart: (CartState & { customerName?: string; customerWhatsapp?: string; customerNote?: string }) | null;
@@ -16,6 +17,7 @@ type CartCtx = {
     storeName: string;
     whatsapp: string;
     mode: CartMode;
+    contactChannels?: StoreContactChannel[];
   }) => void;
 
   addItem: (item: CartItem, opts?: { openDrawer?: boolean }) => void;
@@ -26,6 +28,7 @@ type CartCtx = {
   setCustomerName: (name: string) => void;
   setCustomerWhatsapp: (whatsapp: string) => void;
   setCustomerNote: (note: string) => void;
+  setContactTarget: (contactId: string) => void;
 
   total: number;
   count: number;
@@ -63,6 +66,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     storeName: string;
     whatsapp: string;
     mode: CartMode;
+    contactChannels?: StoreContactChannel[];
   }) {
     // Si cambias de tienda/modo, cerramos el drawer para evitar UI rara
     setIsOpen(false);
@@ -77,6 +81,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         storeSlug: s.storeSlug,
         storeName: s.storeName,
         whatsapp: s.whatsapp,
+        contactChannels: s.contactChannels ?? [],
+        selectedContactId: (s.contactChannels?.length ?? 0) > 1 && existing.contactSelectionConfirmed !== true
+          ? undefined
+          : s.contactChannels?.some((channel) => channel.id === existing.selectedContactId)
+            ? existing.selectedContactId
+            : s.contactChannels?.[0]?.id,
+        contactSelectionConfirmed:
+          existing.contactSelectionConfirmed === true
+          && s.contactChannels?.some((channel) => channel.id === existing.selectedContactId) === true,
         mode: s.mode,
         customerName: cleanStr((existing as any).customerName),
         customerWhatsapp: cleanStr((existing as any).customerWhatsapp),
@@ -90,6 +103,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const fresh = {
       ...s,
+      selectedContactId: s.contactChannels?.length === 1 ? s.contactChannels[0].id : undefined,
+      contactSelectionConfirmed: s.contactChannels?.length === 1,
       items: [],
       customerName: "",
       customerWhatsapp: "",
@@ -166,6 +181,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     update({ ...cart, customerNote: cleanStr(note) });
   }
 
+  function setContactTarget(contactId: string) {
+    if (!cart) return;
+    update({ ...cart, selectedContactId: contactId, contactSelectionConfirmed: true });
+  }
+
   const total = useMemo(
     () => (cart?.items ?? []).reduce((a, i) => a + i.price * i.qty, 0),
     [cart]
@@ -189,6 +209,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setCustomerName,
     setCustomerWhatsapp,
     setCustomerNote,
+    setContactTarget,
     total,
     count,
   };

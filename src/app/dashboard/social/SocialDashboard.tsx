@@ -5,9 +5,11 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Copy,
+  Filter,
   Megaphone,
   Pencil,
   Plus,
+  Power,
   Search,
   ShieldAlert,
   Sparkles,
@@ -16,6 +18,7 @@ import {
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
+import { ImageUpload } from "../store/ImageUpload";
 import { hasProductLanding, normalizeProductDetails } from "@/lib/product-details";
 import {
   createSocialCaption,
@@ -51,10 +54,18 @@ type SocialPost = {
   created_at: string;
 };
 
-type Campaign = { id: string; name: string; description: string; created_at: string };
-type Counts = Record<SocialPost["status"], number>;
+type StoreCategory = { id: string; name: string };
+type Campaign = {
+  id: string;
+  name: string;
+  description: string;
+  cover_image_url: string | null;
+  category_id: string | null;
+  is_public: boolean;
+  created_at: string;
+};
 const PAGE_SIZE = 24;
-const EMPTY_COUNTS: Counts = { draft: 0, review: 0, ready: 0, scheduled: 0, published: 0, failed: 0 };
+const SOCIAL_PUBLISHING_TOOLS_ENABLED: boolean = false;
 
 const fieldClass =
   "w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-fuchsia-400 focus:ring-4 focus:ring-fuchsia-200/50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-fuchsia-400";
@@ -76,7 +87,16 @@ function escapeHtml(value: string) {
 
 function readableError(error: unknown) {
   if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
   return "Ocurrió un error inesperado.";
+}
+
+function newCampaignAssetId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `campaign-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function platformName(value: string) {
@@ -103,7 +123,12 @@ export default function SocialDashboard() {
   const [error, setError] = useState("");
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [counts, setCounts] = useState<Counts>(EMPTY_COUNTS);
+  const [categories, setCategories] = useState<StoreCategory[]>([]);
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignVisibilityFilter, setCampaignVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
+  const [campaignCategoryFilter, setCampaignCategoryFilter] = useState("all");
+  const [campaignSort, setCampaignSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [updatingCampaignId, setUpdatingCampaignId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -123,6 +148,10 @@ export default function SocialDashboard() {
   const [campaignName, setCampaignName] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
   const [campaignProductIds, setCampaignProductIds] = useState<string[]>([]);
+  const [campaignCoverUrl, setCampaignCoverUrl] = useState("");
+  const [campaignCategoryId, setCampaignCategoryId] = useState("");
+  const [campaignIsPublic, setCampaignIsPublic] = useState(true);
+  const [campaignAssetId, setCampaignAssetId] = useState(newCampaignAssetId);
   const [showCampaignForm, setShowCampaignForm] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
 
@@ -196,23 +225,6 @@ export default function SocialDashboard() {
     return false;
   }
 
-  const loadCounts = useCallback(async (storeId: string) => {
-    const sb = supabaseBrowser();
-    const statuses: SocialPost["status"][] = ["draft", "review", "ready", "scheduled", "published", "failed"];
-    const results = await Promise.all(
-      statuses.map(async (status) => {
-        const { count, error: countError } = await sb
-          .from("store_social_posts")
-          .select("id", { count: "exact", head: true })
-          .eq("store_id", storeId)
-          .eq("status", status);
-        if (countError) throw countError;
-        return [status, count ?? 0] as const;
-      }),
-    );
-    setCounts(Object.fromEntries(results) as Counts);
-  }, []);
-
   const loadPosts = useCallback(async (storeId: string, nextOffset: number, append: boolean) => {
     const sb = supabaseBrowser();
     let query = sb
@@ -236,14 +248,12 @@ export default function SocialDashboard() {
     setLoading(true);
     setError("");
     try {
-      await Promise.all([loadPosts(storeId, 0, false), loadCounts(storeId)]);
       const sb = supabaseBrowser();
       const { data, error: campaignsError } = await sb
         .from("store_social_campaigns")
-        .select("id,name,description,created_at")
+        .select("id,name,description,cover_image_url,category_id,is_public,created_at")
         .eq("store_id", storeId)
-        .order("created_at", { ascending: false })
-        .limit(30);
+        .order("created_at", { ascending: false });
       if (campaignsError) throw campaignsError;
       setCampaigns((data ?? []) as Campaign[]);
     } catch (cause) {
@@ -251,7 +261,7 @@ export default function SocialDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [loadCounts, loadPosts]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,40 +279,15 @@ export default function SocialDashboard() {
         if (cancelled) return;
         setStore(access.store);
         setUserId(data.user.id);
-        const queryProduct = new URLSearchParams(window.location.search).get("product");
-        if (queryProduct) {
-          setProductId(queryProduct);
-          const { data: product, error: productError } = await sb
-            .from("products")
-            .select("id,name,description,price_retail,image_url,stock,active,product_details")
-            .eq("store_id", access.store.id)
-            .eq("id", queryProduct)
-            .maybeSingle();
-          if (productError) throw productError;
-          if (product) {
-            setProductOptions((current) => [
-              product as ProductOption,
-              ...current.filter((item) => item.id !== queryProduct),
-            ]);
-            const option = product as ProductOption;
-            setTitle(option.name);
-            setCaption(
-              createSocialCaption(
-                {
-                  id: option.id,
-                  name: option.name,
-                  description: option.description,
-                  price_retail: option.price_retail,
-                  image_url: option.image_url,
-                  stock: option.stock,
-                  active: option.active,
-                  details: normalizeProductDetails(option.product_details),
-                },
-                "instagram",
-              ),
-            );
-          }
-        }
+        const { data: categoryRows, error: categoryError } = await sb
+          .from("product_categories")
+          .select("id,name")
+          .eq("store_id", access.store.id)
+          .eq("active", true)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true });
+        if (categoryError) throw categoryError;
+        if (!cancelled) setCategories((categoryRows ?? []) as StoreCategory[]);
       } catch (cause) {
         if (!cancelled) setError(readableError(cause));
       } finally {
@@ -316,27 +301,17 @@ export default function SocialDashboard() {
 
   useEffect(() => {
     if (!store) return;
-    void loadCounts(store.id).catch((cause: unknown) => setError(readableError(cause)));
     const sb = supabaseBrowser();
     void sb
       .from("store_social_campaigns")
-      .select("id,name,description,created_at")
+      .select("id,name,description,cover_image_url,category_id,is_public,created_at")
       .eq("store_id", store.id)
       .order("created_at", { ascending: false })
-      .limit(30)
       .then(({ data, error: campaignError }) => {
         if (campaignError) setError(readableError(campaignError));
         else setCampaigns((data ?? []) as Campaign[]);
       });
-  }, [loadCounts, store]);
-
-  useEffect(() => {
-    if (!store) return;
-    const timeout = window.setTimeout(() => {
-      void loadPosts(store.id, 0, false).catch((cause: unknown) => setError(readableError(cause)));
-    }, 250);
-    return () => window.clearTimeout(timeout);
-  }, [loadPosts, store]);
+  }, [store]);
 
   useEffect(() => {
     if (!store) return;
@@ -636,9 +611,10 @@ export default function SocialDashboard() {
       const sb = supabaseBrowser();
       const { data: items, error: itemsError } = await sb
         .from("store_social_campaign_items")
-        .select("product_id")
+        .select("product_id,sort_order")
         .eq("store_id", store.id)
-        .eq("campaign_id", campaign.id);
+        .eq("campaign_id", campaign.id)
+        .order("sort_order", { ascending: true });
       if (itemsError) throw itemsError;
       const ids = (items ?? []).map((item) => String(item.product_id));
       if (ids.length) {
@@ -658,6 +634,10 @@ export default function SocialDashboard() {
       setCampaignName(campaign.name);
       setCampaignDescription(campaign.description);
       setCampaignProductIds(ids);
+      setCampaignCoverUrl(campaign.cover_image_url ?? "");
+      setCampaignCategoryId(campaign.category_id ?? "");
+      setCampaignIsPublic(campaign.is_public);
+      setCampaignAssetId(campaign.id);
       setProductSearch("");
       setShowCampaignForm(true);
       window.requestAnimationFrame(() => {
@@ -704,17 +684,50 @@ export default function SocialDashboard() {
     }
   }
 
+  async function toggleCampaignVisibility(campaign: Campaign) {
+    if (!store || updatingCampaignId) return;
+    if (!campaign.is_public && (!campaign.cover_image_url || !campaign.category_id)) {
+      setError("Para publicar esta campaña, edítala y agrega una portada y una categoría primero.");
+      return;
+    }
+    setUpdatingCampaignId(campaign.id);
+    setError("");
+    try {
+      const nextVisibility = !campaign.is_public;
+      const { data, error: updateError } = await supabaseBrowser()
+        .from("store_social_campaigns")
+        .update({ is_public: nextVisibility })
+        .eq("id", campaign.id)
+        .eq("store_id", store.id)
+        .select("id")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!data) throw new Error("No se pudo actualizar la campaña. Comprueba tus permisos e inténtalo de nuevo.");
+      setCampaigns((current) => current.map((item) =>
+        item.id === campaign.id ? { ...item, is_public: nextVisibility } : item,
+      ));
+    } catch (cause) {
+      setError(readableError(cause));
+    } finally {
+      setUpdatingCampaignId(null);
+    }
+  }
+
   function resetCampaignForm() {
     setEditingCampaignId(null);
     setCampaignName("");
     setCampaignDescription("");
     setCampaignProductIds([]);
+    setCampaignCoverUrl("");
+    setCampaignCategoryId("");
+    setCampaignIsPublic(true);
+    setCampaignAssetId(newCampaignAssetId());
     setShowCampaignForm(false);
   }
 
   async function createCampaign(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!store || !userId || !campaignName.trim() || campaignProductIds.length === 0) return;
+    if (!store || !userId || !campaignName.trim() || campaignProductIds.length === 0 || !campaignCoverUrl || !campaignCategoryId) return;
     const campaignFindings = reviewCommercialContent([
       campaignName,
       campaignDescription,
@@ -739,10 +752,17 @@ export default function SocialDashboard() {
     try {
       const sb = supabaseBrowser();
       let targetCampaignId = editingCampaignId;
+      const campaignValues = {
+        name: campaignName.trim(),
+        description: campaignDescription.trim(),
+        cover_image_url: campaignCoverUrl,
+        category_id: campaignCategoryId,
+        is_public: campaignIsPublic,
+      };
       if (editingCampaignId) {
         const { error: updateError } = await sb
           .from("store_social_campaigns")
-          .update({ name: campaignName.trim(), description: campaignDescription.trim() })
+          .update(campaignValues)
           .eq("id", editingCampaignId)
           .eq("store_id", store.id);
         if (updateError) throw updateError;
@@ -760,8 +780,7 @@ export default function SocialDashboard() {
           .from("store_social_campaigns")
           .insert({
             store_id: store.id,
-            name: campaignName.trim(),
-            description: campaignDescription.trim(),
+            ...campaignValues,
             created_by: userId,
           })
           .select("id")
@@ -770,10 +789,11 @@ export default function SocialDashboard() {
         targetCampaignId = campaign.id;
       }
       const { error: itemsError } = await sb.from("store_social_campaign_items").insert(
-        campaignProductIds.map((selectedProductId) => ({
+        campaignProductIds.map((selectedProductId, sortOrder) => ({
           store_id: store.id,
           campaign_id: targetCampaignId,
           product_id: selectedProductId,
+          sort_order: sortOrder,
         })),
       );
       if (itemsError) {
@@ -790,15 +810,26 @@ export default function SocialDashboard() {
   }
 
   const visiblePosts = useMemo(() => posts, [posts]);
-  const statCards = [
-    ["Borradores", counts.draft, "text-slate-600 dark:text-slate-300"],
-    ["Necesitan revisión", counts.review, "text-amber-700 dark:text-amber-300"],
-    ["Preparadas", counts.ready, "text-violet-700 dark:text-violet-300"],
-    ["Programadas", counts.scheduled, "text-blue-700 dark:text-blue-300"],
-    ["Publicadas", counts.published, "text-emerald-700 dark:text-emerald-300"],
-    ["Con errores", counts.failed, "text-rose-700 dark:text-rose-300"],
-  ] as const;
-
+  const filteredCampaigns = useMemo(() => {
+    const term = campaignSearch.trim().toLocaleLowerCase("es");
+    return campaigns
+      .filter((campaign) => {
+        const categoryName = categories.find((category) => category.id === campaign.category_id)?.name ?? "";
+        const matchesSearch = !term ||
+          campaign.name.toLocaleLowerCase("es").includes(term) ||
+          campaign.description.toLocaleLowerCase("es").includes(term) ||
+          categoryName.toLocaleLowerCase("es").includes(term);
+        const matchesVisibility = campaignVisibilityFilter === "all" ||
+          (campaignVisibilityFilter === "visible" ? campaign.is_public : !campaign.is_public);
+        const matchesCategory = campaignCategoryFilter === "all" || campaign.category_id === campaignCategoryFilter;
+        return matchesSearch && matchesVisibility && matchesCategory;
+      })
+      .sort((a, b) => {
+        if (campaignSort === "name") return a.name.localeCompare(b.name, "es");
+        const dateOrder = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return campaignSort === "oldest" ? dateOrder : -dateOrder;
+      });
+  }, [campaignCategoryFilter, campaignSearch, campaignSort, campaignVisibilityFilter, campaigns, categories]);
   return (
     <main className="min-h-screen space-y-6 px-3 py-4 text-slate-900 dark:text-white sm:p-6">
       <header className={`${cardClass} relative overflow-hidden p-5 sm:p-8`}>
@@ -808,9 +839,9 @@ export default function SocialDashboard() {
             <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-700 dark:text-fuchsia-300">
               <Sparkles size={16} /> RemHub Social
             </p>
-            <h1 className="mt-2 text-3xl font-black sm:text-4xl">De tu catálogo a tus redes.</h1>
+            <h1 className="mt-2 text-3xl font-black sm:text-4xl">Campañas de tu catálogo.</h1>
             <p className="mt-2 max-w-2xl text-sm opacity-70">
-              {store?.name ?? "Tu tienda"} · Prepara contenido con datos reales, revísalo y compártelo cuando estés listo.
+              {store?.name ?? "Tu tienda"} · Crea campañas y elige cuáles se muestran en tu catálogo.
             </p>
           </div>
           <button
@@ -835,35 +866,53 @@ export default function SocialDashboard() {
         </div>
       ) : null}
 
-      <section className="grid gap-3 grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        {statCards.map(([label, value, color]) => (
-          <div key={label} className={`${cardClass} p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-60">{label}</p>
-            <p className={`mt-2 text-3xl font-black ${color}`}>{value}</p>
-          </div>
-        ))}
-      </section>
-
       {showCampaignForm ? (
         <form id="campaign-form" onSubmit={(event) => void createCampaign(event)} className={`${cardClass} space-y-4 p-5 transition`}>
           <div>
             <h2 className="flex items-center gap-2 text-xl font-bold">
               {editingCampaignId ? <Pencil size={18} className="text-fuchsia-600" /> : <Sparkles size={18} className="text-fuchsia-600" />}
-              {editingCampaignId ? "Editar campaña" : "Crear campaña de esta tienda"}
+              {editingCampaignId ? "Editar campaña del catálogo" : "Crear campaña para el catálogo"}
             </h2>
-            <p className="text-sm opacity-70">Modifica el nombre, el objetivo y los productos vinculados. Solo se pueden asociar productos de {store?.name}.</p>
+            <p className="text-sm opacity-70">Agrega una portada, asígnala a una categoría y elige los productos que aparecerán en el catálogo de {store?.name}.</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             <input className={fieldClass} value={campaignName} onChange={(event) => setCampaignName(event.target.value)} placeholder="Nombre de campaña" required maxLength={160} />
             <input className={fieldClass} value={campaignDescription} onChange={(event) => setCampaignDescription(event.target.value)} placeholder="Objetivo o contexto (opcional)" maxLength={1000} />
+            <label className="block text-sm font-semibold">
+              Categoría asociada
+              <select className={`${fieldClass} mt-1`} value={campaignCategoryId} onChange={(event) => setCampaignCategoryId(event.target.value)} required>
+                <option value="">Selecciona una categoría…</option>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+              {categories.length === 0 ? <span className="mt-1 block text-xs font-normal text-amber-700 dark:text-amber-300">Crea primero una categoría en Productos → Categorías para asociarla a esta campaña.</span> : null}
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-current/10 px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={campaignIsPublic}
+                onChange={(event) => setCampaignIsPublic(event.target.checked)}
+                className="h-4 w-4 accent-fuchsia-600"
+              />
+              <span><strong>Mostrar en el catálogo</strong><span className="mt-0.5 block text-xs font-normal opacity-65">Si lo desactivas, solo será visible en RemHub Social.</span></span>
+            </label>
+            <div className="lg:col-span-2">
+              <ImageUpload
+                label="Imagen principal de portada"
+                currentUrl={campaignCoverUrl || null}
+                pathPrefix={`${store?.id ?? "store"}/campaign-covers/`}
+                fileName={`${campaignAssetId}.jpg`}
+                onUploaded={setCampaignCoverUrl}
+              />
+              {!campaignCoverUrl ? <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">Sube una imagen de portada para poder guardar la campaña.</p> : null}
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-3.5 opacity-40" size={17} />
             <input className={`${fieldClass} pl-10`} value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Busca productos para incluir…" />
           </div>
-          <div className="flex max-h-52 flex-wrap gap-2 overflow-auto">
+          <div className="grid max-h-80 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-3">
             {productOptions.map((product) => (
-              <label key={product.id} className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-current/10 px-3 py-2 text-sm">
+              <label key={product.id} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-current/10 p-2.5 text-sm transition hover:border-fuchsia-500/40 hover:bg-fuchsia-500/5">
                 <input
                   type="checkbox"
                   checked={campaignProductIds.includes(product.id)}
@@ -871,17 +920,26 @@ export default function SocialDashboard() {
                     event.target.checked ? [...current, product.id] : current.filter((id) => id !== product.id),
                   )}
                 />
-                {product.name}
+                {product.image_url ? (
+                  <img src={product.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" loading="lazy" />
+                ) : (
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-fuchsia-500/10 text-lg">📦</span>
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{product.name}</span>
+                  <span className="block text-xs opacity-60">${Number(product.price_retail ?? 0).toLocaleString("es-CO")}</span>
+                </span>
               </label>
             ))}
+            {productOptions.length === 0 ? <p className="text-sm opacity-65">No encontramos productos. Prueba otra búsqueda o crea productos en tu catálogo.</p> : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs opacity-70">{campaignProductIds.length} producto(s) seleccionado(s).</p>
+            <p className="text-xs opacity-70">{campaignProductIds.length} producto(s) seleccionado(s){campaignCategoryId ? ` · ${categories.find((category) => category.id === campaignCategoryId)?.name ?? ""}` : ""}.</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={saving} onClick={resetCampaignForm} className="rounded-xl border border-current/10 px-4 py-2 text-sm font-semibold disabled:opacity-50">
                 Cancelar
               </button>
-              <button disabled={saving || campaignProductIds.length === 0} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:opacity-50">
+              <button disabled={saving || campaignProductIds.length === 0 || !campaignCoverUrl || !campaignCategoryId} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:opacity-50">
                 {saving ? "Guardando…" : editingCampaignId ? "Guardar cambios" : "Guardar campaña"}
               </button>
             </div>
@@ -889,7 +947,7 @@ export default function SocialDashboard() {
         </form>
       ) : null}
 
-      <section id="social-composer" className={`${cardClass} overflow-hidden`}>
+      {SOCIAL_PUBLISHING_TOOLS_ENABLED && <section id="social-composer" className={`${cardClass} overflow-hidden`}>
         <div className="border-b border-current/10 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-amber-500/10 p-5">
           <h2 className="flex items-center gap-2 text-xl font-black">
             <Megaphone size={20} className="text-fuchsia-600" />
@@ -1030,9 +1088,9 @@ export default function SocialDashboard() {
             </div>
           </aside>
         </form>
-      </section>
+      </section>}
 
-      <section className={`${cardClass} overflow-hidden`}>
+      {SOCIAL_PUBLISHING_TOOLS_ENABLED && <section className={`${cardClass} overflow-hidden`}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-current/10 p-5">
           <div>
             <h2 className="text-xl font-black">Publicaciones de {store?.name ?? "tu tienda"}</h2>
@@ -1133,13 +1191,16 @@ export default function SocialDashboard() {
             </button>
           </div>
         ) : null}
-      </section>
+      </section>}
 
       <section className={`${cardClass} p-5`}>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-black">Campañas</h2>
-            <p className="text-sm opacity-65">Agrupa productos pertenecientes a esta misma tienda.</p>
+            <p className="text-sm opacity-65">
+              Busca, filtra y controla qué campañas se muestran en el catálogo.
+              {campaigns.length ? ` ${filteredCampaigns.length} de ${campaigns.length} campañas.` : ""}
+            </p>
           </div>
           <button type="button" onClick={() => {
             resetCampaignForm();
@@ -1148,17 +1209,101 @@ export default function SocialDashboard() {
             <Plus size={16} /> Crear
           </button>
         </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-white/10 dark:bg-black/15 sm:p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-fuchsia-600 dark:text-fuchsia-300" />
+              <p className="text-sm font-bold">Buscar y filtrar campañas</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCampaignSearch("");
+                setCampaignVisibilityFilter("all");
+                setCampaignCategoryFilter("all");
+                setCampaignSort("newest");
+              }}
+              disabled={!campaignSearch && campaignVisibilityFilter === "all" && campaignCategoryFilter === "all" && campaignSort === "newest"}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="relative block sm:col-span-2 xl:col-span-1">
+              <span className="sr-only">Buscar campañas</span>
+              <Search size={16} className="absolute left-3 top-3.5 opacity-45" />
+              <input
+                className={`${fieldClass} pl-9`}
+                value={campaignSearch}
+                onChange={(event) => setCampaignSearch(event.target.value)}
+                placeholder="Nombre, descripción o categoría…"
+                type="search"
+              />
+            </label>
+            <label>
+              <span className="sr-only">Filtrar por visibilidad</span>
+              <select className={fieldClass} value={campaignVisibilityFilter} onChange={(event) => setCampaignVisibilityFilter(event.target.value as typeof campaignVisibilityFilter)}>
+                <option value="all">Todas las campañas</option>
+                <option value="visible">Visibles en catálogo</option>
+                <option value="hidden">Ocultas / inactivas</option>
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Filtrar por categoría</span>
+              <select className={fieldClass} value={campaignCategoryFilter} onChange={(event) => setCampaignCategoryFilter(event.target.value)}>
+                <option value="all">Todas las categorías</option>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Ordenar campañas</span>
+              <select className={fieldClass} value={campaignSort} onChange={(event) => setCampaignSort(event.target.value as typeof campaignSort)}>
+                <option value="newest">Más recientes</option>
+                <option value="oldest">Más antiguas</option>
+                <option value="name">Nombre A–Z</option>
+              </select>
+            </label>
+          </div>
+        </div>
         {campaigns.length ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {campaigns.map((campaign) => (
+            {filteredCampaigns.map((campaign) => (
               <div key={campaign.id} className="group rounded-2xl border border-current/10 bg-white/30 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-fuchsia-500/30 hover:shadow-lg hover:shadow-fuchsia-950/5 dark:bg-white/[0.02]">
+                {campaign.cover_image_url ? (
+                  <img src={campaign.cover_image_url} alt={`Portada de ${campaign.name}`} className="mb-3 aspect-[16/8] w-full rounded-xl object-cover" loading="lazy" />
+                ) : (
+                  <div className="mb-3 grid aspect-[16/8] w-full place-items-center rounded-xl bg-fuchsia-500/10 text-sm opacity-65">Sin portada</div>
+                )}
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-bold">{campaign.name}</p>
                     {campaign.description ? <p className="mt-1 line-clamp-3 text-sm opacity-70">{campaign.description}</p> : <p className="mt-1 text-sm opacity-50">Sin objetivo agregado</p>}
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-full bg-fuchsia-500/10 px-2.5 py-1 font-semibold text-fuchsia-800 dark:text-fuchsia-200">
+                        {categories.find((category) => category.id === campaign.category_id)?.name ?? "Sin categoría"}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-1 font-semibold ${campaign.is_public ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-slate-500/10 opacity-70"}`}>
+                        {campaign.is_public ? "Activa · visible" : "Inactiva · oculta"}
+                      </span>
+                    </div>
                     <p className="mt-2 text-xs opacity-55">{new Date(campaign.created_at).toLocaleDateString("es-CO")}</p>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void toggleCampaignVisibility(campaign)}
+                      disabled={saving || updatingCampaignId !== null}
+                      className={`grid h-9 w-9 place-items-center rounded-xl border transition disabled:cursor-wait disabled:opacity-50 ${
+                        campaign.is_public
+                          ? "border-amber-500/25 text-amber-700 hover:bg-amber-500/10 dark:text-amber-200"
+                          : "border-emerald-500/25 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-200"
+                      }`}
+                      aria-label={`${campaign.is_public ? "Desactivar" : "Activar"} campaña ${campaign.name}`}
+                      title={campaign.is_public ? "Desactivar y ocultar del catálogo" : "Activar y mostrar en el catálogo"}
+                    >
+                      <Power size={16} className={updatingCampaignId === campaign.id ? "animate-pulse" : ""} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => void editCampaign(campaign)}
@@ -1183,6 +1328,11 @@ export default function SocialDashboard() {
                 </div>
               </div>
             ))}
+            {filteredCampaigns.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-current/15 p-5 text-sm opacity-65 sm:col-span-2 lg:col-span-3">
+                No hay campañas que coincidan con esos filtros. Prueba otra búsqueda o limpia los filtros.
+              </p>
+            ) : null}
           </div>
         ) : <p className="mt-4 text-sm opacity-65">Tus campañas aparecerán aquí.</p>}
       </section>

@@ -65,14 +65,14 @@ export function ImageUpload({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 p-4">
+    <div className="rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", color: "var(--t-text)" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-semibold">{label}</h3>
-          <p className="text-sm opacity-80">PNG/JPG, máximo 2MB.</p>
+          <p className="text-sm" style={{ color: "var(--t-muted)" }}>PNG/JPG, máximo 2MB.</p>
         </div>
 
-        <label className="cursor-pointer rounded-xl bg-white text-black px-4 py-2 font-semibold">
+        <label className="btn-soft cursor-pointer rounded-xl px-4 py-2 font-semibold">
           {uploading ? "Subiendo..." : "Subir"}
           <input
             className="hidden"
@@ -88,11 +88,12 @@ export function ImageUpload({
           <img
             src={currentUrl}
             alt={label}
-            className="max-h-40 rounded-xl border border-white/10 object-contain"
+            className="max-h-40 rounded-xl border object-contain"
+            style={{ borderColor: "var(--t-card-border)" }}
           />
         </div>
       ) : (
-        <p className="mt-4 text-sm opacity-70">Aún no has subido imagen.</p>
+        <p className="mt-4 text-sm" style={{ color: "var(--t-muted)" }}>Aún no has subido imagen.</p>
       )}
 
       {msg && <p className="mt-3 text-sm">{msg}</p>}

@@ -19,8 +19,12 @@ export function SocialIconRow({
           href={l.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm"
-          style={{ background: "rgba(255,255,255,0.03)" }}
+          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5"
+          style={{
+            borderColor: "var(--t-border)",
+            background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)",
+            color: "var(--t-text)",
+          }}
           title={l.label ?? l.type}
         >
           {l.type === "other" && l.icon_url ? (
