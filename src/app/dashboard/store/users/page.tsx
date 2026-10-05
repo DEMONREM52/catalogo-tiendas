@@ -13,9 +13,12 @@ type MemberRow = {
   display_name: string | null;
   role: "store_admin" | "seller" | "accounting" | "viewer";
   permissions: string[];
+  point_id?: string | null;
   active: boolean;
   created_at: string;
 };
+
+type PointRow = { id: string; name: string; kind: string };
 
 const PERMISSION_OPTIONS: Array<{ value: StoreMenuPermission; label: string; description: string }> = [
   { value: "store", label: "Mi tienda", description: "Datos y apariencia de la tienda" },
@@ -26,7 +29,14 @@ const PERMISSION_OPTIONS: Array<{ value: StoreMenuPermission; label: string; des
   { value: "products", label: "Productos", description: "Crear y editar el catálogo" },
   { value: "categories", label: "Categorías", description: "Organizar el catálogo" },
   { value: "orders", label: "Pedidos", description: "Consultar pedidos y actualizar sus estados" },
-] as const;
+    { value: "inventory", label: "Inventario y kardex", description: "Ver existencias, bodegas y movimientos" },
+    { value: "inventory_adjust", label: "Ajustes de inventario", description: "Corregir existencias con motivo" },
+    { value: "transfers", label: "Traslados", description: "Mover productos entre bodegas" },
+    { value: "purchases", label: "Compras", description: "Registrar y anular compras" },
+    { value: "suppliers", label: "Proveedores", description: "Administrar proveedores" },
+    { value: "payables", label: "Cuentas por pagar", description: "Registrar pagos a proveedores" },
+    { value: "audit", label: "Auditoría", description: "Consultar el historial de operaciones" },
+  ] as const;
 
 function inputProps() {
   return {
@@ -62,6 +72,9 @@ export default function StoreUsersPage() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
   const [loginLink, setLoginLink] = useState("");
+  const [points, setPoints] = useState<PointRow[]>([]);
+  const [pointId, setPointId] = useState("");
+  const [editingPointId, setEditingPointId] = useState("");
 
   useEffect(() => {
     load();
@@ -81,6 +94,13 @@ export default function StoreUsersPage() {
       }
       setStore(access.store);
       await loadMembers(access.store.id);
+      const { data: pointData } = await supabaseBrowser()
+        .from("erp_warehouses")
+        .select("id,name,kind")
+        .eq("store_id", access.store.id)
+        .eq("active", true)
+        .order("name");
+      setPoints((pointData ?? []) as PointRow[]);
     } catch (err: unknown) {
       await Swal.fire({
         icon: "error",
@@ -139,6 +159,7 @@ export default function StoreUsersPage() {
           display_name: displayName,
           password,
           permissions: selectedPermissions,
+          point_id: pointId || null,
         }),
       });
       const result = await response.json();
@@ -158,6 +179,7 @@ export default function StoreUsersPage() {
       setDisplayName("");
       setPassword("");
       setSelectedPermissions(["pos"]);
+      setPointId("");
       await loadMembers(store.id);
     } catch (err: unknown) {
       await Swal.fire({
@@ -175,7 +197,7 @@ export default function StoreUsersPage() {
 
   async function updateMember(
     member: MemberRow,
-    changes: { permissions?: string[]; active?: boolean },
+    changes: { permissions?: string[]; active?: boolean; point_id?: string | null },
   ) {
     if (!store) return;
     setSaving(true);
@@ -428,6 +450,19 @@ export default function StoreUsersPage() {
             </div>
 
             <div>
+              <label className="text-sm font-semibold">Punto de venta / bodega asignado</label>
+              <select {...inputProps()} value={pointId} onChange={(e) => setPointId(e.target.value)}>
+                <option value="">Todos los puntos (sin restricción)</option>
+                {points.map((pt) => (
+                  <option key={pt.id} value={pt.id}>{pt.kind === "point" ? "📍" : "🏬"} {pt.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                Con un punto asignado, el usuario solo verá y moverá el inventario de ese punto. Los puntos se crean en Inventario → Puntos y bodegas.
+              </p>
+            </div>
+
+            <div>
               <label className="text-sm font-semibold">Secciones permitidas</label>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {PERMISSION_OPTIONS.map((option) => (
@@ -548,6 +583,9 @@ export default function StoreUsersPage() {
                         ) : null}
                       </div>
                       <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                        Punto: <b>{points.find((pt) => pt.id === member.point_id)?.name ?? "Todos"}</b>
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                         Agregado: {new Date(member.created_at).toLocaleString("es-CO")}
                       </p>
                     </div>
@@ -573,6 +611,7 @@ export default function StoreUsersPage() {
                         onClick={() => {
                           setEditingUserId(editingUserId === member.user_id ? null : member.user_id);
                           setEditingPermissions(member.permissions ?? []);
+                          setEditingPointId(member.point_id ?? "");
                         }}
                       >
                         {editingUserId === member.user_id ? "Cancelar" : "Permisos"}
@@ -593,7 +632,14 @@ export default function StoreUsersPage() {
                   </div>
                   {editingUserId === member.user_id ? (
                     <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--t-card-border)" }}>
-                      <p className="mb-2 text-sm font-semibold">Permisos del usuario</p>
+                      <p className="mb-2 text-sm font-semibold">Punto asignado</p>
+                      <select {...inputProps()} value={editingPointId} onChange={(e) => setEditingPointId(e.target.value)}>
+                        <option value="">Todos los puntos (sin restricción)</option>
+                        {points.map((pt) => (
+                          <option key={pt.id} value={pt.id}>{pt.kind === "point" ? "📍" : "🏬"} {pt.name}</option>
+                        ))}
+                      </select>
+                      <p className="mb-2 mt-4 text-sm font-semibold">Permisos del usuario</p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {PERMISSION_OPTIONS.map((option) => (
                           <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -614,9 +660,9 @@ export default function StoreUsersPage() {
                         type="button"
                         className="btn-cta mt-4 px-4 py-2 text-sm font-semibold"
                         disabled={saving}
-                        onClick={() => updateMember(member, { permissions: editingPermissions })}
+                        onClick={() => updateMember(member, { permissions: editingPermissions, point_id: editingPointId || null })}
                       >
-                        {saving ? "Guardando..." : "Guardar permisos"}
+                        {saving ? "Guardando..." : "Guardar cambios"}
                       </button>
                     </div>
                   ) : null}

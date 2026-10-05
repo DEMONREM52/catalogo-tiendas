@@ -1,6 +1,8 @@
 "use client";
 
+import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
@@ -63,7 +65,7 @@ function getProductPrice(product: Product, priceLevel: PriceLevel) {
 
 function inputProps() {
   return {
-    className: "w-full rounded-2xl border px-4 py-3 text-sm outline-none",
+    className: "w-full rounded-xl border px-3 py-2 text-sm outline-none",
     style: {
       borderColor: "var(--t-card-border)",
       background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
@@ -74,7 +76,7 @@ function inputProps() {
 
 function cardProps() {
   return {
-    className: "rounded-[28px] border p-6",
+    className: "rounded-2xl border p-3 sm:p-4",
     style: {
       borderColor: "var(--t-card-border)",
       background: "var(--t-card-bg)",
@@ -86,9 +88,23 @@ function cardProps() {
 const DEFAULT_CLIENT_NAME = "CONSUMIDOR FINAL";
 const DEFAULT_PRICE_LIST = 3;
 
+type PointOption = { id: string; name: string; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
+type SellerOption = { user_id: string; name: string; role: string };
+
 export default function PosPage() {
   const [store, setStore] = useState<DashboardStore | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setProducts] = useState<Product[]>([]);
+  const [visibleCount, setVisibleCount] = useState(48);
+  const [savingClient, setSavingClient] = useState(false);
+  const [listOverride, setListOverride] = useState<number | null>(null);
+  const [pointStock, setPointStock] = useState<Map<string, number> | null>(null);
+  // Solo se ofrecen los productos con existencias en el punto elegido.
+  const products = useMemo(() => {
+    if (!pointStock) return allProducts;
+    return allProducts
+      .filter((p) => (pointStock.get(p.id) ?? 0) > 0)
+      .map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }));
+  }, [allProducts, pointStock]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,15 +128,22 @@ export default function PosPage() {
     remision_prefix?: string | null;
   } | null>(null);
   const [customerNote, setCustomerNote] = useState("");
+  const [points, setPoints] = useState<PointOption[]>([]);
+  const [sellers, setSellers] = useState<SellerOption[]>([]);
+  const [pointId, setPointId] = useState("");
+  const [lockedPoint, setLockedPoint] = useState(false);
+  const [sellerId, setSellerId] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return products;
-    return products.filter((product) =>
-      [product.name].join(" ").toLowerCase().includes(term),
-    );
-  }, [products, search]);
+    // Al buscar también se muestran los productos sin existencias en este punto (deshabilitados).
+    const base = pointStock
+      ? allProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }))
+      : products;
+    return base.filter((product) => product.name.toLowerCase().includes(term));
+  }, [products, allProducts, pointStock, search]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -147,15 +170,24 @@ export default function PosPage() {
   const filteredClients = useMemo(() => {
     const term = clientSearch.trim().toLowerCase();
     if (!term) return clients;
-    return clients.filter((client) =>
-      [client.name, client.document_number ?? "", client.mobile ?? "", client.email ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(term),
-    );
+    const digits = term.replace(/\D/g, "");
+    return clients.filter((client) => {
+      if (
+        [client.name, client.document_number ?? "", client.mobile ?? "", client.email ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(term)
+      )
+        return true;
+      return (
+        digits.length > 0 &&
+        ((client.document_number ?? "").replace(/\D/g, "").includes(digits) ||
+          (client.mobile ?? "").replace(/\D/g, "").includes(digits))
+      );
+    });
   }, [clients, clientSearch]);
 
-  const currentPriceList = (selectedClient?.price_list ?? customerPriceList) as PriceLevel;
+  const currentPriceList = (listOverride ?? selectedClient?.price_list ?? customerPriceList) as PriceLevel;
   const siigoConfigured = billingSettings?.electronic_provider?.toLowerCase() === "siigo";
 
   const total = useMemo(
@@ -167,7 +199,35 @@ export default function PosPage() {
     load();
   }, []);
 
+  const storeId = store?.id;
   useEffect(() => {
+    if (!storeId || !pointId) return;
+    let alive = true;
+    (async () => {
+      const sb = supabaseBrowser();
+      const map = new Map<string, number>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb
+          .from("erp_stock_levels")
+          .select("product_id,qty")
+          .eq("store_id", storeId)
+          .eq("warehouse_id", pointId)
+          .gt("qty", 0)
+          .order("product_id")
+          .range(from, from + 999);
+        if (error || !data) return; // sin ERP aplicado se muestra el catálogo completo
+        for (const row of data as { product_id: string; qty: number }[]) map.set(row.product_id, row.qty);
+        if (data.length < 1000) break;
+      }
+      if (alive) setPointStock(map);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [storeId, pointId]);
+
+  useEffect(() => {
+    setListOverride(null);
     if (selectedClient) {
       setCustomerName(selectedClient.name);
       setCustomerEmail(selectedClient.email ?? "");
@@ -200,6 +260,32 @@ export default function PosPage() {
     );
   }, [currentPriceList, productMap]);
 
+  async function loadErp(storeId: string) {
+    const sb = supabaseBrowser();
+    const [pointsRes, sellersRes, userRes] = await Promise.all([
+      sb
+        .from("erp_warehouses")
+        .select("id,name,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number")
+        .eq("store_id", storeId)
+        .eq("kind", "point")
+        .eq("active", true)
+        .order("name"),
+      sb.rpc("erp_sellers", { p_store: storeId }),
+      sb.auth.getUser(),
+    ]);
+    // Si erp_ops.sql aún no está aplicado el POS sigue funcionando sin punto ni vendedor.
+    const pointRows = (pointsRes.data ?? []) as PointOption[];
+    const sellerRows = (sellersRes.data ?? []) as SellerOption[];
+    const myPoint = (await sb.rpc("erp_my_point", { p_store: storeId })).data as string | null;
+    const visiblePoints = myPoint ? pointRows.filter((pt) => pt.id === myPoint) : pointRows;
+    setPoints(visiblePoints);
+    setLockedPoint(Boolean(myPoint));
+    setSellers(sellerRows);
+    setPointId((current) => current || visiblePoints[0]?.id || "");
+    const me = userRes.data.user?.id;
+    setSellerId((current) => current || sellerRows.find((r) => r.user_id === me)?.user_id || sellerRows[0]?.user_id || "");
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -210,18 +296,27 @@ export default function PosPage() {
       setStore(access.store);
       const sb = supabaseBrowser();
 
+      const productPages: Product[] = [];
+      let productError: unknown = null;
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb
+          .from("products")
+          .select("id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active")
+          .eq("store_id", access.store.id)
+          .order("name", { ascending: true })
+          .order("id")
+          .range(from, from + 999);
+        if (error) {
+          productError = error;
+          break;
+        }
+        productPages.push(...((data as Product[]) ?? []));
+        if (!data || data.length < 1000) break;
+      }
       const [
-        { data: productData, error: productError },
         { data: clientData, error: clientError },
         { data: settingsData },
       ] = await Promise.all([
-        sb
-          .from("products")
-          .select(
-            "id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active",
-          )
-          .eq("store_id", access.store.id)
-          .order("name", { ascending: true }),
         sb
           .from("billing_customers")
           .select("id,name,email,mobile,document_number,price_list")
@@ -237,8 +332,9 @@ export default function PosPage() {
       if (productError) throw productError;
       if (clientError) throw clientError;
 
-      setProducts((productData as Product[]) ?? []);
+      setProducts(productPages);
       setClients((clientData as Client[]) ?? []);
+      void loadErp(access.store.id);
       setBillingSettings((settingsData as {
         electronic_provider?: string | null;
         invoice_prefix?: string | null;
@@ -256,6 +352,89 @@ export default function PosPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function prefillNewClient() {
+    const term = clientSearch.trim();
+    if (/^[\d.\-\s]+$/.test(term)) setCustomerDocument(term);
+    else setCustomerName(term.toUpperCase());
+    setSelectedClientId("");
+  }
+
+  async function saveNewClient() {
+    if (!store) return;
+    setSavingClient(true);
+    try {
+      const { data, error } = await supabaseBrowser()
+        .from("billing_customers")
+        .insert({
+          store_id: store.id,
+          name: customerName.trim(),
+          document_number: customerDocument.trim() || null,
+          email: customerEmail.trim() || null,
+          mobile: customerWhatsApp.trim() || null,
+          price_list: customerPriceList,
+        })
+        .select("id,name,email,mobile,document_number,price_list")
+        .single();
+      if (error) throw error;
+      setClients((prev) => [data as Client, ...prev]);
+      setClientSearch("");
+      setSelectedClientId((data as Client).id);
+    } catch (err: unknown) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo crear el cliente",
+        text: getStoreDataSchemaErrorMessage(err),
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#ef4444",
+      });
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
+  async function updateClient() {
+    if (!selectedClient) return;
+    setSavingClient(true);
+    try {
+      const { data, error } = await supabaseBrowser()
+        .from("billing_customers")
+        .update({
+          name: customerName.trim() || selectedClient.name,
+          document_number: customerDocument.trim() || null,
+          email: customerEmail.trim() || null,
+          mobile: customerWhatsApp.trim() || null,
+        })
+        .eq("id", selectedClient.id)
+        .select("id,name,email,mobile,document_number,price_list")
+        .single();
+      if (error) throw error;
+      setClients((prev) => prev.map((c) => (c.id === selectedClient.id ? (data as Client) : c)));
+      await Swal.fire({ icon: "success", title: "Tercero modificado", timer: 1200, showConfirmButton: false, background: "#0b0b0b", color: "#fff" });
+    } catch (err: unknown) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo modificar el tercero",
+        text: getStoreDataSchemaErrorMessage(err),
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#ef4444",
+      });
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
+  function setItemLevel(productId: string, level: PriceLevel) {
+    const product = productMap.get(productId);
+    if (!product) return;
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, price: getProductPrice(product, level), priceLevel: level } : item,
+      ),
+    );
   }
 
   function adjustQty(productId: string, delta: number) {
@@ -351,6 +530,18 @@ export default function PosPage() {
  
       const invoiceUrl = `${window.location.origin}/pedido/${token}`;
       window.open(invoiceUrl, "_blank");
+
+      let docNumber = "";
+      if (pointId || sellerId) {
+        const { data: tag } = await sb.rpc("erp_tag_order", {
+          p_store: store.id,
+          p_token: token,
+          p_point: pointId || null,
+          p_seller: sellerId || null,
+          p_kind: documentKind,
+        });
+        docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
+      }
  
       if (requestElectronicInvoice && documentKind === "factura" && siigoConfigured) {
         try {
@@ -411,7 +602,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "success",
         title: "Factura creada",
-        html: `Factura generada con éxito.${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}`,
+        html: `Factura generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}`,
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonText: "Ver comprobante",
@@ -436,93 +627,50 @@ export default function PosPage() {
   }
 
   return (
-    <main className="space-y-6">
+    <main className="space-y-3">
       <div {...cardProps()}>
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">💳 POS / Facturación</h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
-              {store?.name ? `Punto de venta de ${store.name}. ` : ""}
-              Registra ventas en vitrina o prepara la factura de un pedido de WhatsApp.
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold">💳 POS / Facturación</h1>
+            <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+              {store?.name ? `${store.name} · ` : ""}{products.length} producto{products.length === 1 ? "" : "s"} · {clients.length} cliente{clients.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-flow-col sm:auto-cols-max">
-            <div
-              className="rounded-2xl border px-4 py-2 text-sm"
-              style={{
-                borderColor: "var(--t-card-border)",
-                background:
-                  "color-mix(in oklab, var(--t-card-bg) 90%, transparent)",
-                color: "var(--t-text)",
-              }}
-            >
-              {products.length} producto{products.length === 1 ? "" : "s"}
-            </div>
-            <div
-              className="rounded-2xl border px-4 py-2 text-sm"
-              style={{
-                borderColor: "var(--t-card-border)",
-                background:
-                  "color-mix(in oklab, var(--t-card-bg) 90%, transparent)",
-                color: "var(--t-text)",
-              }}
-            >
-              {clients.length} cliente{clients.length === 1 ? "" : "s"}
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { value: "vitrina", label: "Vitrina" },
+              { value: "whatsapp", label: "WhatsApp" },
+            ] as const).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className="rounded-full border px-3.5 py-1.5 text-xs font-semibold transition"
+                style={{
+                  borderColor: orderSource === option.value ? "transparent" : "var(--t-card-border)",
+                  background: orderSource === option.value ? "var(--t-cta)" : "transparent",
+                  color: orderSource === option.value ? "var(--t-cta-text, #0b0b0b)" : "var(--t-text)",
+                }}
+                onClick={() => setOrderSource(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      <div {...cardProps()}>
-        <div className="flex flex-wrap gap-2">
-          {([
-            { value: "vitrina", label: "Venta en vitrina" },
-            { value: "whatsapp", label: "Pedido por WhatsApp" },
-          ] as const).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className="rounded-2xl border px-4 py-2 text-sm font-semibold"
-              style={{
-                borderColor: "var(--t-card-border)",
-                background:
-                  orderSource === option.value
-                    ? "var(--t-cta)"
-                    : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                color: orderSource === option.value ? "#0b0b0b" : "var(--t-text)",
-              }}
-              onClick={() => setOrderSource(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-sm" style={{ color: "var(--t-muted)" }}>
-          Flujo recomendado: el cliente hace el pedido por WhatsApp, el vendedor lo confirma, revisa el carrito, crea la remisión o factura y puede imprimir o emitir factura electrónica si aplica.
-        </p>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <div className="space-y-3">
           <div {...cardProps()}>
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  1. Selecciona productos
-                </h2>
-                <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                  Busca por nombre y agrega los productos que quieras vender en
-                  vitrina.
-                </p>
-              </div>
-              <input
-                {...inputProps()}
-                className="w-full rounded-2xl border px-4 py-3 text-sm outline-none md:w-72"
-                placeholder="Buscar productos..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+            <input
+              {...inputProps()}
+              placeholder="🔍 Buscar producto por nombre…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setVisibleCount(48);
+              }}
+            />
 
             {loading ? (
               <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
@@ -530,89 +678,81 @@ export default function PosPage() {
               </p>
             ) : filteredProducts.length === 0 ? (
               <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
-                No se encontraron productos.
+                {search.trim()
+                  ? "No hay productos con ese nombre en esta tienda."
+                  : pointStock
+                    ? "Este punto no tiene existencias. Recibe mercancía con un ingreso de factura o un traslado."
+                    : "No se encontraron productos."}
               </p>
             ) : (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="rounded-[24px] border p-4"
-                    style={{
-                      borderColor: "var(--t-card-border)",
-                      background:
-                        "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
-                    }}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div
-                        className="grid h-14 w-14 place-items-center rounded-3xl border"
+              <div className="mt-3 max-h-[62vh] overflow-y-auto pr-1">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredProducts.slice(0, visibleCount).map((product) => {
+                    const disabled = !product.active || product.stock === 0;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => addProduct(product)}
+                        className="group flex items-center gap-2.5 rounded-xl border p-2 text-left transition hover:-translate-y-0.5 disabled:opacity-50"
                         style={{
                           borderColor: "var(--t-card-border)",
-                          background:
-                            "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
+                          background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
                         }}
                       >
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="h-12 w-12 rounded-2xl object-cover"
-                          />
-                        ) : (
-                          <span className="text-lg">🛍️</span>
-                        )}
-                      </div>
-
-                      <div className="flex-1">
-                        <p className="font-semibold">{product.name}</p>
-                        <p
-                          className="mt-1 text-sm"
-                          style={{ color: "var(--t-muted)" }}
+                        <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}>
+                          {product.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          ) : (
+                            <span>🛍️</span>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</span>
+                          <span className="mt-0.5 block text-[11px]" style={{ color: "var(--t-muted)" }}>
+                            {money(getProductPrice(product, currentPriceList))}
+                            {product.stock === 0 ? " · Agotado" : product.stock !== null ? ` · ${product.stock} disp.` : ""}
+                          </span>
+                        </span>
+                        <span
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-lg font-bold"
+                          style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}
                         >
-                          {money(getProductPrice(product, currentPriceList))}
-                          {product.stock === 0
-                            ? " · Agotado"
-                            : product.stock !== null
-                              ? ` · ${product.stock} disponibles`
-                              : " · Stock ilimitado"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      className="mt-4 rounded-2xl border px-4 py-2 text-sm font-semibold w-full"
-                      onClick={() => addProduct(product)}
-                      disabled={!product.active || product.stock === 0}
-                      style={{
-                        borderColor:
-                          "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))",
-                        background:
-                          product.active && product.stock !== 0
-                            ? "var(--t-cta)"
-                            : "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
-                        color:
-                          product.active && product.stock !== 0
-                            ? "#0b0b0b"
-                            : "var(--t-muted)",
-                      }}
-                    >
-                      {product.stock === 0 ? "Sin stock" : "Agregar"}
-                    </button>
-                  </div>
-                ))}
+                          +
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {filteredProducts.length > visibleCount ? (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((n) => n + 48)}
+                    className="mt-3 w-full rounded-xl border py-2 text-xs font-semibold"
+                    style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
+                  >
+                    Mostrar más ({filteredProducts.length - visibleCount} restantes)
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
 
           <div {...cardProps()}>
-            <h2 className="text-lg font-semibold">2. Datos del cliente</h2>
-            <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              Elige un cliente guardado o escribe un nombre y WhatsApp para la
-              venta.
-            </p>
+            <details>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+              <span>
+                <span className="text-base font-semibold">2. Cliente y documento</span>
+                <span className="block text-xs" style={{ color: "var(--t-muted)" }}>
+                  {effectiveClient.name} · {documentKind === "factura" ? "Factura" : "Remisión"} · {paymentType === "credito" ? "Crédito" : "Contado"}
+                </span>
+              </span>
+              <span className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Editar ▾</span>
+            </summary>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-3 space-y-3">
               <div>
                 <label className="text-sm font-semibold">Buscar cliente</label>
                 <input
@@ -621,6 +761,22 @@ export default function PosPage() {
                   onChange={(e) => setClientSearch(e.target.value)}
                   placeholder="Buscar por nombre, documento o teléfono"
                 />
+                {clientSearch.trim() && filteredClients.length === 0 ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed p-3 text-sm"
+                    style={{ borderColor: "var(--t-accent)" }}
+                  >
+                    <span>No encontramos al tercero buscado. ¿Deseas crearlo?</span>
+                    <button
+                      type="button"
+                      onClick={prefillNewClient}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                      style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}
+                    >
+                      ➕ Crear tercero
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -643,12 +799,41 @@ export default function PosPage() {
                   className="mt-2 text-sm"
                   style={{ color: "var(--t-muted)" }}
                 >
-                  Cliente activo: {effectiveClient.name} · Doc: {effectiveClient.document_number ?? "CF"} · Lista {effectiveClient.price_list}
+                  Cliente activo: {effectiveClient.name} · Doc: {effectiveClient.document_number ? docWithDv(effectiveClient.document_number) : "CF"} · Lista {effectiveClient.price_list}
                 </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-semibold">Punto de venta</label>
+                    <select {...inputProps()} value={pointId} onChange={(e) => setPointId(e.target.value)} disabled={lockedPoint}>
+                      {lockedPoint ? null : <option value="">Sin punto asignado</option>}
+                      {points.map((pt) => (
+                        <option key={pt.id} value={pt.id}>{pt.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Vendedor</label>
+                    <select {...inputProps()} value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+                      <option value="">Sin vendedor</option>
+                      {sellers.map((r) => (
+                        <option key={r.user_id} value={r.user_id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
-                  {billingSettings
-                    ? `Prefijos: ${billingSettings.invoice_prefix ?? "FAC"} / ${billingSettings.remision_prefix ?? "REM"}`
-                    : "Configura facturación para usar remisiones, facturas y Siigo."}
+                  {(() => {
+                    const pt = points.find((x) => x.id === pointId);
+                    if (pt) {
+                      const prefix = documentKind === "factura" ? pt.invoice_prefix : pt.remision_prefix;
+                      const next = documentKind === "factura" ? pt.next_invoice_number : pt.next_remision_number;
+                      return `Próximo documento: ${prefix}-${String(next).padStart(5, "0")}`;
+                    }
+                    return billingSettings
+                      ? `Prefijos: ${billingSettings.invoice_prefix ?? "FAC"} / ${billingSettings.remision_prefix ?? "REM"}`
+                      : "Configura facturación para usar remisiones, facturas y Siigo.";
+                  })()}{" "}
+                  <Link href="/dashboard/inventario" className="font-semibold underline" style={{ color: "var(--t-accent)" }}>Editar prefijos y puntos</Link>
                 </p>
               </div>
  
@@ -664,12 +849,14 @@ export default function PosPage() {
                 </div>
                 <div>
                   <label className="text-sm font-semibold">Documento</label>
-                  <input
-                    {...inputProps()}
-                    value={customerDocument}
-                    onChange={(e) => setCustomerDocument(e.target.value)}
-                    placeholder="NIT o cédula"
-                  />
+                  <WithDv value={customerDocument}>
+                    <input
+                      {...inputProps()}
+                      value={customerDocument}
+                      onChange={(e) => setCustomerDocument(e.target.value)}
+                      placeholder="NIT o cédula"
+                    />
+                  </WithDv>
                 </div>
               </div>
  
@@ -694,7 +881,31 @@ export default function PosPage() {
                   />
                 </div>
               </div>
+
+              {!selectedClient && customerName.trim() && customerName.trim() !== DEFAULT_CLIENT_NAME ? (
+                <button
+                  type="button"
+                  onClick={saveNewClient}
+                  disabled={savingClient}
+                  className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                  style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
+                >
+                  {savingClient ? "Guardando…" : "💾 Guardar como cliente nuevo"}
+                </button>
+              ) : null}
  
+              {selectedClient ? (
+                <button
+                  type="button"
+                  onClick={updateClient}
+                  disabled={savingClient}
+                  className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                  style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
+                >
+                  {savingClient ? "Guardando…" : "✏️ Modificar tercero (guardar cambios)"}
+                </button>
+              ) : null}
+
               <div>
                 <label className="text-sm font-semibold">Tipo de pago</label>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -809,17 +1020,15 @@ export default function PosPage() {
                 />
               </div>
             </div>
+            </details>
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-3 lg:sticky lg:top-2">
           <div {...cardProps()}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">3. Carrito</h2>
-                <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                  Revisa el contenido, ajusta cantidades y genera la factura.
-                </p>
+                <h2 className="text-base font-semibold">🛒 Carrito ({cart.length})</h2>
               </div>
               <div
                 className="rounded-2xl border px-4 py-2 text-sm"
@@ -834,23 +1043,42 @@ export default function PosPage() {
               </div>
             </div>
 
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+              <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>💲 Lista de precios:</span>
+              {([1, 2, 3, 4, 5] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setListOverride(lvl)}
+                  className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold"
+                  style={{
+                    borderColor: currentPriceList === lvl ? "transparent" : "var(--t-card-border)",
+                    background: currentPriceList === lvl ? "var(--t-cta)" : "transparent",
+                    color: currentPriceList === lvl ? "var(--t-cta-text, #0b0b0b)" : "var(--t-text)",
+                  }}
+                >
+                  P{lvl}
+                </button>
+              ))}
+            </div>
+
             {cart.length === 0 ? (
-              <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
+              <p className="mt-3 text-sm" style={{ color: "var(--t-muted)" }}>
                 El carrito está vacío. Agrega productos para comenzar.
               </p>
             ) : (
-              <div className="mt-6 space-y-4">
+              <div className="mt-3 max-h-[40vh] space-y-2 overflow-y-auto pr-1">
                 {cart.map((item) => (
                   <div
                     key={item.productId}
-                    className="rounded-[24px] border p-4"
+                    className="rounded-xl border p-2.5"
                     style={{
                       borderColor: "var(--t-card-border)",
                       background:
                         "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
                     }}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="font-semibold">{item.name}</p>
                         <p
@@ -863,6 +1091,17 @@ export default function PosPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          aria-label="Precio de esta línea"
+                          value={item.priceLevel}
+                          onChange={(e) => setItemLevel(item.productId, Number(e.target.value) as PriceLevel)}
+                          className="rounded-xl border px-1.5 py-1.5 text-xs"
+                          style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
+                        >
+                          {([1, 2, 3, 4, 5] as const).map((lvl) => (
+                            <option key={lvl} value={lvl}>P{lvl}</option>
+                          ))}
+                        </select>
                         <button
                           className="rounded-2xl border px-3 py-2 text-sm font-semibold"
                           style={{
@@ -913,7 +1152,7 @@ export default function PosPage() {
             <button
               onClick={createInvoice}
               disabled={saving}
-              className="mt-6 w-full rounded-2xl border px-4 py-3 text-sm font-semibold transition hover:brightness-110 disabled:opacity-60"
+              className="mt-3 w-full rounded-xl border px-4 py-3 text-sm font-semibold transition hover:brightness-110 disabled:opacity-60"
               style={{
                 borderColor:
                   "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))",
@@ -933,20 +1172,6 @@ export default function PosPage() {
             </button>
           </div>
 
-          <div {...cardProps()}>
-            <h2 className="text-lg font-semibold">Ayuda rápida</h2>
-            <ul
-              className="mt-4 space-y-2 text-sm"
-              style={{ color: "var(--t-muted)" }}
-            >
-              <li>• Selecciona el cliente o escribe el nombre directamente.</li>
-              <li>• Ajusta cantidades del carrito antes de facturar.</li>
-              <li>
-                • El comprobante se guarda como pedido y se puede abrir desde el
-                panel de pedidos.
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
     </main>

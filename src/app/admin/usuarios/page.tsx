@@ -49,6 +49,13 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   products: "Productos",
   categories: "Categorías",
   orders: "Pedidos",
+  inventory: "Inventario y kardex",
+  inventory_adjust: "Ajustes de inventario",
+  transfers: "Traslados",
+  purchases: "Compras",
+  suppliers: "Proveedores",
+  payables: "Cuentas por pagar",
+  audit: "Auditoría",
 };
 
 /** =========================

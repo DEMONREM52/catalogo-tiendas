@@ -1,5 +1,6 @@
 "use client";
 
+import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
@@ -304,71 +305,31 @@ export default function CreateProductPage() {
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 1 (mínimo)
                 </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(price1)}
-                  onChange={(e) => setPrice1(digitsOnlyToNumber(e.target.value, 0))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
+                <MoneyInput {...inputProps()} value={price1} onValueChange={(v) => setPrice1(v ?? 0)} />
               </div>
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 2 (mayor predeterminado)
                 </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(price2)}
-                  onChange={(e) => setPrice2(digitsOnlyToNumber(e.target.value, 0))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
+                <MoneyInput {...inputProps()} value={price2} onValueChange={(v) => setPrice2(v ?? 0)} />
               </div>
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 3 (detal predeterminado)
                 </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(price3)}
-                  onChange={(e) => setPrice3(digitsOnlyToNumber(e.target.value, 0))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
+                <MoneyInput {...inputProps()} value={price3} onValueChange={(v) => setPrice3(v ?? 0)} />
               </div>
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 4
                 </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(price4)}
-                  onChange={(e) => setPrice4(digitsOnlyToNumber(e.target.value, 0))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
+                <MoneyInput {...inputProps()} value={price4} onValueChange={(v) => setPrice4(v ?? 0)} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 5
                 </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(price5)}
-                  onChange={(e) => setPrice5(digitsOnlyToNumber(e.target.value, 0))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
+                <MoneyInput {...inputProps()} value={price5} onValueChange={(v) => setPrice5(v ?? 0)} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>

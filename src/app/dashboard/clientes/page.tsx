@@ -1,5 +1,7 @@
 "use client";
 
+import { IconBtn } from "@/app/dashboard/IconBtn";
+import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -75,7 +77,14 @@ export default function ClientesPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return clients;
+    const digits = term.replace(/\D/g, "");
     return clients.filter((client) => {
+      if (
+        digits.length > 0 &&
+        ((client.document_number ?? "").replace(/\D/g, "").includes(digits) ||
+          (client.mobile ?? "").replace(/\D/g, "").includes(digits))
+      )
+        return true;
       return [
         client.name,
         client.email ?? "",
@@ -206,7 +215,7 @@ export default function ClientesPage() {
 
       await Swal.fire({
         icon: "success",
-        title: editing ? "Cliente actualizado" : "Cliente guardado",
+        title: editing ? "Tercero modificado" : "Tercero guardado",
         timer: 1000,
         showConfirmButton: false,
         background: "#0b0b0b",
@@ -319,7 +328,7 @@ export default function ClientesPage() {
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
         <div {...cardProps()}>
           <h2 className="text-lg font-semibold">
-            {editing ? "Editar cliente" : "Agregar cliente"}
+            {editing ? "✏️ Modificar tercero" : "Agregar tercero"}
           </h2>
 
           <div className="mt-4 space-y-3">
@@ -337,14 +346,16 @@ export default function ClientesPage() {
 
             <div>
               <label className="text-sm font-semibold">Documento</label>
-              <input
-                {...inputProps()}
-                value={form.document_number}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, document_number: e.target.value }))
-                }
-                placeholder="NIT o cédula"
-              />
+              <WithDv value={form.document_number}>
+                <input
+                  {...inputProps()}
+                  value={form.document_number}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, document_number: e.target.value }))
+                  }
+                  placeholder="NIT o cédula"
+                />
+              </WithDv>
             </div>
 
             <div>
@@ -441,7 +452,7 @@ export default function ClientesPage() {
                 ? "Guardando..."
                 : editing
                   ? "Actualizar cliente"
-                  : "Guardar cliente"}
+                  : "Guardar tercero"}
             </button>
           </div>
         </div>
@@ -492,7 +503,7 @@ export default function ClientesPage() {
                         className="mt-1 text-sm"
                         style={{ color: "var(--t-muted)" }}
                       >
-                        {client.document_number ?? "Sin documento"} · Precio {client.price_list}
+                        {client.document_number ? docWithDv(client.document_number) : "Sin documento"} · Precio {client.price_list}
                       </p>
                       <p
                         className="mt-1 text-sm"
@@ -502,32 +513,9 @@ export default function ClientesPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        className="rounded-2xl border px-3 py-2 text-sm font-semibold"
-                        style={{
-                          borderColor: "var(--t-card-border)",
-                          background:
-                            "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                          color: "var(--t-text)",
-                        }}
-                        onClick={() => editClient(client)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        className="rounded-2xl border px-3 py-2 text-sm font-semibold"
-                        style={{
-                          borderColor:
-                            "color-mix(in oklab, #ef4444 35%, var(--t-card-border))",
-                          background:
-                            "color-mix(in oklab, #ef4444 12%, transparent)",
-                          color: "var(--t-text)",
-                        }}
-                        onClick={() => deleteClient(client)}
-                      >
-                        Eliminar
-                      </button>
+                    <div className="flex gap-2">
+                      <IconBtn icon="edit" title="Modificar tercero" onClick={() => editClient(client)} />
+                      <IconBtn icon="trash" tone="danger" title="Eliminar" onClick={() => deleteClient(client)} />
                     </div>
                   </div>
                 </div>

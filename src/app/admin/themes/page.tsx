@@ -29,6 +29,16 @@ type ThemeConfig = {
   ctaA: string;
   ctaB: string;
   ctaAngle: number;
+
+  colorMode: "auto" | "light" | "dark";
+  lightBg: string;
+  lightBg2: string;
+  lightText: string;
+  lightMuted: string;
+  lightBorder: string;
+  lightCardBg: string;
+  lightAccent: string;
+  lightAccent2: string;
 };
 
 type ThemeRow = {
@@ -65,6 +75,16 @@ const DEFAULT_CFG: ThemeConfig = {
   ctaA: "#d946ef",
   ctaB: "#8b5cf6",
   ctaAngle: 90,
+
+  colorMode: "auto",
+  lightBg: "#f8fafc",
+  lightBg2: "#eef2ff",
+  lightText: "#0f172a",
+  lightMuted: "rgba(15,23,42,0.68)",
+  lightBorder: "rgba(15,23,42,0.14)",
+  lightCardBg: "rgba(255,255,255,0.9)",
+  lightAccent: "#a21caf",
+  lightAccent2: "#6d28d9",
 };
 
 function clamp(n: number, a: number, b: number) {
@@ -100,6 +120,7 @@ function normalizeConfig(raw: any): ThemeConfig {
     ctaAngle: Number.isFinite(Number(o.ctaAngle)) ? Number(o.ctaAngle) : DEFAULT_CFG.ctaAngle,
     bgMode: o.bgMode === "solid" ? "solid" : "gradient",
     ctaMode: o.ctaMode === "solid" ? "solid" : "gradient",
+    colorMode: o.colorMode === "light" || o.colorMode === "dark" ? o.colorMode : "auto",
   };
 }
 
@@ -733,6 +754,61 @@ export default function AdminThemesPage() {
                     />
                     <span className="text-sm">Activo</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Modo claro / oscuro */}
+              <div
+                className="rounded-2xl border p-4"
+                style={{
+                  borderColor: "var(--ap-border)",
+                  background: "color-mix(in oklab, var(--ap-card) 72%, transparent)",
+                }}
+              >
+                <p className="text-sm font-semibold">🌗 Modo claro / oscuro</p>
+                <p className="mt-1 text-xs" style={{ color: "var(--ap-muted)" }}>
+                  Cada theme tiene su versión oscura (colores de arriba) y su versión clara (estos colores). La tienda elige un solo theme y el cliente elige claro u oscuro. «Seguir al visitante» respeta esa elección.
+                </p>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {([
+                    ["auto", "Seguir al visitante"],
+                    ["light", "Siempre claro"],
+                    ["dark", "Siempre oscuro"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setCfg((p) => ({ ...p, colorMode: value }))}
+                      className="rounded-xl border px-2 py-2 text-xs font-semibold"
+                      style={{
+                        borderColor: cfg.colorMode === value ? "var(--ap-cta)" : "var(--ap-border)",
+                        background: cfg.colorMode === value ? "color-mix(in oklab, var(--ap-cta) 18%, transparent)" : "transparent",
+                        color: "var(--ap-text)",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {([
+                    ["lightBg", "Fondo claro"],
+                    ["lightBg2", "Fondo claro 2"],
+                    ["lightText", "Texto claro"],
+                    ["lightAccent", "Acento claro"],
+                    ["lightAccent2", "Acento claro 2"],
+                  ] as const).map(([field, label]) => (
+                    <label key={field} className="text-xs" style={{ color: "var(--ap-muted)" }}>
+                      {label}
+                      <input
+                        type="color"
+                        className="mt-2 h-10 w-full rounded-xl border bg-transparent"
+                        style={{ borderColor: "var(--ap-border)" }}
+                        value={/^#[0-9a-f]{6}$/i.test(cfg[field]) ? cfg[field] : DEFAULT_CFG[field]}
+                        onChange={(e) => setCfg((p) => ({ ...p, [field]: e.target.value }))}
+                      />
+                    </label>
+                  ))}
                 </div>
               </div>
 

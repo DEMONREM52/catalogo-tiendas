@@ -1,7 +1,9 @@
 "use client";
 
+import { WithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
+import PointBillingPanel from "./PointBillingPanel";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 
@@ -121,6 +123,7 @@ const DEFAULT_SETTINGS: BillingSettings = {
 export default function BillingSettingsPage() {
   const [store, setStore] = useState<DashboardStore | null>(null);
   const [isStoreOwner, setIsStoreOwner] = useState(false);
+  const [canManage, setCanManage] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<BillingSettings>(DEFAULT_SETTINGS);
   const [wompi, setWompi] = useState<WompiSettings>(EMPTY_WOMPI_SETTINGS);
   const [addiClientId, setAddiClientId] = useState("");
@@ -143,6 +146,7 @@ export default function BillingSettingsPage() {
 
       setStore(access.store);
       setIsStoreOwner(access.isOwner);
+      setCanManage(access.isOwner || access.profileRole === "admin" || access.membership?.role === "store_admin");
       const sb = supabaseBrowser();
 
       if (access.isOwner) {
@@ -567,6 +571,19 @@ export default function BillingSettingsPage() {
     }
   }
 
+  if (canManage === false) {
+    return (
+      <main className="p-2">
+        <div {...cardProps()}>
+          <h1 className="text-lg font-semibold">🔒 Datos de facturación</h1>
+          <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
+            Solo el administrador de la tienda puede ver y modificar estos datos.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="space-y-6">
       <div {...cardProps()}>
@@ -579,6 +596,8 @@ export default function BillingSettingsPage() {
           </div>
         </div>
       </div>
+
+      {store ? <PointBillingPanel storeId={store.id} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
         <div {...cardProps()}>
@@ -596,12 +615,14 @@ export default function BillingSettingsPage() {
 
             <div>
               <label className="text-sm font-semibold">NIT / cédula</label>
-              <input
-                {...inputProps()}
-                value={settings.nit}
-                onChange={(e) => setSettings((prev) => ({ ...prev, nit: e.target.value }))}
-                placeholder="123456789-0"
-              />
+              <WithDv value={settings.nit}>
+                <input
+                  {...inputProps()}
+                  value={settings.nit}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, nit: e.target.value }))}
+                  placeholder="900123456"
+                />
+              </WithDv>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

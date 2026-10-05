@@ -1,5 +1,6 @@
 "use client";
 
+import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
@@ -424,32 +425,37 @@ export default function EditProductPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio Detal
+                  Precio 1 (mínimo)
                 </label>
-                <input
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  type="text"
-                  inputMode="numeric"
-                  value={String(draft.price_retail ?? 0)}
-                  onChange={(e) => setDraft({ ...draft, price_retail: digitsOnlyToNumber(e.target.value, 0) })}
-                />
+                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_1 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_1: v ?? 0 })} />
               </div>
 
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio Mayor
+                  Precio 2 (mayor)
                 </label>
-                <input
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  type="text"
-                  inputMode="numeric"
-                  value={String(draft.price_wholesale ?? 0)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, price_wholesale: digitsOnlyToNumber(e.target.value, 0) })
-                  }
-                />
+                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_2 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_2: v ?? 0 })} />
+              </div>
+
+              <div>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio 3 (detal)
+                </label>
+                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_3 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_3: v ?? 0 })} />
+              </div>
+
+              <div>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio 4
+                </label>
+                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_4 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_4: v ?? 0 })} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Precio 5
+                </label>
+                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_5 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_5: v ?? 0 })} />
               </div>
 
               <div className="sm:col-span-2">

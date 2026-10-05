@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import {
   getDashboardStore,
 } from "@/lib/store-utils";
@@ -71,7 +72,7 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
         style={{
           borderColor: "rgba(16,185,129,0.25)",
           background: "rgba(16,185,129,0.10)",
-          color: "rgba(236,253,245,0.95)",
+          color: "color-mix(in oklab, #047857 70%, var(--t-text))",
         }}
       >
         <p className="text-xs font-semibold">
@@ -118,7 +119,7 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
     style = {
       borderColor: "rgba(245,158,11,0.35)",
       background: "rgba(245,158,11,0.12)",
-      color: "rgba(254,243,199,0.95)",
+      color: "color-mix(in oklab, #b45309 65%, var(--t-text))",
     };
     icon = "⚠️";
   }
@@ -126,7 +127,7 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
     style = {
       borderColor: "rgba(244,63,94,0.30)",
       background: "rgba(244,63,94,0.12)",
-      color: "rgba(255,228,230,0.95)",
+      color: "color-mix(in oklab, #be123c 65%, var(--t-text))",
     };
     icon = "🧯";
   }
@@ -134,7 +135,7 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
     style = {
       borderColor: "rgba(239,68,68,0.40)",
       background: "rgba(239,68,68,0.14)",
-      color: "rgba(254,226,226,0.95)",
+      color: "color-mix(in oklab, #b91c1c 65%, var(--t-text))",
     };
     icon = "🔥";
   }
@@ -159,21 +160,78 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
   );
 }
 
+type ModuleKey = "inventory" | "billing" | "settings";
+
+const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permissions: string[]; adminOnly?: boolean }>> = {
+  inventory: [
+    { href: "/dashboard/products", label: "📦 Productos", permissions: ["products"] },
+    { href: "/dashboard/categories", label: "🗂️ Categorías del catálogo", permissions: ["categories"] },
+    { href: "/dashboard/inventario", label: "🏭 Stock, puntos, traslados y compras", permissions: ERP_PERMISSIONS },
+  ],
+  billing: [
+    { href: "/dashboard/pos", label: "💳 POS / Facturar", permissions: ["pos"] },
+    { href: "/dashboard/clientes", label: "👥 Clientes", permissions: ["clients"] },
+    { href: "/dashboard/store/billing", label: "🧾 Datos de facturación", permissions: ["billing"], adminOnly: true },
+  ],
+  settings: [
+    { href: "/dashboard/store", label: "🏪 Mi tienda", permissions: ["store"] },
+    { href: "/dashboard/store/users", label: "👤 Usuarios y vendedores", permissions: ["users"] },
+  ],
+};
+
+function moduleOf(path: string): ModuleKey | null {
+  if (path.startsWith("/dashboard/store/billing") || path.startsWith("/dashboard/pos") || path.startsWith("/dashboard/clientes")) return "billing";
+  if (path.startsWith("/dashboard/store")) return "settings";
+  if (path.startsWith("/dashboard/products") || path.startsWith("/dashboard/categories") || path.startsWith("/dashboard/inventario")) return "inventory";
+  return null;
+}
+
+function ModuleNav({ canOpen, isAdmin }: { canOpen: (permission: string) => boolean; isAdmin: boolean }) {
+  const path = usePathname();
+  const key = moduleOf(path);
+  if (!key) return null;
+  const tabs = MODULE_TABS[key].filter((t) => t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || isAdmin));
+  if (tabs.length < 2) return null;
+  return (
+    <nav className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Secciones del módulo">
+      {tabs.map((t) => {
+        const on = key === "billing" || key === "settings" ? path === t.href : path.startsWith(t.href);
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5"
+            style={
+              on
+                ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", color: "var(--t-cta-text, #fff)", borderColor: "transparent" }
+                : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
+            }
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 function NavItem({
   href,
   label,
   emoji,
   show = true,
+  module,
   onClick,
 }: {
   href: string;
   label: string;
   emoji: string;
   show?: boolean;
+  module?: ModuleKey;
   onClick?: () => void;
 }) {
   const path = usePathname();
-  const active = path === href;
+  const active = module ? moduleOf(path) === module : path === href;
 
   if (!show) return null;
 
@@ -427,9 +485,11 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/social") ? "products" :
       pathname.startsWith("/dashboard/categories") ? "categories" :
       pathname.startsWith("/dashboard/pedidos") ? "orders" :
+      pathname.startsWith("/dashboard/inventario") ? "inventory" :
       null;
 
-    if (!permission || canOpen(permission)) return;
+    if (!permission) return;
+    if (permission === "inventory" ? ERP_PERMISSIONS.some((p) => canOpen(p)) : canOpen(permission)) return;
     void Swal.fire({
       icon: "warning",
       title: "Acceso no habilitado",
@@ -497,68 +557,17 @@ export default function DashboardShell({
   const canAccessStorePages = Boolean(store) && role === "store";
 
   const menu = useMemo(() => {
+    const store = canAccessStorePages;
+    const firstOf = (key: ModuleKey) => MODULE_TABS[key].find((t) => t.permissions.some((p) => canOpen(p)))?.href ?? "/dashboard";
+    const anyOf = (key: ModuleKey) => MODULE_TABS[key].some((t) => t.permissions.some((p) => canOpen(p)));
     return [
-      { href: "/dashboard", emoji: "⚡", label: "Acceso rápido", show: true },
-      {
-        href: "/dashboard/store",
-        emoji: "🏪",
-        label: "Mi tienda",
-        show: canAccessStorePages && canOpen("store"),
-      },
-      {
-        href: "/dashboard/store/billing",
-        emoji: "🧾",
-        label: "Facturación",
-        show: canAccessStorePages && canOpen("billing"),
-      },
-      {
-        href: "/dashboard/pos",
-        emoji: "💳",
-        label: "POS / Facturación",
-        show: canAccessStorePages && canOpen("pos"),
-      },
-      {
-        href: "/dashboard/clientes",
-        emoji: "👥",
-        label: "Clientes",
-        show: canAccessStorePages && canOpen("clients"),
-      },
-      {
-        href: "/dashboard/store/users",
-        emoji: "👤",
-        label: "Usuarios",
-        show: canAccessStorePages && canOpen("users"),
-      },
-      {
-        href: "/dashboard/products",
-        emoji: "📦",
-        label: "Productos",
-        show: canAccessStorePages && canOpen("products"),
-      },
-      {
-        href: "/dashboard/social",
-        emoji: "📣",
-        label: "RemHub Social",
-        show: canAccessStorePages && canOpen("products"),
-      },
-      {
-        href: "/dashboard/categories",
-        emoji: "🗂️",
-        label: "Categorías",
-        show: canAccessStorePages && canOpen("categories"),
-      },
-      {
-        href: "/dashboard/pedidos",
-        emoji: "🧾",
-        label: "Pedidos",
-        show: canAccessStorePages && canOpen("orders"),
-      },
-      {
-        href: "/admin",
-        emoji: "🛡️",
-        label: "Panel Admin",
-        show: role === "admin",
-      },
+      { href: "/dashboard", emoji: "⚡", label: "Acceso rápido", show: true, module: undefined as ModuleKey | undefined },
+      { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", show: store && anyOf("inventory"), module: "inventory" as ModuleKey | undefined },
+      { href: firstOf("billing"), emoji: "💳", label: "Facturación", show: store && anyOf("billing"), module: "billing" as ModuleKey | undefined },
+      { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && canOpen("orders"), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/social", emoji: "📣", label: "RemHub Social", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
+      { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
+      { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },
     ];
   }, [canAccessStorePages, role, canOpen]);
 
@@ -625,11 +634,6 @@ export default function DashboardShell({
 
   const burgerOpen = drawerMounted && drawerOpen;
 
-  // Botón siempre visible en mobile:
-  const burgerStyle: React.CSSProperties = burgerOpen
-    ? { left: "min(86vw - 56px, 304px)", top: "16px" }
-    : { left: "16px", top: "16px" };
-
   return (
     <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
       {/* ✅ Fondo premium: ahora usa tus tokens (auto claro/oscuro) */}
@@ -659,18 +663,19 @@ export default function DashboardShell({
         />
       </div>
 
-      <div className="mx-auto w-full max-w-[1800px] px-6 py-3 sm:px-10 md:px-12 md:py-5">
+      <div className="mx-auto w-full max-w-[1800px] px-2 py-2 sm:px-4">
         {/* Top bar */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <BurgerButton open={burgerOpen} onClick={toggleDrawer} />
           <div
-            className="rounded-[28px] border p-5 backdrop-blur-xl"
+            className="rounded-2xl border px-3 py-2 backdrop-blur-xl"
             style={{
               borderColor: "var(--t-card-border)",
               background: "var(--t-card-bg)",
             }}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">Dashboard</h1>
+              <h1 className="text-base font-semibold">Dashboard</h1>
 
               {role ? (
                 <span
@@ -697,12 +702,12 @@ export default function DashboardShell({
                       ? {
                           borderColor: "rgba(16,185,129,0.28)",
                           background: "rgba(16,185,129,0.10)",
-                          color: "rgba(236,253,245,0.95)",
+                          color: "color-mix(in oklab, #047857 70%, var(--t-text))",
                         }
                       : {
                           borderColor: "rgba(239,68,68,0.28)",
                           background: "rgba(239,68,68,0.10)",
-                          color: "rgba(254,226,226,0.95)",
+                          color: "color-mix(in oklab, #b91c1c 65%, var(--t-text))",
                         }
                   }
                   title="Estado de la tienda (manual + temporizador)"
@@ -749,14 +754,14 @@ export default function DashboardShell({
           </div>
 
           {/* Acciones derecha */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {role === "store" && canOpen("store") ? (
               <>
                 <Link
                   href={detalUrl}
                   target="_blank"
                   className={cx(
-                    "rounded-2xl px-4 py-2 text-sm font-semibold transition",
+                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
                   )}
                   style={
                     canDetal
@@ -783,7 +788,7 @@ export default function DashboardShell({
                   type="button"
                   onClick={() => copyLink(detalUrl)}
                   disabled={!canDetal}
-                  className="rounded-2xl border px-3 py-2 text-sm transition disabled:opacity-40"
+                  className="rounded-xl border px-2.5 py-1.5 text-xs transition disabled:opacity-40"
                   style={{
                     borderColor: "var(--t-card-border)",
                     background:
@@ -798,7 +803,7 @@ export default function DashboardShell({
                   href={mayorUrl}
                   target="_blank"
                   className={cx(
-                    "rounded-2xl px-4 py-2 text-sm font-semibold transition",
+                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
                   )}
                   style={
                     canMayor
@@ -824,7 +829,7 @@ export default function DashboardShell({
                   type="button"
                   onClick={() => copyLink(mayorUrl)}
                   disabled={!canMayor}
-                  className="rounded-2xl border px-3 py-2 text-sm transition disabled:opacity-40"
+                  className="rounded-xl border px-2.5 py-1.5 text-xs transition disabled:opacity-40"
                   style={{
                     borderColor: "var(--t-card-border)",
                     background:
@@ -839,7 +844,7 @@ export default function DashboardShell({
 
             <button
               onClick={logout}
-              className="rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition active:scale-[0.99]"
+              className="rounded-xl border px-3 py-1.5 text-xs font-semibold backdrop-blur-xl transition active:scale-[0.99]"
               style={{
                 borderColor:
                   "color-mix(in oklab, var(--t-accent) 45%, transparent)",
@@ -856,70 +861,7 @@ export default function DashboardShell({
         </div>
 
         {/* Layout */}
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
-          {/* Sidebar desktop */}
-          <aside
-            className="hidden rounded-[28px] border p-4 backdrop-blur-xl md:block"
-            style={{
-              borderColor: "var(--t-card-border)",
-              background: "var(--t-card-bg)",
-            }}
-          >
-            <div className="mb-3 px-2">
-              <p
-                className="text-[11px] font-semibold tracking-[0.32em]"
-                style={{
-                  color: "color-mix(in oklab, var(--t-text) 55%, transparent)",
-                }}
-              >
-                MENÚ
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {menu.map((m) => (
-                <NavItem
-                  key={m.href}
-                  href={m.href}
-                  emoji={m.emoji}
-                  label={m.label}
-                  show={m.show}
-                />
-              ))}
-            </div>
-
-            {role === "store" && store ? (
-              <StoreExpiryNotice store={store} />
-            ) : null}
-
-            <div
-              className="my-4 h-px"
-              style={{
-                background:
-                  "color-mix(in oklab, var(--t-text) 10%, transparent)",
-              }}
-            />
-
-            <div
-              className="rounded-2xl border p-4"
-              style={{
-                borderColor: "var(--t-card-border)",
-                background:
-                  "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-              }}
-            >
-              <p className="text-sm font-semibold">💜 Tip rápido</p>
-              <p
-                className="mt-1 text-xs"
-                style={{
-                  color: "color-mix(in oklab, var(--t-text) 70%, transparent)",
-                }}
-              >
-                Mantén productos con imágenes y categorías para vender más.
-              </p>
-            </div>
-          </aside>
-
+        <div className="mt-2">
           {/* Content */}
           <section
             className="min-w-0 rounded-2xl border p-2.5 sm:p-3 md:p-4 backdrop-blur-xl"
@@ -928,19 +870,15 @@ export default function DashboardShell({
               background: "var(--t-card-bg)",
             }}
           >
+            {role === "store" ? <ModuleNav canOpen={canOpen} isAdmin={storeIsOwner || storeMemberRole === "store_admin"} /> : null}
             {children}
           </section>
         </div>
       </div>
 
-      {/* Botón premium flotante ALWAYS visible en mobile */}
-      <div className="fixed z-[70] md:hidden" style={burgerStyle}>
-        <BurgerButton open={burgerOpen} onClick={toggleDrawer} />
-      </div>
-
       {/* Drawer mobile premium */}
       {drawerMounted ? (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50">
           {/* Overlay */}
           <div
             className="absolute inset-0 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -955,7 +893,7 @@ export default function DashboardShell({
 
           {/* Panel */}
           <div
-            className="absolute left-0 top-0 h-full w-[86%] max-w-[360px] border-r p-4 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="absolute left-0 top-0 h-full w-[86%] max-w-[360px] overflow-y-auto border-r p-4 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               transform: drawerOpen ? "translateX(0px)" : "translateX(-18px)",
               borderColor: "var(--t-card-border)",
@@ -1011,6 +949,7 @@ export default function DashboardShell({
                   emoji={m.emoji}
                   label={m.label}
                   show={m.show}
+                  module={m.module}
                   onClick={() => {
                     haptic(6);
                     closeDrawer();
@@ -1022,33 +961,6 @@ export default function DashboardShell({
             {role === "store" && store ? (
               <StoreExpiryNotice store={store} />
             ) : null}
-
-            <div
-              className="my-4 h-px"
-              style={{
-                background:
-                  "color-mix(in oklab, var(--t-text) 10%, transparent)",
-              }}
-            />
-
-            <div
-              className="rounded-2xl border p-4"
-              style={{
-                borderColor: "var(--t-card-border)",
-                background:
-                  "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-              }}
-            >
-              <p className="text-sm font-semibold">💜 Tip rápido</p>
-              <p
-                className="mt-1 text-xs"
-                style={{
-                  color: "color-mix(in oklab, var(--t-text) 70%, transparent)",
-                }}
-              >
-                Mantén productos con imágenes y categorías para vender más.
-              </p>
-            </div>
 
             <div
               className="mt-4 text-[11px]"

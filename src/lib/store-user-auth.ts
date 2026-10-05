@@ -7,9 +7,26 @@ export const STORE_MENU_PERMISSIONS = [
   "products",
   "categories",
   "orders",
+  "inventory",
+  "inventory_adjust",
+  "transfers",
+  "purchases",
+  "suppliers",
+  "payables",
+  "audit",
 ] as const;
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];
+
+export const ERP_PERMISSIONS: StoreMenuPermission[] = [
+  "inventory",
+  "inventory_adjust",
+  "transfers",
+  "purchases",
+  "suppliers",
+  "payables",
+  "audit",
+];
 
 export function normalizeStoreUsername(username: string) {
   return username.trim().toLowerCase();

@@ -15,6 +15,7 @@ const MODULES = [
   { permission: "billing", href: "/dashboard/store/billing", icon: "⚙️", title: "Facturación y pagos", description: "Configura datos de facturación y métodos de pago." },
   { permission: "store", href: "/dashboard/store", icon: "🏪", title: "Mi tienda", description: "Consulta el espacio de trabajo y los enlaces de catálogo." },
   { permission: "users", href: "/dashboard/store/users", icon: "🔐", title: "Usuarios", description: "Crea accesos internos y administra permisos." },
+  { permission: "inventory", href: "/dashboard/inventario", icon: "🏭", title: "Inventario y compras", description: "Bodegas, kardex, traslados, ajustes, compras y cuentas por pagar." },
 ];
 
 function defaultQuickAccess() {

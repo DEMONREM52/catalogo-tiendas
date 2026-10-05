@@ -141,6 +141,16 @@ function normalizePermissions(value: unknown) {
   ))];
 }
 
+async function resolvePointId(admin: SupabaseClient, storeId: string, value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const id = String(value);
+  const { data, error } = await admin.from("erp_warehouses").select("id").eq("id", id).eq("store_id", storeId).maybeSingle();
+  if (error) throw new ApiError(error.message, 500);
+  if (!data) throw new ApiError("El punto seleccionado no pertenece a esta tienda.", 400);
+  return id;
+}
+
 export async function GET(request: Request) {
   try {
     const { admin, userId } = await authorizeRequest(request);
@@ -150,7 +160,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await admin
       .from("store_users")
-      .select("store_id,user_id,username,display_name,role,active,permissions,created_at")
+      .select("*")
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
     if (error) throw new ApiError(error.message, 500);
@@ -196,6 +206,7 @@ export async function POST(request: Request) {
     if (requestedRole === "store_admin" && !manager.isOwner && !manager.isAdmin) {
       throw new ApiError("Solo el dueño o administrador global puede crear otro administrador de tienda.", 403);
     }
+    const pointId = await resolvePointId(admin, storeId, body.point_id);
     const store = manager.store;
     const { data: duplicate, error: duplicateError } = await admin
       .from("store_users")
@@ -230,6 +241,7 @@ export async function POST(request: Request) {
       role: requestedRole,
       permissions,
       active: true,
+      ...(pointId ? { point_id: pointId } : {}),
     });
 
     if (membershipError) {
@@ -260,6 +272,7 @@ export async function POST(request: Request) {
         role: requestedRole,
         permissions,
         active: true,
+        point_id: pointId ?? null,
         created_at: created.user.created_at,
       },
       login_url: loginUrl.toString(),
@@ -292,12 +305,14 @@ export async function PATCH(request: Request) {
       throw new ApiError("Solo el dueño puede administrar el acceso de otro administrador.", 403);
     }
 
-    const patch: { permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
+    const patch: { point_id?: string | null; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
     if (body.permissions !== undefined) {
       patch.permissions = normalizePermissions(body.permissions);
       assertCanGrantPermissions(manager, patch.permissions);
     }
     if (typeof body.active === "boolean") patch.active = body.active;
+    const pointPatch = await resolvePointId(admin, storeId, body.point_id);
+    if (pointPatch !== undefined) patch.point_id = pointPatch;
     if (body.role !== undefined) {
       const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
       if (!allowedRoles.includes(body.role)) throw new ApiError("El rol seleccionado no es válido.", 400);
@@ -331,7 +346,7 @@ export async function PATCH(request: Request) {
         .update(patch)
         .eq("store_id", storeId)
         .eq("user_id", targetUserId)
-        .select("store_id,user_id,username,display_name,role,active,permissions,created_at")
+        .select("*")
         .single();
       if (error) throw new ApiError(error.message, 500);
       user = data;

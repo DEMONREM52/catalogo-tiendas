@@ -60,6 +60,7 @@ const QUICK_ACCESS_OPTIONS = [
   ["billing", "Facturación y pagos", "⚙️"],
   ["store", "Mi tienda", "🏪"],
   ["users", "Usuarios", "🔐"],
+  ["inventory", "Inventario y compras", "🏭"],
 ] as const;
 
 const LINK_TYPES = [
@@ -90,12 +91,25 @@ function newId() {
     : `contact-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function themePreview(theme: ThemeOption | undefined) {
+function themePreview(theme: ThemeOption | undefined, light = false) {
   const config = theme?.config && typeof theme.config === "object"
     ? theme.config as Record<string, unknown>
     : {};
   const stringValue = (key: string, fallback: string) =>
     typeof config[key] === "string" ? config[key] as string : fallback;
+  if (light) {
+    const accent = stringValue("lightAccent", stringValue("accent", "#a21caf"));
+    const lightBg = stringValue("lightBg", "#f8fafc");
+    return {
+      background: `linear-gradient(135deg, ${lightBg}, ${stringValue("lightBg2", lightBg)})`,
+      card: stringValue("lightCardBg", "rgba(255,255,255,0.9)"),
+      border: stringValue("lightBorder", "rgba(15,23,42,0.14)"),
+      text: stringValue("lightText", "#0f172a"),
+      muted: stringValue("lightMuted", "rgba(15,23,42,0.68)"),
+      accent,
+      cta: stringValue("lightCta", "") || stringValue("lightAccent2", "") || accent,
+    };
+  }
   const mode = config.bgMode === "solid" ? "solid" : "gradient";
   const legacyBg = stringValue("bg", "");
   const background = mode === "solid"
@@ -103,10 +117,13 @@ function themePreview(theme: ThemeOption | undefined) {
     : legacyBg
       ? legacyBg
       : `linear-gradient(${typeof config.bgAngle === "number" ? config.bgAngle : 135}deg, ${stringValue("bgGradA", "#2a0a5e")}, ${stringValue("bgGradB", "#060620")})`;
-  const legacyCta = stringValue("cta", "");
-  const cta = legacyCta || (config.ctaMode === "solid"
-    ? stringValue("ctaSolid", stringValue("accent", "#d946ef"))
-    : `linear-gradient(${typeof config.ctaAngle === "number" ? config.ctaAngle : 90}deg, ${stringValue("ctaA", "#d946ef")}, ${stringValue("ctaB", "#8b5cf6")})`);
+  const hasOwnCta = Boolean(stringValue("cta", "") || stringValue("ctaA", "") || stringValue("ctaB", ""));
+  const accentValue = stringValue("accent", "#d946ef");
+  const cta = stringValue("cta", "") || (!hasOwnCta && typeof config.accent === "string"
+    ? `linear-gradient(90deg, color-mix(in oklab, ${accentValue} 72%, #000000), color-mix(in oklab, ${accentValue} 46%, #000000))`
+    : config.ctaMode === "solid"
+      ? stringValue("ctaSolid", accentValue)
+      : `linear-gradient(${typeof config.ctaAngle === "number" ? config.ctaAngle : 90}deg, ${stringValue("ctaA", "#d946ef")}, ${stringValue("ctaB", "#8b5cf6")})`);
   return {
     background,
     card: stringValue("card", stringValue("cardBg", "rgba(255,255,255,0.08)")),
@@ -196,6 +213,7 @@ export default function StoreSettings() {
   const [saving, setSaving] = useState(false);
   const [savingContacts, setSavingContacts] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [previewLight, setPreviewLight] = useState(false);
   const [settingsMigrationMissing, setSettingsMigrationMissing] = useState(false);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
 
@@ -302,7 +320,7 @@ export default function StoreSettings() {
 
   const slugPreview = useMemo(() => normalizeStoreSlug(store?.slug ?? ""), [store?.slug]);
   const selectedTheme = themes.find((theme) => theme.id === store?.theme);
-  const preview = themePreview(selectedTheme);
+  const preview = themePreview(selectedTheme, previewLight);
 
   async function copyLink(path: string) {
     try {
@@ -765,9 +783,19 @@ export default function StoreSettings() {
                 <p className="text-[10px] font-extrabold tracking-[0.2em]" style={{ color: preview.muted }}>VISTA PREVIA DEL CATÁLOGO</p>
                 <p className="mt-1 text-lg font-black">{selectedTheme?.name ?? "Tema predeterminado"}</p>
               </div>
-              <span className="rounded-full border px-3 py-1 text-xs font-bold" style={{ borderColor: preview.accent, color: preview.text, background: `color-mix(in srgb, ${preview.accent} 20%, transparent)` }}>
-                Colores del tema
-              </span>
+              <div className="flex items-center gap-1 rounded-full border p-1" style={{ borderColor: preview.border }}>
+                {([[false, "Oscuro"], [true, "Claro"]] as const).map(([value, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setPreviewLight(value)}
+                    className="rounded-full px-3 py-1 text-xs font-bold transition"
+                    style={previewLight === value ? { background: preview.accent, color: "#fff" } : { color: preview.text }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <div className="rounded-xl border p-3" style={{ borderColor: preview.border, background: preview.card }}>

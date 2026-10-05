@@ -1,5 +1,6 @@
 "use client";
 
+import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Eye, Megaphone, Pencil, Power } from "lucide-react";
@@ -19,6 +20,11 @@ type Product = {
   description: string | null;
   price_retail: number;
   price_wholesale: number;
+  price_1?: number | null;
+  price_2?: number | null;
+  price_3?: number | null;
+  price_4?: number | null;
+  price_5?: number | null;
   min_wholesale: number;
   active: boolean;
   image_url: string | null;
@@ -268,7 +274,7 @@ export default function ProductsListPage() {
       let query = sb
         .from("products")
         .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
+          "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details"
         )
         .eq("store_id", sId);
       if (statusFilter !== "all") query = query.eq("active", statusFilter === "active");
@@ -318,7 +324,7 @@ export default function ProductsListPage() {
       let query = sb
         .from("products")
         .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
+          "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details"
         )
         .eq("store_id", storeId)
         .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
@@ -416,6 +422,11 @@ export default function ProductsListPage() {
       description: r.description == null ? null : String(r.description),
       price_retail: Number(r.price_retail ?? 0),
       price_wholesale: Number(r.price_wholesale ?? 0),
+      price_1: Number(r.price_1 ?? 0),
+      price_2: Number(r.price_2 ?? 0),
+      price_3: Number(r.price_3 ?? 0),
+      price_4: Number(r.price_4 ?? 0),
+      price_5: Number(r.price_5 ?? 0),
       min_wholesale: Number(r.min_wholesale ?? 1),
       active: !!r.active,
       image_url: r.image_url == null ? null : String(r.image_url),
@@ -775,11 +786,11 @@ export default function ProductsListPage() {
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
                   Precio mínimo
-                  <input type="number" min="0" inputMode="numeric" className={`${clsInput()} mt-1`} placeholder="$ 0" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} />
+                  <MoneyInput allowEmpty className={`${clsInput()} mt-1`} placeholder="$ 0" value={minPrice === "" ? null : Number(minPrice)} onValueChange={(v) => setMinPrice(v === null ? "" : String(v))} />
                 </label>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
                   Precio máximo
-                  <input type="number" min="0" inputMode="numeric" className={`${clsInput()} mt-1`} placeholder="Sin límite" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} />
+                  <MoneyInput allowEmpty className={`${clsInput()} mt-1`} placeholder="Sin límite" value={maxPrice === "" ? null : Number(maxPrice)} onValueChange={(v) => setMaxPrice(v === null ? "" : String(v))} />
                 </label>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
                   Ficha del producto
@@ -906,13 +917,11 @@ export default function ProductsListPage() {
                       </div>
 
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-white/70">
-                        <span>
-                          Mayorista: <b className="text-slate-900 dark:text-white/90">{money(p.price_wholesale)}</b>
-                        </span>
-                        <span className="text-slate-300 dark:text-white/30">·</span>
-                        <span>
-                          Detal: <b className="text-slate-900 dark:text-white/90">{money(p.price_retail)}</b>
-                        </span>
+                        {([p.price_1, p.price_2, p.price_3, p.price_4, p.price_5] as Array<number | null | undefined>).map((v, i) => (
+                          <span key={i} className="rounded-md border border-slate-300 px-1.5 py-0.5 dark:border-white/15" title={`Precio ${i + 1}${i === 1 ? " (mayor)" : i === 2 ? " (detal)" : ""}`}>
+                            P{i + 1}: <b className="text-slate-900 dark:text-white/90">{money(Number(v ?? 0))}</b>
+                          </span>
+                        ))}
                         <span className="text-slate-300 dark:text-white/30">·</span>
                         <span className="text-slate-500 dark:text-white/60">{formatDate(p.created_at)}</span>
                       </div>

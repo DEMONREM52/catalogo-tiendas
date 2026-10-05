@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Pause, Play, Sparkles, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, MapPin, Pause, Play, Sparkles, X } from "lucide-react";
 import Swal from "sweetalert2";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -240,6 +240,12 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
   if (text) cfg.text = text;
   if (muted) cfg.mutedText = muted;
 
+  const colorMode = pickStr(dbCfg.colorMode ?? dbCfg.color_mode);
+  if (colorMode === "light" || colorMode === "dark" || colorMode === "auto") cfg.colorMode = colorMode;
+  for (const key of ["lightBg", "lightBg2", "lightText", "lightMuted", "lightBorder", "lightCardBg", "lightAccent", "lightAccent2", "lightCta"] as const) {
+    const value = pickStr(dbCfg[key]);
+    if (value) cfg[key] = value;
+  }
   if (cardBorder) {
     cfg.border = cardBorder;
     cfg.cardBorder = cardBorder;
@@ -258,6 +264,7 @@ function mapDbThemeToApplyTheme(dbCfg: any): ThemeConfig | undefined {
     if (ctaB) cfg.ctaB = ctaB;
     if (ctaAngle != null) cfg.ctaAngle = ctaAngle;
   } else if (accent2 || accent) {
+    cfg.ctaFromAccent = true;
     cfg.ctaMode = "solid";
     cfg.ctaSolid = accent2 ?? accent!;
   }
@@ -286,9 +293,13 @@ export default function StoreCatalogPage() {
 
   const [store, setStore] = useState<StoreRow | null>(null);
   const [catalogTheme, setCatalogTheme] = useState<ThemeConfig>();
+  const [scheme, setScheme] = useState<"light" | "dark">("dark");
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [links, setLinks] = useState<StoreLinkRow[]>([]);
   const [campaigns, setCampaigns] = useState<CatalogCampaign[]>([]);
+  const [openCampaignIds, setOpenCampaignIds] = useState<string[]>([]);
+  const toggleCampaignProducts = (id: string) =>
+    setOpenCampaignIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const [campaignLoadMessage, setCampaignLoadMessage] = useState<string | null>(null);
   const [dailyCampaign, setDailyCampaign] = useState<CatalogCampaign | null>(null);
   const [campaignSlideIndex, setCampaignSlideIndex] = useState(0);
@@ -583,9 +594,18 @@ export default function StoreCatalogPage() {
   }, [slug, mode, key, initCart, router, safeMode]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setScheme(root.classList.contains("dark") ? "dark" : "light");
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     const catalog = document.querySelector<HTMLElement>("[data-store-catalog]");
-    if (catalog) applyThemeToElement(catalogTheme, catalog);
-  }, [catalogTheme, loading, store]);
+    if (catalog) applyThemeToElement(catalogTheme, catalog, scheme);
+  }, [catalogTheme, loading, store, scheme]);
 
   /* -------------------------
      favicon (✅ sin cache-bust)
@@ -1317,14 +1337,27 @@ export default function StoreCatalogPage() {
               className="rounded-[28px] border p-4 sm:p-6"
               style={{ borderColor: "var(--t-border)", background: glassBg }}
             >
-              <div className="mb-4">
-                <div>
+              <div className={`flex items-center justify-between gap-3 ${openCampaignIds.includes(campaign.id) ? "mb-4" : ""}`}>
+                <div className="min-w-0">
                   <h2 className="text-xl font-extrabold sm:text-2xl">{campaign.name}</h2>
                   {campaign.description ? <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{campaign.description}</p> : null}
-                  <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>Productos disponibles de esta campaña</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => toggleCampaignProducts(campaign.id)}
+                  aria-expanded={openCampaignIds.includes(campaign.id)}
+                  className={`t-btn inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-xs font-black shadow-lg transition hover:scale-105 active:scale-95 sm:text-sm ${openCampaignIds.includes(campaign.id) ? "border-2" : "text-white ring-2 ring-white/25"}`}
+                  style={openCampaignIds.includes(campaign.id)
+                    ? { borderColor: "var(--t-accent)", background: glassBg2, color: "var(--t-text)" }
+                    : { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", boxShadow: "0 10px 28px color-mix(in oklab, var(--t-accent) 45%, transparent)", textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
+                >
+                  {openCampaignIds.includes(campaign.id) ? "Ocultar productos" : `Ver ${campaign.products.length} producto${campaign.products.length === 1 ? "" : "s"}`}
+                  <span className={`grid h-6 w-6 place-items-center rounded-full bg-white/25 ${openCampaignIds.includes(campaign.id) ? "" : "animate-bounce"}`}>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${openCampaignIds.includes(campaign.id) ? "rotate-180" : ""}`} />
+                  </span>
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className={`${openCampaignIds.includes(campaign.id) ? "grid" : "hidden"} grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4`}>
                 {campaign.products.map((product) => (
                   <article
                     key={product.id}
@@ -1363,7 +1396,7 @@ export default function StoreCatalogPage() {
                         )}
                         disabled={product.stock !== null && Number(product.stock ?? 0) <= 0}
                         className="t-btn mt-3 w-full rounded-xl px-3 py-2 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-55"
-                        style={{ background: "var(--t-cta)", color: "var(--t-text)" }}
+                        style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #fff)" }}
                       >
                         {product.stock !== null && Number(product.stock ?? 0) <= 0 ? "Agotado" : "Agregar al carrito"}
                       </button>
@@ -1652,7 +1685,7 @@ export default function StoreCatalogPage() {
                         className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
                         style={{
                           background: "var(--t-cta)",
-                          color: "var(--t-text)",
+                          color: "var(--t-cta-text, #fff)",
                           boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
                         }}
                         onClick={() => addToCartWithQty(p, Number(price ?? 0))}
