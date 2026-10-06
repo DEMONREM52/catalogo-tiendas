@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AddiCustomerForm, type AddiCustomerInfo } from "@/lib/payments/AddiCustomerForm";
+import { PRINT_FORMAT_KEY, PrintReceipt, PrintStyles, parsePrintFormat, type PrintFormat } from "./PrintReceipt";
+import { PrintFormatPicker } from "./PrintFormatPicker";
 
 /* =========================================================
    Helpers
@@ -179,6 +181,14 @@ export default function PedidoPage() {
 
   // ✅ control de impresión (sin abrir otra pestaña)
   const [printMode, setPrintMode] = useState(false);
+  const [printFormat, setPrintFormat] = useState<PrintFormat>("carta");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [suggestedFormat, setSuggestedFormat] = useState<PrintFormat>("carta");
+  // Documento del POS (remisión/factura con prefijo del punto), si existe.
+  const [erpDoc, setErpDoc] = useState<{
+    doc_number: string | null; doc_kind: "factura" | "remision" | null; seller_name: string | null; customer_doc: string | null;
+    point: { name: string; address: string | null; phone: string | null } | null;
+  } | null>(null);
 
   /* -------------------------
      Memo
@@ -214,6 +224,10 @@ export default function PedidoPage() {
   const receiptNumber = useMemo(() => {
     return order?.receipt_no ?? order?.order_no ?? order?.number ?? order?.seq ?? null;
   }, [order]);
+
+  // Remisión/factura del POS con su numeración por punto; si no existe, comprobante del pedido.
+  const docKindLabel = erpDoc?.doc_kind === "remision" ? "Remisión" : erpDoc?.doc_kind === "factura" ? "Factura de venta" : "Comprobante de pedido";
+  const docNumberLabel = erpDoc?.doc_number || (receiptNumber ? `#${receiptNumber}` : "—");
 
   const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
   const invoiceBusinessName = billingDetails?.business_name || storeName;
@@ -255,6 +269,9 @@ export default function PedidoPage() {
 
       setStore(storeRpc);
       setOrder(orderRpc);
+      void sb.rpc("erp_order_doc_by_token", { p_token: token }).then(({ data: doc, error: docError }) => {
+        if (!docError) setErpDoc((doc as typeof erpDoc) ?? null);
+      });
 
       const loadedItems: Item[] = (data?.items ?? []).map((i: any) => ({
           product_id: i.product_id,
@@ -539,7 +556,7 @@ export default function PedidoPage() {
     if (!printMode) return;
 
     const prevTitle = document.title;
-    document.title = `Factura-${receiptNumber ?? token}`;
+    document.title = `${docKindLabel}-${erpDoc?.doc_number ?? receiptNumber ?? token}`;
 
     const t = window.setTimeout(() => {
       try {
@@ -568,9 +585,28 @@ export default function PedidoPage() {
       window.clearTimeout(fallback);
       document.title = prevTitle;
     };
-  }, [printMode, receiptNumber, token]);
+  }, [printMode, receiptNumber, token, docKindLabel, erpDoc]);
 
   function printNow() {
+    // Formato sugerido: el que pidió el POS (?formato=) o el último usado en este equipo.
+    let saved: PrintFormat | null = null;
+    try {
+      saved = parsePrintFormat(localStorage.getItem(PRINT_FORMAT_KEY));
+    } catch {
+      saved = null;
+    }
+    setSuggestedFormat(parsePrintFormat(new URLSearchParams(window.location.search).get("formato")) ?? saved ?? "carta");
+    setPickerOpen(true);
+  }
+
+  function confirmPrint(format: PrintFormat) {
+    try {
+      localStorage.setItem(PRINT_FORMAT_KEY, format);
+    } catch {
+      /* recordar el formato es solo una comodidad */
+    }
+    setPickerOpen(false);
+    setPrintFormat(format);
     setPrintMode(true);
   }
 
@@ -726,10 +762,10 @@ export default function PedidoPage() {
 
     const lines: string[] = [];
     lines.push(`Hola, soy *${customerNameShow}* 👋`);
-    lines.push(`Factura / comprobante del pedido${receiptNumber ? ` #${receiptNumber}` : ""}:`);
+    lines.push(`${docKindLabel} ${docNumberLabel}:`);
     lines.push("");
     lines.push(`🏪 Tienda: *${storeName}*`);
-    if (receiptNumber) lines.push(`🧾 Comprobante: *#${receiptNumber}*`);
+    lines.push(`🧾 ${docKindLabel}: *${docNumberLabel}*`);
     lines.push(`Estado: ${statusLabel(order.status)}`);
     lines.push(`📝 Observaciones: ${customerNoteShow}`);
     lines.push("");
@@ -793,9 +829,9 @@ export default function PedidoPage() {
      UI
   ========================================================= */
   return (
-    <main className="relative min-h-screen px-4 py-10 text-[color:var(--t-text)] print:bg-white print:text-black">
+    <main className="receipt-host relative min-h-screen px-4 py-10 text-[color:var(--t-text)] print:bg-white print:text-black">
       {/* Fondo premium (auto claro/oscuro con tokens) */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
+      <div className="no-print pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
         <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)" }} />
         <div className="absolute inset-0 starfield opacity-[0.55]" />
@@ -808,145 +844,31 @@ export default function PedidoPage() {
         />
       </div>
 
-      {/* Estilos impresión */}
-      <style jsx global>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          .only-print {
-            display: block !important;
-          }
-          .print-card {
-            border: none !important;
-            box-shadow: none !important;
-            background: #fff !important;
-            color: #000 !important;
-          }
-          @page {
-            margin: 14mm;
-          }
-        }
-        @media screen {
-          .only-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
-      {/* =========================================================
-         ✅ FACTURA (solo impresión)
-      ========================================================= */}
-      <div className="only-print mx-auto max-w-3xl print-card rounded-2xl border border-white/10 p-6">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            {storeLogo ? (
-              <img
-                src={storeLogo}
-                alt="Logo"
-                style={{
-                  width: 70,
-                  height: 70,
-                  objectFit: "contain",
-                  borderRadius: 10,
-                  border: "1px solid rgba(0,0,0,0.12)",
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 70,
-                  height: 70,
-                  borderRadius: 10,
-                  border: "1px solid rgba(0,0,0,0.12)",
-                }}
-              />
-            )}
-
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 900 }}>{invoiceBusinessName}</div>
-
-              {billingDetails?.nit ? (
-                <div style={{ fontSize: 12, marginTop: 4 }}>NIT / identificación: {billingDetails.nit}</div>
-              ) : null}
-              {[billingDetails?.address, billingDetails?.city].filter(Boolean).length ? (
-                <div style={{ fontSize: 12, marginTop: 4 }}>
-                  {[billingDetails?.address, billingDetails?.city].filter(Boolean).join(" · ")}
-                </div>
-              ) : null}
-              {billingDetails?.email ? (
-                <div style={{ fontSize: 12, marginTop: 4 }}>Email: {billingDetails.email}</div>
-              ) : null}
-
-              {storeWhatsapp ? (
-                <div style={{ fontSize: 12, marginTop: 4 }}>
-                  WhatsApp: <b>{storeWhatsapp}</b>
-                </div>
-              ) : null}
-
-              {/* ✅ CLIENTE + OBSERVACIONES (IMPRESIÓN) */}
-              <div style={{ fontSize: 12, marginTop: 8 }}>
-                Cliente: <b>{customerNameShow}</b>
-              </div>
-              <div style={{ fontSize: 12, marginTop: 2 }}>
-                Observaciones: <b>{customerNoteShow}</b>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Factura / comprobante de pedido</div>
-            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-              {billingDetails?.invoice_prefix || "FAC"}-{receiptNumber ?? "—"}
-            </div>
-            <div style={{ fontSize: 11, marginTop: 4 }}>{new Date(order.created_at).toLocaleString("es-CO")}</div>
-          </div>
-        </div>
-
-        <div style={{ height: 1, background: "rgba(0,0,0,0.12)", margin: "14px 0" }} />
-
-        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.12)" }}>
-              <th style={{ textAlign: "left", padding: "8px 0", width: 60 }}>Cant</th>
-              <th style={{ textAlign: "left", padding: "8px 0" }}>Descripción</th>
-              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>Precio Unit</th>
-              <th style={{ textAlign: "right", padding: "8px 0", width: 120 }}>Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i) => {
-              const sub = Number(i.price) * Number(i.qty);
-              return (
-                <tr key={i.product_id} style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
-                  <td style={{ padding: "8px 0" }}>{i.qty}</td>
-                  <td style={{ padding: "8px 0" }}>{i.name}</td>
-                  <td style={{ padding: "8px 0", textAlign: "right" }}>{money(i.price)}</td>
-                  <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>{money(sub)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-          <div style={{ width: 260, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 12 }}>TOTAL</div>
-              <div style={{ fontSize: 16, fontWeight: 900 }}>{money(total)}</div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ fontSize: 11, marginTop: 14, opacity: 0.9 }}>
-          <div>Documento de venta generado por la tienda. No reemplaza una factura electrónica validada por la DIAN.</div>
-          {profile?.description ? (
-            <div>{profile.description}</div>
-          ) : (
-            <div>Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.</div>
-          )}
-        </div>
-      </div>
+      {/* Impresión: hoja carta o tirilla POS (80 / 58 mm) */}
+      <PrintStyles format={printFormat} />
+      <PrintFormatPicker open={pickerOpen} initial={suggestedFormat} onCancel={() => setPickerOpen(false)} onConfirm={confirmPrint} />
+      <PrintReceipt
+        format={printFormat}
+        logo={storeLogo}
+        businessName={invoiceBusinessName}
+        nit={billingDetails?.nit}
+        address={[billingDetails?.address, billingDetails?.city].filter(Boolean).join(" · ") || null}
+        email={billingDetails?.email}
+        whatsapp={storeWhatsapp}
+        docTitle={docKindLabel}
+        docNumber={erpDoc?.doc_number || `${billingDetails?.invoice_prefix || "FAC"}-${receiptNumber ?? "—"}`}
+        pointName={erpDoc?.point?.name ?? null}
+        pointAddress={erpDoc?.point?.address ?? null}
+        sellerName={erpDoc?.seller_name ?? null}
+        customerDoc={erpDoc?.customer_doc ?? null}
+        date={new Date(order.created_at).toLocaleString("es-CO")}
+        customer={customerNameShow}
+        note={customerNoteShow}
+        items={items.map((i) => ({ product_id: i.product_id, name: i.name, qty: Number(i.qty), price: Number(i.price) }))}
+        total={total}
+        money={money}
+        footer={profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp."}
+      />
 
       {/* =========================================================
          ✅ COMPROBANTE (pantalla)
@@ -965,8 +887,9 @@ export default function PedidoPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold">Factura / comprobante de pedido</h1>
-                {receiptNumber ? <Pill>#{receiptNumber}</Pill> : null}
+                <h1 className="text-2xl font-bold">{docKindLabel}</h1>
+                {erpDoc?.doc_number ? <Pill tone="cta">{erpDoc.doc_number}</Pill> : null}
+                {receiptNumber ? <Pill tone="soft">Pedido #{receiptNumber}</Pill> : null}
                 <Pill tone="soft">
                   Estado: <span className="font-bold">{statusLabel(order.status)}</span>
                 </Pill>

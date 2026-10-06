@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { TRANSFER_STEPS, transferTrackUrl, transferWhatsAppText, type TransferStep } from "@/lib/transfer-tracking";
 import { ProductPicker } from "./LineEditor";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
@@ -17,7 +19,42 @@ type TransferRow = {
   from_warehouse_id: string; to_warehouse_id: string; created_by_name: string | null; carrier_name: string | null;
   checked_by_name: string | null; received_by_name: string | null; received_notes: string | null;
   erp_transfer_items: TransferItem[];
+  // Solo existen con 20261007_transfer_tracking_links.sql aplicado.
+  track_token?: string; track_expires_at?: string;
+  erp_transfer_signatures?: Array<{ step: TransferStep; signer_name: string; signed_at: string }>;
 };
+
+const BASE_COLUMNS =
+  "id,number,status,notes,created_at,received_at,from_warehouse_id,to_warehouse_id,created_by_name,carrier_name,checked_by_name,received_by_name,received_notes,erp_transfer_items(product_id,qty,received_qty,products(name))";
+const TRACK_COLUMNS = `${BASE_COLUMNS},track_token,track_expires_at,erp_transfer_signatures(step,signer_name,signed_at)`;
+
+function TrackProgress({ row }: { row: TransferRow }) {
+  const signed = new Map((row.erp_transfer_signatures ?? []).map((s) => [s.step, s]));
+  const nextKey = row.status === "in_transit" ? TRANSFER_STEPS.find((s) => !signed.has(s.key))?.key : undefined;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      {TRANSFER_STEPS.map((step) => {
+        const sig = signed.get(step.key);
+        const isNext = step.key === nextKey;
+        return (
+          <div
+            key={step.key}
+            className="rounded-xl border px-2.5 py-1.5 text-xs"
+            style={{
+              borderColor: sig ? "color-mix(in oklab, #22c55e 50%, transparent)" : isNext ? "var(--t-accent)" : "var(--t-card-border)",
+              opacity: sig || isNext ? 1 : 0.55,
+            }}
+          >
+            <p className="font-semibold">{sig ? "✓" : step.icon} {step.title}</p>
+            <p className="truncate" style={{ color: "var(--t-muted)" }} title={sig ? `${sig.signer_name} · ${dateTime(sig.signed_at)}` : undefined}>
+              {sig ? `${sig.signer_name} · ${dateTime(sig.signed_at)}` : isNext ? "Pendiente de firma" : "—"}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const itemName = (item: TransferItem) => (Array.isArray(item.products) ? item.products[0]?.name : item.products?.name) ?? "Producto";
 
@@ -58,19 +95,46 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [receiving, setReceiving] = useState<{ id: string; qty: Record<string, number>; notes: string } | null>(null);
 
   const load = useCallback(async () => {
-    let query = supabaseBrowser()
-      .from("erp_transfers")
-      .select(
-        "id,number,status,notes,created_at,received_at,from_warehouse_id,to_warehouse_id,created_by_name,carrier_name,checked_by_name,received_by_name,received_notes,erp_transfer_items(product_id,qty,received_qty,products(name))",
-      )
-      .eq("store_id", ctx.storeId)
-      .order("created_at", { ascending: false })
-      .limit(30);
-    if (filter !== "all") query = query.eq("status", filter);
-    const { data, error } = await query;
+    const run = (columns: string) => {
+      let query = supabaseBrowser()
+        .from("erp_transfers")
+        .select(columns)
+        .eq("store_id", ctx.storeId)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (filter !== "all") query = query.eq("status", filter);
+      return query;
+    };
+    let { data, error } = await run(TRACK_COLUMNS);
+    // Sin la migración de seguimiento se muestran los traslados sin enlace ni firmas.
+    if (error) ({ data, error } = await run(BASE_COLUMNS));
     if (error) void toast("No se pudieron cargar los traslados", "error", errorMessage(error));
     else setRows((data ?? []) as unknown as TransferRow[]);
   }, [ctx.storeId, filter]);
+
+  async function copyLink(row: TransferRow) {
+    if (!row.track_token) return;
+    try {
+      await navigator.clipboard.writeText(transferTrackUrl(row.track_token));
+      void toast("Enlace copiado");
+    } catch {
+      window.prompt("Copia el enlace:", transferTrackUrl(row.track_token));
+    }
+  }
+
+  function shareWhatsApp(row: TransferRow) {
+    if (!row.track_token) return;
+    const text = transferWhatsAppText(row.number, names.get(row.from_warehouse_id) ?? "Origen", names.get(row.to_warehouse_id) ?? "Destino", row.track_token);
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  }
+
+  async function renewLink(row: TransferRow) {
+    if (!(await confirmAction(`Renovar enlace #${row.number}`, "El enlace anterior dejará de funcionar y el nuevo durará 15 días.", "Renovar"))) return;
+    const { error } = await supabaseBrowser().rpc("erp_transfer_track_renew", { p_transfer: row.id });
+    if (error) return void toast("No se pudo renovar el enlace", "error", errorMessage(error));
+    void toast("Enlace renovado");
+    void load();
+  }
 
   useRunOnChange(load);
 
@@ -116,14 +180,57 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     if (!(await confirmAction("Enviar mercancía", `Se crearán ${plan.length} traslado(s) con ${units} unidades. Quedarán en tránsito hasta que cada destino las reciba.`, "Enviar"))) return;
 
     setBusy(true);
-    const { error } = await supabaseBrowser().rpc("erp_dispatch_transfers", {
+    const sb = supabaseBrowser();
+    const { data: ids, error } = await sb.rpc("erp_dispatch_transfers", {
       p_store: ctx.storeId, p_from: from, p_notes: notes, p_carrier: carrier, p_checked_by: checkedBy, p_plan: plan,
     });
-    setBusy(false);
-    if (error) return void toast("No se pudo enviar", "error", errorMessage(error));
+    if (error) {
+      setBusy(false);
+      return void toast("No se pudo enviar", "error", errorMessage(error));
+    }
     resetPlan();
-    void toast(`${plan.length} traslado(s) enviados`);
     void load();
+    const { data: created } = await sb
+      .from("erp_transfers")
+      .select("id,number,from_warehouse_id,to_warehouse_id,track_token")
+      .in("id", (ids ?? []) as string[])
+      .order("number");
+    setBusy(false);
+    const links = ((created ?? []) as Array<Pick<TransferRow, "id" | "number" | "from_warehouse_id" | "to_warehouse_id" | "track_token">>).filter((t) => t.track_token);
+    if (!links.length) return void toast(`${plan.length} traslado(s) enviados`);
+    await showLinks(links);
+  }
+
+  /** Muestra el enlace único de cada traslado recién creado para enviarlo por WhatsApp. */
+  async function showLinks(links: Array<Pick<TransferRow, "id" | "number" | "from_warehouse_id" | "to_warehouse_id" | "track_token">>) {
+    const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const html = links
+      .map((t) => {
+        const fromName = names.get(t.from_warehouse_id) ?? "Origen";
+        const toName = names.get(t.to_warehouse_id) ?? "Destino";
+        const url = transferTrackUrl(t.track_token!);
+        const wa = `https://wa.me/?text=${encodeURIComponent(transferWhatsAppText(t.number, fromName, toName, t.track_token!))}`;
+        return `<div style="text-align:left;border:1px solid rgba(127,127,127,.35);border-radius:14px;padding:10px 12px;margin-top:8px">
+          <b>#${t.number} · ${esc(fromName)} → ${esc(toName)}</b>
+          <div style="font-size:12px;word-break:break-all;opacity:.8;margin:4px 0">${esc(url)}</div>
+          <a href="${wa}" target="_blank" rel="noopener" style="display:inline-block;background:#22c55e;color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px;text-decoration:none">💬 Enviar por WhatsApp</a>
+          <button type="button" data-copy="${esc(url)}" style="margin-left:6px;border:1px solid rgba(127,127,127,.5);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600">🔗 Copiar</button>
+        </div>`;
+      })
+      .join("");
+    await Swal.fire({
+      icon: "success",
+      title: links.length > 1 ? `${links.length} traslados creados` : `Traslado #${links[0].number} creado`,
+      html: `<p style="font-size:14px">Envía el enlace a quien empaca, despacha, entrega y recibe. Cada uno firma su paso sin iniciar sesión, y tú ves todo el recorrido aquí.</p>${html}`,
+      confirmButtonText: "Listo",
+      didOpen: (popup) => {
+        popup.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            void navigator.clipboard.writeText(btn.dataset.copy ?? "").then(() => { btn.textContent = "✓ Copiado"; });
+          });
+        });
+      },
+    });
   }
 
   function startReceive(row: TransferRow) {
@@ -305,6 +412,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   </p>
                 ) : null}
                 {row.notes ? <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>Nota: {row.notes}</p> : null}
+                {row.track_token && row.status !== "cancelled" ? <TrackProgress row={row} /> : null}
 
                 {receiving?.id === row.id ? (
                   <div className="mt-3 space-y-2 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
@@ -335,10 +443,33 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   </p>
                 )}
 
-                {canTransfer && row.status === "in_transit" && receiving?.id !== row.id ? (
-                  <div className="mt-3 flex gap-2">
-                    <Btn onClick={() => startReceive(row)}>Recibir</Btn>
-                    <Btn variant="danger" onClick={() => void cancel(row)}>Anular</Btn>
+                {receiving?.id !== row.id && (row.track_token || (canTransfer && row.status === "in_transit")) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {row.track_token && row.status !== "cancelled" ? (
+                      row.status === "in_transit" && row.track_expires_at && new Date(row.track_expires_at) < new Date() ? (
+                        <Btn variant="ghost" onClick={() => void renewLink(row)}>⏰ Enlace vencido · Renovar</Btn>
+                      ) : (
+                        <>
+                          <Btn onClick={() => shareWhatsApp(row)}>💬 Enviar enlace por WhatsApp</Btn>
+                          <Btn variant="ghost" onClick={() => void copyLink(row)}>🔗 Copiar enlace</Btn>
+                          <a
+                            href={transferTrackUrl(row.track_token)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold underline"
+                            style={{ color: "var(--t-muted)" }}
+                          >
+                            Abrir seguimiento
+                          </a>
+                        </>
+                      )
+                    ) : null}
+                    {canTransfer && row.status === "in_transit" ? (
+                      <>
+                        <Btn variant="ghost" onClick={() => startReceive(row)}>Recibir desde el panel</Btn>
+                        <Btn variant="danger" onClick={() => void cancel(row)}>Anular</Btn>
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

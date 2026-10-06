@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
+import { PosDocuments, type PosDocument } from "./PosDocuments";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -134,6 +135,8 @@ export default function PosPage() {
   const [lockedPoint, setLockedPoint] = useState(false);
   const [sellerId, setSellerId] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [editingDoc, setEditingDoc] = useState<PosDocument | null>(null);
+  const [docsRefresh, setDocsRefresh] = useState(0);
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -476,6 +479,92 @@ export default function PosPage() {
     });
   }
 
+  /** Carga un documento abierto del punto en el carrito para agregarle o quitarle productos. */
+  function startEdit(doc: PosDocument) {
+    setCart(
+      doc.items.map((it) => ({
+        productId: it.product_id,
+        name: it.name,
+        qty: Number(it.qty),
+        price: Number(it.price),
+        priceLevel: currentPriceList,
+        note: "",
+      })),
+    );
+    setEditingDoc(doc);
+    setDocumentKind(doc.doc_kind === "factura" ? "factura" : "remision");
+    setCustomerName(doc.customer_name || DEFAULT_CLIENT_NAME);
+    setCustomerNote(doc.customer_note ?? "");
+    setCustomerDocument(doc.customer_doc ?? "");
+    void Swal.fire({
+      icon: "info",
+      title: `Editando ${doc.doc_number ?? `#${doc.receipt_no}`}`,
+      text: "Agrega o quita productos y pulsa “Guardar cambios”.",
+      timer: 1800,
+      showConfirmButton: false,
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingDoc(null);
+    setCart([]);
+    setCustomerNote("");
+    setCustomerDocument("");
+    setCustomerName(selectedClient?.name ?? DEFAULT_CLIENT_NAME);
+  }
+
+  async function saveEdit(doc: PosDocument) {
+    if (cart.length === 0) {
+      await Swal.fire({ icon: "warning", title: "El documento no puede quedar vacío", background: "var(--t-bg-base)", color: "var(--t-text)" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const sb = supabaseBrowser();
+      const { error } = await sb.rpc("erp_pos_order_set_items", {
+        p_order: doc.order_id,
+        p_items: cart.map((item) => ({ product_id: item.productId, qty: item.qty, price: item.price })),
+        p_customer_name: customerName.trim() || null,
+        p_customer_note: customerNote.trim(),
+      });
+      if (error) throw error;
+      if (customerDocument.trim() !== (doc.customer_doc ?? "")) {
+        await sb.rpc("erp_pos_set_customer_doc", { p_token: doc.token, p_doc: customerDocument.trim() });
+      }
+      const label = doc.doc_number ?? `#${doc.receipt_no}`;
+      setEditingDoc(null);
+      setCart([]);
+      setCustomerNote("");
+      setDocsRefresh((n) => n + 1);
+      const res = await Swal.fire({
+        icon: "success",
+        title: `${label} actualizado`,
+        html: `<b>Total:</b> ${money(total)}`,
+        showCancelButton: true,
+        confirmButtonText: "Ver e imprimir",
+        cancelButtonText: "Seguir vendiendo",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#22c55e",
+      });
+      if (res.isConfirmed) {
+        window.open(`${window.location.origin}/pedido/${doc.token}?formato=${printSize === "carta" ? "carta" : "t80"}`, "_blank");
+      }
+    } catch (err: unknown) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo guardar el documento",
+        text: String((err as Error)?.message ?? err),
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createInvoice() {
     if (!store) return;
     if (cart.length === 0) {
@@ -502,7 +591,10 @@ export default function PosPage() {
       return;
     }
 
+    if (editingDoc) return saveEdit(editingDoc);
+
     setSaving(true);
+    let receiptWindow: Window | null = null;
 
     try {
       let siigoTrackingWarning: string | null = null;
@@ -515,6 +607,9 @@ export default function PosPage() {
       }));
  
       const sb = supabaseBrowser();
+      // Se abre la pestaña ya (los navegadores bloquean ventanas abiertas después de esperar)
+      // y se carga el comprobante cuando el documento tiene su número del punto.
+      receiptWindow = window.open("", "_blank");
       const { data, error } = await sb.rpc("create_order_from_cart", {
         p_store_id: store.id,
         p_catalog_type: "retail",
@@ -528,9 +623,6 @@ export default function PosPage() {
       const token = (data as { token?: string } | null)?.token;
       if (!token) throw new Error("No se generó token de factura.");
  
-      const invoiceUrl = `${window.location.origin}/pedido/${token}`;
-      window.open(invoiceUrl, "_blank");
-
       let docNumber = "";
       if (pointId || sellerId) {
         const { data: tag } = await sb.rpc("erp_tag_order", {
@@ -541,7 +633,17 @@ export default function PosPage() {
           p_kind: documentKind,
         });
         docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
+        if (customerDocument.trim()) {
+          // Permite buscar el documento por cédula/NIT; si el SQL no está aplicado se ignora.
+          await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
+        }
       }
+
+      // El comprobante sugiere al imprimir el tamaño elegido en el POS.
+      const invoiceUrl = `${window.location.origin}/pedido/${token}?formato=${printSize === "carta" ? "carta" : "t80"}`;
+      if (receiptWindow && !receiptWindow.closed) receiptWindow.location.href = invoiceUrl;
+      else window.open(invoiceUrl, "_blank");
+      setDocsRefresh((n) => n + 1);
  
       if (requestElectronicInvoice && documentKind === "factura" && siigoConfigured) {
         try {
@@ -599,10 +701,11 @@ export default function PosPage() {
         }
       }
 
+      const kindLabel = documentKind === "factura" ? "Factura" : "Remisión";
       await Swal.fire({
         icon: "success",
-        title: "Factura creada",
-        html: `Factura generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}`,
+        title: `${kindLabel} creada`,
+        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}`,
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonText: "Ver comprobante",
@@ -613,9 +716,10 @@ export default function PosPage() {
       setCustomerNote("");
       setSelectedClientId("");
     } catch (err: unknown) {
+      if (receiptWindow && !receiptWindow.closed) receiptWindow.close();
       await Swal.fire({
         icon: "error",
-        title: "No se pudo crear la factura",
+        title: documentKind === "factura" ? "No se pudo crear la factura" : "No se pudo crear la remisión",
         text: String((err as Error)?.message ?? err),
         background: "#0b0b0b",
         color: "#fff",
@@ -636,7 +740,16 @@ export default function PosPage() {
               {store?.name ? `${store.name} · ` : ""}{products.length} producto{products.length === 1 ? "" : "s"} · {clients.length} cliente{clients.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PosDocuments
+              storeId={store?.id}
+              pointId={pointId}
+              pointName={points.find((pt) => pt.id === pointId)?.name ?? "este punto"}
+              refreshKey={docsRefresh}
+              editingId={editingDoc?.order_id ?? null}
+              printFormat={printSize}
+              onEdit={startEdit}
+            />
             {([
               { value: "vitrina", label: "Vitrina" },
               { value: "whatsapp", label: "WhatsApp" },
@@ -1043,6 +1156,20 @@ export default function PosPage() {
               </div>
             </div>
 
+            {editingDoc ? (
+              <div
+                className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs"
+                style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}
+              >
+                <span>
+                  ✏️ Editando <b>{editingDoc.doc_number ?? `#${editingDoc.receipt_no}`}</b> · {editingDoc.customer_name ?? DEFAULT_CLIENT_NAME}
+                </span>
+                <button type="button" onClick={cancelEdit} className="rounded-full border px-2.5 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                  Cancelar edición
+                </button>
+              </div>
+            ) : null}
+
             <div className="mt-2 flex flex-wrap items-center gap-1">
               <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>💲 Lista de precios:</span>
               {([1, 2, 3, 4, 5] as const).map((lvl) => (
@@ -1160,7 +1287,11 @@ export default function PosPage() {
                 color: "#0b0b0b",
               }}
             >
-              {saving
+              {editingDoc
+                ? saving
+                  ? "Guardando cambios..."
+                  : `💾 Guardar cambios en ${editingDoc.doc_number ?? `#${editingDoc.receipt_no}`}`
+                : saving
                 ? documentKind === "factura"
                   ? "Creando factura..."
                   : "Creando remisión..."

@@ -126,6 +126,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const active = warehouses.filter((w) => w.active);
   const { suppliers } = useSuppliers(ctx.storeId);
   const [rows, setRows] = useState<PurchaseRow[]>([]);
+  const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [supplier, setSupplier] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const defaultWh = warehouse || active.find((w) => w.is_default)?.id || active[0]?.id || "";
@@ -142,14 +143,21 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const supplierNames = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabaseBrowser()
-      .from("erp_purchases")
-      .select("id,number,status,invoice_ref,payment_type,due_date,total,created_at,supplier_id,invoice_date,created_by_name,checked_by_name,received_by_name")
-      .eq("store_id", ctx.storeId)
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const sb = supabaseBrowser();
+    const [{ data, error }, { data: last }] = await Promise.all([
+      sb.from("erp_purchases")
+        .select("id,number,status,invoice_ref,payment_type,due_date,total,created_at,supplier_id,invoice_date,created_by_name,checked_by_name,received_by_name")
+        .eq("store_id", ctx.storeId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      // El consecutivo real lo asigna erp_receive_invoice (erp_counters); aquí solo se muestra el siguiente.
+      sb.from("erp_purchases").select("number").eq("store_id", ctx.storeId).order("number", { ascending: false }).limit(1).maybeSingle(),
+    ]);
     if (error) void toast("No se pudieron cargar las compras", "error", errorMessage(error));
-    else setRows((data ?? []) as PurchaseRow[]);
+    else {
+      setRows((data ?? []) as PurchaseRow[]);
+      setNextNumber(Number(last?.number ?? 0) + 1);
+    }
   }, [ctx.storeId]);
 
   useRunOnChange(load);
@@ -167,7 +175,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     const valid = lines.filter((l) => l.qty > 0);
     if (!valid.length) return void toast("Agrega al menos un producto", "warning");
     setBusy(true);
-    const { error } = await supabaseBrowser().rpc("erp_receive_invoice", {
+    const { data: purchaseId, error } = await supabaseBrowser().rpc("erp_receive_invoice", {
       p_store: ctx.storeId, p_supplier: supplier, p_invoice_ref: invoiceRef.trim(), p_invoice_date: invoiceDate || null, p_checked_by: checkedBy,
       p_payment_type: paymentType, p_due_date: paymentType === "credit" && dueDate ? dueDate : null, p_notes: notes,
       p_items: valid.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, tax_rate: l.tax_rate, warehouse_id: l.warehouse_id })),
@@ -176,10 +184,11 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       setBusy(false);
       return void toast("No se pudo registrar la factura", "error", errorMessage(error));
     }
+    const { data: created } = purchaseId
+      ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
+      : { data: null };
     let filesFailed = 0;
     if (staged.length) {
-      const { data: created } = await supabaseBrowser().from("erp_purchases").select("id").eq("store_id", ctx.storeId).eq("supplier_id", supplier)
-        .eq("invoice_ref", invoiceRef.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
       filesFailed = created?.id ? await uploadStaged(ctx.storeId, created.id as string, staged) : staged.length;
       staged.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
       setStaged([]);
@@ -189,7 +198,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setLines([]);
     setInvoiceRef("");
     setNotes("");
-    void toast("Factura registrada: inventario, costo y cuenta por pagar actualizados");
+    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`);
     void load();
   }
 
@@ -207,6 +216,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       {canBuy ? (
         <Panel title="Ingreso de factura de proveedor" subtitle="Elige a qué bodega entra cada producto. Al guardar suma al inventario, recalcula el costo promedio y, si es a crédito, crea la cuenta por pagar.">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <input readOnly className={inputClass} style={{ ...inputStyle, fontWeight: 700, cursor: "default" }} value={nextNumber ? `N.º ${nextNumber}` : "N.º …"} aria-label="Número interno del ingreso" title="Consecutivo interno asignado automáticamente al guardar" />
             <select className={inputClass} style={inputStyle} value={supplier} onChange={(e) => setSupplier(e.target.value)}>
               <option value="">Proveedor…</option>
               {suppliers.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
