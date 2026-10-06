@@ -1,9 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import StoreLogin from "@/components/StoreLogin";
+import StaffLogin from "@/components/StaffLogin";
 
 export default function StoreAccessPage() {
   const params = useParams<{ slug: string }>();
-  return <StoreLogin storeSlug={params.slug} />;
+  return <StaffLogin storeSlug={params.slug} />;
 }

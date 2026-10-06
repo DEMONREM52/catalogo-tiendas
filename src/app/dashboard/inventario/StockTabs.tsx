@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import PointBillingPanel from "@/app/dashboard/store/billing/PointBillingPanel";
 import {
   Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast,
   type ErpCtx, type Warehouse,
@@ -154,19 +155,12 @@ export function StockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehou
   );
 }
 
-type WhEdit = { name: string; address: string; phone: string; invoice_prefix: string; remision_prefix: string; next_invoice_number: string; next_remision_number: string };
-const toEdit = (w: Warehouse): WhEdit => ({
-  name: w.name, address: w.address ?? "", phone: w.phone ?? "", invoice_prefix: w.invoice_prefix ?? "FAC", remision_prefix: w.remision_prefix ?? "REM",
-  next_invoice_number: String(w.next_invoice_number ?? 1), next_remision_number: String(w.next_remision_number ?? 1),
-});
-
 export function WarehousesTab({ ctx, warehouses, onChanged }: { ctx: ErpCtx; warehouses: Warehouse[]; onChanged: () => void }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
   const [kind, setKind] = useState<"warehouse" | "point">("point");
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState<{ id: string; form: WhEdit } | null>(null);
   const canEdit = ctx.can("inventory") && !ctx.pointId;
 
   async function create() {
@@ -181,54 +175,15 @@ export function WarehousesTab({ ctx, warehouses, onChanged }: { ctx: ErpCtx; war
     setName("");
     setCode("");
     setAddress("");
-    void toast(kind === "point" ? "Punto físico creado" : "Bodega creada");
+    void toast(kind === "point" ? "Punto físico creado" : "Bodega creada", "success", "Ábrelo en la lista para ponerle logo, datos, numeración y resolución.");
     onChanged();
   }
-
-  async function toggle(w: Warehouse) {
-    if (w.is_default) return void toast("La bodega principal no se puede desactivar", "warning");
-    const { error } = await supabaseBrowser().from("erp_warehouses").update({ active: !w.active, updated_at: new Date().toISOString() }).eq("id", w.id);
-    if (error) void toast("No se pudo actualizar", "error", errorMessage(error));
-    else onChanged();
-  }
-
-  async function saveEdit() {
-    if (!editing) return;
-    const f = editing.form;
-    if (!f.name.trim()) return void toast("El nombre es obligatorio", "warning");
-    const prefixOk = /^[A-Za-z0-9-]{0,12}$/;
-    if (!prefixOk.test(f.invoice_prefix) || !prefixOk.test(f.remision_prefix)) return void toast("Prefijo inválido", "warning", "Usa solo letras, números o guion (máx. 12).");
-    const { error } = await supabaseBrowser().from("erp_warehouses").update({
-      name: f.name.trim(), address: f.address.trim() || null, phone: f.phone.trim() || null,
-      invoice_prefix: f.invoice_prefix.trim().toUpperCase(), remision_prefix: f.remision_prefix.trim().toUpperCase(),
-      next_invoice_number: Math.max(1, Math.floor(Number(f.next_invoice_number) || 1)),
-      next_remision_number: Math.max(1, Math.floor(Number(f.next_remision_number) || 1)),
-      updated_at: new Date().toISOString(),
-    }).eq("id", editing.id);
-    if (error) return void toast("No se pudo guardar", "error", errorMessage(error));
-    setEditing(null);
-    void toast("Cambios guardados");
-    onChanged();
-  }
-
-  const field = (label: string, key: keyof WhEdit, type = "text") => (
-    <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-      {label}
-      <input
-        type={type}
-        className={`${inputClass} mt-1`}
-        style={inputStyle}
-        value={editing?.form[key] ?? ""}
-        onChange={(e) => editing && setEditing({ ...editing, form: { ...editing.form, [key]: e.target.value } })}
-      />
-    </label>
-  );
 
   return (
     <div className="space-y-5">
       {canEdit ? (
-        <Panel title="Nuevo punto físico o bodega" subtitle="Los puntos venden y tienen sus propios prefijos de factura; las bodegas solo guardan mercancía.">
-          <div className="grid gap-2 sm:grid-cols-5">
+        <Panel title="Nuevo punto físico o bodega" subtitle="Los puntos venden con su propia identidad, numeración e inventario; las bodegas guardan mercancía. Todos pertenecen a tu tienda.">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <select className={inputClass} style={inputStyle} value={kind} onChange={(e) => setKind(e.target.value as "warehouse" | "point")}>
               <option value="point">📍 Punto físico (vende)</option>
               <option value="warehouse">🏬 Bodega (almacena)</option>
@@ -240,48 +195,22 @@ export function WarehousesTab({ ctx, warehouses, onChanged }: { ctx: ErpCtx; war
           </div>
         </Panel>
       ) : null}
-      <Panel title="Puntos y bodegas" subtitle="Edita aquí los prefijos y el siguiente consecutivo de facturas y remisiones de cada punto.">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {warehouses.map((w) => (
-            <div key={w.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)", opacity: w.active ? 1 : 0.6 }}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{w.kind === "point" ? "📍" : "🏬"} {w.name}</p>
-                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>{w.code}{w.address ? ` · ${w.address}` : ""}</p>
-                </div>
-                {w.is_default ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)", color: "var(--t-accent)" }}>Principal</span> : null}
+
+      {canEdit ? (
+        // Editor completo: logo, identidad, contacto, numeración y resolución de cada punto.
+        <PointBillingPanel key={warehouses.length} storeId={ctx.storeId} onChanged={onChanged} />
+      ) : (
+        <Panel title="Puntos y bodegas">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {warehouses.map((w) => (
+              <div key={w.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)", opacity: w.active ? 1 : 0.6 }}>
+                <p className="font-semibold">{w.kind === "point" ? "📍" : "🏬"} {w.name}</p>
+                <p className="text-xs" style={{ color: "var(--t-muted)" }}>{w.code}{w.address ? ` · ${w.address}` : ""}</p>
               </div>
-              {w.kind === "point" ? (
-                <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
-                  Factura: <b style={{ color: "var(--t-text)" }}>{w.invoice_prefix}-{String(w.next_invoice_number).padStart(5, "0")}</b> · Remisión: <b style={{ color: "var(--t-text)" }}>{w.remision_prefix}-{String(w.next_remision_number).padStart(5, "0")}</b>
-                </p>
-              ) : null}
-              {editing?.id === w.id ? (
-                <div className="mt-3 space-y-2">
-                  {field("Nombre", "name")}
-                  {field("Dirección", "address")}
-                  {field("Teléfono", "phone")}
-                  <div className="grid grid-cols-2 gap-2">
-                    {field("Prefijo factura", "invoice_prefix")}
-                    {field("Próx. n.º factura", "next_invoice_number", "number")}
-                    {field("Prefijo remisión", "remision_prefix")}
-                    {field("Próx. n.º remisión", "next_remision_number", "number")}
-                  </div>
-                  <div className="flex gap-2">
-                    <Btn onClick={() => void saveEdit()}>Guardar</Btn>
-                    <Btn variant="ghost" onClick={() => setEditing(null)}>Cancelar</Btn>
-                  </div>
-                </div>
-              ) : canEdit ? (
-                <div className="mt-3 flex gap-2">
-                  <Btn variant="ghost" onClick={() => setEditing({ id: w.id, form: toEdit(w) })}>Editar</Btn>
-                  {!w.is_default ? <Btn variant="ghost" onClick={() => void toggle(w)}>{w.active ? "Desactivar" : "Activar"}</Btn> : null}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </Panel>
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../../store/ImageUpload";
 import { getDashboardStore } from "@/lib/store-utils";
 import ProductDetailsFields from "../ProductDetailsFields";
+import ProductCatalogsPanel from "../ProductCatalogsPanel";
 import {
   normalizeProductDetails,
   type ProductDetails,
@@ -22,6 +23,7 @@ type Product = {
   name: string;
   description: string | null;
 
+  cost_price: number;
   price_1: number;
   price_2: number;
   price_3: number;
@@ -38,6 +40,18 @@ type Product = {
   stock: number | null; // null = ilimitado
   product_details: ProductDetails;
 };
+
+/** Margen de ganancia de un precio frente al costo. */
+function Margin({ cost, price }: { cost: number; price: number }) {
+  if (!cost || !price) return null;
+  const pct = ((price - cost) / price) * 100;
+  const color = pct < 0 ? "#ef4444" : pct < 15 ? "#f59e0b" : "#22c55e";
+  return (
+    <p className="mt-1 text-[11px] font-semibold" style={{ color }}>
+      {pct < 0 ? "Pierdes" : "Ganas"} {"$" + Math.abs(price - cost).toLocaleString("es-CO")} · margen {pct.toFixed(1)}%
+    </p>
+  );
+}
 
 // ✅ Styles con tokens (auto claro/oscuro por sistema)
 function inputSoftProps(extraClassName = "") {
@@ -208,7 +222,7 @@ export default function EditProductPage() {
       const { data: p, error: pErr } = await sb
         .from("products")
         .select(
-          "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
+          "id,store_id,created_at,name,description,cost_price,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
         )
         .eq("id", id)
         .eq("store_id", access.store.id)
@@ -230,6 +244,7 @@ export default function EditProductPage() {
 
       const normalized: Product = {
         ...(p as any),
+        cost_price: clampNum((p as any).cost_price, 0),
         price_1: clampNum((p as any).price_1, 0),
         price_2: clampNum((p as any).price_2, 0),
         price_3: clampNum((p as any).price_3, 0),
@@ -276,6 +291,7 @@ export default function EditProductPage() {
       const payload = {
         name: draft.name,
         description: draft.description,
+        cost_price: clampNum(draft.cost_price, 0),
         price_1: clampNum(draft.price_1, 0),
         price_2: clampNum(draft.price_2, 0),
         price_3: clampNum(draft.price_3, 0),
@@ -422,12 +438,31 @@ export default function EditProductPage() {
               />
             </div>
 
+            <div
+              className="rounded-2xl border p-3"
+              style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}
+            >
+              <label className="text-xs font-semibold" style={{ color: "var(--t-text)" }}>
+                💰 Costo del producto
+              </label>
+              <MoneyInput
+                className={`mt-1 ${inputSoftProps().className}`}
+                style={inputSoftProps().style}
+                value={draft.cost_price ?? 0}
+                onValueChange={(v) => setDraft({ ...draft, cost_price: v ?? 0 })}
+              />
+              <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                Se recalcula como costo promedio en cada ingreso de factura. Puedes corregirlo aquí cuando lo necesites.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Precio 1 (mínimo)
                 </label>
                 <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_1 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_1: v ?? 0 })} />
+                <Margin cost={draft.cost_price} price={draft.price_1} />
               </div>
 
               <div>
@@ -435,6 +470,7 @@ export default function EditProductPage() {
                   Precio 2 (mayor)
                 </label>
                 <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_2 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_2: v ?? 0 })} />
+                <Margin cost={draft.cost_price} price={draft.price_2} />
               </div>
 
               <div>
@@ -442,6 +478,7 @@ export default function EditProductPage() {
                   Precio 3 (detal)
                 </label>
                 <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_3 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_3: v ?? 0 })} />
+                <Margin cost={draft.cost_price} price={draft.price_3} />
               </div>
 
               <div>
@@ -449,6 +486,7 @@ export default function EditProductPage() {
                   Precio 4
                 </label>
                 <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_4 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_4: v ?? 0 })} />
+                <Margin cost={draft.cost_price} price={draft.price_4} />
               </div>
 
               <div className="sm:col-span-2">
@@ -456,6 +494,7 @@ export default function EditProductPage() {
                   Precio 5
                 </label>
                 <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_5 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_5: v ?? 0 })} />
+                <Margin cost={draft.cost_price} price={draft.price_5} />
               </div>
 
               <div className="sm:col-span-2">
@@ -571,6 +610,15 @@ export default function EditProductPage() {
             userId={userId}
             productId={draft.id}
           />
+          {storeId ? (
+            <div className="mt-4">
+              <ProductCatalogsPanel
+                storeId={storeId}
+                productId={draft.id}
+                prices={{ price_1: draft.price_1, price_2: draft.price_2, price_3: draft.price_3, price_4: draft.price_4, price_5: draft.price_5 }}
+              />
+            </div>
+          ) : null}
         </>
       ) : null}
     </main>

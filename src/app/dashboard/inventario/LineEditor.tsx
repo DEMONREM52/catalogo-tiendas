@@ -41,6 +41,9 @@ export function ProductPicker({
   warehouseId,
   inStockOnly,
   excludeIds,
+  addedQty,
+  keepOpen,
+  inputRef,
   placeholder = "Buscar por nombre, SKU o código de barras…",
   onPick,
 }: {
@@ -48,6 +51,11 @@ export function ProductPicker({
   warehouseId?: string | null;
   inStockOnly?: boolean;
   excludeIds?: string[];
+  /** Productos ya agregados: se muestran con su cantidad en vez de ocultarse. */
+  addedQty?: Record<string, number>;
+  /** Mantiene la lista abierta tras elegir, para agregar varios productos seguidos. */
+  keepOpen?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
   placeholder?: string;
   onPick: (product: ProductHit) => void;
 }) {
@@ -105,15 +113,24 @@ export function ProductPicker({
   const visible = hits.filter((h) => !excludeIds?.includes(h.id));
   const thumbs = useThumbs(open ? visible.map((h) => h.id) : []);
 
+  const [flash, setFlash] = useState<string | null>(null);
+
   function pick(hit: ProductHit) {
     onPick(hit);
     setQuery("");
-    setOpen(false);
+    if (keepOpen) {
+      setFlash(hit.id);
+      window.setTimeout(() => setFlash((cur) => (cur === hit.id ? null : cur)), 900);
+      inputRef?.current?.focus();
+    } else {
+      setOpen(false);
+    }
   }
 
   return (
     <div ref={boxRef} className="relative">
       <input
+        ref={inputRef}
         className={inputClass}
         style={inputStyle}
         placeholder={placeholder}
@@ -133,9 +150,17 @@ export function ProductPicker({
       />
       {open ? (
         <div
-          className="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl"
+          className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-y-auto rounded-2xl border p-1 shadow-2xl"
           style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}
         >
+          {keepOpen ? (
+            <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
+              <span>Toca para agregar · puedes elegir varios seguidos</span>
+              <button type="button" onClick={() => setOpen(false)} className="rounded-full border px-2 py-0.5 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                Listo
+              </button>
+            </div>
+          ) : null}
           {error ? <p className="p-3 text-sm" style={{ color: "#ef4444" }}>{error}</p> : null}
           {!error && loading && visible.length === 0 ? <p className="p-3 text-sm" style={{ color: "var(--t-muted)" }}>Buscando…</p> : null}
           {!error && !loading && visible.length === 0 ? <p className="p-3 text-sm" style={{ color: "var(--t-muted)" }}>Sin resultados.</p> : null}
@@ -147,15 +172,25 @@ export function ProductPicker({
               className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition"
               style={{ color: "var(--t-text)" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "color-mix(in oklab, var(--t-accent) 14%, transparent)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = flash === hit.id ? "color-mix(in oklab, #22c55e 18%, transparent)" : "transparent")}
+              ref={(el) => {
+                if (el && flash === hit.id) el.style.background = "color-mix(in oklab, #22c55e 18%, transparent)";
+              }}
             >
               <Thumb src={thumbs[hit.id]} size={44} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{hit.name}</span>
                 {hit.sku ? <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{hit.sku}</span> : null}
               </span>
-              <span className="shrink-0 text-xs" style={{ color: "var(--t-muted)" }}>
+              <span className="shrink-0 text-right text-xs" style={{ color: "var(--t-muted)" }}>
                 {warehouseId ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
+                {addedQty?.[hit.id] ? (
+                  <span className="mt-0.5 block font-bold" style={{ color: "#22c55e" }}>
+                    {flash === hit.id ? "✓ " : ""}En la lista: {addedQty[hit.id]} · +1
+                  </span>
+                ) : (
+                  <span className="mt-0.5 block font-bold" style={{ color: "var(--t-accent)" }}>+ Agregar</span>
+                )}
               </span>
             </button>
           ))}
@@ -209,6 +244,15 @@ export function LineEditor({
 }) {
   const isPurchase = mode === "purchase";
   const lineThumbs = useThumbs(lines.map((l) => l.product_id));
+  const searchRef = useRef<HTMLInputElement>(null);
+  const addedQty = Object.fromEntries(lines.map((l) => [l.product_id, l.qty]));
+
+  // Si el producto ya está en la lista se suma una unidad (en compras); si no, se agrega una línea nueva.
+  function addHit(hit: ProductHit) {
+    const index = lines.findIndex((l) => l.product_id === hit.id);
+    if (index === -1) onChange([...lines, lineFromHit(hit, mode, warehouseId)]);
+    else if (isPurchase) patch(index, { qty: lines[index].qty + 1 });
+  }
 
   function patch(index: number, change: Partial<Line>) {
     onChange(lines.map((line, i) => (i === index ? { ...line, ...change } : line)));
@@ -221,8 +265,12 @@ export function LineEditor({
       <ProductPicker
         storeId={storeId}
         warehouseId={isPurchase ? null : warehouseId}
-        excludeIds={lines.map((l) => l.product_id)}
-        onPick={(hit) => onChange([...lines, lineFromHit(hit, mode, warehouseId)])}
+        excludeIds={isPurchase ? undefined : lines.map((l) => l.product_id)}
+        addedQty={isPurchase ? addedQty : undefined}
+        keepOpen
+        inputRef={searchRef}
+        placeholder={lines.length ? "➕ Buscar otro producto para agregar (nombre, SKU o código de barras)…" : undefined}
+        onPick={addHit}
       />
 
       {lines.length === 0 ? (
@@ -323,7 +371,20 @@ export function LineEditor({
             {isPurchase ? (
               <tfoot>
                 <tr className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
-                  <td className={td} colSpan={5} style={{ textAlign: "right", fontWeight: 700 }}>Total factura (con IVA)</td>
+                  <td className={td} colSpan={5} style={{ textAlign: "right", fontWeight: 700 }}>
+                    <span className="float-left font-normal">
+                      <Btn
+                        variant="ghost"
+                        onClick={() => {
+                          searchRef.current?.focus();
+                          searchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }}
+                      >
+                        ➕ Agregar otro producto
+                      </Btn>
+                    </span>
+                    {lines.length} producto{lines.length === 1 ? "" : "s"} · {lines.reduce((s, l) => s + l.qty, 0)} und. · Total factura (con IVA)
+                  </td>
                   <td className={td} style={{ fontWeight: 800 }}>{money(total)}</td>
                   <td />
                 </tr>

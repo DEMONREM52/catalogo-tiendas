@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   });
   const { data: store, error } = await admin
     .from("stores")
-    .select("id,slug")
+    .select("id,slug,name,logo_url,active")
     .eq("id", storeId)
     .maybeSingle();
 
@@ -39,5 +39,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  // Solo datos públicos de la tienda para mostrar su marca en la pantalla de acceso del equipo.
+  return NextResponse.json({ ok: true, store: { name: store.name, logo_url: store.logo_url, active: store.active !== false } });
 }

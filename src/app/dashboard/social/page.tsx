@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import SocialDashboard from "./SocialDashboard";
+import SocialHub from "./SocialHub";
 
 export const metadata: Metadata = { title: "RemHub Social" };
 
 export default function SocialPage() {
-  return <SocialDashboard />;
+  return <SocialHub />;
 }

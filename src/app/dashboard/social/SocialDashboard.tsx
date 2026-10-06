@@ -63,7 +63,10 @@ type Campaign = {
   category_id: string | null;
   is_public: boolean;
   created_at: string;
+  /** Vacío = se muestra en todos los catálogos. */
+  catalog_ids?: string[] | null;
 };
+type CatalogOption = { id: string; name: string };
 const PAGE_SIZE = 24;
 const SOCIAL_PUBLISHING_TOOLS_ENABLED: boolean = false;
 
@@ -154,6 +157,8 @@ export default function SocialDashboard() {
   const [campaignAssetId, setCampaignAssetId] = useState(newCampaignAssetId);
   const [showCampaignForm, setShowCampaignForm] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [catalogOptions, setCatalogOptions] = useState<CatalogOption[]>([]);
+  const [campaignCatalogIds, setCampaignCatalogIds] = useState<string[]>([]);
 
   const chosenProduct = useMemo(
     () => productOptions.find((product) => product.id === productId) ?? null,
@@ -251,7 +256,7 @@ export default function SocialDashboard() {
       const sb = supabaseBrowser();
       const { data, error: campaignsError } = await sb
         .from("store_social_campaigns")
-        .select("id,name,description,cover_image_url,category_id,is_public,created_at")
+        .select("*")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
       if (campaignsError) throw campaignsError;
@@ -304,12 +309,21 @@ export default function SocialDashboard() {
     const sb = supabaseBrowser();
     void sb
       .from("store_social_campaigns")
-      .select("id,name,description,cover_image_url,category_id,is_public,created_at")
+      .select("*")
       .eq("store_id", store.id)
       .order("created_at", { ascending: false })
       .then(({ data, error: campaignError }) => {
         if (campaignError) setError(readableError(campaignError));
         else setCampaigns((data ?? []) as Campaign[]);
+      });
+    // Si los catálogos múltiples no están instalados, las campañas se muestran en todos los catálogos.
+    void sb
+      .from("store_catalogs")
+      .select("id,name")
+      .eq("store_id", store.id)
+      .order("sort_order")
+      .then(({ data, error: catalogsError }) => {
+        if (!catalogsError) setCatalogOptions((data ?? []) as CatalogOption[]);
       });
   }, [store]);
 
@@ -637,6 +651,7 @@ export default function SocialDashboard() {
       setCampaignCoverUrl(campaign.cover_image_url ?? "");
       setCampaignCategoryId(campaign.category_id ?? "");
       setCampaignIsPublic(campaign.is_public);
+      setCampaignCatalogIds(Array.isArray(campaign.catalog_ids) ? campaign.catalog_ids : []);
       setCampaignAssetId(campaign.id);
       setProductSearch("");
       setShowCampaignForm(true);
@@ -721,6 +736,7 @@ export default function SocialDashboard() {
     setCampaignCoverUrl("");
     setCampaignCategoryId("");
     setCampaignIsPublic(true);
+    setCampaignCatalogIds([]);
     setCampaignAssetId(newCampaignAssetId());
     setShowCampaignForm(false);
   }
@@ -758,6 +774,7 @@ export default function SocialDashboard() {
         cover_image_url: campaignCoverUrl,
         category_id: campaignCategoryId,
         is_public: campaignIsPublic,
+        ...(catalogOptions.length ? { catalog_ids: campaignCatalogIds } : {}),
       };
       if (editingCampaignId) {
         const { error: updateError } = await sb
@@ -895,6 +912,36 @@ export default function SocialDashboard() {
               />
               <span><strong>Mostrar en el catálogo</strong><span className="mt-0.5 block text-xs font-normal opacity-65">Si lo desactivas, solo será visible en RemHub Social.</span></span>
             </label>
+            {catalogOptions.length ? (
+              <div className="lg:col-span-2">
+                <p className="text-sm font-semibold">¿En qué catálogos aparece?</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCampaignCatalogIds([])}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${campaignCatalogIds.length === 0 ? "border-fuchsia-500 bg-fuchsia-500/15" : "border-current/15"}`}
+                  >
+                    🌐 Todos los catálogos
+                  </button>
+                  {catalogOptions.map((option) => {
+                    const selected = campaignCatalogIds.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setCampaignCatalogIds((current) =>
+                          current.includes(option.id) ? current.filter((id) => id !== option.id) : [...current, option.id],
+                        )}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${selected ? "border-fuchsia-500 bg-fuchsia-500/15" : "border-current/15"}`}
+                      >
+                        {selected ? "✓ " : ""}{option.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs opacity-65">Los precios de la campaña se muestran con la lista de precios de cada catálogo.</p>
+              </div>
+            ) : null}
             <div className="lg:col-span-2">
               <ImageUpload
                 label="Imagen principal de portada"
@@ -1286,6 +1333,13 @@ export default function SocialDashboard() {
                       <span className={`rounded-full px-2.5 py-1 font-semibold ${campaign.is_public ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-slate-500/10 opacity-70"}`}>
                         {campaign.is_public ? "Activa · visible" : "Inactiva · oculta"}
                       </span>
+                      {catalogOptions.length ? (
+                        <span className="rounded-full bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-800 dark:text-violet-200">
+                          {campaign.catalog_ids?.length
+                            ? catalogOptions.filter((option) => campaign.catalog_ids?.includes(option.id)).map((option) => option.name).join(", ") || "Catálogo eliminado"
+                            : "Todos los catálogos"}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-2 text-xs opacity-55">{new Date(campaign.created_at).toLocaleDateString("es-CO")}</p>
                   </div>

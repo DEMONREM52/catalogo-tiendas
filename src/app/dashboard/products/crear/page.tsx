@@ -90,6 +90,7 @@ export default function CreateProductPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
+  const [costPrice, setCostPrice] = useState(0);
   const [price1, setPrice1] = useState(0);
   const [price2, setPrice2] = useState(0);
   const [price3, setPrice3] = useState(0);
@@ -184,6 +185,7 @@ export default function CreateProductPage() {
         store_id: storeId,
         name: n,
         description: description?.trim() ? description.trim() : "",
+        cost_price: Math.max(0, Number(costPrice || 0)),
         price_1: Math.max(0, Number(price1 || 0)),
         price_2: Math.max(0, Number(price2 || 0)),
         price_3: Math.max(0, Number(price3 || 0)),
@@ -298,6 +300,16 @@ export default function CreateProductPage() {
                   ...inputProps().style,
                 }}
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold" style={{ color: "var(--t-text)" }}>
+                💰 Costo del producto
+              </label>
+              <MoneyInput {...inputProps()} value={costPrice} onValueChange={(v) => setCostPrice(v ?? 0)} />
+              <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                Opcional. Luego se actualiza como costo promedio con cada ingreso de factura.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

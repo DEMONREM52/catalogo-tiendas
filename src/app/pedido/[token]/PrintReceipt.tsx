@@ -20,7 +20,7 @@ export function parsePrintFormat(value: string | null | undefined): PrintFormat 
   return null;
 }
 
-type Line = { product_id: string; name: string; qty: number; price: number };
+type Line = { product_id: string; name: string; qty: number; price: number; image_url?: string | null };
 
 type Props = {
   format: PrintFormat;
@@ -36,6 +36,8 @@ type Props = {
   pointAddress?: string | null;
   sellerName?: string | null;
   customerDoc?: string | null;
+  /** Texto de la resolución de facturación del punto (solo facturas). */
+  resolution?: string | null;
   date: string;
   customer: string;
   note: string;
@@ -47,14 +49,18 @@ type Props = {
 
 /** Reglas @page e impresión según el formato elegido. */
 export function PrintStyles({ format }: { format: PrintFormat }) {
+  // Margen 0: el navegador no imprime fecha/URL; el espacio lo da el propio comprobante.
   // En tirilla no se fija el alto: lo define el rollo configurado en el driver de la impresora POS.
-  const page = format === "carta" ? "size: letter portrait; margin: 12mm;" : "margin: 0;";
+  const page = format === "carta" ? "size: letter portrait; margin: 0;" : "margin: 0;";
+  const pad = format === "carta" ? "12mm 14mm" : "1mm 2mm";
   const css = `
     @media print {
       @page { ${page} }
       html, body { background: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+      body * { visibility: hidden !important; }
+      .receipt-print, .receipt-print * { visibility: visible !important; }
       .receipt-host { min-height: 0 !important; padding: 0 !important; margin: 0 !important; background: #fff !important; }
-      .receipt-print { display: block !important; ${format === "carta" ? "" : "padding: 1mm 2mm;"} }
+      .receipt-print { display: block !important; position: absolute; left: 0; top: 0; padding: ${pad}; box-sizing: border-box; }
       .no-print { display: none !important; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: none !important; text-shadow: none !important; }
     }
@@ -68,65 +74,110 @@ export function PrintReceipt(props: Props) {
 }
 
 function LetterReceipt(p: Props) {
-  const cell = { padding: "7px 6px", borderBottom: "1px solid #ddd" } as const;
+  // Colores pensados para imprimir sin "gráficos de fondo": nada depende de un fondo oscuro.
+  const ink = "#000";
+  const soft = "#334155";
+  const line = "#94a3b8";
+  const units = p.items.reduce((sum, i) => sum + i.qty, 0);
+  const label = { fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: soft, marginBottom: 4 } as const;
+  const card = { border: `1px solid ${line}`, borderRadius: 8, padding: "9px 11px" } as const;
+  const th = { padding: "8px 8px", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: ink, borderTop: `2px solid ${ink}`, borderBottom: `2px solid ${ink}` } as const;
+  const td = { padding: "7px 8px", borderBottom: `1px solid ${line}`, verticalAlign: "middle" } as const;
+
   return (
-    <div className="receipt-print" style={{ width: "100%", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 12, color: "#000" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          {p.logo ? <img src={p.logo} alt="" style={{ width: 72, height: 72, objectFit: "contain" }} /> : null}
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{p.businessName}</div>
+    <div className="receipt-print" style={{ width: "100%", fontFamily: "Inter, Arial, Helvetica, sans-serif", fontSize: 11.5, color: ink, lineHeight: 1.4 }}>
+      {/* Encabezado */}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", minWidth: 0 }}>
+          {p.logo ? <img src={p.logo} alt="" style={{ width: 74, height: 74, objectFit: "contain", flexShrink: 0 }} /> : null}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: -0.2 }}>{p.businessName}</div>
+            {p.pointName ? <div style={{ color: soft }}>{p.pointName}</div> : null}
             {p.nit ? <div>NIT: {p.nit}</div> : null}
             {p.address ? <div>{p.address}</div> : null}
-            {p.email ? <div>{p.email}</div> : null}
-            {p.whatsapp ? <div>WhatsApp: {p.whatsapp}</div> : null}
-            {p.pointName ? <div>Punto de venta: <b>{p.pointName}</b>{p.pointAddress ? ` · ${p.pointAddress}` : ""}</div> : null}
+            {[p.whatsapp, p.email].filter(Boolean).length ? <div>{[p.whatsapp, p.email].filter(Boolean).join(" · ")}</div> : null}
           </div>
         </div>
-        <div style={{ textAlign: "right", border: "1px solid #000", borderRadius: 6, padding: "8px 12px" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}>{p.docTitle}</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{p.docNumber}</div>
-          <div style={{ fontSize: 11 }}>{p.date}</div>
+        <div style={{ border: `2px solid ${ink}`, borderRadius: 10, padding: "8px 14px", textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>{p.docTitle}</div>
+          <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>{p.docNumber}</div>
+          <div style={{ fontSize: 10, color: soft }}>{p.date}</div>
         </div>
       </div>
 
-      <div style={{ marginTop: 14, padding: "8px 10px", border: "1px solid #ddd", borderRadius: 6 }}>
-        <div>Cliente: <b>{p.customer}</b>{p.customerDoc ? ` · Doc. ${p.customerDoc}` : ""}</div>
-        {p.sellerName ? <div style={{ marginTop: 2 }}>Atendió: {p.sellerName}</div> : null}
-        {p.note && p.note !== "—" ? <div style={{ marginTop: 2 }}>Observaciones: {p.note}</div> : null}
+      {/* Datos */}
+      <div style={{ display: "grid", gridTemplateColumns: p.note && p.note !== "—" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10, marginTop: 16 }}>
+        <div style={card}>
+          <div style={label}>Cliente</div>
+          <div style={{ fontWeight: 800 }}>{p.customer}</div>
+          {p.customerDoc ? <div>Doc.: {p.customerDoc}</div> : null}
+        </div>
+        <div style={card}>
+          <div style={label}>Venta</div>
+          <div>Fecha: {p.date}</div>
+          {p.sellerName ? <div>Atendió: {p.sellerName}</div> : null}
+        </div>
+        {p.note && p.note !== "—" ? (
+          <div style={card}>
+            <div style={label}>Observaciones</div>
+            <div>{p.note}</div>
+          </div>
+        ) : null}
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14 }}>
+      {/* Productos */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 16 }}>
         <thead>
-          <tr style={{ background: "#f1f1f1" }}>
-            <th style={{ ...cell, textAlign: "center", width: 60 }}>Cant.</th>
-            <th style={{ ...cell, textAlign: "left" }}>Descripción</th>
-            <th style={{ ...cell, textAlign: "right", width: 110 }}>Vr. unitario</th>
-            <th style={{ ...cell, textAlign: "right", width: 110 }}>Subtotal</th>
+          <tr>
+            <th style={{ ...th, width: 28, textAlign: "center", borderTopLeftRadius: 6 }}>#</th>
+            <th style={{ ...th, textAlign: "left" }}>Descripción</th>
+            <th style={{ ...th, width: 54, textAlign: "center" }}>Cant.</th>
+            <th style={{ ...th, width: 100, textAlign: "right" }}>Vr. unitario</th>
+            <th style={{ ...th, width: 104, textAlign: "right", borderTopRightRadius: 6 }}>Subtotal</th>
           </tr>
         </thead>
         <tbody>
-          {p.items.map((i) => (
-            <tr key={i.product_id} style={{ breakInside: "avoid" }}>
-              <td style={{ ...cell, textAlign: "center" }}>{i.qty}</td>
-              <td style={cell}>{i.name}</td>
-              <td style={{ ...cell, textAlign: "right" }}>{p.money(i.price)}</td>
-              <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{p.money(i.price * i.qty)}</td>
+          {p.items.map((i, index) => (
+            <tr key={i.product_id} style={{ breakInside: "avoid", background: "#fff" }}>
+              <td style={{ ...td, textAlign: "center", color: soft }}>{index + 1}</td>
+              <td style={td}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {i.image_url ? (
+                    <img src={i.image_url} alt="" style={{ width: 30, height: 30, objectFit: "cover", borderRadius: 5, border: `1px solid ${line}`, flexShrink: 0 }} />
+                  ) : null}
+                  <span style={{ fontWeight: 600 }}>{i.name}</span>
+                </div>
+              </td>
+              <td style={{ ...td, textAlign: "center", fontWeight: 700 }}>{i.qty}</td>
+              <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{p.money(i.price)}</td>
+              <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}>{p.money(i.price * i.qty)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-        <div style={{ minWidth: 240, border: "1px solid #000", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontWeight: 700 }}>TOTAL</span>
-          <span style={{ fontSize: 16, fontWeight: 800 }}>{p.money(p.total)}</span>
+      {/* Totales */}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 18, marginTop: 14, alignItems: "flex-start", breakInside: "avoid" }}>
+        <div style={{ fontSize: 10.5, color: soft, maxWidth: "55%" }}>
+          <div>{p.items.length} producto{p.items.length === 1 ? "" : "s"} · {units} unidad{units === 1 ? "" : "es"}</div>
+          {p.resolution ? <div style={{ marginTop: 6 }}>{p.resolution}</div> : null}
+        </div>
+        <div style={{ width: 250, border: `2px solid ${ink}`, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px" }}>
+            <span>Subtotal</span>
+            <span>{p.money(p.total)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", background: "#f1f5f9", borderTop: `2px solid ${ink}`, color: ink, fontSize: 15, fontWeight: 900 }}>
+            <span>TOTAL</span>
+            <span>{p.money(p.total)}</span>
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 18, fontSize: 10, color: "#333" }}>
-        <div>Documento de venta generado por la tienda. No reemplaza una factura electrónica validada por la DIAN.</div>
-        <div>{p.footer}</div>
+      {/* Pie */}
+      <div style={{ marginTop: 26, paddingTop: 10, borderTop: `1px solid ${line}`, textAlign: "center", fontSize: 10, color: soft }}>
+        <div style={{ fontWeight: 700, color: ink, fontSize: 11 }}>{p.footer}</div>
+        <div style={{ marginTop: 3 }}>Documento de venta generado por la tienda. No reemplaza una factura electrónica validada por la DIAN.</div>
       </div>
     </div>
   );
@@ -183,6 +234,7 @@ function TicketReceipt(p: Props) {
       <div style={rule} />
       <div style={{ textAlign: "center", fontSize: font - 1 }}>
         <div>{p.footer}</div>
+        {p.resolution ? <div style={{ marginTop: 4, fontSize: font - 2 }}>{p.resolution}</div> : null}
         <div style={{ marginTop: 4 }}>No reemplaza la factura electrónica DIAN.</div>
       </div>
       <div style={{ height: "6mm" }} />

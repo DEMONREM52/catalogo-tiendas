@@ -46,7 +46,7 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   pos: "POS / ventas",
   clients: "Clientes",
   users: "Usuarios",
-  products: "Productos",
+  products: "Productos y catálogos",
   categories: "Categorías",
   orders: "Pedidos",
   inventory: "Inventario y kardex",
@@ -55,7 +55,7 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   purchases: "Compras",
   suppliers: "Proveedores",
   payables: "Cuentas por pagar",
-  audit: "Auditoría",
+  audit: "Auditoría e informes",
 };
 
 /** =========================

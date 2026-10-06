@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
+import NotificationBell from "./NotificationBell";
 import {
   getDashboardStore,
 } from "@/lib/store-utils";
@@ -561,11 +562,11 @@ export default function DashboardShell({
     const firstOf = (key: ModuleKey) => MODULE_TABS[key].find((t) => t.permissions.some((p) => canOpen(p)))?.href ?? "/dashboard";
     const anyOf = (key: ModuleKey) => MODULE_TABS[key].some((t) => t.permissions.some((p) => canOpen(p)));
     return [
-      { href: "/dashboard", emoji: "⚡", label: "Acceso rápido", show: true, module: undefined as ModuleKey | undefined },
+      { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true, module: undefined as ModuleKey | undefined },
       { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", show: store && anyOf("inventory"), module: "inventory" as ModuleKey | undefined },
       { href: firstOf("billing"), emoji: "💳", label: "Facturación", show: store && anyOf("billing"), module: "billing" as ModuleKey | undefined },
       { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && canOpen("orders"), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/social", emoji: "📣", label: "RemHub Social", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
       { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
       { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },
     ];
@@ -841,6 +842,18 @@ export default function DashboardShell({
                 </button>
               </>
             ) : null}
+
+            {role === "store" && canOpen("products") ? (
+              <Link
+                href="/dashboard/social"
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold transition"
+                style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)", color: "var(--t-text)" }}
+              >
+                🛍️ Mis catálogos
+              </Link>
+            ) : null}
+
+            {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
 
             <button
               onClick={logout}

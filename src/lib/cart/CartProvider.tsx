@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useMemo, useState } from "react";
-import { CartItem, CartMode, CartState } from "./types";
+import { CartCatalog, CartItem, CartMode, CartState } from "./types";
 import { clearCart, loadCart, saveCart } from "./storage";
 import type { StoreContactChannel } from "@/lib/store-contacts";
 
@@ -18,6 +18,7 @@ type CartCtx = {
     whatsapp: string;
     mode: CartMode;
     contactChannels?: StoreContactChannel[];
+    catalog?: CartCatalog | null;
   }) => void;
 
   addItem: (item: CartItem, opts?: { openDrawer?: boolean }) => void;
@@ -38,6 +39,12 @@ const Ctx = createContext<CartCtx | null>(null);
 
 function cleanStr(v: any) {
   return typeof v === "string" ? v : "";
+}
+
+/** Los mínimos por producto aplican al catálogo mayorista clásico o a catálogos con esa regla. */
+export function cartUsesMinimums(cart: Pick<CartState, "mode" | "catalog"> | null | undefined) {
+  if (!cart) return false;
+  return cart.catalog ? cart.catalog.wholesaleRules : cart.mode === "mayor";
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -67,6 +74,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     whatsapp: string;
     mode: CartMode;
     contactChannels?: StoreContactChannel[];
+    catalog?: CartCatalog | null;
   }) {
     // Si cambias de tienda/modo, cerramos el drawer para evitar UI rara
     setIsOpen(false);
@@ -91,6 +99,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           existing.contactSelectionConfirmed === true
           && s.contactChannels?.some((channel) => channel.id === existing.selectedContactId) === true,
         mode: s.mode,
+        catalog: s.catalog ?? null,
         customerName: cleanStr((existing as any).customerName),
         customerWhatsapp: cleanStr((existing as any).customerWhatsapp),
         customerNote: cleanStr((existing as any).customerNote),
@@ -103,6 +112,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const fresh = {
       ...s,
+      catalog: s.catalog ?? null,
       selectedContactId: s.contactChannels?.length === 1 ? s.contactChannels[0].id : undefined,
       contactSelectionConfirmed: s.contactChannels?.length === 1,
       items: [],
@@ -121,7 +131,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const idx = cart.items.findIndex((i) => i.productId === item.productId);
     const items = [...cart.items];
 
-    const min = cart.mode === "mayor" ? (item.minWholesale ?? null) : null;
+    const min = cartUsesMinimums(cart) ? (item.minWholesale ?? null) : null;
     const baseQty = min ? Math.max(item.qty, min) : item.qty;
 
     if (idx >= 0) {
@@ -145,7 +155,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         if (i.productId !== productId) return i;
 
         const safeQty = Math.max(0, Math.floor(qty || 0));
-        const min = cart.mode === "mayor" ? (i.minWholesale ?? null) : null;
+        const min = cartUsesMinimums(cart) ? (i.minWholesale ?? null) : null;
         const finalQty = min ? Math.max(safeQty, min) : safeQty;
 
         return { ...i, qty: finalQty };

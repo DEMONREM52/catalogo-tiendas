@@ -84,7 +84,7 @@ export async function GET(
 
     const { data: campaignRows, error: campaignsError } = await supabase
       .from("store_social_campaigns")
-      .select("id,name,description,cover_image_url,category_id,is_public,created_at")
+      .select("*")
       .eq("store_id", store.id)
       .eq("is_public", true)
       .not("cover_image_url", "is", null)
@@ -92,8 +92,11 @@ export async function GET(
       .limit(30);
     if (campaignsError) throw campaignsError;
 
+    // Las campañas asignadas a catálogos de RemHub Social solo se ven en esos catálogos.
     const campaigns = (campaignRows ?? []).filter(
-      (campaign) => typeof campaign.cover_image_url === "string" && campaign.cover_image_url.trim(),
+      (campaign) =>
+        typeof campaign.cover_image_url === "string" && campaign.cover_image_url.trim() &&
+        (!Array.isArray(campaign.catalog_ids) || campaign.catalog_ids.length === 0),
     );
     if (!campaigns.length) {
       return NextResponse.json({ campaigns: [] }, { headers: { "Cache-Control": "no-store" } });

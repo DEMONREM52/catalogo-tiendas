@@ -303,6 +303,12 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             </div>
           </form>
 
+          {!storeLogin ? (
+            <p className="mt-4 text-xs" style={{ color: "var(--t-muted)" }}>
+              🔑 ¿Tienes usuario en lugar de correo? Entra con el <b>enlace de acceso</b> de tu tienda.
+            </p>
+          ) : null}
+
           {msg ? (
             <div
               className="mt-4 rounded-2xl border p-3 text-sm"

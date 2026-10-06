@@ -12,6 +12,9 @@ import {
   type ErpCtx, type Warehouse,
 } from "./shared";
 
+/** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
+const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
+
 type Supplier = { id: string; name: string; nit: string | null; contact_name: string | null; phone: string | null; email: string | null; payment_days: number; active: boolean };
 
 export function useSuppliers(storeId: string) {
@@ -175,12 +178,15 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     const valid = lines.filter((l) => l.qty > 0);
     if (!valid.length) return void toast("Agrega al menos un producto", "warning");
     setBusy(true);
+    // La pestaña del comprobante se abre ya (los navegadores bloquean ventanas abiertas después de esperar).
+    const receiptWin = window.open("", "_blank");
     const { data: purchaseId, error } = await supabaseBrowser().rpc("erp_receive_invoice", {
       p_store: ctx.storeId, p_supplier: supplier, p_invoice_ref: invoiceRef.trim(), p_invoice_date: invoiceDate || null, p_checked_by: checkedBy,
       p_payment_type: paymentType, p_due_date: paymentType === "credit" && dueDate ? dueDate : null, p_notes: notes,
       p_items: valid.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, tax_rate: l.tax_rate, warehouse_id: l.warehouse_id })),
     });
     if (error) {
+      receiptWin?.close();
       setBusy(false);
       return void toast("No se pudo registrar la factura", "error", errorMessage(error));
     }
@@ -198,7 +204,14 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setLines([]);
     setInvoiceRef("");
     setNotes("");
-    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`);
+    if (purchaseId) {
+      const url = purchaseReceiptUrl(purchaseId as string, true);
+      if (receiptWin && !receiptWin.closed) receiptWin.location.href = url;
+      else window.open(url, "_blank");
+    } else {
+      receiptWin?.close();
+    }
+    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`, "success", "Se abrió el comprobante: elige si lo quieres a costo o con Precio 1 a 5 y se imprime.");
     void load();
   }
 
@@ -268,7 +281,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     <td className={td}>{r.payment_type === "credit" ? `Crédito${r.due_date ? ` · vence ${r.due_date}` : ""}` : "Contado"}</td>
                     <td className={td}>{money(r.total)}</td>
                     <td className={td}><StatusPill status={r.status} /></td>
-                    <td className={td}><div className="flex gap-1"><PurchaseFilesButton purchaseId={r.id} />{canBuy && r.status === "received" ? <Btn variant="danger" onClick={() => void cancel(r)}>Anular</Btn> : null}</div></td>
+                    <td className={td}><div className="flex flex-wrap gap-1"><Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn><PurchaseFilesButton purchaseId={r.id} />{canBuy && r.status === "received" ? <Btn variant="danger" onClick={() => void cancel(r)}>Anular</Btn> : null}</div></td>
                   </tr>
                 ))}
               </tbody>

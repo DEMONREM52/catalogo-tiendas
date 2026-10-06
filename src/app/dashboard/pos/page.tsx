@@ -89,7 +89,7 @@ function cardProps() {
 const DEFAULT_CLIENT_NAME = "CONSUMIDOR FINAL";
 const DEFAULT_PRICE_LIST = 3;
 
-type PointOption = { id: string; name: string; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
+type PointOption = { id: string; name: string; kind?: "point" | "warehouse"; is_default?: boolean; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
 type SellerOption = { user_id: string; name: string; role: string };
 
 export default function PosPage() {
@@ -218,7 +218,11 @@ export default function PosPage() {
           .gt("qty", 0)
           .order("product_id")
           .range(from, from + 999);
-        if (error || !data) return; // sin ERP aplicado se muestra el catálogo completo
+        if (error || !data) {
+          // Sin acceso a existencias no se ofrece nada para no vender lo que el punto no tiene.
+          if (alive) setPointStock(new Map());
+          return;
+        }
         for (const row of data as { product_id: string; qty: number }[]) map.set(row.product_id, row.qty);
         if (data.length < 1000) break;
       }
@@ -268,10 +272,11 @@ export default function PosPage() {
     const [pointsRes, sellersRes, userRes] = await Promise.all([
       sb
         .from("erp_warehouses")
-        .select("id,name,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number")
+        // Se puede vender desde puntos y bodegas: cada uno con sus propias existencias.
+        .select("id,name,kind,is_default,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number")
         .eq("store_id", storeId)
-        .eq("kind", "point")
         .eq("active", true)
+        .order("kind", { ascending: false })
         .order("name"),
       sb.rpc("erp_sellers", { p_store: storeId }),
       sb.auth.getUser(),
@@ -284,7 +289,14 @@ export default function PosPage() {
     setPoints(visiblePoints);
     setLockedPoint(Boolean(myPoint));
     setSellers(sellerRows);
-    setPointId((current) => current || visiblePoints[0]?.id || "");
+    setPointId(
+      (current) =>
+        current ||
+        visiblePoints.find((pt) => pt.kind === "point")?.id ||
+        visiblePoints.find((pt) => pt.is_default)?.id ||
+        visiblePoints[0]?.id ||
+        "",
+    );
     const me = userRes.data.user?.id;
     setSellerId((current) => current || sellerRows.find((r) => r.user_id === me)?.user_id || sellerRows[0]?.user_id || "");
   }
@@ -785,9 +797,9 @@ export default function PosPage() {
               }}
             />
 
-            {loading ? (
+            {loading || (pointId && !pointStock) ? (
               <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
-                Cargando productos...
+                {loading ? "Cargando productos..." : "Cargando existencias del punto..."}
               </p>
             ) : filteredProducts.length === 0 ? (
               <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
@@ -916,13 +928,22 @@ export default function PosPage() {
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-semibold">Punto de venta</label>
-                    <select {...inputProps()} value={pointId} onChange={(e) => setPointId(e.target.value)} disabled={lockedPoint}>
-                      {lockedPoint ? null : <option value="">Sin punto asignado</option>}
+                    <label className="text-sm font-semibold">Punto de venta / bodega</label>
+                    <select
+                      {...inputProps()}
+                      value={pointId}
+                      onChange={(e) => {
+                        if (editingDoc) cancelEdit();
+                        setPointStock(null);
+                        setPointId(e.target.value);
+                      }}
+                      disabled={lockedPoint}
+                    >
                       {points.map((pt) => (
-                        <option key={pt.id} value={pt.id}>{pt.name}</option>
+                        <option key={pt.id} value={pt.id}>{pt.kind === "warehouse" ? "🏬" : "📍"} {pt.name}</option>
                       ))}
                     </select>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Solo se venden las existencias de este lugar.</p>
                   </div>
                   <div>
                     <label className="text-sm font-semibold">Vendedor</label>

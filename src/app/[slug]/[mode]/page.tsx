@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, MapPin, Pause, Play, Sparkles, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, Sparkles, X } from "lucide-react";
 import Swal from "sweetalert2";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -98,6 +98,46 @@ type StoreLinkRow = {
   icon_url: string | null;
 };
 
+/** Catálogo creado en RemHub Social (respuesta de catalog_public). */
+type PublicCatalog = {
+  id: string;
+  slug: string;
+  name: string;
+  headline: string | null;
+  description: string | null;
+  logo_url: string | null;
+  banner_url: string | null;
+  theme: string | null;
+  price_level: number;
+  wholesale_rules: boolean;
+  show_stock: boolean;
+  has_key: boolean;
+  whatsapp: string;
+  contact_channels: unknown;
+  locations: unknown;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  footer_note: string | null;
+  point: { name: string; address: string | null; city: string | null; phone: string | null } | null;
+};
+
+type CatalogPayload =
+  | {
+      status: "ok";
+      store: { id: string; name: string; slug: string; whatsapp: string; logo_url: string | null; banner_url: string | null; theme: string | null };
+      catalog: PublicCatalog;
+      links: StoreLinkRow[];
+      categories: CategoryRow[];
+      campaigns: CatalogCampaign[];
+      other_catalogs: Array<{ slug: string; name: string; logo_url: string | null }>;
+    }
+  | { status: "locked" | "inactive"; store_slug: string; store_name: string; name: string; logo_url: string | null; whatsapp?: string }
+  | { status: "not_found" | "store_not_found"; store_slug?: string };
+
+type CatalogLock = { status: "locked" | "inactive"; storeName: string; name: string; logoUrl: string | null; whatsapp: string | null };
+
 /* =========================================================
    Helpers
 ========================================================= */
@@ -126,6 +166,29 @@ function normalizeLegacyStoreSlug(value: string) {
 
 function isValidMode(x: any): x is Mode {
   return x === "detal" || x === "mayor";
+}
+
+function isCatalogSlugLike(x: string) {
+  return /^[a-z0-9][a-z0-9-]{0,47}$/i.test(x);
+}
+
+async function loadThemeConfig(sb: ReturnType<typeof supabaseBrowser>, themeId: string | null) {
+  let cfg: ThemeConfig | undefined;
+  if (themeId) {
+    const { data: themeRow } = await sb.from("themes").select("id,active,config").eq("id", themeId).maybeSingle();
+    cfg = mapDbThemeToApplyTheme(themeRow?.config);
+  }
+  if (!cfg) {
+    const { data: fallback } = await sb
+      .from("themes")
+      .select("id,config")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    cfg = mapDbThemeToApplyTheme(fallback?.config);
+  }
+  return cfg;
 }
 
 function cx(...s: Array<string | false | null | undefined>) {
@@ -292,6 +355,9 @@ export default function StoreCatalogPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const [store, setStore] = useState<StoreRow | null>(null);
+  const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
+  const [otherCatalogs, setOtherCatalogs] = useState<Array<{ slug: string; name: string; logo_url: string | null }>>([]);
+  const [catalogLock, setCatalogLock] = useState<CatalogLock | null>(null);
   const [catalogTheme, setCatalogTheme] = useState<ThemeConfig>();
   const [scheme, setScheme] = useState<"light" | "dark">("dark");
   const [profile, setProfile] = useState<StoreProfile | null>(null);
@@ -326,6 +392,10 @@ export default function StoreCatalogPage() {
   const [hasMore, setHasMore] = useState(false);
 
   const { initCart, addItem } = useCart();
+  // Mínimos por producto: catálogo mayorista clásico o catálogos con esa regla.
+  const wholesaleRules = catalog ? catalog.wholesale_rules : safeMode === "mayor";
+  const showStock = catalog ? catalog.show_stock : true;
+  const canShareProducts = catalog ? !catalog.has_key : safeMode === "detal";
   const campaignSlides = useMemo<CampaignSlide[]>(
     () => campaigns.flatMap((campaign) => [
       {
@@ -400,12 +470,83 @@ export default function StoreCatalogPage() {
       setLoading(true);
       setCampaigns([]);
       setCampaignLoadMessage(null);
+      setCatalog(null);
+      setCatalogLock(null);
+      setOtherCatalogs([]);
 
       try {
         const sb = supabaseBrowser();
 
-        if (!slug || !isValidMode(mode)) {
+        if (!slug || !isCatalogSlugLike(mode)) {
           if (!cancelled) setMsg("❌ Ruta inválida.");
+          return;
+        }
+
+        // 0) Catálogo de RemHub Social con este enlace (si la tienda lo creó).
+        const catalogResult = await sb.rpc("catalog_public", { p_store: slug, p_catalog: mode, p_key: key });
+        const catalogPayload = catalogResult.error ? null : (catalogResult.data as CatalogPayload | null);
+        if (catalogPayload?.status === "ok") {
+          const cat = catalogPayload.catalog;
+          const st: StoreRow = {
+            id: catalogPayload.store.id,
+            name: catalogPayload.store.name,
+            slug: catalogPayload.store.slug,
+            whatsapp: cat.whatsapp,
+            active: true,
+            catalog_retail: true,
+            catalog_wholesale: false,
+            theme: cat.theme,
+            logo_url: cat.logo_url,
+            banner_url: cat.banner_url,
+            wholesale_key: null,
+          };
+          if (st.slug !== slug) {
+            router.replace(`/${encodeURIComponent(st.slug)}/${encodeURIComponent(cat.slug)}${window.location.search}`);
+          }
+          const cfg = await loadThemeConfig(sb, cat.theme);
+          if (cancelled) return;
+          const channels = normalizeStoreContactChannels(cat.contact_channels, cat.whatsapp).filter((channel) => channel.active);
+          setCatalog(cat);
+          setOtherCatalogs(catalogPayload.other_catalogs ?? []);
+          setStore(st);
+          setCatalogTheme(cfg);
+          setProfile({
+            headline: cat.headline,
+            address: cat.address,
+            city: cat.city,
+            contact_channels: cat.contact_channels,
+            locations: cat.locations,
+          });
+          setLinks((catalogPayload.links ?? []) as StoreLinkRow[]);
+          setCategories(catalogPayload.categories ?? []);
+          setCampaigns((catalogPayload.campaigns ?? []).filter((campaign) => Boolean(campaign.cover_image_url?.trim())));
+          initCart({
+            storeId: st.id,
+            storeSlug: st.slug,
+            storeName: st.name,
+            whatsapp: cat.whatsapp,
+            contactChannels: channels,
+            mode: cat.slug,
+            catalog: { slug: cat.slug, name: cat.name, key: key ?? null, wholesaleRules: cat.wholesale_rules },
+          });
+          return;
+        }
+        if (catalogPayload?.status === "locked" || catalogPayload?.status === "inactive") {
+          if (!cancelled) {
+            setCatalogLock({
+              status: catalogPayload.status,
+              storeName: catalogPayload.store_name,
+              name: catalogPayload.name,
+              logoUrl: catalogPayload.logo_url,
+              whatsapp: catalogPayload.whatsapp ?? null,
+            });
+          }
+          return;
+        }
+        if (!isValidMode(mode)) {
+          if (!cancelled) {
+            setMsg(catalogPayload?.status === "store_not_found" ? "❌ Tienda no encontrada." : "❌ Este catálogo no existe o ya no está disponible.");
+          }
           return;
         }
 
@@ -445,15 +586,17 @@ export default function StoreCatalogPage() {
         }
 
         // mayorista key
-        if (safeMode === "mayor") {
-          if (!st.wholesale_key) {
-            if (!cancelled) setMsg("❌ Este catálogo mayorista no está disponible.");
-            return;
+        if (safeMode === "mayor" && (!st.wholesale_key || key !== st.wholesale_key)) {
+          if (!cancelled) {
+            setCatalogLock({
+              status: st.wholesale_key ? "locked" : "inactive",
+              storeName: st.name,
+              name: "Catálogo por mayor",
+              logoUrl: st.logo_url ?? null,
+              whatsapp: st.whatsapp ?? null,
+            });
           }
-          if (key !== st.wholesale_key) {
-            if (!cancelled) setMsg("🔒 Catálogo mayorista privado. Solicita acceso por WhatsApp.");
-            return;
-          }
+          return;
         }
 
         if (!st.active) {
@@ -474,26 +617,7 @@ export default function StoreCatalogPage() {
         if (!cancelled) setStore(st);
 
         // 2) theme
-        const themeId = st.theme?.trim() || null;
-        let cfg: ThemeConfig | undefined;
-
-        if (themeId) {
-          const { data: themeRow } = await sb.from("themes").select("id,active,config").eq("id", themeId).maybeSingle();
-          cfg = mapDbThemeToApplyTheme(themeRow?.config);
-        }
-
-        if (!cfg) {
-          const { data: fallback } = await sb
-            .from("themes")
-            .select("id,config")
-            .eq("active", true)
-            .order("sort_order", { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-          cfg = mapDbThemeToApplyTheme(fallback?.config);
-        }
-
+        const cfg = await loadThemeConfig(sb, st.theme?.trim() || null);
         if (!cancelled) setCatalogTheme(cfg);
 
         // 3) profile
@@ -613,7 +737,7 @@ export default function StoreCatalogPage() {
   useEffect(() => {
     if (!store?.name) return;
 
-    document.title = `${store.name} - Catálogos online`;
+    document.title = catalog ? `${catalog.name} · ${store.name}` : `${store.name} - Catálogos online`;
 
     const favicon =
       (document.querySelector("link[rel~='icon']") as HTMLLinkElement | null) ||
@@ -622,7 +746,7 @@ export default function StoreCatalogPage() {
     favicon.rel = "icon";
     favicon.href = store.logo_url ? store.logo_url : "/favicon.ico";
     document.head.appendChild(favicon);
-  }, [store]);
+  }, [store, catalog]);
 
   /* -------------------------
      Load products (paged)
@@ -638,6 +762,36 @@ export default function StoreCatalogPage() {
     const pageToLoad = opts.reset ? 0 : (opts.nextPage ?? page);
     const from = pageToLoad * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
+
+    if (catalog) {
+      const term = q.trim();
+      const { data, error } = await sb.rpc("catalog_public_products", {
+        p_store: store.slug,
+        p_catalog: catalog.slug,
+        p_key: key,
+        p_category: selectedCat,
+        p_q: term.length >= 2 ? term : null,
+        p_limit: PAGE_SIZE,
+        p_offset: from,
+      });
+      if (error) throw error;
+      const result = (data ?? { total: 0, items: [] }) as { total: number; items: ProductRow[] };
+      const rows: ProductRow[] = (result.items ?? []).map((p) => ({
+        ...p,
+        price_retail: Number(p.price_retail ?? 0),
+        price_wholesale: Number(p.price_wholesale ?? 0),
+        min_wholesale: p.min_wholesale == null ? null : Number(p.min_wholesale),
+        stock: p.stock === null || p.stock === undefined ? null : Number(p.stock),
+      }));
+      if (opts.reset) {
+        setProducts(rows);
+        setPage(0);
+      } else {
+        setProducts((prev) => [...prev, ...rows]);
+      }
+      setHasMore(from + rows.length < Number(result.total ?? 0));
+      return;
+    }
 
     // base
     let query = sb
@@ -710,7 +864,7 @@ export default function StoreCatalogPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store?.id, selectedCat, q]);
+  }, [store?.id, catalog?.id, selectedCat, q]);
 
   async function loadMore() {
     if (!store?.id) return;
@@ -747,7 +901,7 @@ export default function StoreCatalogPage() {
       return;
     }
 
-    const min = safeMode === "mayor" ? Math.max(1, Number(p.min_wholesale ?? 1)) : 1;
+    const min = wholesaleRules ? Math.max(1, Number(p.min_wholesale ?? 1)) : 1;
     const start = min;
 
     const res = await Swal.fire({
@@ -760,8 +914,8 @@ export default function StoreCatalogPage() {
           </div>
 
           <div style="font-size:12px; opacity:.82; margin-bottom:10px;">
-            Disponible: <b>${isUnlimited ? "Ilimitado" : stockNum}</b>
-            ${safeMode === "mayor" ? ` · Mínimo: <b>${min}</b>` : ""}
+            ${showStock ? `Disponible: <b>${isUnlimited ? "Ilimitado" : stockNum}</b>` : "Disponible"}
+            ${wholesaleRules ? ` · Mínimo: <b>${min}</b>` : ""}
           </div>
 
           <label style="font-size:12px; opacity:.8;">Cantidad</label>
@@ -776,7 +930,7 @@ export default function StoreCatalogPage() {
           />
 
           <div style="font-size:12px; opacity:.7; margin-top:6px;">
-            ${isUnlimited ? "* Sin límite de stock." : "* No se permite pedir más que el stock disponible."}
+            ${isUnlimited || !showStock ? "" : "* No se permite pedir más que el stock disponible."}
           </div>
         </div>
       `,
@@ -797,7 +951,7 @@ export default function StoreCatalogPage() {
         }
 
         if (!isUnlimited && qty > stockNum) {
-          Swal.showValidationMessage(`Solo hay ${stockNum} unidades disponibles.`);
+          Swal.showValidationMessage(showStock ? `Solo hay ${stockNum} unidades disponibles.` : "No hay suficientes unidades para esa cantidad.");
           return;
         }
 
@@ -865,10 +1019,53 @@ export default function StoreCatalogPage() {
   }
 
   if (!store) {
+    const lockedHref = catalogLock?.whatsapp
+      ? whatsappUrl(catalogLock.whatsapp, `Hola, quiero acceso al catálogo "${catalogLock.name}" de ${catalogLock.storeName}.`)
+      : null;
     return (
-      <main data-store-catalog className="min-h-screen p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
-        <div className="mx-auto max-w-6xl">
-          <p>{msg ?? "No se pudo cargar."}</p>
+      <main data-store-catalog className="grid min-h-[100dvh] place-items-center p-6" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+        <div
+          className="w-full max-w-md rounded-[28px] border p-7 text-center shadow-2xl"
+          style={{ borderColor: "var(--t-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)" }}
+        >
+          {catalogLock ? (
+            <>
+              <div className="relative mx-auto w-fit">
+                {catalogLock.logoUrl ? (
+                  <img src={catalogLock.logoUrl} alt="" className="h-20 w-20 rounded-3xl border object-cover" style={{ borderColor: "var(--t-border)" }} />
+                ) : (
+                  <div className="grid h-20 w-20 place-items-center rounded-3xl text-3xl" style={{ background: "var(--t-cta)" }}>🛍️</div>
+                )}
+                <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 text-white" style={{ background: "var(--t-accent)", borderColor: "var(--t-bg-base)" }}>
+                  <Lock size={15} />
+                </span>
+              </div>
+              <p className="mt-5 text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-muted)" }}>{catalogLock.storeName}</p>
+              <h1 className="mt-1 text-2xl font-black">{catalogLock.name}</h1>
+              <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
+                {catalogLock.status === "locked"
+                  ? "Este catálogo es privado. Pide el enlace de acceso a la tienda."
+                  : "Este catálogo no está disponible en este momento."}
+              </p>
+              {catalogLock.status === "locked" && lockedHref ? (
+                <a
+                  href={lockedHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-5 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg"
+                  style={{ background: "#16a34a" }}
+                >
+                  <MessageCircle size={17} /> Solicitar acceso por WhatsApp
+                </a>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="text-4xl">🔎</p>
+              <h1 className="mt-3 text-xl font-black">No encontramos este catálogo</h1>
+              <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>{msg ?? "No se pudo cargar."}</p>
+            </>
+          )}
         </div>
       </main>
     );
@@ -974,7 +1171,10 @@ export default function StoreCatalogPage() {
               )}
 
               <div className="min-w-0">
-                <p className="truncate text-sm font-extrabold">{store.name}</p>
+                <p className="truncate text-sm font-extrabold">{catalog ? catalog.name : store.name}</p>
+                {catalog && catalog.name.trim().toLowerCase() !== store.name.trim().toLowerCase() ? (
+                  <p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>{store.name}</p>
+                ) : null}
               </div>
             </div>
 
@@ -1075,7 +1275,32 @@ export default function StoreCatalogPage() {
                       </div>
                     </div>
                   ) : null}
-                  {safeMode === "mayor" ? (
+                  {catalog && otherCatalogs.length ? (
+                    <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--t-border)" }}>
+                      <p className="mb-2 flex items-center gap-2 px-1 text-xs font-extrabold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>
+                        <LayoutGrid size={14} /> Otros catálogos
+                      </p>
+                      <div className="grid gap-2">
+                        {otherCatalogs.map((other) => (
+                          <a
+                            key={other.slug}
+                            href={`/${store.slug}/${other.slug}`}
+                            className="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold transition hover:brightness-110"
+                            style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-bg-base) 90%, var(--t-text) 10%)" }}
+                          >
+                            {other.logo_url ? (
+                              <img src={other.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                            ) : (
+                              <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: "var(--t-cta)" }}>🛍️</span>
+                            )}
+                            <span className="min-w-0 flex-1 truncate">{other.name}</span>
+                            <span aria-hidden="true" style={{ color: "var(--t-muted)" }}>↗</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!catalog && safeMode === "mayor" ? (
                     <a
                       href={`/${store.slug}/detal`}
                       className="mt-1 block rounded-xl px-3 py-2.5 text-sm font-semibold transition hover:bg-white/10"
@@ -1107,9 +1332,11 @@ export default function StoreCatalogPage() {
                     </p>
                   ) : null}
                   {contactChannels.map((channel) => {
-                    const message = safeMode === "detal"
-                      ? `Hola, vi el catálogo de ${store.name}. Quiero información.`
-                      : `Hola, vi el catálogo mayorista de ${store.name}. Quiero información.`;
+                    const message = catalog
+                      ? `Hola, vi el catálogo "${catalog.name}" de ${store.name}. Quiero información.`
+                      : safeMode === "detal"
+                        ? `Hola, vi el catálogo de ${store.name}. Quiero información.`
+                        : `Hola, vi el catálogo mayorista de ${store.name}. Quiero información.`;
                     const href = whatsappUrl(channel.phone, message);
                     return href ? (
                       <a
@@ -1129,7 +1356,7 @@ export default function StoreCatalogPage() {
                       </a>
                     ) : null;
                   })}
-                  {safeMode === "detal" && store.catalog_wholesale && contactChannels[0] ? (
+                  {!catalog && safeMode === "detal" && store.catalog_wholesale && contactChannels[0] ? (
                     <a
                       href={whatsappUrl(
                         contactChannels[0].phone,
@@ -1311,7 +1538,7 @@ export default function StoreCatalogPage() {
           className="flex min-h-14 items-center gap-2 overflow-hidden rounded-2xl border px-4 py-2 sm:gap-4"
           style={{ borderColor: "var(--t-border)", background: glassBg }}
         >
-          <h1 className="shrink-0 text-base font-black tracking-tight sm:text-lg">{store.name}</h1>
+          <h1 className="shrink-0 text-base font-black tracking-tight sm:text-lg">{catalog ? catalog.name : store.name}</h1>
           <span className="hidden h-5 w-px shrink-0 sm:block" style={{ background: "var(--t-border)" }} />
           <p className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--t-muted)" }}>
             Explora los productos
@@ -1383,7 +1610,7 @@ export default function StoreCatalogPage() {
                       <p className="mt-1 text-sm font-black">
                         {money(safeMode === "detal" ? product.price_retail : product.price_wholesale)}
                       </p>
-                      {safeMode === "mayor" && product.min_wholesale ? (
+                      {wholesaleRules && product.min_wholesale ? (
                         <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                           Mínimo: {product.min_wholesale}
                         </p>
@@ -1547,7 +1774,9 @@ export default function StoreCatalogPage() {
                 const isUnlimited = p.stock === null;
                 const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
                 const isOut = !isUnlimited && stockNum <= 0;
-                const productPageUrl = `/${store.slug}/producto/${p.id}`;
+                const productPageUrl = catalog
+                  ? `/${store.slug}/producto/${p.id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`
+                  : `/${store.slug}/producto/${p.id}`;
                 const canViewProductLanding =
                   (safeMode === "detal" || store.catalog_retail) &&
                   hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url });
@@ -1614,7 +1843,7 @@ export default function StoreCatalogPage() {
 
                     {/* Inventario */}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span
+                      {showStock ? <span
                         className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
                         style={{
                           borderColor: stockPill.border,
@@ -1624,9 +1853,9 @@ export default function StoreCatalogPage() {
                         title="Inventario disponible"
                       >
                         {stockInfo.tone === "danger" ? "⛔" : stockInfo.tone === "warn" ? "⚠️" : "✅"} {stockInfo.label}
-                      </span>
+                      </span> : null}
 
-                      {safeMode === "mayor" && p.min_wholesale ? (
+                      {wholesaleRules && p.min_wholesale ? (
                         <span
                           className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold"
                           style={{
@@ -1658,7 +1887,7 @@ export default function StoreCatalogPage() {
                           Ver más
                         </Link>
                       ) : null}
-                      {safeMode === "detal" && canViewProductLanding ? (
+                      {canShareProducts && canViewProductLanding ? (
                         <ShareProductButton
                           title={p.name}
                           text={buildProductShareText({
@@ -1723,15 +1952,20 @@ export default function StoreCatalogPage() {
 
         {/* Footer */}
         <div className="mt-10 border-t pt-6" style={{ borderColor: "var(--t-border)" }}>
-          <div className="text-sm" style={{ color: "var(--t-muted)" }}>
+          <div className="space-y-1 text-sm" style={{ color: "var(--t-muted)" }}>
+            {catalog?.description ? <p style={{ color: "var(--t-text)" }}>{catalog.description}</p> : null}
             {profile?.address || profile?.city ? (
               <p>
                 {profile?.address ? profile.address + " · " : ""}
                 {profile?.city ?? ""}
               </p>
-            ) : (
+            ) : !catalog ? (
               <p>Catálogo generado por la tienda.</p>
-            )}
+            ) : null}
+            {catalog && (catalog.phone || catalog.email) ? (
+              <p>{[catalog.phone, catalog.email].filter(Boolean).join(" · ")}</p>
+            ) : null}
+            {catalog?.footer_note ? <p className="pt-2 font-semibold" style={{ color: "var(--t-text)" }}>{catalog.footer_note}</p> : null}
           </div>
         </div>
       </section>

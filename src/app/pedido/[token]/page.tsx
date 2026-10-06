@@ -186,8 +186,13 @@ export default function PedidoPage() {
   const [suggestedFormat, setSuggestedFormat] = useState<PrintFormat>("carta");
   // Documento del POS (remisión/factura con prefijo del punto), si existe.
   const [erpDoc, setErpDoc] = useState<{
-    doc_number: string | null; doc_kind: "factura" | "remision" | null; seller_name: string | null; customer_doc: string | null;
-    point: { name: string; address: string | null; phone: string | null } | null;
+    doc_number: string | null; doc_prefix?: string | null; doc_kind: "factura" | "remision" | null; seller_name: string | null; customer_doc: string | null;
+    point: {
+      name: string; kind?: "point" | "warehouse"; logo_url?: string | null; legal_name?: string | null; nit?: string | null;
+      address: string | null; city?: string | null; phone: string | null; email?: string | null; receipt_footer?: string | null;
+      resolution?: string | null; resolution_date?: string | null; resolution_from?: number | null; resolution_to?: number | null;
+      resolution_valid_to?: string | null;
+    } | null;
   } | null>(null);
 
   /* -------------------------
@@ -230,6 +235,20 @@ export default function PedidoPage() {
   const docNumberLabel = erpDoc?.doc_number || (receiptNumber ? `#${receiptNumber}` : "—");
 
   const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
+  const point = erpDoc?.point ?? null;
+  // Resolución de facturación del punto: solo se imprime en facturas.
+  const resolutionText = (() => {
+    if (erpDoc?.doc_kind !== "factura" || !point?.resolution) return null;
+    const d = (v?: string | null) => (v ? new Date(`${v}T12:00:00`).toLocaleDateString("es-CO") : "");
+    const pre = erpDoc.doc_prefix ? `${erpDoc.doc_prefix}-` : "";
+    return [
+      `Resolución de facturación N.º ${point.resolution}${point.resolution_date ? ` del ${d(point.resolution_date)}` : ""}.`,
+      point.resolution_from || point.resolution_to
+        ? `Numeración autorizada del ${pre}${point.resolution_from ?? "—"} al ${pre}${point.resolution_to ?? "—"}.`
+        : "",
+      point.resolution_valid_to ? `Vigente hasta ${d(point.resolution_valid_to)}.` : "",
+    ].filter(Boolean).join(" ");
+  })();
   const invoiceBusinessName = billingDetails?.business_name || storeName;
   const storeWhatsapp = storeExtra?.whatsapp ?? store?.whatsapp ?? "";
   const storeLogo = storeExtra?.logo_url ?? store?.logo_url ?? null;
@@ -849,25 +868,28 @@ export default function PedidoPage() {
       <PrintFormatPicker open={pickerOpen} initial={suggestedFormat} onCancel={() => setPickerOpen(false)} onConfirm={confirmPrint} />
       <PrintReceipt
         format={printFormat}
-        logo={storeLogo}
-        businessName={invoiceBusinessName}
-        nit={billingDetails?.nit}
-        address={[billingDetails?.address, billingDetails?.city].filter(Boolean).join(" · ") || null}
-        email={billingDetails?.email}
-        whatsapp={storeWhatsapp}
+        logo={point?.logo_url || storeLogo}
+        businessName={point ? point.legal_name || point.name : invoiceBusinessName}
+        nit={point?.nit || billingDetails?.nit}
+        address={
+          (point ? [point.address, point.city] : [billingDetails?.address, billingDetails?.city]).filter(Boolean).join(" · ") || null
+        }
+        email={point?.email || billingDetails?.email}
+        whatsapp={point?.phone || storeWhatsapp}
         docTitle={docKindLabel}
         docNumber={erpDoc?.doc_number || `${billingDetails?.invoice_prefix || "FAC"}-${receiptNumber ?? "—"}`}
-        pointName={erpDoc?.point?.name ?? null}
-        pointAddress={erpDoc?.point?.address ?? null}
+        pointName={point && point.legal_name && point.legal_name !== point.name ? point.name : null}
+        pointAddress={null}
         sellerName={erpDoc?.seller_name ?? null}
         customerDoc={erpDoc?.customer_doc ?? null}
+        resolution={resolutionText}
         date={new Date(order.created_at).toLocaleString("es-CO")}
         customer={customerNameShow}
         note={customerNoteShow}
-        items={items.map((i) => ({ product_id: i.product_id, name: i.name, qty: Number(i.qty), price: Number(i.price) }))}
+        items={items.map((i) => ({ product_id: i.product_id, name: i.name, qty: Number(i.qty), price: Number(i.price), image_url: i.image_url }))}
         total={total}
         money={money}
-        footer={profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp."}
+        footer={point?.receipt_footer || profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp."}
       />
 
       {/* =========================================================
@@ -895,9 +917,28 @@ export default function PedidoPage() {
                 </Pill>
               </div>
 
-              <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
-                {storeName} · {order.catalog_type === "retail" ? "Detal" : "Mayoristas"}
-              </p>
+              <div className="mt-3 flex items-center gap-3">
+                {point?.logo_url || storeLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={point?.logo_url || storeLogo || ""}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-xl border bg-white object-contain"
+                    style={{ borderColor: "var(--t-card-border)" }}
+                  />
+                ) : null}
+                <div className="min-w-0 text-sm">
+                  <p className="truncate font-semibold">{point ? point.legal_name || point.name : storeName}</p>
+                  <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>
+                    {[
+                      point && point.legal_name && point.legal_name !== point.name ? point.name : null,
+                      point?.nit ? `NIT ${point.nit}` : null,
+                      point ? [point.address, point.city].filter(Boolean).join(", ") || null : null,
+                      order.catalog_type === "retail" ? "Detal" : "Mayoristas",
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              </div>
 
               {/* ✅ CLIENTE + OBSERVACIONES (PANTALLA) */}
               <div className="mt-3 space-y-1">

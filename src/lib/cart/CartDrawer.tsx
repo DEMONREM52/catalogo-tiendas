@@ -5,7 +5,7 @@ import { ArrowRight, Minus, Plus, ShoppingBasket, Sparkles, Trash2, X } from "lu
 import { StoreContactIcon } from "@/components/StoreContactIcon";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { useCart } from "./CartProvider";
+import { cartUsesMinimums, useCart } from "./CartProvider";
 
 /* =========================
    Helpers
@@ -105,7 +105,7 @@ export function CartDrawer() {
 
   function minAllowed(i: { minWholesale?: number | null }) {
     if (!cart) return 1;
-    if (cart.mode !== "mayor") return 1;
+    if (!cartUsesMinimums(cart)) return 1;
     return Math.max(1, Number(i.minWholesale ?? 1));
   }
 
@@ -123,7 +123,7 @@ export function CartDrawer() {
     const note = (cart.customerNote ?? "").trim();
 
     const lines: string[] = [];
-    lines.push(`🧾 Pedido (${cart.mode === "detal" ? "DETAL" : "MAYOR"})`);
+    lines.push(`🧾 Pedido (${cart.catalog ? cart.catalog.name.toUpperCase() : cart.mode === "detal" ? "DETAL" : "MAYOR"})`);
     lines.push(`🏪 Tienda: ${cart.storeName}`);
     lines.push("");
 
@@ -141,7 +141,7 @@ export function CartDrawer() {
           i.price * i.qty
         )}`
       );
-      if (cart.mode === "mayor" && i.minWholesale) {
+      if (cartUsesMinimums(cart) && i.minWholesale) {
         lines.push(`   (mínimo mayor: ${minAllowed(i)})`);
       }
     });
@@ -177,10 +177,18 @@ export function CartDrawer() {
 
     const sb = supabaseBrowser();
 
-    const { data, error } = await sb
-      .from("products")
-      .select("id,stock,name")
-      .in("id", ids);
+    // En un catálogo con punto asignado manda el inventario de ese punto.
+    const { data, error } = cart.catalog
+      ? await sb.rpc("catalog_public_stock", {
+          p_store: cart.storeSlug,
+          p_catalog: cart.catalog.slug,
+          p_key: cart.catalog.key,
+          p_ids: ids,
+        })
+      : await sb
+          .from("products")
+          .select("id,stock,name")
+          .in("id", ids);
 
     if (error) {
       return { ok: false, reason: "ERROR", message: error.message };
@@ -314,7 +322,7 @@ export function CartDrawer() {
     }
 
     // mínimos mayoristas
-    if (cart.mode === "mayor") {
+    if (cartUsesMinimums(cart)) {
       const bad = cart.items.find((i) => i.qty < minAllowed(i));
       if (bad) {
         await Swal.fire({
@@ -433,14 +441,25 @@ export function CartDrawer() {
 
       const sb = supabaseBrowser();
 
-      const { data, error } = await sb.rpc("create_order_from_cart", {
-        p_store_id: cart.storeId,
-        p_catalog_type: cart.mode === "detal" ? "retail" : "wholesale",
-        p_items: payload,
-        p_customer_name: (cart.customerName ?? "").trim(),
-        p_customer_note: (cart.customerNote ?? "").trim(),
-        p_customer_whatsapp: null,
-      });
+      // Los catálogos de RemHub Social calculan precios y existencias en el servidor.
+      const { data, error } = cart.catalog
+        ? await sb.rpc("catalog_create_order", {
+            p_store: cart.storeSlug,
+            p_catalog: cart.catalog.slug,
+            p_key: cart.catalog.key,
+            p_items: cart.items.map((i) => ({ product_id: i.productId, qty: i.qty })),
+            p_customer_name: (cart.customerName ?? "").trim(),
+            p_customer_note: (cart.customerNote ?? "").trim(),
+            p_customer_whatsapp: null,
+          })
+        : await sb.rpc("create_order_from_cart", {
+            p_store_id: cart.storeId,
+            p_catalog_type: cart.mode === "detal" ? "retail" : "wholesale",
+            p_items: payload,
+            p_customer_name: (cart.customerName ?? "").trim(),
+            p_customer_note: (cart.customerNote ?? "").trim(),
+            p_customer_whatsapp: null,
+          });
 
       if (error) {
         // ✅ si por carrera el backend detecta stock insuficiente
@@ -671,7 +690,7 @@ export function CartDrawer() {
                 <div className="min-w-0">
                   <h3 className="text-base font-extrabold">Tu canasta</h3>
                   <p className="truncate text-xs opacity-75">
-                    {cart.mode === "detal" ? "Compra al detal" : "Compra al por mayor"} · {cart.storeName}
+                    {cart.catalog ? cart.catalog.name : cart.mode === "detal" ? "Compra al detal" : "Compra al por mayor"} · {cart.storeName}
                   </p>
                 </div>
               </div>

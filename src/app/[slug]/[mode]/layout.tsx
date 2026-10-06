@@ -76,33 +76,50 @@ function absUrl(siteUrl: string, maybeUrl: string) {
   return `${siteUrl}${maybeUrl.startsWith("/") ? "" : "/"}${maybeUrl}`;
 }
 
+/** Datos del catálogo de RemHub Social para la vista previa del enlace (si existe). */
+async function findCatalogMeta(slugRaw: string, catalogSlug: string) {
+  try {
+    const { data, error } = await supabaseServerPublic().rpc("catalog_public_meta", {
+      p_store: decodeURIComponent(slugRaw || ""),
+      p_catalog: decodeURIComponent(catalogSlug || ""),
+    });
+    if (error || !data) return null;
+    return data as { name: string; store_name: string; headline: string | null; logo_url: string | null; banner_url: string | null };
+  } catch {
+    return null;
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string; mode: string };
+  params: Promise<{ slug: string; mode: string }>;
 }): Promise<Metadata> {
+  const { slug, mode } = await params;
   const siteUrl = getSiteUrl();
-  const store = await findStoreBySlug(params.slug);
+  const [store, catalogMeta] = await Promise.all([findStoreBySlug(slug), findCatalogMeta(slug, mode)]);
 
-  const storeName = store?.name || "Catálogo";
-  const title = `${storeName} - Catálogos online`;
-  const description = store?.name
-    ? `Catálogo online de ${storeName}. Mira productos, precios y realiza pedidos por WhatsApp.`
-    : "Catálogo online. Mira productos, precios y realiza pedidos por WhatsApp.";
+  const storeName = catalogMeta?.store_name || store?.name || "Catálogo";
+  const title = catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} - Catálogos online`;
+  const description = catalogMeta?.headline
+    || (storeName !== "Catálogo"
+      ? `Catálogo online de ${storeName}. Mira productos, precios y realiza pedidos por WhatsApp.`
+      : "Catálogo online. Mira productos, precios y realiza pedidos por WhatsApp.");
 
   // URL canonical
-  const canonical = `${siteUrl}/${params.slug}/${params.mode}`;
+  const canonical = `${siteUrl}/${slug}/${mode}`;
 
   // ✅ imagen OG (banner si hay, si no logo, si no default)
   const ogImage =
+    (catalogMeta?.banner_url && absUrl(siteUrl, catalogMeta.banner_url)) ||
+    (catalogMeta?.logo_url && absUrl(siteUrl, catalogMeta.logo_url)) ||
     (store?.banner_url && absUrl(siteUrl, store.banner_url)) ||
     (store?.logo_url && absUrl(siteUrl, store.logo_url)) ||
     `${siteUrl}/og-default.png`;
 
   // ✅ icon (favicon) desde logo si existe
-  const iconUrl = store?.logo_url
-    ? absUrl(siteUrl, store.logo_url)
-    : `${siteUrl}/favicon.ico`;
+  const logo = catalogMeta?.logo_url || store?.logo_url;
+  const iconUrl = logo ? absUrl(siteUrl, logo) : `${siteUrl}/favicon.ico`;
 
   return {
     metadataBase: new URL(siteUrl),

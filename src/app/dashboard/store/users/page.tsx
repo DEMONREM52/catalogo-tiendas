@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
@@ -26,7 +26,7 @@ const PERMISSION_OPTIONS: Array<{ value: StoreMenuPermission; label: string; des
   { value: "pos", label: "POS / Facturación", description: "Ventas, documentos y caja" },
   { value: "clients", label: "Clientes", description: "Consultar y administrar clientes" },
   { value: "users", label: "Usuarios", description: "Crear usuarios y asignar permisos" },
-  { value: "products", label: "Productos", description: "Crear y editar el catálogo" },
+  { value: "products", label: "Productos y catálogos", description: "Productos, catálogos, categorías por catálogo y campañas" },
   { value: "categories", label: "Categorías", description: "Organizar el catálogo" },
   { value: "orders", label: "Pedidos", description: "Consultar pedidos y actualizar sus estados" },
     { value: "inventory", label: "Inventario y kardex", description: "Ver existencias, bodegas y movimientos" },
@@ -35,7 +35,7 @@ const PERMISSION_OPTIONS: Array<{ value: StoreMenuPermission; label: string; des
     { value: "purchases", label: "Compras", description: "Registrar y anular compras" },
     { value: "suppliers", label: "Proveedores", description: "Administrar proveedores" },
     { value: "payables", label: "Cuentas por pagar", description: "Registrar pagos a proveedores" },
-    { value: "audit", label: "Auditoría", description: "Consultar el historial de operaciones" },
+    { value: "audit", label: "Auditoría e informes", description: "Ver informes de ventas, ganancias, inventario y el historial de operaciones" },
   ] as const;
 
 function inputProps() {
@@ -361,6 +361,31 @@ export default function StoreUsersPage() {
     }
   }
 
+  // Enlace único de la tienda: el trabajador escribe su usuario al entrar.
+  const storeLoginLink = useMemo(() => {
+    if (!store || typeof window === "undefined") return "";
+    const url = new URL(`/acceso/${encodeURIComponent(store.slug)}`, window.location.origin);
+    url.searchParams.set("sid", store.id);
+    return url.toString();
+  }, [store]);
+
+  async function copyStoreLoginLink() {
+    try {
+      await navigator.clipboard.writeText(storeLoginLink);
+      await Swal.fire({
+        icon: "success",
+        title: "Enlace general copiado",
+        text: "Sirve para todos los usuarios de esta tienda.",
+        timer: 1400,
+        showConfirmButton: false,
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch {
+      window.prompt("Copia el enlace:", storeLoginLink);
+    }
+  }
+
   async function copyNewLoginLink() {
     try {
       await navigator.clipboard.writeText(loginLink);
@@ -396,15 +421,39 @@ export default function StoreUsersPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-        <p className="font-semibold">Configuración necesaria en el servidor</p>
-        <p className="mt-1" style={{ color: "var(--t-muted)" }}>
-          Si aparece el error <code>Falta SUPABASE_SERVICE_ROLE_KEY</code>, el servidor todavía no puede crear cuentas de acceso. Añade la llave <code>service_role</code> en las variables privadas del hosting (en Vercel: <b>Project → Settings → Environment Variables</b>) con el nombre exacto <code>SUPABASE_SERVICE_ROLE_KEY</code> y vuelve a desplegar. En desarrollo local, añádela a <code>.env.local</code> y reinicia el servidor.
-        </p>
-        <p className="mt-2 font-semibold text-amber-200">
-          No uses <code>NEXT_PUBLIC_</code>, no la pegues aquí y no la compartas con los trabajadores.
-        </p>
-      </div>
+      {storeLoginLink ? (
+        <div
+          className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 8%, var(--t-card-bg))", color: "var(--t-text)" }}
+        >
+          <div className="min-w-0">
+            <p className="font-semibold">🔗 Enlace de acceso para todo el equipo</p>
+            <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>
+              Un solo enlace para la tienda: cada trabajador entra con su usuario y contraseña. Guárdalo en los equipos de cada punto.
+            </p>
+            <p className="mt-1 truncate text-xs font-mono" style={{ color: "var(--t-muted)" }}>{storeLoginLink}</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => void copyStoreLoginLink()}
+              className="rounded-full px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: "var(--t-cta)" }}
+            >
+              Copiar enlace general
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Acceso al sistema de ${store?.name ?? "la tienda"}. Entra con tu usuario y contraseña:\n${storeLoginLink}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border px-4 py-2 text-sm font-semibold"
+              style={{ borderColor: "var(--t-card-border)" }}
+            >
+              WhatsApp
+            </a>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
         <div {...cardProps()}>
