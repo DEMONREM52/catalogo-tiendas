@@ -23,6 +23,18 @@ type Track = {
 
 const NAME_KEY = "remhub_transfer_signer";
 
+type LinkedRequest = {
+  number: number; status: string; priority: string; note: string | null; needed_by: string | null;
+  requested_by_name: string | null; handled_by_name: string | null; created_at: string; closed_at: string | null;
+  from_name: string; to_name: string;
+  items: Array<{ product_id: string; name: string; requested: number; approved: number | null; received: number | null }>;
+  messages: Array<{ user_name: string | null; point_name: string | null; kind: "message" | "system"; body: string; created_at: string }>;
+};
+const REQUEST_STATUS: Record<string, [string, string]> = {
+  pending: ["Enviado", "#8b5cf6"], preparing: ["Preparando", "#f59e0b"], dispatched: ["En camino", "#0ea5e9"],
+  received: ["Recibido", "#22c55e"], rejected: ["Rechazado", "#ef4444"], cancelled: ["Cancelado", "#94a3b8"],
+};
+
 const dateTime = (value: string | null | undefined) =>
   value ? new Date(value).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }) : "—";
 
@@ -42,17 +54,21 @@ export default function TransferTrackPage() {
   const [track, setTrack] = useState<Track | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [request, setRequest] = useState<LinkedRequest | null>(null);
 
   const load = useCallback(
     () =>
-      supabaseBrowser()
-        .rpc("erp_transfer_track", { p_token: token })
-        .then(({ data, error }) => {
-          setLoading(false);
-          if (error) return setLoadError(cleanError(error));
-          setLoadError("");
-          setTrack(data as Track);
-        }),
+      Promise.all([
+        supabaseBrowser().rpc("erp_transfer_track", { p_token: token }),
+        // Datos del pedido interno que originó el traslado (si lo hay).
+        supabaseBrowser().rpc("erp_transfer_track_request", { p_token: token }),
+      ]).then(([{ data, error }, linked]) => {
+        setLoading(false);
+        if (error) return setLoadError(cleanError(error));
+        setLoadError("");
+        setTrack(data as Track);
+        setRequest(linked.error ? null : ((linked.data as LinkedRequest | null) ?? null));
+      }),
     [token],
   );
 
@@ -118,8 +134,8 @@ export default function TransferTrackPage() {
 
               <p className="mt-3 text-xs" style={{ color: "var(--t-muted)" }}>
                 Creado {dateTime(track.created_at)}{track.created_by_name ? ` por ${track.created_by_name}` : ""}
-                {track.checked_by_name ? ` · Revisó: ${track.checked_by_name}` : ""}
-                {track.carrier_name ? ` · Traslada: ${track.carrier_name}` : ""}
+                {track.checked_by_name ? <> · Revisó: <b className="uppercase">{track.checked_by_name}</b></> : ""}
+                {track.carrier_name ? <> · Traslada: <b className="uppercase">{track.carrier_name}</b></> : ""}
               </p>
               {track.notes ? <p className="mt-1 text-sm">📝 {track.notes}</p> : null}
 
@@ -132,6 +148,8 @@ export default function TransferTrackPage() {
                 </button>
               </div>
             </header>
+
+            {request ? <RequestCard request={request} /> : null}
 
             <section className="rounded-3xl border p-5" style={card}>
               <h2 className="text-base font-bold">Recorrido</h2>
@@ -165,7 +183,7 @@ export default function TransferTrackPage() {
                         {sig ? (
                           <div className="mt-1 text-sm">
                             <p>
-                              <b>{sig.signer_name}</b>
+                              <b className="uppercase tracking-wide">{sig.signer_name}</b>
                               {sig.signer_doc ? <span style={{ color: "var(--t-muted)" }}> · CC {sig.signer_doc}</span> : null}
                             </p>
                             <p className="text-xs" style={{ color: "var(--t-muted)" }}>
@@ -232,6 +250,67 @@ export default function TransferTrackPage() {
   );
 }
 
+/** Pedido interno que originó el traslado: quién pidió, cantidades y la conversación. */
+function RequestCard({ request }: { request: LinkedRequest }) {
+  const [label, color] = REQUEST_STATUS[request.status] ?? [request.status, "#94a3b8"];
+  return (
+    <section className="rounded-3xl border p-5" style={card}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold">
+          📝 Pedido interno #{request.number}
+          {request.priority === "urgent" ? <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[11px] text-white">⚡ Urgente</span> : null}
+        </h2>
+        <span className="rounded-full border px-2.5 py-1 text-xs font-bold" style={{ color, borderColor: color }}>{label}</span>
+      </div>
+      <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+        {request.from_name} le pidió a {request.to_name} · {dateTime(request.created_at)}
+        {request.requested_by_name ? <> · Pidió <b className="uppercase">{request.requested_by_name}</b></> : null}
+        {request.handled_by_name ? <> · Atendió <b className="uppercase">{request.handled_by_name}</b></> : null}
+        {request.needed_by ? ` · Para el ${new Date(`${request.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
+      </p>
+      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
+        <table className="w-full min-w-[420px] text-sm">
+          <thead style={{ color: "var(--t-muted)" }}>
+            <tr className="text-left text-[11px] uppercase tracking-wide">
+              <th className="px-3 py-2">Producto</th><th className="px-3 py-2 text-right">Pidió</th><th className="px-3 py-2 text-right">Enviado</th><th className="px-3 py-2 text-right">Recibido</th>
+            </tr>
+          </thead>
+          <tbody>
+            {request.items.map((i) => (
+              <tr key={i.product_id} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
+                <td className="px-3 py-2 font-semibold">{i.name}</td>
+                <td className="px-3 py-2 text-right">{i.requested}</td>
+                <td className="px-3 py-2 text-right" style={{ color: i.approved !== null && i.approved < i.requested ? "#f59e0b" : undefined }}>{i.approved ?? "—"}</td>
+                <td className="px-3 py-2 text-right" style={{ color: i.received !== null && i.approved !== null && i.received < i.approved ? "#ef4444" : undefined }}>{i.received ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {request.messages.length ? (
+        <details className="mt-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
+          <summary className="cursor-pointer text-sm font-bold">💬 Conversación del pedido ({request.messages.length})</summary>
+          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+            {request.messages.map((m, idx) =>
+              m.kind === "system" ? (
+                <p key={idx} className="mx-auto max-w-[95%] whitespace-pre-line rounded-xl px-3 py-1.5 text-center text-xs" style={{ background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
+                  {m.body}
+                </p>
+              ) : (
+                <div key={idx} className="rounded-2xl px-3 py-2 text-sm" style={{ background: "var(--t-card-bg-soft)" }}>
+                  <p className="text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>{m.user_name}{m.point_name ? ` · ${m.point_name}` : ""} · {dateTime(m.created_at)}</p>
+                  <p className="whitespace-pre-line">{m.body}</p>
+                </div>
+              ),
+            )}
+          </div>
+          <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Para escribir en el chat entra al panel: Pedidos → Pedidos internos.</p>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 function StatusBadge({ track }: { track: Track }) {
   const [label, color] =
     track.status === "received" ? ["Recibido", "#22c55e"] : track.status === "cancelled" ? ["Anulado", "#ef4444"] : ["En tránsito", "#f59e0b"];
@@ -263,7 +342,7 @@ function SignForm({
   const padRef = useRef<SignaturePadHandle>(null);
   const [name, setName] = useState(() => {
     try {
-      return localStorage.getItem(NAME_KEY) ?? "";
+      return (localStorage.getItem(NAME_KEY) ?? "").toUpperCase();
     } catch {
       return "";
     }
@@ -299,7 +378,7 @@ function SignForm({
     const { data, error } = await supabaseBrowser().rpc("erp_transfer_track_sign", {
       p_token: token,
       p_step: step.key,
-      p_name: name.trim(),
+      p_name: name.trim().toUpperCase(),
       p_doc: doc.trim() || null,
       p_signature: padRef.current?.toDataUrl() ?? null,
       p_notes: notes.trim() || null,
@@ -308,7 +387,7 @@ function SignForm({
     setBusy(false);
     if (error) return void Swal.fire({ icon: "error", title: "No se pudo firmar", text: cleanError(error) });
     try {
-      localStorage.setItem(NAME_KEY, name.trim());
+      localStorage.setItem(NAME_KEY, name.trim().toUpperCase());
     } catch {
       /* el nombre recordado es solo una comodidad */
     }
@@ -351,7 +430,7 @@ function SignForm({
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-          <input className={input} style={inputStyle} placeholder="Nombre completo *" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
+          <input className={`${input} font-bold uppercase tracking-wide`} style={inputStyle} placeholder="NOMBRE COMPLETO *" autoComplete="name" value={name} onChange={(e) => setName(e.target.value.toUpperCase())} maxLength={80} />
           <input className={input} style={inputStyle} placeholder="Cédula (opcional)" inputMode="numeric" value={doc} onChange={(e) => setDoc(e.target.value)} maxLength={30} />
         </div>
         <textarea

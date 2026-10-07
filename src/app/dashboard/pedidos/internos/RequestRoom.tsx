@@ -8,7 +8,8 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
-import { SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail } from "./types";
+import { RequestSignatures } from "./RequestSignatures";
+import { SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 const QUICK = {
@@ -27,6 +28,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [approved, setApproved] = useState<Record<string, number>>({});
   const [receiving, setReceiving] = useState<Record<string, number> | null>(null);
   const [mobileTab, setMobileTab] = useState<"items" | "chat">("chat");
+  // Después de despachar o recibir se abre la firma de ese paso.
+  const [autoSign, setAutoSign] = useState<SrSignStep | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
@@ -101,26 +104,27 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
   async function dispatch() {
     if (!data) return;
+    // Se permite despachar sin existencias: el origen puede quedar en 0 o en negativo.
+    const negatives = data.items
+      .map((i) => ({ name: i.name, after: i.source_now - (approved[i.id] ?? i.qty_approved ?? i.qty_requested) }))
+      .filter((x) => x.after < 0);
     if (Object.keys(approved).length) await saveQuantities();
     const res = await Swal.fire({
       ...swal,
-      title: "🚚 Despachar pedido",
+      title: "🚚 Enviar: va en camino",
       html: `<div style="text-align:left;display:grid;gap:10px;font-size:13px">
-        <p style="opacity:.8">Se crea el traslado y la mercancía sale del inventario de <b>${data.request.to_name}</b>.</p>
-        <label>¿Quién lo lleva?<input id="sr-carrier" class="swal2-input" style="margin:6px 0 0;width:100%" placeholder="Nombre / moto / empresa" /></label>
-        <label>¿Quién revisó?<input id="sr-checked" class="swal2-input" style="margin:6px 0 0;width:100%" /></label>
+        <p style="opacity:.8">Se crea el traslado y la mercancía sale del inventario de <b>${data.request.to_name}</b>. Luego quien la lleva firma <b>“En camino”</b>.</p>
+        ${negatives.length ? `<div style="border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.1);border-radius:12px;padding:8px 10px">⚠️ Sin existencias suficientes; el inventario de origen quedará así:<br/>${negatives.map((n) => `• ${n.name}: <b>${n.after}</b>`).join("<br/>")}</div>` : ""}
       </div>`,
       showCancelButton: true,
-      confirmButtonText: "Despachar",
+      confirmButtonText: "Enviar",
       cancelButtonText: "Cancelar",
-      preConfirm: () => ({
-        carrier: (document.getElementById("sr-carrier") as HTMLInputElement).value,
-        checked: (document.getElementById("sr-checked") as HTMLInputElement).value,
-      }),
     });
     if (!res.isConfirmed) return;
-    const v = res.value as { carrier: string; checked: string };
-    await run("erp_stock_request_dispatch", { p_request: data.request.id, p_carrier: v.carrier, p_checked_by: v.checked, p_note: null }, "Despachado: el traslado va en camino");
+    // Los nombres del traslado salen de las firmas: "Revisó" ahora y "En camino" al firmar.
+    const checked = data.signatures?.find((s) => s.step === "sent")?.signer_name ?? null;
+    const done = await run("erp_stock_request_dispatch", { p_request: data.request.id, p_carrier: null, p_checked_by: checked, p_note: null }, "¡Enviado! Ahora firma quien lo lleva");
+    if (done) setAutoSign("delivered");
   }
 
   async function close(action: "reject" | "cancel") {
@@ -130,8 +134,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     await run("erp_stock_request_close", { p_request: data.request.id, p_action: action, p_reason: res.value }, action === "reject" ? "Pedido rechazado" : "Pedido cancelado");
   }
 
-  async function receive() {
+  // "Recibió" se firma antes de recibir: sin firma no se confirma.
+  const pendingReceive = useRef(false);
+  async function receive(signedNow = false) {
     if (!data || !receiving) return;
+    if (!signedNow && !data.signatures?.some((s) => s.step === "received")) {
+      pendingReceive.current = true;
+      setAutoSign("received");
+      void Swal.fire({ ...swal, icon: "info", title: "Primero firma “Recibió”", text: "Escribe tu nombre y firma; al terminar se confirma lo recibido.", timer: 1800, showConfirmButton: false });
+      return;
+    }
     const items = data.items.filter((i) => (i.qty_approved ?? 0) > 0).map((i) => ({ product_id: i.product_id, received_qty: receiving[i.id] ?? i.qty_approved ?? 0 }));
     const missing = data.items.reduce((s, i) => s + Math.max(0, (i.qty_approved ?? 0) - (receiving[i.id] ?? i.qty_approved ?? 0)), 0);
     let notes: string | null = null;
@@ -151,6 +163,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const canCancel = Boolean(data?.access.request && r && (r.status === "pending" || r.status === "preparing"));
   const canReceive = Boolean(data?.access.request && r?.status === "dispatched");
   const edited = Object.keys(approved).length > 0;
+  // Para enviar deben estar firmados "Preparó" y "Revisó".
+  const readyToSend = Boolean(data?.signatures?.some((s) => s.step === "packed") && data?.signatures?.some((s) => s.step === "sent"));
 
   const itemsPanel = data && r ? (
     <div className="space-y-3">
@@ -205,9 +219,29 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         })}
       </div>
 
+      <RequestSignatures
+        data={data}
+        onSigned={(step) => {
+          if (step === "received" && pendingReceive.current) {
+            pendingReceive.current = false;
+            void receive(true);
+            return;
+          }
+          void load();
+          onChanged();
+        }}
+        onCancel={() => { pendingReceive.current = false; }}
+        autoOpen={autoSign}
+        onAutoOpenDone={() => setAutoSign(null)}
+      />
+
       {data.transfer ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
-          <span className="inline-flex items-center gap-2"><Truck size={15} /> Traslado #{data.transfer.number} · {data.transfer.status === "in_transit" ? "en tránsito" : data.transfer.status === "received" ? "recibido" : "anulado"}</span>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Truck size={15} /> Traslado #{data.transfer.number} · {data.transfer.status === "in_transit" ? "en tránsito" : data.transfer.status === "received" ? "recibido" : "anulado"}
+            {data.transfer.carrier_name ? <span className="text-xs" style={{ color: "var(--t-muted)" }}>· Lleva: <b className="uppercase">{data.transfer.carrier_name}</b></span> : null}
+            {data.transfer.checked_by_name ? <span className="text-xs" style={{ color: "var(--t-muted)" }}>· Revisó: <b className="uppercase">{data.transfer.checked_by_name}</b></span> : null}
+          </span>
           {data.transfer.track_token ? (
             <a href={`/traslado/${data.transfer.track_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--t-accent)" }}>
               Seguimiento y firmas <ExternalLink size={12} />
@@ -228,8 +262,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           </button>
         ) : null}
         {canAttend ? (
-          <button type="button" disabled={busy} onClick={() => void dispatch()} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: "#0ea5e9" }}>
-            <Truck size={15} /> Despachar
+          <button type="button" disabled={busy || !readyToSend} onClick={() => void dispatch()} title={readyToSend ? "Enviar" : "Primero firma Preparó y Revisó"} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: "#0ea5e9" }}>
+            <Truck size={15} /> Enviar (va en camino)
           </button>
         ) : null}
         {canReceive && !receiving ? (
@@ -240,7 +274,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         {canReceive && receiving ? (
           <>
             <button type="button" disabled={busy} onClick={() => void receive()} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: "#16a34a" }}>
-              <CheckCircle2 size={15} /> Confirmar recibido
+              <CheckCircle2 size={15} /> {data.signatures?.some((x) => x.step === "received") ? "Confirmar recibido" : "Firmar y confirmar recibido"}
             </button>
             <button type="button" onClick={() => setReceiving(null)} className="rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
           </>
@@ -257,7 +291,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         ) : null}
       </div>
       {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cuenta lo que llegó. Si algo falta, se devuelve al inventario de {r.to_name} y queda escrito en el chat.</p> : null}
-      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Ajusta “Enviar” según lo que realmente hay. Al despachar se descuenta de {r.to_name} y queda en camino.</p> : null}
+      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
     </div>
   ) : null;
 

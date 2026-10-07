@@ -7,7 +7,8 @@ import { AdjustmentsTab, AuditTab, KardexTab } from "./OperationsTabs";
 import { TransfersTab } from "./TransfersTab";
 import { ManifestsTab } from "./ManifestsUI";
 import { PayablesTab, PurchasesTab, SuppliersTab } from "./PurchasesTabs";
-import { OverviewTab, StockTab, WarehousesTab } from "./StockTabs";
+import { OverviewTab, WarehousesTab } from "./StockTabs";
+import { StockBrowser } from "./StockBrowser";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
 
 type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "manifests" | "audit";
@@ -111,7 +112,7 @@ export default function InventarioPage() {
       </nav>
 
       {current.key === "overview" ? <OverviewTab ctx={ctx} /> : null}
-      {current.key === "stock" ? <StockTab ctx={ctx} warehouses={warehouses} /> : null}
+      {current.key === "stock" ? <StockBrowser ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "warehouses" ? <WarehousesTab ctx={ctx} warehouses={warehouses} onChanged={() => void loadWarehouses(ctx.storeId)} /> : null}
       {current.key === "transfers" ? <TransfersTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "adjustments" ? <AdjustmentsTab ctx={ctx} warehouses={warehouses} /> : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ImageUpload } from "../store/ImageUpload";
+import { GalleryEditor } from "./GalleryEditor";
 import {
   linesToList,
   linesToSpecifications,
@@ -104,71 +104,13 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
         </label>
       </div>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div>
-            <h3 className="font-semibold">Galería de fotos</h3>
-            <p className="text-xs opacity-70">Hasta seis imágenes extra, máximo 2 MB por imagen.</p>
-          </div>
-          {details.gallery_urls.length < 6 ? (
-            <button
-              type="button"
-              className="rounded-xl border px-3 py-2 text-sm font-semibold"
-              style={textStyle}
-              onClick={() => update("gallery_urls", [...details.gallery_urls, ""])}
-            >
-              + Agregar foto
-            </button>
-          ) : null}
-        </div>
-        {details.gallery_urls.map((url, index) => (
-          <div key={`gallery-${index}`} className="mb-2 flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              {userId ? (
-                <ImageUpload
-                  label={`Foto ${index + 1}`}
-                  currentUrl={url || null}
-                  pathPrefix={`${userId}/products/`}
-                  fileName={`${productId ?? `new-${uploadId}`}-gallery-${index + 1}.jpg`}
-                  bucket="product-images"
-                  onUploaded={(uploaded) => {
-                    const gallery = [...details.gallery_urls];
-                    gallery[index] = uploaded;
-                    update("gallery_urls", gallery);
-                  }}
-                />
-              ) : (
-                <input
-                  className="w-full rounded-2xl border p-3"
-                  style={textStyle}
-                  type="url"
-                  value={url}
-                  onChange={(event) => {
-                    const gallery = [...details.gallery_urls];
-                    gallery[index] = event.target.value;
-                    update("gallery_urls", gallery);
-                  }}
-                  placeholder="URL pública de imagen"
-                />
-              )}
-            </div>
-            <button
-              type="button"
-              className="mt-3 rounded-xl border px-3 py-2 text-sm"
-              style={textStyle}
-              aria-label={`Quitar foto ${index + 1}`}
-              onClick={() =>
-                update(
-                  "gallery_urls",
-                  details.gallery_urls.filter((_, itemIndex) => itemIndex !== index),
-                )
-              }
-            >
-              Quitar
-            </button>
-          </div>
-        ))}
-      </div>
+      <GalleryEditor
+        urls={details.gallery_urls}
+        onChange={(urls) => update("gallery_urls", urls)}
+        userId={userId}
+        productId={productId}
+        uploadId={uploadId}
+      />
     </section>
   );
 }

@@ -120,7 +120,13 @@ const DEFAULT_CLIENT_NAME = "CONSUMIDOR FINAL";
 const DEFAULT_PRICE_LIST = 3;
 
 type PointOption = { id: string; name: string; kind?: "point" | "warehouse"; is_default?: boolean; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
-type SellerOption = { user_id: string; name: string; role: string };
+type SellerOption = { user_id: string; name: string; role: string; point_id?: string | null };
+
+/** Vendedores del punto: solo los usuarios creados para ese punto (si aún no existe el dato, todos). */
+function sellersForPoint(rows: SellerOption[], pointId: string) {
+  if (!rows.some((r) => r.point_id !== undefined)) return rows;
+  return rows.filter((r) => r.point_id && r.point_id === pointId);
+}
 
 export default function PosPage() {
   const [store, setStore] = useState<DashboardStore | null>(null);
@@ -338,16 +344,15 @@ export default function PosPage() {
     setPoints(visiblePoints);
     setLockedPoint(Boolean(myPoint));
     setSellers(sellerRows);
-    setPointId(
-      (current) =>
-        current ||
-        visiblePoints.find((pt) => pt.kind === "point")?.id ||
-        visiblePoints.find((pt) => pt.is_default)?.id ||
-        visiblePoints[0]?.id ||
-        "",
-    );
+    const initialPoint =
+      visiblePoints.find((pt) => pt.kind === "point")?.id ||
+      visiblePoints.find((pt) => pt.is_default)?.id ||
+      visiblePoints[0]?.id ||
+      "";
+    setPointId((current) => current || initialPoint);
     const me = userRes.data.user?.id;
-    setSellerId((current) => current || sellerRows.find((r) => r.user_id === me)?.user_id || sellerRows[0]?.user_id || "");
+    const ofPoint = sellersForPoint(sellerRows, initialPoint);
+    setSellerId((current) => current || ofPoint.find((r) => r.user_id === me)?.user_id || ofPoint[0]?.user_id || "");
   }
 
   async function load() {
@@ -1038,6 +1043,9 @@ export default function PosPage() {
                         if (editingDoc) cancelEdit();
                         setPointStock(null);
                         setPointId(e.target.value);
+                        // Al cambiar de punto se muestran solo sus vendedores.
+                        const ofPoint = sellersForPoint(sellers, e.target.value);
+                        setSellerId((current) => (ofPoint.some((r) => r.user_id === current) ? current : ofPoint[0]?.user_id ?? ""));
                       }}
                       disabled={lockedPoint}
                     >
@@ -1051,10 +1059,13 @@ export default function PosPage() {
                     <label className="text-sm font-semibold">Vendedor</label>
                     <select {...inputProps()} value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
                       <option value="">Sin vendedor</option>
-                      {sellers.map((r) => (
+                      {sellersForPoint(sellers, pointId).map((r) => (
                         <option key={r.user_id} value={r.user_id}>{r.name}</option>
                       ))}
                     </select>
+                    {sellersForPoint(sellers, pointId).length === 0 ? (
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Este punto aún no tiene vendedores. Créalos en Ajustes → Usuarios y asígnales este punto.</p>
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>

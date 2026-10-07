@@ -27,6 +27,9 @@ export type SrItem = {
   source_now: number; dest_now: number; source_at_request: number | null;
 };
 export type SrMessage = { id: string; user_id: string | null; user_name: string | null; point_name: string | null; kind: "message" | "system"; body: string; created_at: string; mine: boolean };
+export type SrSignStep = "packed" | "sent" | "delivered" | "received";
+export type SrSignature = { step: SrSignStep; signer_name: string; signer_doc: string | null; signature: string | null; notes: string | null; via: "dashboard" | "link"; signed_at: string };
+
 export type SrDetail = {
   request: { id: string; store_id: string; number: number; status: SrStatus; priority: "normal" | "urgent"; note: string | null; needed_by: string | null;
     from_point_id: string; from_name: string; to_point_id: string; to_name: string; requested_by_name: string | null; handled_by_name: string | null;
@@ -34,7 +37,9 @@ export type SrDetail = {
   access: SrAccess & { chat: boolean };
   items: SrItem[];
   messages: SrMessage[];
-  transfer: { id: string; number: number; status: string; track_token: string | null } | null;
+  transfer: { id: string; number: number; status: string; track_token: string | null; carrier_name?: string | null; checked_by_name?: string | null } | null;
+  signatures?: SrSignature[];
+  me?: string;
 };
 
 export function timeAgo(iso: string | null | undefined) {
