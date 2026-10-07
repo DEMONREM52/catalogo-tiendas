@@ -6,6 +6,7 @@ import { StoreContactIcon } from "@/components/StoreContactIcon";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cartUsesMinimums, useCart } from "./CartProvider";
+import { track } from "@/lib/tracking";
 
 /* =========================
    Helpers
@@ -432,6 +433,8 @@ export function CartDrawer() {
     }
 
     // ✅ crear pedido
+    const trackItems = cart.items.map((i) => ({ id: i.productId, name: i.name, price: Number(i.price) || 0, quantity: i.qty }));
+    track.beginCheckout(trackItems, cart.storeSlug);
     try {
       const payload = cart.items.map((i) => ({
         product_id: i.productId,
@@ -502,6 +505,9 @@ export function CartDrawer() {
 
       const token = (data as any)?.token as string;
       if (!token) throw new Error("No se generó token.");
+      // El token es privado (abre el comprobante): a la medición solo va el número de pedido.
+      const receiptNo = (data as { receipt_no?: number | string } | null)?.receipt_no;
+      track.order(receiptNo ? `${cart.storeSlug}-${receiptNo}` : `${cart.storeSlug}-${Date.now()}`, trackItems, cart.storeSlug);
 
       const invoiceUrl = `${window.location.origin}/pedido/${token}`;
 

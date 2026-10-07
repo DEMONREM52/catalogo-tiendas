@@ -14,26 +14,31 @@ import {
   Megaphone,
   PackagePlus,
   Receipt,
+  Repeat,
   Settings,
   ShieldCheck,
   Store,
   Truck,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
+import { EditableNickname, useNicknameUpdates } from "./Nickname";
 
 type Module = { permission: string; key: string; href: string; icon: LucideIcon; title: string; description: string };
 
 const MODULES: Module[] = [
   { permission: "pos", key: "pos", href: "/dashboard/pos", icon: CreditCard, title: "POS / Facturación", description: "Registra ventas, crea documentos y abre comprobantes." },
   { permission: "orders", key: "orders", href: "/dashboard/pedidos", icon: Receipt, title: "Pedidos", description: "Revisa pedidos de clientes y actualiza su estado." },
+  { permission: "stock_requests", key: "stock_requests", href: "/dashboard/pedidos?tab=internos", icon: Repeat, title: "Pedidos internos", description: "Pide mercancía a otros puntos o bodegas y coordina por chat hasta recibirla." },
   { permission: "products", key: "products", href: "/dashboard/products", icon: Boxes, title: "Productos", description: "Administra productos, precios, costos e imágenes." },
   { permission: "products", key: "social", href: "/dashboard/social", icon: LayoutGrid, title: "Catálogos y campañas", description: "Catálogos con su precio, diseño, contactos y campañas." },
-  { permission: "clients", key: "clients", href: "/dashboard/clientes", icon: Users, title: "Clientes", description: "Consulta y administra la información de tus clientes." },
+  { permission: "clients", key: "clients", href: "/dashboard/clientes", icon: Users, title: "Terceros y cartera", description: "Clientes, proveedores, trabajadores y vendedores; créditos, cupos y cartera." },
+  { permission: "receivables", key: "receivables", href: "/dashboard/clientes?tab=cartera", icon: Wallet, title: "Cartera", description: "Lo que te deben: vencidas, próximas a vencer, abonos y estados de cuenta." },
   { permission: "categories", key: "categories", href: "/dashboard/categories", icon: FolderTree, title: "Categorías", description: "Organiza los productos de la tienda." },
   { permission: "inventory", key: "inventory", href: "/dashboard/inventario", icon: Truck, title: "Inventario y compras", description: "Puntos, bodegas, traslados, ingresos y cuentas por pagar." },
   { permission: "billing", key: "billing", href: "/dashboard/store/billing", icon: ClipboardList, title: "Facturación y pagos", description: "Datos de facturación, resoluciones y medios de pago." },
@@ -47,6 +52,7 @@ const QUICK_ACTIONS: Array<{ permission: string; href: string; icon: LucideIcon;
   { permission: "purchases", href: "/dashboard/inventario", icon: Truck, label: "Ingresar factura" },
   { permission: "products", href: "/dashboard/social", icon: Megaphone, label: "Catálogos" },
   { permission: "orders", href: "/dashboard/pedidos", icon: Receipt, label: "Pedidos" },
+  { permission: "stock_requests", href: "/dashboard/pedidos?tab=internos", icon: Repeat, label: "Pedir mercancía" },
 ];
 
 function isMissingQuickAccessColumn(error: unknown) {
@@ -62,7 +68,10 @@ function greeting() {
 
 export default function DashboardHome() {
   const [store, setStore] = useState<DashboardStore | null>(null);
+  // Nombre personal ("¿cómo quieres que te llamemos?") y respaldo si no lo ha elegido.
   const [name, setName] = useState("");
+  const [fallbackName, setFallbackName] = useState("");
+  useNicknameUpdates(setName);
   const [allowed, setAllowed] = useState<Module[]>([]);
   const [actions, setActions] = useState<typeof QUICK_ACTIONS>([]);
   const [quickAccess, setQuickAccess] = useState<string[] | null>(null);
@@ -81,11 +90,13 @@ export default function DashboardHome() {
         const [access, userRes] = await Promise.all([getDashboardStore(), sb.auth.getUser()]);
         if (!mounted) return;
         const meta = userRes.data.user?.user_metadata ?? {};
-        setName(String(meta.display_name || meta.internal_username || userRes.data.user?.email?.split("@")[0] || ""));
+        setName(String(meta.display_name || "").trim());
+        setFallbackName(String(meta.internal_username || userRes.data.user?.email?.split("@")[0] || ""));
         setStore(access.store);
         setIsAdmin(access.profileRole === "admin");
         const can = (permission: string) => hasStorePermission(access, permission);
-        setAllowed(MODULES.filter((m) => can(m.permission)));
+        // Cartera aparece aparte solo si no se ve ya el módulo de terceros.
+        setAllowed(MODULES.filter((m) => can(m.permission) && !(m.key === "receivables" && can("clients"))));
         setActions(QUICK_ACTIONS.filter((a) => can(a.permission)));
         setCanReports(can("audit"));
         if (access.store) {
@@ -124,7 +135,13 @@ export default function DashboardHome() {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] first-letter:uppercase" style={{ color: "var(--t-muted)" }}>{today}</p>
             <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-              {loading ? "Cargando…" : `${greeting()}${name ? `, ${name}` : ""} 👋`}
+              {loading ? "Cargando…" : (
+                <span className="inline-flex flex-wrap items-center gap-x-2">
+                  {greeting()},
+                  <EditableNickname value={name} fallback={fallbackName} onSaved={setName} inputClassName="text-xl font-black sm:text-2xl" />
+                  <span aria-hidden>👋</span>
+                </span>
+              )}
             </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
               {store?.name ? `Esto es lo que pasa hoy en ${store.name}.` : "Tus herramientas de trabajo en un solo lugar."}

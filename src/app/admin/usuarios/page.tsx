@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 import { STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";
+import { smartFilter } from "@/lib/search";
 
 type UserProfile = {
   user_id: string;
@@ -44,7 +45,10 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   store: "Mi tienda",
   billing: "Facturación",
   pos: "POS / ventas",
-  clients: "Clientes",
+  clients: "Terceros",
+  clients_delete: "Eliminar terceros",
+  credit: "Créditos",
+  receivables: "Cartera",
   users: "Usuarios",
   products: "Productos y catálogos",
   categories: "Categorías",
@@ -52,6 +56,8 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   inventory: "Inventario y kardex",
   inventory_adjust: "Ajustes de inventario",
   transfers: "Traslados",
+  stock_requests: "Pedidos internos",
+  stock_requests_manage: "Gestión de pedidos internos",
   purchases: "Compras",
   suppliers: "Proveedores",
   payables: "Cuentas por pagar",
@@ -118,14 +124,10 @@ export default function AdminUsuariosPage() {
   const [newUserLoginUrl, setNewUserLoginUrl] = useState("");
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) =>
+    return smartFilter(rows, q, (r) =>
       `${r.user_id} ${r.role} ${r.email ?? ""} ${r.display_name ?? ""} ${
         r.owned_stores.map((store) => `${store.name} ${store.slug}`).join(" ")
-      } ${r.memberships.map((member) => `${member.store_name} ${member.username ?? ""}`).join(" ")}`
-        .toLowerCase()
-        .includes(s)
+      } ${r.memberships.map((member) => `${member.store_name} ${member.username ?? ""}`).join(" ")}`,
     );
   }, [rows, q]);
 

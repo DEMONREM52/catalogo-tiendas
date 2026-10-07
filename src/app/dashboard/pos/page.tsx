@@ -8,6 +8,9 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
+import { matchesSearch, smartFilter } from "@/lib/search";
+import { CreditMeter } from "../clientes/CreditMeter";
+import type { CreditState } from "../clientes/terceros";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -32,7 +35,34 @@ type Client = {
   mobile: string | null;
   document_number: string | null;
   price_list: number;
+  kinds?: string[];
+  active?: boolean;
+  credit_enabled?: boolean;
+  credit_limit?: number;
+  credit_days?: number;
+  credit_blocked?: boolean;
 };
+
+const CLIENT_COLUMNS = "id,name,email,mobile,document_number,price_list";
+const CLIENT_CREDIT_COLUMNS = `${CLIENT_COLUMNS},kinds,active,credit_enabled,credit_limit,credit_days,credit_blocked`;
+
+/** Terceros para vender (todos los puntos). Si falta la migración de cartera usa los datos básicos. */
+async function loadPosClients(storeId: string) {
+  const sb = supabaseBrowser();
+  const all: Client[] = [];
+  let columns = CLIENT_CREDIT_COLUMNS;
+  for (let from = 0; ; from += 1000) {
+    let res = await sb.from("billing_customers").select(columns).eq("store_id", storeId).order("name", { ascending: true }).range(from, from + 999);
+    if (res.error && columns === CLIENT_CREDIT_COLUMNS) {
+      columns = CLIENT_COLUMNS;
+      res = await sb.from("billing_customers").select(columns).eq("store_id", storeId).order("name", { ascending: true }).range(from, from + 999);
+    }
+    if (res.error) return { data: null, error: res.error };
+    all.push(...((res.data ?? []) as unknown as Client[]));
+    if (!res.data || res.data.length < 1000) break;
+  }
+  return { data: all.filter((c) => c.active !== false), error: null };
+}
 
 type CartItem = {
   productId: string;
@@ -119,6 +149,9 @@ export default function PosPage() {
   const [customerPriceList, setCustomerPriceList] = useState<number>(DEFAULT_PRICE_LIST);
   const [paymentType, setPaymentType] = useState<"contado" | "credito">("contado");
   const [dueDays, setDueDays] = useState(30);
+  // Estado del crédito del cliente elegido (cupo, disponible, mora) para la venta a crédito.
+  const [creditState, setCreditState] = useState<(CreditState & { for: string; amount: number }) | null>(null);
+  const [creditUnavailable, setCreditUnavailable] = useState(false);
   const [printSize, setPrintSize] = useState<"tirilla" | "carta">("tirilla");
   const [orderSource, setOrderSource] = useState<"vitrina" | "whatsapp">("vitrina");
   const [documentKind, setDocumentKind] = useState<"remision" | "factura">("remision");
@@ -145,7 +178,7 @@ export default function PosPage() {
     const base = pointStock
       ? allProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }))
       : products;
-    return base.filter((product) => product.name.toLowerCase().includes(term));
+    return smartFilter(base, term, (product) => product.name);
   }, [products, allProducts, pointStock, search]);
 
   const selectedClient = useMemo(
@@ -175,12 +208,7 @@ export default function PosPage() {
     if (!term) return clients;
     const digits = term.replace(/\D/g, "");
     return clients.filter((client) => {
-      if (
-        [client.name, client.document_number ?? "", client.mobile ?? "", client.email ?? ""]
-          .join(" ")
-          .toLowerCase()
-          .includes(term)
-      )
+      if (matchesSearch([client.name, client.document_number ?? "", client.mobile ?? "", client.email ?? ""].join(" "), term))
         return true;
       return (
         digits.length > 0 &&
@@ -234,6 +262,26 @@ export default function PosPage() {
   }, [storeId, pointId]);
 
   useEffect(() => {
+    if (!selectedClient || (paymentType !== "credito" && !selectedClient.credit_enabled)) return;
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await supabaseBrowser().rpc("erp_credit_check", { p_customer: selectedClient.id, p_amount: total });
+      if (!alive) return;
+      if (error) {
+        setCreditUnavailable(/erp_credit_check|Could not find the function|schema cache/i.test(error.message));
+        setCreditState(null);
+        return;
+      }
+      setCreditUnavailable(false);
+      setCreditState({ ...(data as CreditState), for: selectedClient.id, amount: total });
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [selectedClient, total, paymentType]);
+
+  useEffect(() => {
     setListOverride(null);
     if (selectedClient) {
       setCustomerName(selectedClient.name);
@@ -241,6 +289,7 @@ export default function PosPage() {
       setCustomerWhatsApp(selectedClient.mobile ?? "");
       setCustomerDocument(selectedClient.document_number ?? "");
       setCustomerPriceList(selectedClient.price_list ?? DEFAULT_PRICE_LIST);
+      if (selectedClient.credit_enabled && selectedClient.credit_days) setDueDays(selectedClient.credit_days);
     } else {
       setCustomerName(DEFAULT_CLIENT_NAME);
       setCustomerEmail("");
@@ -332,11 +381,7 @@ export default function PosPage() {
         { data: clientData, error: clientError },
         { data: settingsData },
       ] = await Promise.all([
-        sb
-          .from("billing_customers")
-          .select("id,name,email,mobile,document_number,price_list")
-          .eq("store_id", access.store.id)
-          .order("name", { ascending: true }),
+        loadPosClients(access.store.id),
         sb
           .from("billing_settings")
           .select("electronic_provider,invoice_prefix,remision_prefix")
@@ -605,6 +650,40 @@ export default function PosPage() {
 
     if (editingDoc) return saveEdit(editingDoc);
 
+    // Venta a crédito: debe ser un tercero registrado y respetar su cupo.
+    let creditOverride = false;
+    let registerCredit = false;
+    if (paymentType === "credito") {
+      if (!selectedClient) {
+        await Swal.fire({ icon: "warning", title: "Elige el cliente", text: "Para vender a crédito busca y selecciona un cliente registrado (o créalo con «Guardar como cliente nuevo»).", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        return;
+      }
+      let state = creditState && creditState.for === selectedClient.id && creditState.amount === total ? creditState : null;
+      if (!state && !creditUnavailable) {
+        const { data, error } = await supabaseBrowser().rpc("erp_credit_check", { p_customer: selectedClient.id, p_amount: total });
+        if (error && !/erp_credit_check|Could not find the function|schema cache/i.test(error.message)) {
+          await Swal.fire({ icon: "error", title: "No se pudo validar el crédito", text: error.message, background: "#0b0b0b", color: "#fff" });
+          return;
+        }
+        state = error ? null : { ...(data as CreditState), for: selectedClient.id, amount: total };
+      }
+      if (!state) {
+        const go = await Swal.fire({ icon: "warning", title: "Cartera no disponible", text: "La venta quedará marcada como crédito, pero no se registrará en cartera hasta ejecutar la migración 20261018_terceros_cartera.sql. ¿Continuar?", showCancelButton: true, confirmButtonText: "Continuar", cancelButtonText: "Cancelar", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        if (!go.isConfirmed) return;
+      } else if (!state.can_sell) {
+        if (!state.can_override) {
+          await Swal.fire({ icon: "error", title: "Crédito no aprobado", html: `${state.reason ?? "No se puede vender a crédito."}<br/><small>Disponible: <b>${money(state.available)}</b> · Venta: <b>${money(total)}</b></small><br/><small>Pide autorización a un usuario con permiso de Créditos.</small>`, background: "#0b0b0b", color: "#fff", confirmButtonColor: "#ef4444" });
+          return;
+        }
+        const go = await Swal.fire({ icon: "warning", title: "¿Autorizar venta a crédito?", html: `${state.reason}<br/><small>Disponible: <b>${money(state.available)}</b> · Venta: <b>${money(total)}</b>${state.overdue > 0 ? ` · Vencido: <b>${money(state.overdue)}</b>` : ""}</small><br/><small>Quedará registrado en auditoría con tu usuario.</small>`, showCancelButton: true, confirmButtonText: "Autorizar", cancelButtonText: "Cancelar", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        if (!go.isConfirmed) return;
+        creditOverride = true;
+        registerCredit = true;
+      } else {
+        registerCredit = true;
+      }
+    }
+
     setSaving(true);
     let receiptWindow: Window | null = null;
 
@@ -648,6 +727,24 @@ export default function PosPage() {
         if (customerDocument.trim()) {
           // Permite buscar el documento por cédula/NIT; si el SQL no está aplicado se ignora.
           await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
+        }
+      }
+
+      let creditNote = "";
+      if (registerCredit && selectedClient) {
+        const { data: reg, error: regError } = await sb.rpc("erp_credit_register", {
+          p_store: store.id,
+          p_token: token,
+          p_customer: selectedClient.id,
+          p_days: dueDays,
+          p_override: creditOverride,
+        });
+        if (regError) {
+          creditNote = `<br/><small style="color:#f59e0b">⚠️ El documento se creó, pero no se registró en cartera: ${regError.message}</small>`;
+        } else {
+          const due = (reg as { due_date?: string } | null)?.due_date;
+          creditNote = due ? `<br/><b>Crédito:</b> vence el ${new Date(`${due}T12:00:00`).toLocaleDateString("es-CO")}` : "";
+          setCreditState(null);
         }
       }
 
@@ -717,7 +814,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "success",
         title: `${kindLabel} creada`,
-        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}`,
+        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}${creditNote}`,
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonText: "Ver comprobante",
@@ -916,7 +1013,7 @@ export default function PosPage() {
                   <option value="">Selecciona un cliente</option>
                   {filteredClients.map((client) => (
                     <option key={client.id} value={client.id}>
-                      {client.name}
+                      {client.name}{client.document_number ? ` · ${client.document_number}` : ""}{client.credit_enabled ? (client.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 crédito") : ""}
                     </option>
                   ))}
                 </select>
@@ -926,6 +1023,11 @@ export default function PosPage() {
                 >
                   Cliente activo: {effectiveClient.name} · Doc: {effectiveClient.document_number ? docWithDv(effectiveClient.document_number) : "CF"} · Lista {effectiveClient.price_list}
                 </p>
+                {selectedClient?.credit_enabled && creditState?.for === selectedClient.id ? (
+                  <div className="mt-2 rounded-xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
+                    <CreditMeter size="sm" enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+                  </div>
+                ) : null}
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-semibold">Punto de venta / bodega</label>
@@ -1069,7 +1171,28 @@ export default function PosPage() {
               </div>
  
               {paymentType === "credito" ? (
-                <div>
+                <div className="space-y-2">
+                  {!selectedClient ? (
+                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                      💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
+                    </p>
+                  ) : creditUnavailable ? (
+                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
+                  ) : creditState?.for === selectedClient.id ? (
+                    <div
+                      className="rounded-xl border p-3"
+                      style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
+                    >
+                      <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+                      <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
+                        {creditState.can_sell
+                          ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
+                          : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
+                  )}
                   <label className="text-sm font-semibold">Días de crédito</label>
                   <input
                     {...inputProps()}

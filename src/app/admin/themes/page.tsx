@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { smartFilter } from "@/lib/search";
 
 type ThemeConfig = {
   text: string;
@@ -246,10 +247,10 @@ export default function AdminThemesPage() {
     [rows, selectedId],
   );
   const visibleThemes = useMemo(() => {
-    const query = themeSearch.trim().toLocaleLowerCase("es-CO");
-    return rows.filter((theme) =>
-      (themeStatus === "all" || (theme.active ? "active" : "inactive") === themeStatus) &&
-      (!query || `${theme.name} ${theme.id}`.toLocaleLowerCase("es-CO").includes(query))
+    return smartFilter(
+      rows.filter((theme) => themeStatus === "all" || (theme.active ? "active" : "inactive") === themeStatus),
+      themeSearch,
+      (theme) => `${theme.name} ${theme.id}`,
     );
   }, [rows, themeSearch, themeStatus]);
 

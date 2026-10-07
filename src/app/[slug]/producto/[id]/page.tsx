@@ -12,6 +12,7 @@ import {
   normalizeProductDetails,
 } from "@/lib/product-details";
 import { ArrowLeft, Check, PackageCheck, PackageX, Sparkles } from "lucide-react";
+import { TrackProductView } from "@/components/StorePixel";
 
 type PageProps = {
   params: Promise<{ slug: string; id: string }>;
@@ -172,6 +173,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
 
   return (
     <main className="product-landing-page min-h-screen px-2 py-4 sm:px-4 sm:py-8 lg:px-6">
+      <TrackProductView item={{ id: product.id, name: product.name, price: Number(price) || 0, category: categoryName }} store={store.slug} />
       <div className="mx-auto w-full max-w-[1440px]">
         <header className="product-landing-topbar mb-6 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5">
           <Link href={backHref} className="inline-flex items-center gap-2 text-sm font-bold opacity-80 transition hover:opacity-100">

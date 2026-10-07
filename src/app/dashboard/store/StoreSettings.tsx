@@ -8,6 +8,8 @@ import { StoreContactIcon } from "@/components/StoreContactIcon";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { normalizeStoreContactChannels, STORE_CONTACT_ICONS, type StoreContactChannel } from "@/lib/store-contacts";
+import { MarketingPanel } from "./MarketingPanel";
+import { EditableNickname, useNicknameUpdates } from "../Nickname";
 
 type StoreProfileDraft = {
   headline: string;
@@ -216,6 +218,18 @@ export default function StoreSettings() {
   const [previewLight, setPreviewLight] = useState(false);
   const [settingsMigrationMissing, setSettingsMigrationMissing] = useState(false);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
+  // Nombre personal de quien usa el panel (distinto del nombre de la tienda).
+  const [nickname, setNickname] = useState("");
+  const [nicknameFallback, setNicknameFallback] = useState("");
+  useNicknameUpdates(setNickname);
+
+  useEffect(() => {
+    void supabaseBrowser().auth.getUser().then(({ data }) => {
+      const meta = data.user?.user_metadata ?? {};
+      setNickname(String(meta.display_name || "").trim());
+      setNicknameFallback(String(meta.internal_username || data.user?.email?.split("@")[0] || ""));
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -703,7 +717,16 @@ export default function StoreSettings() {
               <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "var(--t-accent)" }}>
                 <WandSparkles size={15} /> Personaliza tu espacio
               </p>
-              <h1 className="mt-2 text-2xl font-black sm:text-3xl">{store.name}</h1>
+              <h1 className="mt-2 flex flex-wrap items-center gap-x-2 text-2xl font-black sm:text-3xl">
+                <span>Hola,</span>
+                <EditableNickname value={nickname} fallback={nicknameFallback} onSaved={setNickname} inputClassName="text-xl font-black sm:text-2xl" />
+              </h1>
+              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--t-muted)" }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                  🏪 Tienda: {store.name}
+                </span>
+                <span className="text-xs">Toca tu nombre para cambiar cómo te llamamos; el nombre de la tienda se edita abajo.</span>
+              </p>
               <p className="mt-2 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
                 Administra la identidad, los catálogos, los puntos de contacto y lo que aparece en el escaparate público.
               </p>
@@ -1066,6 +1089,8 @@ export default function StoreSettings() {
             El estado de suscripción se administra desde el panel administrativo.
           </p>
         </Panel>
+
+        <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
 
         <Panel title="Acceso rápido" description="Elige qué accesos mostrar como tarjetas en la página inicial del dashboard.">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

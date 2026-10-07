@@ -13,6 +13,7 @@ import {
   normalizeProductDetails,
   type ProductDetails,
 } from "@/lib/product-details";
+import { CategoryPicker, loadProductCategoryIds, saveProductCategoryIds } from "../CategoryPicker";
 
 type Category = { id: string; name: string };
 
@@ -158,11 +159,14 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
   const [draft, setDraft] = useState<Product | null>(null);
+  // Todas las categorías del producto (la primera es la principal).
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [savedCategoryIds, setSavedCategoryIds] = useState<string[]>([]);
 
   const isDirty = useMemo(() => {
     if (!product || !draft) return false;
-    return JSON.stringify(product) !== JSON.stringify(draft);
-  }, [product, draft]);
+    return JSON.stringify(product) !== JSON.stringify(draft) || categoryIds.join(",") !== savedCategoryIds.join(",");
+  }, [product, draft, categoryIds, savedCategoryIds]);
 
   async function loadAll() {
     if (!id || !isUuid(id)) {
@@ -262,6 +266,9 @@ export default function EditProductPage() {
 
       setProduct(normalized);
       setDraft({ ...normalized });
+      const ids = await loadProductCategoryIds(normalized.id, normalized.category_id, ((cats as Category[]) ?? []));
+      setCategoryIds(ids);
+      setSavedCategoryIds(ids);
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -303,14 +310,22 @@ export default function EditProductPage() {
         stock: draft.stock === null ? null : Math.max(0, Math.floor(clampNum(draft.stock, 0))),
         active: !!draft.active,
         image_url: draft.image_url,
-        category_id: draft.category_id || null,
+        category_id: categoryIds[0] ?? null,
         product_details: draft.product_details,
       };
 
       const { error } = await sb.from("products").update(payload).eq("id", draft.id).eq("store_id", storeId);
       if (error) throw error;
 
-      setProduct({ ...draft });
+      const categoryWarning = await saveProductCategoryIds(draft.id, categoryIds);
+      const savedDraft = { ...draft, category_id: categoryIds[0] ?? null };
+      setDraft(savedDraft);
+      setProduct(savedDraft);
+      setSavedCategoryIds(categoryIds);
+      if (categoryWarning) {
+        await Swal.fire({ icon: "warning", title: "Producto guardado", text: categoryWarning, background: "var(--t-bg-base)", color: "var(--t-text)" });
+        return;
+      }
 
       await Swal.fire({
         icon: "success",
@@ -552,24 +567,7 @@ export default function EditProductPage() {
               </button>
             </div>
 
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Categoría
-              </label>
-              <select
-                className={`mt-1 ${inputSoftProps().className}`}
-                style={inputSoftProps().style}
-                value={draft.category_id ?? ""}
-                onChange={(e) => setDraft({ ...draft, category_id: e.target.value || null })}
-              >
-                <option value="">Sin categoría</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
 
             <p className="text-xs pt-2" style={{ color: "color-mix(in oklab, var(--t-text) 60%, transparent)" }}>
               ID: <span style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{draft.id}</span>

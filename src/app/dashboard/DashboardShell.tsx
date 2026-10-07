@@ -10,6 +10,8 @@ import NotificationBell from "./NotificationBell";
 import {
   getDashboardStore,
 } from "@/lib/store-utils";
+import { useNicknameUpdates } from "./Nickname";
+import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
 
 type Role = "admin" | "store";
 
@@ -171,7 +173,6 @@ const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permis
   ],
   billing: [
     { href: "/dashboard/pos", label: "💳 POS / Facturar", permissions: ["pos"] },
-    { href: "/dashboard/clientes", label: "👥 Clientes", permissions: ["clients"] },
     { href: "/dashboard/store/billing", label: "🧾 Datos de facturación", permissions: ["billing"], adminOnly: true },
   ],
   settings: [
@@ -181,7 +182,7 @@ const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permis
 };
 
 function moduleOf(path: string): ModuleKey | null {
-  if (path.startsWith("/dashboard/store/billing") || path.startsWith("/dashboard/pos") || path.startsWith("/dashboard/clientes")) return "billing";
+  if (path.startsWith("/dashboard/store/billing") || path.startsWith("/dashboard/pos")) return "billing";
   if (path.startsWith("/dashboard/store")) return "settings";
   if (path.startsWith("/dashboard/products") || path.startsWith("/dashboard/categories") || path.startsWith("/dashboard/inventario")) return "inventory";
   return null;
@@ -392,6 +393,7 @@ export default function DashboardShell({
   const [storeIsOwner, setStoreIsOwner] = useState(false);
   const [storeMemberRole, setStoreMemberRole] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  useNicknameUpdates(setDisplayName);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   // Drawer (montaje + animación)
@@ -490,7 +492,12 @@ export default function DashboardShell({
       null;
 
     if (!permission) return;
-    if (permission === "inventory" ? ERP_PERMISSIONS.some((p) => canOpen(p)) : canOpen(permission)) return;
+    const allowed =
+      permission === "inventory" ? ERP_PERMISSIONS.some((p) => canOpen(p)) :
+      permission === "clients" ? ["clients", "receivables", "credit"].some((p) => canOpen(p)) :
+      permission === "orders" ? ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) :
+      canOpen(permission);
+    if (allowed) return;
     void Swal.fire({
       icon: "warning",
       title: "Acceso no habilitado",
@@ -565,7 +572,8 @@ export default function DashboardShell({
       { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true, module: undefined as ModuleKey | undefined },
       { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", show: store && anyOf("inventory"), module: "inventory" as ModuleKey | undefined },
       { href: firstOf("billing"), emoji: "💳", label: "Facturación", show: store && anyOf("billing"), module: "billing" as ModuleKey | undefined },
-      { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && canOpen("orders"), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
       { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
       { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },
@@ -854,6 +862,7 @@ export default function DashboardShell({
             ) : null}
 
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
+            {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
 
             <button
               onClick={logout}

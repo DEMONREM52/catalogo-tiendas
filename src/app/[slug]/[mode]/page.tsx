@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, Sparkles, X } from "lucide-react";
+import { ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, Search, Sparkles, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import Swal from "sweetalert2";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -13,6 +14,8 @@ import { SocialIconRow } from "./socials";
 import { useCart } from "@/lib/cart/CartProvider";
 import { CartDrawer } from "@/lib/cart/CartDrawer";
 import { normalizeStoreContactChannels, whatsappUrl } from "@/lib/store-contacts";
+import { ilikeTokenFilters } from "@/lib/search";
+import { track } from "@/lib/tracking";
 
 import { applyThemeToElement, type ThemeConfig } from "@/lib/themes/applyTheme";
 
@@ -391,6 +394,16 @@ export default function StoreCatalogPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
+  // Botones flotantes (buscar / volver arriba) y carrusel que solo trabaja cuando se ve.
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const productsGridRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLElement>(null);
+  const [searchInView, setSearchInView] = useState(true);
+  const [pastFirstProduct, setPastFirstProduct] = useState(false);
+  const [carouselInView, setCarouselInView] = useState(true);
+  const [pageVisible, setPageVisible] = useState(true);
+
   const { initCart, addItem } = useCart();
   // Mínimos por producto: catálogo mayorista clásico o catálogos con esa regla.
   const wholesaleRules = catalog ? catalog.wholesale_rules : safeMode === "mayor";
@@ -421,12 +434,67 @@ export default function StoreCatalogPage() {
 
   useEffect(() => {
     if (campaignSlides.length < 2 || campaignCarouselPaused || campaignCarouselHovered || dailyCampaign) return;
+    // Fuera de la vista o con la pestaña oculta no se mueve ni gasta recursos.
+    if (!carouselInView || !pageVisible) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => {
       setCampaignSlideIndex((index) => (index + 1) % campaignSlides.length);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [campaignCarouselHovered, campaignCarouselPaused, campaignSlides.length, dailyCampaign]);
+  }, [campaignCarouselHovered, campaignCarouselPaused, campaignSlides.length, dailyCampaign, carouselInView, pageVisible]);
+
+  useEffect(() => {
+    const sync = () => setPageVisible(document.visibilityState !== "hidden");
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setCarouselInView(entry.isIntersecting), { threshold: 0.15 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, campaignSlides.length > 0]);
+
+  // ¿El buscador está en pantalla? Si no, aparece el botón flotante de búsqueda.
+  useEffect(() => {
+    const el = searchBoxRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setSearchInView(entry.isIntersecting), { rootMargin: "-72px 0px 0px 0px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, store?.id, categories.length > 0]);
+
+  // ¿Ya pasó del primer producto? Entonces aparece "volver arriba".
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const first = productsGridRef.current?.firstElementChild as HTMLElement | null;
+      setPastFirstProduct(first ? first.getBoundingClientRect().bottom < 0 : window.scrollY > 900);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [loading, products.length > 0]);
+
+  // Medición de búsquedas (cuando la persona deja de escribir).
+  useEffect(() => {
+    const term = q.trim();
+    if (!store?.slug || term.length < 2) return;
+    const timer = window.setTimeout(() => track.search(term, store.slug), 1200);
+    return () => window.clearTimeout(timer);
+  }, [q, store?.slug]);
 
   useEffect(() => {
     if (loading || !store || campaigns.length === 0) return;
@@ -793,6 +861,55 @@ export default function StoreCatalogPage() {
       return;
     }
 
+    const normalizeRows = (rows: ProductRow[]): ProductRow[] =>
+      rows
+        .map((p) => ({
+          ...p,
+          price_retail: Number(p.price_retail ?? 0),
+          price_wholesale: Number(p.price_wholesale ?? 0),
+          min_wholesale: p.min_wholesale == null ? null : Number(p.min_wholesale),
+          stock: p.stock === null || p.stock === undefined ? null : Number(p.stock),
+        }))
+        .filter((p) => p.stock === null || Number(p.stock) > 0);
+    const columns = "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details";
+    const term = q.trim();
+
+    // Búsqueda inteligente (sin orden, sin tildes, lo más parecido primero) y filtro por
+    // categoría que incluye las categorías adicionales de cada producto.
+    if (term.length >= 2 || selectedCat) {
+      const smart = await sb.rpc("store_public_search", {
+        p_store: store.id,
+        p_q: term.length >= 2 ? term : null,
+        p_category: selectedCat,
+        p_limit: PAGE_SIZE,
+        p_offset: from,
+      });
+      // Sin texto y sin resultados se usa la consulta normal (por si falta la migración de categorías).
+      const smartTotal = Number((smart.data as { total?: number } | null)?.total ?? 0);
+      if (!smart.error && smart.data && (term.length >= 2 || smartTotal > 0)) {
+        const result = smart.data as { total: number; ids: string[] };
+        const ids = result.ids ?? [];
+        let found: ProductRow[] = [];
+        if (ids.length) {
+          const { data, error } = await sb.from("products").select(columns).in("id", ids);
+          if (error) throw error;
+          const order = new Map(ids.map((id, index) => [id, index]));
+          found = normalizeRows(((data ?? []) as unknown) as ProductRow[])
+            .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+            // Se muestra en la categoría elegida aunque su principal sea otra.
+            .map((p) => (selectedCat ? { ...p, category_id: selectedCat } : p));
+        }
+        if (opts.reset) {
+          setProducts(found);
+          setPage(0);
+        } else {
+          setProducts((prev) => [...prev, ...found]);
+        }
+        setHasMore(from + ids.length < Number(result.total ?? 0));
+        return;
+      }
+    }
+
     // base
     let query = sb
       .from("products")
@@ -807,11 +924,9 @@ export default function StoreCatalogPage() {
     // category (server)
     if (selectedCat) query = query.eq("category_id", selectedCat);
 
-    // search (server) — si quieres, puedes quitarlo y dejarlo local
-    const s = q.trim();
-    if (s.length >= 2) {
-      const safe = s.replace(/,/g, " ");
-      query = query.or(`name.ilike.%${safe}%,description.ilike.%${safe}%`);
+    // Respaldo si aún no está la búsqueda inteligente en Supabase: todas las palabras, en cualquier orden.
+    if (term.length >= 2) {
+      for (const filter of ilikeTokenFilters(["name", "description"], term)) query = query.or(filter);
     }
 
     // orden estable + rango
@@ -822,15 +937,7 @@ export default function StoreCatalogPage() {
 
     if (error) throw error;
 
-    const normalized: ProductRow[] = ((data as any[]) ?? [])
-      .map((p) => ({
-        ...p,
-        price_retail: Number(p.price_retail ?? 0),
-        price_wholesale: Number(p.price_wholesale ?? 0),
-        min_wholesale: p.min_wholesale == null ? null : Number(p.min_wholesale),
-        stock: p.stock === null || p.stock === undefined ? null : Number(p.stock),
-      }))
-      .filter((p) => p.stock === null || Number(p.stock) > 0);
+    const normalized: ProductRow[] = normalizeRows(((data ?? []) as unknown) as ProductRow[]);
 
     if (opts.reset) {
       setProducts(normalized);
@@ -984,6 +1091,8 @@ export default function StoreCatalogPage() {
       } as any);
     }
 
+    track.addToCart({ id: p.id, name: p.name, price: Number(price ?? 0), quantity: qty }, store?.slug);
+
     await Swal.fire({
       icon: "success",
       title: "Agregado",
@@ -1109,6 +1218,19 @@ export default function StoreCatalogPage() {
   }
   function showCampaignSlide(index: number) {
     setCampaignSlideIndex((index + campaignSlides.length) % campaignSlides.length);
+  }
+  const smoothBehavior = (): ScrollBehavior =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  function goToSearch() {
+    const box = searchBoxRef.current;
+    if (!box) return;
+    // El foco va primero (en celulares así se abre el teclado) y luego se desliza hasta el buscador.
+    searchInputRef.current?.focus({ preventScroll: true });
+    const top = box.getBoundingClientRect().top + window.scrollY - 96;
+    window.scrollTo({ top: Math.max(0, top), behavior: smoothBehavior() });
+  }
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: smoothBehavior() });
   }
   const glassBg = "color-mix(in oklab, var(--t-card-bg) 78%, transparent)";
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
@@ -1344,6 +1466,7 @@ export default function StoreCatalogPage() {
                         href={href}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={() => track.contact("whatsapp", store.slug)}
                         className="flex min-w-0 items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition hover:bg-emerald-500/10"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-500/10 text-emerald-500">
@@ -1383,8 +1506,10 @@ export default function StoreCatalogPage() {
         const slideLoaded = loadedCampaignSlideKey === slideKey;
         return (
           <section
+            ref={carouselRef}
             aria-label="Campañas y productos destacados"
             className="mx-auto w-full max-w-screen-2xl px-6 pt-6 sm:px-8 lg:px-12"
+            style={{ contentVisibility: "auto", containIntrinsicSize: "auto 720px" }}
             onMouseEnter={() => setCampaignCarouselHovered(true)}
             onMouseLeave={() => setCampaignCarouselHovered(false)}
           >
@@ -1688,7 +1813,7 @@ export default function StoreCatalogPage() {
             </div>
 
             {/* Buscador */}
-            <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+            <div ref={searchBoxRef} className="mt-4 scroll-mt-24 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
               <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                 Buscar producto
               </label>
@@ -1699,8 +1824,12 @@ export default function StoreCatalogPage() {
                   background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                   color: "var(--t-text)",
                 }}
-                placeholder="Ej: camiseta, bolso, perfume..."
+                placeholder="Ej: camiseta roja, bolso, perfume..."
                 value={q}
+                ref={searchInputRef}
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
                 onChange={(e) => setQ(e.target.value)}
               />
               {q ? (
@@ -1716,7 +1845,7 @@ export default function StoreCatalogPage() {
             </div>
           </div>
         ) : (
-          <div className="mt-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
+          <div ref={searchBoxRef} className="mt-2 scroll-mt-24 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
             <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
               Buscar producto
             </label>
@@ -1727,8 +1856,12 @@ export default function StoreCatalogPage() {
                 background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
                 color: "var(--t-text)",
               }}
-              placeholder="Ej: camiseta, bolso, perfume..."
+              placeholder="Ej: camiseta roja, bolso, perfume..."
               value={q}
+              ref={searchInputRef}
+              type="search"
+              enterKeyHint="search"
+              autoComplete="off"
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
@@ -1767,7 +1900,7 @@ export default function StoreCatalogPage() {
           </div>
         ) : (
           <>
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div ref={productsGridRef} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((p) => {
                 const price = safeMode === "detal" ? p.price_retail : p.price_wholesale;
 
@@ -2062,6 +2195,50 @@ export default function StoreCatalogPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Botones flotantes: buscar y volver arriba (encima del carrito, sin estorbar) */}
+      <div
+        className="pointer-events-none fixed right-8 z-40 flex flex-col items-center gap-3"
+        style={{ bottom: "calc(6.75rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <AnimatePresence>
+          {!searchInView && !dailyCampaign ? (
+            <motion.button
+              key="float-search"
+              type="button"
+              initial={{ opacity: 0, scale: 0.6, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.6, y: 12 }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              onClick={goToSearch}
+              className="pointer-events-auto relative grid h-12 w-12 place-items-center rounded-full border shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:-translate-y-0.5 active:scale-95"
+              style={{ borderColor: "var(--t-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", color: "var(--t-text)" }}
+              aria-label={q ? `Buscar producto (filtro activo: ${q})` : "Buscar producto"}
+              title="Buscar producto"
+            >
+              <Search size={20} />
+              {q ? <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full border-2" style={{ background: "var(--t-accent)", borderColor: "var(--t-card-bg)" }} /> : null}
+            </motion.button>
+          ) : null}
+          {pastFirstProduct && !dailyCampaign ? (
+            <motion.button
+              key="float-top"
+              type="button"
+              initial={{ opacity: 0, scale: 0.6, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.6, y: 12 }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              onClick={scrollToTop}
+              className="pointer-events-auto grid h-12 w-12 place-items-center rounded-full text-white shadow-[0_10px_28px_rgba(0,0,0,0.3)] transition hover:-translate-y-0.5 active:scale-95"
+              style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #fff)" }}
+              aria-label="Volver al inicio"
+              title="Volver al inicio"
+            >
+              <ArrowUp size={20} />
+            </motion.button>
+          ) : null}
+        </AnimatePresence>
+      </div>
 
       <CartDrawer />
     </main>

@@ -12,6 +12,7 @@ import {
   EMPTY_PRODUCT_DETAILS,
   type ProductDetails,
 } from "@/lib/product-details";
+import { CategoryPicker, saveProductCategoryIds } from "../CategoryPicker";
 
 type Category = { id: string; name: string };
 
@@ -101,7 +102,8 @@ export default function CreateProductPage() {
   const [stockRaw, setStockRaw] = useState<string>(""); // "" => ilimitado
   const [active, setActive] = useState(true);
 
-  const [categoryId, setCategoryId] = useState<string>("");
+  // Categorías donde aparece (la primera es la principal).
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [productDetails, setProductDetails] = useState<ProductDetails>({ ...EMPTY_PRODUCT_DETAILS });
@@ -197,7 +199,7 @@ export default function CreateProductPage() {
         stock: computedStock, // null si vacío
         active: !!active,
         image_url: imageUrl,
-        category_id: categoryId || null,
+        category_id: categoryIds[0] ?? null,
       };
 
       const { data, error } = await sb.from("products").insert({
@@ -205,11 +207,12 @@ export default function CreateProductPage() {
         product_details: productDetails,
       }).select("id").single();
       if (error) throw error;
+      const categoryWarning = data?.id && categoryIds.length > 1 ? await saveProductCategoryIds(String(data.id), categoryIds) : null;
 
       await Swal.fire({
-        icon: "success",
+        icon: categoryWarning ? "warning" : "success",
         title: "Producto creado",
-        text: "Tu producto y su página de catálogo están listos.",
+        text: categoryWarning ?? "Tu producto y su página de catálogo están listos.",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
         confirmButtonText: "Ir a editar",
@@ -380,24 +383,7 @@ export default function CreateProductPage() {
               </div>
 
               <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Categoría
-                </label>
-                <select
-                  {...inputProps()}
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                >
-                  <option value="">Sin categoría</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
 
                 <label
                   className="mt-3 flex items-center gap-2 rounded-2xl border p-3 text-sm"

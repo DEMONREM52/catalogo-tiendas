@@ -27,6 +27,7 @@ import {
   type SocialPlatform,
 } from "@/lib/social-content";
 import { reviewCommercialContent } from "@/lib/content-review";
+import { ilikeTokenFilters } from "@/lib/search";
 
 type ProductOption = {
   id: string;
@@ -239,8 +240,7 @@ export default function SocialDashboard() {
       .order("created_at", { ascending: false })
       .range(nextOffset, nextOffset + PAGE_SIZE - 1);
     if (statusFilter !== "all") query = query.eq("status", statusFilter);
-    const term = search.trim().replace(/[,%()]/g, " ");
-    if (term) query = query.ilike("title", `%${term}%`);
+    for (const filter of ilikeTokenFilters(["title"], search)) query = query.or(filter);
     const { data, error: queryError } = await query;
     if (queryError) throw queryError;
     const rows = (data ?? []) as SocialPost[];
@@ -338,8 +338,7 @@ export default function SocialDashboard() {
         .eq("store_id", store.id)
         .order("name", { ascending: true })
         .limit(20);
-      const term = productSearch.trim().replace(/[,%()]/g, " ");
-      if (term) query = query.ilike("name", `%${term}%`);
+      for (const filter of ilikeTokenFilters(["name", "sku"], productSearch)) query = query.or(filter);
       const { data, error: productError } = await query;
       if (cancelled) return;
       if (productError) {

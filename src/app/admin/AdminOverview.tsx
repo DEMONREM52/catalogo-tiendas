@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { matchesSearch } from "@/lib/search";
 
 type StoreRow = {
   id: string;
@@ -604,7 +605,7 @@ export default function AdminOverview() {
   }
 
   const filteredOrders = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("es-CO");
+    const query = search.trim();
     const start = period === "all" || !startDate ? null : new Date(`${startDate}T00:00:00`);
     const end = period === "all" || !endDate ? null : new Date(`${endDate}T23:59:59.999`);
     const storeNames = new Map(stores.map((store) => [store.id, store.name]));
@@ -617,7 +618,7 @@ export default function AdminOverview() {
       if (paymentFilter !== "all" && (isPaid(order) ? "paid" : "unpaid") !== paymentFilter) return false;
       if (catalogFilter !== "all" && order.catalog_type !== catalogFilter) return false;
       if (!query) return true;
-      return [
+      return matchesSearch([
         order.receipt_no,
         order.token,
         order.customer_name,
@@ -626,7 +627,7 @@ export default function AdminOverview() {
         order.payment_status,
         order.catalog_type,
         storeNames.get(order.store_id),
-      ].some((value) => String(value ?? "").toLocaleLowerCase("es-CO").includes(query));
+      ].map((value) => String(value ?? "")).join(" "), query);
     });
   }, [orders, stores, period, startDate, endDate, storeFilter, statusFilter, paymentFilter, catalogFilter, search]);
 

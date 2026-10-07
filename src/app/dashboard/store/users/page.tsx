@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
-import type { StoreMenuPermission } from "@/lib/store-user-auth";
+import { PERMISSION_LIST } from "@/lib/permissions";
+import { PermissionPicker } from "./PermissionPicker";
 
 type MemberRow = {
   store_id: string;
@@ -20,23 +21,7 @@ type MemberRow = {
 
 type PointRow = { id: string; name: string; kind: string };
 
-const PERMISSION_OPTIONS: Array<{ value: StoreMenuPermission; label: string; description: string }> = [
-  { value: "store", label: "Mi tienda", description: "Datos y apariencia de la tienda" },
-  { value: "billing", label: "Facturación", description: "Configuración de comprobantes y pagos" },
-  { value: "pos", label: "POS / Facturación", description: "Ventas, documentos y caja" },
-  { value: "clients", label: "Clientes", description: "Consultar y administrar clientes" },
-  { value: "users", label: "Usuarios", description: "Crear usuarios y asignar permisos" },
-  { value: "products", label: "Productos y catálogos", description: "Productos, catálogos, categorías por catálogo y campañas" },
-  { value: "categories", label: "Categorías", description: "Organizar el catálogo" },
-  { value: "orders", label: "Pedidos", description: "Consultar pedidos y actualizar sus estados" },
-    { value: "inventory", label: "Inventario y kardex", description: "Ver existencias, bodegas y movimientos" },
-    { value: "inventory_adjust", label: "Ajustes de inventario", description: "Corregir existencias con motivo" },
-    { value: "transfers", label: "Traslados", description: "Mover productos entre bodegas" },
-    { value: "purchases", label: "Compras", description: "Registrar y anular compras" },
-    { value: "suppliers", label: "Proveedores", description: "Administrar proveedores" },
-    { value: "payables", label: "Cuentas por pagar", description: "Registrar pagos a proveedores" },
-    { value: "audit", label: "Auditoría e informes", description: "Ver informes de ventas, ganancias, inventario y el historial de operaciones" },
-  ] as const;
+const PERMISSION_OPTIONS = PERMISSION_LIST;
 
 function inputProps() {
   return {
@@ -261,6 +246,52 @@ export default function StoreUsersPage() {
     });
     if (!res.isConfirmed) return;
     await updateMember(member, { active: !member.active });
+  }
+
+  async function deleteMember(member: MemberRow) {
+    if (!store) return;
+    const who = member.display_name || member.username || "este usuario";
+    const res = await Swal.fire({
+      icon: "warning",
+      title: `Eliminar a ${who}`,
+      html: "Perderá el acceso de forma <b>permanente</b> y su usuario quedará libre.<br/><small>Las ventas, abonos y movimientos que hizo se conservan en el historial.</small>",
+      input: "text",
+      inputPlaceholder: `Escribe ELIMINAR para confirmar`,
+      showCancelButton: true,
+      confirmButtonText: "Eliminar usuario",
+      cancelButtonText: "Cancelar",
+      background: "#0b0b0b",
+      color: "#fff",
+      confirmButtonColor: "#ef4444",
+      inputValidator: (value) => (value.trim().toUpperCase() === "ELIMINAR" ? null : "Escribe ELIMINAR para confirmar."),
+    });
+    if (!res.isConfirmed) return;
+    setSaving(true);
+    try {
+      const { data: sessionData, error: sessionError } = await supabaseBrowser().auth.getSession();
+      if (sessionError) throw sessionError;
+      const response = await fetch("/api/store-team/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token ?? ""}` },
+        body: JSON.stringify({ store_id: store.id, user_id: member.user_id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudo eliminar el usuario.");
+      setMembers((current) => current.filter((row) => row.user_id !== member.user_id));
+      await Swal.fire({
+        icon: result.warning ? "info" : "success",
+        title: "Usuario eliminado",
+        text: result.warning ?? `${who} ya no tiene acceso a la tienda.`,
+        timer: result.warning ? undefined : 1500,
+        showConfirmButton: Boolean(result.warning),
+        background: "#0b0b0b",
+        color: "#fff",
+      });
+    } catch (error: unknown) {
+      await Swal.fire({ icon: "error", title: "No se pudo eliminar", text: String((error as Error)?.message ?? error), background: "#0b0b0b", color: "#fff" });
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function copyLoginLink(member: MemberRow) {
@@ -512,34 +543,9 @@ export default function StoreUsersPage() {
             </div>
 
             <div>
-              <label className="text-sm font-semibold">Secciones permitidas</label>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {PERMISSION_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-sm"
-                    style={{ borderColor: "var(--t-card-border)" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPermissions.includes(option.value)}
-                      onChange={(e) => {
-                        setSelectedPermissions((prev) =>
-                          e.target.checked
-                            ? [...new Set([...prev, option.value])]
-                            : prev.filter((value) => value !== option.value),
-                        );
-                      }}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border"
-                    />
-                    <span>
-                      <span className="block font-semibold">{option.label}</span>
-                      <span className="text-xs" style={{ color: "var(--t-muted)" }}>
-                        {option.description}
-                      </span>
-                    </span>
-                  </label>
-                ))}
+              <label className="text-sm font-semibold">Permisos</label>
+              <div className="mt-2">
+                <PermissionPicker value={selectedPermissions} onChange={setSelectedPermissions} disabled={saving} compact />
               </div>
             </div>
 
@@ -677,6 +683,16 @@ export default function StoreUsersPage() {
                       >
                         {member.active ? "Desactivar" : "Reactivar"}
                       </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border px-3 py-2 text-xs font-semibold"
+                        style={{ borderColor: "rgba(239,68,68,.45)", background: "rgba(239,68,68,.12)", color: "#f87171" }}
+                        disabled={saving}
+                        onClick={() => void deleteMember(member)}
+                        title="Eliminar el acceso de forma permanente"
+                      >
+                        🗑️ Eliminar
+                      </button>
                     </div>
                   </div>
                   {editingUserId === member.user_id ? (
@@ -689,22 +705,7 @@ export default function StoreUsersPage() {
                         ))}
                       </select>
                       <p className="mb-2 mt-4 text-sm font-semibold">Permisos del usuario</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {PERMISSION_OPTIONS.map((option) => (
-                          <label key={option.value} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={editingPermissions.includes(option.value)}
-                              onChange={(event) => setEditingPermissions((current) =>
-                                event.target.checked
-                                  ? [...new Set([...current, option.value])]
-                                  : current.filter((value) => value !== option.value),
-                              )}
-                            />
-                            {option.label}
-                          </label>
-                        ))}
-                      </div>
+                      <PermissionPicker value={editingPermissions} onChange={setEditingPermissions} disabled={saving} />
                       <button
                         type="button"
                         className="btn-cta mt-4 px-4 py-2 text-sm font-semibold"

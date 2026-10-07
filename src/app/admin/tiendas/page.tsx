@@ -5,6 +5,7 @@ import Link from "next/link";
 import Swal from "sweetalert2";
 import { fetchAdminData } from "@/lib/admin-data";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { smartFilter } from "@/lib/search";
 
 type Store = {
   id: string;
@@ -132,10 +133,10 @@ export default function AdminTiendasPage() {
   const [stores, setStores] = useState<Store[]>([]);
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return stores.filter((x) =>
-      (statusFilter === "all" || (isStoreActiveNow(x) ? "active" : "inactive") === statusFilter) &&
-      (!s || `${x.name} ${x.slug} ${x.whatsapp} ${x.owner_id}`.toLowerCase().includes(s))
+    return smartFilter(
+      stores.filter((x) => statusFilter === "all" || (isStoreActiveNow(x) ? "active" : "inactive") === statusFilter),
+      q,
+      (x) => `${x.name} ${x.slug} ${x.whatsapp} ${x.owner_id}`,
     );
   }, [q, stores, statusFilter]);
 

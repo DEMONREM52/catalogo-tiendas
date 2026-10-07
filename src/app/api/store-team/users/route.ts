@@ -282,6 +282,55 @@ export async function POST(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const { admin, userId } = await authorizeRequest(request);
+    const body = await request.json();
+    const storeId = String(body.store_id ?? "");
+    const targetUserId = String(body.user_id ?? "");
+    if (!storeId || !targetUserId) throw new ApiError("Faltan datos del usuario.", 400);
+    const manager = await requireStoreManager(admin, userId, storeId);
+    if (targetUserId === userId) throw new ApiError("No puedes eliminar tu propio usuario.", 400);
+    if (manager.store.owner_id === targetUserId) throw new ApiError("No se puede eliminar al dueño de la tienda.", 400);
+
+    const { data: target, error: targetError } = await admin
+      .from("store_users")
+      .select("user_id,role,username")
+      .eq("store_id", storeId)
+      .eq("user_id", targetUserId)
+      .maybeSingle();
+    if (targetError) throw new ApiError(targetError.message, 500);
+    if (!target) throw new ApiError("El usuario no pertenece a esta tienda.", 404);
+    if (target.role === "store_admin" && !manager.isOwner && !manager.isAdmin) {
+      throw new ApiError("Solo el dueño puede eliminar a otro administrador.", 403);
+    }
+
+    const { error: deleteError } = await admin.from("store_users").delete().eq("store_id", storeId).eq("user_id", targetUserId);
+    if (deleteError) throw new ApiError(deleteError.message, 500);
+
+    // Si no pertenece a otra tienda ni es dueño de una, se borra también su acceso.
+    const [{ count: otherMemberships }, { count: ownedStores }, { data: profile }] = await Promise.all([
+      admin.from("store_users").select("user_id", { count: "exact", head: true }).eq("user_id", targetUserId),
+      admin.from("stores").select("id", { count: "exact", head: true }).eq("owner_id", targetUserId),
+      admin.from("user_profiles").select("role").eq("user_id", targetUserId).maybeSingle(),
+    ]);
+    let warning: string | null = null;
+    if (!otherMemberships && !ownedStores && profile?.role !== "admin") {
+      const { error: authError } = await admin.auth.admin.deleteUser(targetUserId);
+      if (authError) {
+        // Si la base conserva referencias, se bloquea el acceso para siempre en lugar de borrarlo.
+        await admin.auth.admin.updateUserById(targetUserId, { ban_duration: "876000h" });
+        warning = "El acceso se quitó y el usuario quedó bloqueado de forma permanente (se conserva por el historial).";
+      } else {
+        await admin.from("user_profiles").delete().eq("user_id", targetUserId);
+      }
+    }
+    return NextResponse.json({ ok: true, warning });
+  } catch (error) {
+    return respondWithError(error);
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const { admin, userId } = await authorizeRequest(request);

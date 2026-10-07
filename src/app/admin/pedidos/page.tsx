@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
+import { smartFilter } from "@/lib/search";
 
 /** =========================
  * Helpers
@@ -169,9 +170,7 @@ export default function AdminPedidosPage() {
    * Filter
    * ========================= */
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-
-    return orders.filter((o) => {
+    const byFilters = orders.filter((o) => {
       if (storeFilter !== "all" && o.store_id !== storeFilter) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       if (paymentFilter !== "all" && (o.payment_status === "paid" ? "paid" : "pending") !== paymentFilter) return false;
@@ -179,18 +178,11 @@ export default function AdminPedidosPage() {
       const orderDate = new Date(o.created_at);
       if (startDate && orderDate < new Date(`${startDate}T00:00:00`)) return false;
       if (endDate && orderDate > new Date(`${endDate}T23:59:59.999`)) return false;
-
-      if (!s) return true;
-
-      const txt =
-        `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${
-          o.stores?.slug ?? ""
-        } ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${
-          o.customer_note ?? ""
-        }`.toLowerCase();
-
-      return txt.includes(s);
+      return true;
     });
+    return smartFilter(byFilters, q, (o) =>
+      `${o.receipt_no ?? ""} ${o.token ?? ""} ${o.stores?.name ?? ""} ${o.stores?.slug ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""}`,
+    { keepOrder: true });
   }, [orders, q, storeFilter, statusFilter, paymentFilter, catalogFilter, startDate, endDate]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));

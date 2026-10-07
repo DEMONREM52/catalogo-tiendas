@@ -147,6 +147,18 @@ const SEARCH_PAGE = 50; // ✅ búsqueda pro
 
 type Cursor = { created_at: string; id: string } | null;
 
+const PRODUCT_COLUMNS = "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details";
+/** Filtra por cualquiera de las categorías del producto (no solo la principal). */
+const CATEGORY_JOIN = ",product_category_links!inner(category_id)";
+let linksAvailable: boolean | null = null;
+async function categoryLinksAvailable(sb: ReturnType<typeof supabaseBrowser>) {
+  if (linksAvailable === null) {
+    const { error } = await sb.from("product_category_links").select("product_id").limit(1);
+    linksAvailable = !error;
+  }
+  return linksAvailable;
+}
+
 export default function ProductsListPage() {
   // carga inicial
   const [loading, setLoading] = useState(true);
@@ -271,14 +283,13 @@ export default function ProductsListPage() {
       setCatalogRetail(isRetailEnabled);
       await loadCategories(sb, sId);
 
+      const byLinks = categoryFilter !== "all" && (await categoryLinksAvailable(sb));
       let query = sb
         .from("products")
-        .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details"
-        )
+        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
         .eq("store_id", sId);
       if (statusFilter !== "all") query = query.eq("active", statusFilter === "active");
-      if (categoryFilter !== "all") query = query.eq("category_id", categoryFilter);
+      if (categoryFilter !== "all") query = byLinks ? query.eq("product_category_links.category_id", categoryFilter) : query.eq("category_id", categoryFilter);
       if (stockFilter === "in") query = query.gt("stock", 0);
       if (stockFilter === "out") query = query.eq("stock", 0);
       if (stockFilter === "unlimited") query = query.is("stock", null);
@@ -321,15 +332,14 @@ export default function ProductsListPage() {
     try {
       const sb = supabaseBrowser();
 
+      const byLinks = categoryFilter !== "all" && (await categoryLinksAvailable(sb));
       let query = sb
         .from("products")
-        .select(
-          "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details"
-        )
+        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
         .eq("store_id", storeId)
         .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
       if (statusFilter !== "all") query = query.eq("active", statusFilter === "active");
-      if (categoryFilter !== "all") query = query.eq("category_id", categoryFilter);
+      if (categoryFilter !== "all") query = byLinks ? query.eq("product_category_links.category_id", categoryFilter) : query.eq("category_id", categoryFilter);
       if (stockFilter === "in") query = query.gt("stock", 0);
       if (stockFilter === "out") query = query.eq("stock", 0);
       if (stockFilter === "unlimited") query = query.is("stock", null);
@@ -606,7 +616,6 @@ export default function ProductsListPage() {
       const statuses = socialStatuses[product.id] ?? [];
       if (statusFilter === "active" && !product.active) return false;
       if (statusFilter === "inactive" && product.active) return false;
-      if (categoryFilter !== "all" && product.category_id !== categoryFilter) return false;
       if (stockFilter === "in" && product.stock !== null && product.stock <= 0) return false;
       if (stockFilter === "out" && (product.stock === null || product.stock > 0)) return false;
       if (stockFilter === "unlimited" && product.stock !== null) return false;

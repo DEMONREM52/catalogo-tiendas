@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../store/ImageUpload";
 import { getDashboardStore } from "@/lib/store-utils";
+import { smartFilter } from "@/lib/search";
 
 type Category = {
   id: string;
@@ -26,9 +27,7 @@ export default function CategoriesPage() {
   const [q, setQ] = useState("");
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return categories;
-    return categories.filter((c) => c.name.toLowerCase().includes(s));
+    return smartFilter(categories, q, (c) => c.name);
   }, [categories, q]);
 
   async function load() {

@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData } from "@/lib/admin-data";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";
+import { smartFilter } from "@/lib/search";
 
 type StoreMini = { id: string; name: string; slug: string };
 
@@ -62,9 +63,7 @@ export default function AdminCategoriasPage() {
   // Filter
   // -----------------------------
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return cats;
-    return cats.filter((c) => (c.name ?? "").toLowerCase().includes(s));
+    return smartFilter(cats, q, (c) => c.name ?? "");
   }, [cats, q]);
 
   // -----------------------------
