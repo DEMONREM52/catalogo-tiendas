@@ -13,6 +13,7 @@ import {
 } from "@/lib/product-details";
 import { ArrowLeft, Camera, Check, PackageCheck, PackageX, ScanSearch, Sparkles } from "lucide-react";
 import { CatalogFinderButton } from "@/components/product-finder/CatalogFinder";
+import { ManifestLink } from "@/components/pwa/ManifestLink";
 import { TrackProductView } from "@/components/StorePixel";
 
 type PageProps = {
@@ -45,8 +46,16 @@ function catalogHref(storeSlug: string, catalog: { slug: string; key: string | n
   return `/${storeSlug}/${catalog.slug}${catalog.key ? `?key=${encodeURIComponent(catalog.key)}` : ""}`;
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug, id } = await params;
+  const { catalogo } = await searchParams;
+  // Instalar desde «Ver más» instala el catálogo del que viene (no la app de RemHub).
+  const catalogPath = catalogo && /^[a-z0-9][a-z0-9-]{0,47}$/i.test(catalogo) ? catalogo.toLowerCase() : "detal";
+  const appMeta = {
+    manifest: `/${slug}/${catalogPath}/app.webmanifest`,
+    icons: { apple: [{ url: `/api/pwa-icon?${new URLSearchParams({ store: decodeURIComponent(slug), mode: catalogPath, size: "180" }).toString()}`, sizes: "180x180", type: "image/png" }] },
+    appleWebApp: { capable: true, statusBarStyle: "default" as const },
+  };
   const sb = supabaseServer();
   const { data: store, error: storeError } = await sb
     .from("stores")
@@ -56,7 +65,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .eq("catalog_retail", true)
     .maybeSingle();
   if (storeError) throw new Error(`No se pudo cargar la tienda: ${storeError.message}`);
-  if (!store) return { title: "Producto no disponible · RemHub" };
+  if (!store) return { title: "Producto no disponible · RemHub", ...appMeta };
 
   const { data: product, error: productError } = await sb
     .from("products")
@@ -68,18 +77,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle();
   if (productError) throw new Error(`No se pudo cargar el producto: ${productError.message}`);
   if (!product) {
-    return { title: "Producto no disponible · RemHub", robots: { index: false, follow: false } };
+    return { title: "Producto no disponible · RemHub", robots: { index: false, follow: false }, ...appMeta };
   }
 
   const details = normalizeProductDetails(product.product_details);
   const description = (details.long_description || product.description || `Conoce todos los detalles de ${product.name}.`)
     .replace(/\s+/g, " ")
     .slice(0, 300);
-  const images = [product.image_url, ...details.gallery_urls].filter(
+  const photos = [product.image_url, ...details.gallery_urls].filter(
     (url): url is string => Boolean(url) && isSafeHttpUrl(url),
   );
+  // Sin fotos: la tarjeta con el logo de la tienda.
+  const images = photos.length ? photos : [`/api/og?store=${encodeURIComponent(decodeURIComponent(slug))}`];
 
   return {
+    ...appMeta,
     title: product.name,
     description,
     openGraph: {
@@ -180,6 +192,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   return (
     <main className="product-landing-page min-h-screen px-2 py-4 sm:px-4 sm:py-8 lg:px-6">
       <TrackProductView item={{ id: product.id, name: product.name, price: Number(price) || 0, category: categoryName }} store={store.slug} />
+      <ManifestLink base={`/${store.slug}/${inCatalog?.slug ?? "detal"}/app.webmanifest`} param="key" />
       <div className="mx-auto w-full max-w-[1440px]">
         <header className="product-landing-topbar mb-6 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5">
           <Link href={backHref} className="inline-flex min-w-0 items-center gap-2 text-sm font-bold opacity-80 transition hover:opacity-100">

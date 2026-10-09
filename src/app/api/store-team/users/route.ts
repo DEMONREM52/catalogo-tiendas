@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  displayStoreUsername,
   isValidStoreUsername,
   normalizeStoreUsername,
   STORE_MENU_PERMISSIONS,
+  STORE_STAFF_MIN_PASSWORD,
   storeStaffAuthEmail,
+  storeStaffAuthPassword,
 } from "@/lib/store-user-auth";
+
+/** Patrón ilike que solo coincide con ese texto exacto (sin distinguir mayúsculas): escapa % y _. */
+function likeExact(value: string) {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 class ApiError extends Error {
   constructor(
@@ -205,7 +213,8 @@ export async function POST(request: Request) {
     const { admin, userId } = await authorizeRequest(request);
     const body = await request.json();
     const storeId = String(body.store_id ?? "");
-    const username = normalizeStoreUsername(String(body.username ?? ""));
+    const usernameShown = displayStoreUsername(String(body.username ?? ""));
+    const username = normalizeStoreUsername(usernameShown);
     const password = String(body.password ?? "");
     const displayName = String(body.display_name ?? "").trim();
     const requestedRole = String(body.role ?? "seller");
@@ -215,8 +224,8 @@ export async function POST(request: Request) {
     if (!isValidStoreUsername(username)) {
       throw new ApiError("El usuario debe tener de 3 a 32 caracteres: letras, números, punto, guion o guion bajo.", 400);
     }
-    if (password.length < 8) {
-      throw new ApiError("La contraseña debe tener al menos 8 caracteres.", 400);
+    if (password.length < STORE_STAFF_MIN_PASSWORD) {
+      throw new ApiError(`La contraseña debe tener al menos ${STORE_STAFF_MIN_PASSWORD} caracteres.`, 400);
     }
     if (displayName.length > 100) throw new ApiError("El nombre visible no puede superar 100 caracteres.", 400);
     const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
@@ -238,20 +247,21 @@ export async function POST(request: Request) {
       .from("store_users")
       .select("user_id")
       .eq("store_id", storeId)
-      .eq("username", username)
+      .ilike("username", likeExact(username))
+      .limit(1)
       .maybeSingle();
     if (duplicateError) throw new ApiError(duplicateError.message, 500);
-    if (duplicate) throw new ApiError("Ese usuario interno ya existe en esta tienda.", 409);
+    if (duplicate) throw new ApiError("Ese usuario interno ya existe en esta tienda (no importan mayúsculas o minúsculas).", 409);
 
     const email = storeStaffAuthEmail(storeId, username);
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      password,
+      password: storeStaffAuthPassword(password),
       email_confirm: true,
       user_metadata: {
-        internal_username: username,
+        internal_username: usernameShown,
         internal_store_id: storeId,
-        display_name: displayName || username,
+        display_name: displayName || usernameShown,
       },
     });
     if (createError || !created.user) {
@@ -262,8 +272,8 @@ export async function POST(request: Request) {
     const { error: membershipError } = await admin.from("store_users").insert({
       store_id: storeId,
       user_id: userIdCreated,
-      username,
-      display_name: displayName || username,
+      username: usernameShown,
+      display_name: displayName || usernameShown,
       role: requestedRole,
       permissions,
       active: true,
@@ -286,15 +296,15 @@ export async function POST(request: Request) {
 
     const loginUrl = new URL(`/acceso/${encodeURIComponent(store.slug)}`, request.url);
     loginUrl.searchParams.set("sid", storeId);
-    loginUrl.searchParams.set("usuario", username);
+    loginUrl.searchParams.set("usuario", usernameShown);
 
     return NextResponse.json({
       ok: true,
       user: {
         store_id: storeId,
         user_id: userIdCreated,
-        username,
-        display_name: displayName || username,
+        username: usernameShown,
+        display_name: displayName || usernameShown,
         role: requestedRole,
         permissions,
         active: true,
@@ -371,7 +381,7 @@ export async function PATCH(request: Request) {
 
     const { data: target, error: targetError } = await admin
       .from("store_users")
-      .select("user_id,role,point_id")
+      .select("user_id,role,point_id,username")
       .eq("store_id", storeId)
       .eq("user_id", targetUserId)
       .maybeSingle();
@@ -382,7 +392,7 @@ export async function PATCH(request: Request) {
       throw new ApiError("Solo el dueño puede administrar el acceso de otro administrador.", 403);
     }
 
-    const patch: { point_id?: string | null; point_ids?: string[]; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
+    const patch: { point_id?: string | null; point_ids?: string[]; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer"; username?: string; display_name?: string } = {};
     if (body.permissions !== undefined) {
       patch.permissions = normalizePermissions(body.permissions);
       assertCanGrantPermissions(manager, patch.permissions);
@@ -411,19 +421,66 @@ export async function PATCH(request: Request) {
       patch.role = body.role;
     }
     const newPassword = body.new_password === undefined ? null : String(body.new_password);
-    if (newPassword !== null && newPassword.length < 8) {
-      throw new ApiError("La nueva contraseña debe tener al menos 8 caracteres.", 400);
+    if (newPassword !== null && newPassword.length < STORE_STAFF_MIN_PASSWORD) {
+      throw new ApiError(`La nueva contraseña debe tener al menos ${STORE_STAFF_MIN_PASSWORD} caracteres.`, 400);
     }
-    if (Object.keys(patch).length === 0 && newPassword === null) {
+
+    // Editar nombre visible y usuario interno (el usuario no distingue mayúsculas de minúsculas).
+    const profilePatch: { username?: string; display_name?: string } = {};
+    if (body.display_name !== undefined) {
+      const name = String(body.display_name ?? "").trim();
+      if (name.length > 100) throw new ApiError("El nombre visible no puede superar 100 caracteres.", 400);
+      profilePatch.display_name = name || String(target.username ?? "");
+    }
+    let newUsername: string | null = null;
+    let shownUsername: string | null = null;
+    if (body.username !== undefined) {
+      shownUsername = displayStoreUsername(String(body.username ?? ""));
+      const candidate = normalizeStoreUsername(shownUsername);
+      if (!isValidStoreUsername(candidate)) {
+        throw new ApiError("El usuario debe tener de 3 a 32 caracteres: letras, números, punto, guion o guion bajo.", 400);
+      }
+      if (candidate !== normalizeStoreUsername(String(target.username ?? ""))) {
+        const { data: taken, error: takenError } = await admin
+          .from("store_users")
+          .select("user_id")
+          .eq("store_id", storeId)
+          .ilike("username", likeExact(candidate))
+          .neq("user_id", targetUserId)
+          .limit(1)
+          .maybeSingle();
+        if (takenError) throw new ApiError(takenError.message, 500);
+        if (taken) throw new ApiError("Ese usuario interno ya lo usa otra persona de esta tienda.", 409);
+        newUsername = candidate;
+      }
+      profilePatch.username = shownUsername;
+    }
+
+    if (Object.keys(patch).length === 0 && newPassword === null && Object.keys(profilePatch).length === 0) {
       throw new ApiError("No hay cambios para guardar.", 400);
+    }
+
+    // Cambio de usuario: también cambia el correo interno con el que entra.
+    if (shownUsername !== null || profilePatch.display_name !== undefined) {
+      const { data: authUser, error: authUserError } = await admin.auth.admin.getUserById(targetUserId);
+      if (authUserError) throw new ApiError(authUserError.message, 500);
+      const metadata = { ...(authUser.user?.user_metadata ?? {}) };
+      if (shownUsername !== null) metadata.internal_username = shownUsername;
+      if (profilePatch.display_name !== undefined) metadata.display_name = profilePatch.display_name;
+      const { error: renameError } = await admin.auth.admin.updateUserById(targetUserId, {
+        ...(newUsername !== null ? { email: storeStaffAuthEmail(storeId, newUsername), email_confirm: true } : {}),
+        user_metadata: metadata,
+      });
+      if (renameError) throw new ApiError(renameError.message, 400);
     }
 
     if (newPassword !== null) {
       const { error: passwordError } = await admin.auth.admin.updateUserById(targetUserId, {
-        password: newPassword,
+        password: storeStaffAuthPassword(newPassword),
       });
       if (passwordError) throw new ApiError(passwordError.message, 400);
     }
+    Object.assign(patch, profilePatch);
 
     let user = null;
     if (Object.keys(patch).length > 0) {
@@ -436,6 +493,10 @@ export async function PATCH(request: Request) {
         .single();
       if (error) throw new ApiError(error.message, 500);
       user = data;
+      // Se confirma que el cambio de usuario quedó guardado.
+      if (shownUsername !== null && String(user?.username ?? "") !== shownUsername) {
+        throw new ApiError("La base de datos no guardó el nuevo usuario. Inténtalo de nuevo o revisa los permisos de la tabla store_users.", 500);
+      }
     }
 
     return NextResponse.json({

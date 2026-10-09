@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { createClient } from "@supabase/supabase-js";
+import { ManifestLink } from "@/components/pwa/ManifestLink";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -84,7 +85,7 @@ async function findCatalogMeta(slugRaw: string, catalogSlug: string) {
       p_catalog: decodeURIComponent(catalogSlug || ""),
     });
     if (error || !data) return null;
-    return data as { name: string; store_name: string; headline: string | null; logo_url: string | null; banner_url: string | null };
+    return data as { name: string; store_name: string; headline: string | null; logo_url: string | null; banner_url: string | null; point_name?: string | null };
   } catch {
     return null;
   }
@@ -109,17 +110,19 @@ export async function generateMetadata({
   // URL canonical
   const canonical = `${siteUrl}/${slug}/${mode}`;
 
-  // ✅ imagen OG (banner si hay, si no logo, si no default)
-  const ogImage =
-    (catalogMeta?.banner_url && absUrl(siteUrl, catalogMeta.banner_url)) ||
-    (catalogMeta?.logo_url && absUrl(siteUrl, catalogMeta.logo_url)) ||
-    (store?.banner_url && absUrl(siteUrl, store.banner_url)) ||
-    (store?.logo_url && absUrl(siteUrl, store.logo_url)) ||
-    `${siteUrl}/og-default.png`;
+  // Tarjeta de vista previa con el logo: del punto (catálogo de un punto), del catálogo o de la tienda.
+  const ogParams = new URLSearchParams({ store: store?.slug || decodeURIComponent(slug) });
+  if (catalogMeta) ogParams.set("catalog", decodeURIComponent(mode));
+  else ogParams.set("mode", mode);
+  const ogImage = `${siteUrl}/api/og?${ogParams.toString()}`;
 
   // ✅ icon (favicon) desde logo si existe
   const logo = catalogMeta?.logo_url || store?.logo_url;
   const iconUrl = logo ? absUrl(siteUrl, logo) : `${siteUrl}/favicon.ico`;
+  // Icono para instalar el catálogo (generado desde su logo real; sin logo, uno neutral).
+  const pwaIcon = (size: number) =>
+    `/api/pwa-icon?${new URLSearchParams({ store: store?.slug || decodeURIComponent(slug), mode: decodeURIComponent(mode), size: String(size) }).toString()}`;
+  const appName = catalogMeta?.point_name || catalogMeta?.store_name || store?.name || "Catálogo";
 
   return {
     metadataBase: new URL(siteUrl),
@@ -127,10 +130,14 @@ export async function generateMetadata({
     description,
     alternates: { canonical },
 
+    // App instalable del catálogo: su propio nombre, icono y dirección de inicio.
+    manifest: `/${slug}/${mode}/app.webmanifest`,
+    appleWebApp: { capable: true, title: appName.length > 14 ? appName.slice(0, 14) : appName, statusBarStyle: "default" },
+
     icons: {
       icon: iconUrl,
       shortcut: iconUrl,
-      apple: iconUrl,
+      apple: [{ url: pwaIcon(180), sizes: "180x180", type: "image/png" }],
     },
 
     openGraph: {
@@ -144,6 +151,7 @@ export async function generateMetadata({
           url: ogImage,
           width: 1200,
           height: 630,
+          type: "image/jpeg",
           alt: title,
         },
       ],
@@ -158,10 +166,18 @@ export async function generateMetadata({
   };
 }
 
-export default function StoreCatalogLayout({
+export default async function StoreCatalogLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ slug: string; mode: string }>;
 }) {
-  return <>{children}</>;
+  const { slug, mode } = await params;
+  return (
+    <>
+      <ManifestLink base={`/${slug}/${mode}/app.webmanifest`} param="key" />
+      {children}
+    </>
+  );
 }

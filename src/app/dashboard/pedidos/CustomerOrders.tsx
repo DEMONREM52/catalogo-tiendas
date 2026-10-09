@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { smartFilter } from "@/lib/search";
+import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
 
 /** =========================
  * Helpers (UI)
@@ -18,6 +19,7 @@ function statusLabel(s: string) {
   if (s === "sent") return "Enviado (editable)";
   if (s === "confirmed") return "Confirmado";
   if (s === "completed") return "Completado";
+  if (s === "cancelled") return "Anulado";
   return s;
 }
 
@@ -28,7 +30,7 @@ function paymentStatusLabel(s: string | null | undefined) {
   return "Sin pagar";
 }
 
-type OrderStatus = "draft" | "sent" | "confirmed" | "completed";
+type OrderStatus = "draft" | "sent" | "confirmed" | "completed" | "cancelled";
 
 /** =========================
  * ✅ Tokens (auto claro/oscuro por tu CSS)
@@ -78,6 +80,13 @@ function statusBadge(st: OrderStatus) {
 
 /** estilos inline (tokens) para los badges, para que sean 100% auto tema */
 function statusBadgeStyle(st: OrderStatus): React.CSSProperties {
+  if (st === "cancelled") {
+    return {
+      borderColor: "color-mix(in oklab, #ef4444 45%, var(--t-card-border))",
+      background: "color-mix(in oklab, #ef4444 12%, transparent)",
+      color: "#ef4444",
+    };
+  }
   const borderBase = "var(--t-card-border)";
   const bgBase = "color-mix(in oklab, var(--t-card-bg) 88%, transparent)";
   const textBase = "color-mix(in oklab, var(--t-text) 88%, transparent)";
@@ -150,6 +159,18 @@ export function CustomerOrders() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
+  const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null);
+  const voidRights = useSaleVoidRights(storeId);
+
+  function askVoid(o: OrderRow) {
+    setVoidTarget({
+      orderId: o.id,
+      label: `Pedido #${o.receipt_no ?? "—"}`,
+      total: Number(o.total ?? 0),
+      confirmed: o.status === "confirmed" || o.status === "completed",
+      customer: o.customer_name,
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -468,6 +489,7 @@ export function CustomerOrders() {
             <option value="sent">Enviado (editable)</option>
             <option value="confirmed">Confirmado</option>
             <option value="completed">Completado</option>
+            <option value="cancelled">Anulado</option>
           </select>
 
           <div className={`${tokenCardSoft()} px-4 py-3 text-sm rounded-2xl`}>
@@ -557,21 +579,38 @@ export function CustomerOrders() {
                     Detalle
                   </button>
 
-                  {o.status !== "confirmed" ? (
+                  {o.status === "cancelled" ? (
+                    <p className="col-span-2 rounded-2xl border px-3 py-2 text-center text-xs font-semibold" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)", color: "#ef4444" }}>
+                      Anulado · ya no se puede usar
+                    </p>
+                  ) : o.status === "draft" || o.status === "sent" ? (
                     <button
                       className={`${btnCta()} col-span-2`}
                       onClick={() => setOrderStatus(o, "confirmed")}
                     >
                       Confirmar
                     </button>
-                  ) : (
+                  ) : o.status === "confirmed" ? (
                     <button
                       className={`${btnCta()} col-span-2`}
                       onClick={() => setOrderStatus(o, "completed")}
                     >
                       Completar
                     </button>
-                  )}
+                  ) : null}
+                  {o.status !== "cancelled" && voidRights && ((o.status === "confirmed" || o.status === "completed") ? voidRights.return : voidRights.void) ? (
+                    <button
+                      className="btn-soft col-span-2 px-4 py-2 text-sm font-semibold"
+                      style={{
+                        borderColor: (o.status === "confirmed" || o.status === "completed") ? "color-mix(in oklab, #f97316 45%, var(--t-card-border))" : "color-mix(in oklab, #ef4444 45%, var(--t-card-border))",
+                        background: (o.status === "confirmed" || o.status === "completed") ? "color-mix(in oklab, #f97316 10%, transparent)" : "color-mix(in oklab, #ef4444 10%, transparent)",
+                        color: (o.status === "confirmed" || o.status === "completed") ? "#f97316" : "#ef4444",
+                      }}
+                      onClick={() => askVoid(o)}
+                    >
+                      {(o.status === "confirmed" || o.status === "completed") ? "↩ Devolución" : "⊘ Anular"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -638,7 +677,7 @@ export function CustomerOrders() {
                   Detalle
                 </button>
 
-                {o.status !== "confirmed" && (
+                {(o.status === "draft" || o.status === "sent") && (
                   <button
                     className="btn-soft px-3 py-1 text-sm font-semibold"
                     style={{
@@ -665,11 +704,42 @@ export function CustomerOrders() {
                     Completar
                   </button>
                 )}
+                {o.status !== "cancelled" && voidRights && ((o.status === "confirmed" || o.status === "completed") ? voidRights.return : voidRights.void) ? (
+                    <button
+                      className="btn-soft px-3 py-1 text-sm font-semibold"
+                      style={{
+                        borderColor: (o.status === "confirmed" || o.status === "completed") ? "color-mix(in oklab, #f97316 45%, var(--t-card-border))" : "color-mix(in oklab, #ef4444 45%, var(--t-card-border))",
+                        background: (o.status === "confirmed" || o.status === "completed") ? "color-mix(in oklab, #f97316 10%, transparent)" : "color-mix(in oklab, #ef4444 10%, transparent)",
+                        color: (o.status === "confirmed" || o.status === "completed") ? "#f97316" : "#ef4444",
+                      }}
+                      onClick={() => askVoid(o)}
+                    >
+                      {(o.status === "confirmed" || o.status === "completed") ? "↩ Devolución" : "⊘ Anular"}
+                    </button>
+                  ) : null}
               </div>
             </div>
           ))
         )}
       </div>
+
+      <VoidSaleDialog
+        target={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onDone={(r) => {
+          setVoidTarget(null);
+          setOrders((prev) => prev.map((x) => (x.id === voidTarget?.orderId ? { ...x, status: "cancelled" } : x)));
+          void Swal.fire({
+            icon: "success",
+            title: r.kind === "return" ? "Devolución lista" : "Pedido anulado",
+            text: r.units_returned ? `${r.units_returned} unidades volvieron al inventario.` : undefined,
+            timer: 2600,
+            showConfirmButton: false,
+            background: "var(--t-bg-base)",
+            color: "var(--t-text)",
+          });
+        }}
+      />
 
       <p className="text-xs" style={{ color: "var(--t-muted)" }}>
         Tip: el cliente puede editar mientras esté en <b>Enviado</b>. Si tú lo confirmas, ya no debería editarse.

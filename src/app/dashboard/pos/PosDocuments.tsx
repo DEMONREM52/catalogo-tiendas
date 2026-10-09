@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, FilePlus2, Printer, Search, X } from "lucide-react";
+import { Ban, CheckCircle2, FilePlus2, Lock, Printer, Search, Undo2, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "./VoidSaleDialog";
 
 export type PosDocument = {
   order_id: string;
@@ -12,7 +13,7 @@ export type PosDocument = {
   receipt_no: number | null;
   doc_number: string | null;
   doc_kind: "factura" | "remision";
-  status: "draft" | "sent" | "confirmed" | "completed" | string;
+  status: "draft" | "sent" | "confirmed" | "completed" | "cancelled" | string;
   customer_name: string | null;
   customer_doc: string | null;
   customer_whatsapp: string | null;
@@ -32,7 +33,9 @@ const STATUS: Record<string, { label: string; color: string }> = {
   sent: { label: "Enviado", color: "#3b82f6" },
   confirmed: { label: "Confirmado", color: "#22c55e" },
   completed: { label: "Completado", color: "#14b8a6" },
+  cancelled: { label: "Anulado", color: "#ef4444" },
 };
+const isConfirmed = (d: PosDocument) => d.status === "confirmed" || d.status === "completed";
 
 const swalTheme = { background: "var(--t-bg-base)", color: "var(--t-text)" } as const;
 
@@ -54,6 +57,8 @@ export function PosDocuments({
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null);
+  const rights = useSaleVoidRights(storeId);
 
   useEffect(() => {
     if (!open || !storeId || !pointId) return;
@@ -109,11 +114,23 @@ export function PosDocuments({
         e.preventDefault();
         setOpen(true);
       }
-      if (e.key === "Escape" && !Swal.isVisible()) setOpen(false);
+      if (e.key === "Escape" && !Swal.isVisible() && !voidTarget) setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pointId]);
+  }, [pointId, voidTarget]);
+
+  function askVoid(doc: PosDocument) {
+    setVoidTarget({
+      orderId: doc.order_id,
+      label: doc.doc_number ?? `Pedido #${doc.receipt_no}`,
+      total: doc.total,
+      confirmed: isConfirmed(doc),
+      pointName,
+      units: doc.items.reduce((s, it) => s + Number(it.qty || 0), 0),
+      customer: doc.customer_name,
+    });
+  }
 
   if (!pointId) return null;
 
@@ -309,11 +326,37 @@ export function PosDocuments({
                                       >
                                         <CheckCircle2 className="h-3.5 w-3.5" /> Confirmar
                                       </button>
+                                    ) : doc.status === "cancelled" ? (
+                                      <span className="inline-flex items-center gap-1 self-center text-[11px] font-semibold" style={{ color: "#ef4444" }}>
+                                        <Ban className="h-3.5 w-3.5" /> Anulado: ya no se puede usar.
+                                      </span>
                                     ) : (
                                       <span className="self-center text-[11px]" style={{ color: "var(--t-muted)" }}>
                                         Confirmado: ya no se puede editar.
                                       </span>
                                     )}
+                                    {doc.status !== "cancelled" && rights ? (
+                                      (isConfirmed(doc) ? rights.return : rights.void) ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => askVoid(doc)}
+                                          className="ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
+                                          style={isConfirmed(doc)
+                                            ? { borderColor: "color-mix(in oklab, #f97316 55%, transparent)", color: "#f97316", background: "color-mix(in oklab, #f97316 8%, transparent)" }
+                                            : { borderColor: "color-mix(in oklab, #ef4444 55%, transparent)", color: "#ef4444", background: "color-mix(in oklab, #ef4444 8%, transparent)" }}
+                                        >
+                                          {isConfirmed(doc) ? <><Undo2 className="h-3.5 w-3.5" /> Devolución</> : <><Ban className="h-3.5 w-3.5" /> Anular</>}
+                                        </button>
+                                      ) : (
+                                        <span
+                                          className="ml-auto inline-flex items-center gap-1 self-center text-[11px]"
+                                          style={{ color: "var(--t-muted)" }}
+                                          title={isConfirmed(doc) ? "Pide a un usuario con el permiso «Devolución de venta»." : "Pide a un usuario con el permiso «Anular documentos sin confirmar»."}
+                                        >
+                                          <Lock className="h-3 w-3" /> {isConfirmed(doc) ? "Devolución: requiere permiso" : "Anular: requiere permiso"}
+                                        </span>
+                                      )
+                                    ) : null}
                                   </div>
                                 </div>
                               </motion.div>
@@ -330,6 +373,27 @@ export function PosDocuments({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <VoidSaleDialog
+        target={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onDone={(r) => {
+          setVoidTarget(null);
+          setReloadTick((n) => n + 1);
+          void Swal.fire({
+            ...swalTheme,
+            icon: "success",
+            title: r.kind === "return" ? `Devolución de ${r.doc_number} lista` : `${r.doc_number} anulado`,
+            html: [
+              r.units_returned ? `<b>${r.units_returned}</b> unidades volvieron al inventario de <b>${pointName}</b>.` : "",
+              r.receivables_voided ? "La cuenta por cobrar quedó anulada." : "",
+              r.fiscal_voided ? "La factura electrónica sin enviar quedó anulada." : "",
+            ].filter(Boolean).join("<br/>") || undefined,
+            timer: 3200,
+            showConfirmButton: false,
+          });
+        }}
+      />
     </>
   );
 }

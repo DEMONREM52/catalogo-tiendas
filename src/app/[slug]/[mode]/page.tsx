@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
+import { InstallButton } from "@/components/pwa/InstallButton";
 import { AnimatePresence, motion } from "framer-motion";
 import Swal from "sweetalert2";
 
@@ -1355,6 +1356,19 @@ export default function StoreCatalogPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              {/* Instalar este catálogo en la pantalla de inicio (con su nombre e icono). */}
+              <InstallButton
+                identity={{
+                  name: catalog?.point?.name || (catalog ? catalog.name : store.name),
+                  iconUrl: `/api/pwa-icon?${new URLSearchParams({ store: store.slug, mode, size: "192" }).toString()}`,
+                  kind: "catalog",
+                }}
+                className="t-btn grid h-9 w-9 place-items-center rounded-2xl border text-base sm:h-auto sm:w-auto sm:px-3 sm:py-2 sm:text-sm"
+                style={{ borderColor: "var(--t-border)", background: glassBg2 }}
+                title="Agregar este catálogo a tu pantalla de inicio"
+              >
+                <span aria-hidden>📲</span><span className="ml-1.5 hidden font-semibold lg:inline">Instalar</span>
+              </InstallButton>
               <details className="relative z-0 open:z-[100]">
                 <summary
                   className="t-btn cursor-pointer list-none rounded-2xl border px-3 py-2 text-xs font-semibold sm:px-4 sm:text-sm"

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
@@ -35,6 +35,15 @@ export const metadata: Metadata = {
     canonical: SITE_URL,
   },
 
+  // App instalable (PWA): siempre con la identidad de RemHub. Los catálogos usan su propio manifest.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "RemHub",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
+
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -59,11 +68,13 @@ export const metadata: Metadata = {
     siteName: "RemHub",
     type: "website",
     locale: "es_CO",
+    // Tarjeta con el logo de RemHub (archivo fijo, igual a /api/og). Los catálogos usan la de su tienda o punto.
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
+        type: "image/png",
         alt: "RemHub",
       },
     ],
@@ -85,16 +96,28 @@ export const metadata: Metadata = {
   category: "technology",
   creator: "RemHub",
   publisher: "RemHub",
+};
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Usa toda la pantalla en celulares con muesca; el contenido respeta las zonas seguras.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0b0b0b" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
   ],
 };
 
+// Guarda el aviso de «se puede instalar» aunque llegue antes de que cargue la app.
+const EARLY_INSTALL_SCRIPT = "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__remhubBIP=e;});";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: EARLY_INSTALL_SCRIPT }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Google Tag Manager (noscript) */}
         <GoogleTagManagerNoScript />

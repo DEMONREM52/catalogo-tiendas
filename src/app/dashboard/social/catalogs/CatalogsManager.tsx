@@ -21,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import { QrCode } from "lucide-react";
+import { QrDialog } from "@/components/pwa/QrDialog";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import {
@@ -46,6 +48,7 @@ function isMissingTable(error: unknown) {
 
 export default function CatalogsManager() {
   const [store, setStore] = useState<DashboardStore | null>(null);
+  const [qrFor, setQrFor] = useState<StoreCatalog | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [catalogs, setCatalogs] = useState<StoreCatalog[]>([]);
   const [summaries, setSummaries] = useState<Record<string, Summary>>({});
@@ -449,6 +452,9 @@ export default function CatalogsManager() {
                       <button type="button" onClick={() => shareWhatsApp(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp">
                         <MessageCircle size={15} />
                       </button>
+                      <button type="button" onClick={() => setQrFor(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Código QR del catálogo" aria-label="Código QR del catálogo">
+                        <QrCode size={15} />
+                      </button>
                       {canEdit ? (
                         <>
                           <button type="button" disabled={busyId === catalog.id} onClick={() => void duplicate(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border disabled:opacity-50" style={softBox} title="Duplicar" aria-label="Duplicar">
@@ -500,6 +506,13 @@ export default function CatalogsManager() {
           />
         ) : null}
       </AnimatePresence>
+      <QrDialog
+        open={Boolean(qrFor && store)}
+        onClose={() => setQrFor(null)}
+        path={qrFor && store ? catalogPath(store.slug, qrFor) : "/"}
+        title={qrFor?.name ?? "Catálogo"}
+        subtitle="Imprímelo o compártelo: al escanearlo se abre este catálogo."
+      />
     </div>
   );
 }

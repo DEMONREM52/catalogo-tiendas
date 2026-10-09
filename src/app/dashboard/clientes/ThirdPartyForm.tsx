@@ -120,6 +120,39 @@ export function ThirdPartyForm({
     setTagText("");
   }
 
+  // Tercero de la tienda que ya tiene ese documento (con o sin puntos, guiones o espacios).
+  async function findByDocument(raw: string | null | undefined): Promise<ThirdParty | null> {
+    const trimmed = (raw ?? "").trim();
+    const digits = trimmed.replace(/\D/g, "");
+    if (!trimmed) return null;
+    const variants = [...new Set([trimmed, digits].filter(Boolean))].map((v) => `document_number.eq."${v.replace(/"/g, "")}"`).join(",");
+    const { data } = await supabaseBrowser().from("billing_customers").select(FULL_COLUMNS).eq("store_id", storeId).or(variants).limit(5);
+    const hit = ((data ?? []) as unknown as Record<string, unknown>[]).find((x) => x.id !== draft.id);
+    return hit ? normalizeThird(hit) : null;
+  }
+
+  /** Avisa que el documento ya existe. Devuelve true si se resolvió (usar el existente o volver a revisar). */
+  async function offerExisting(other: ThirdParty) {
+    const creating = !draft.id;
+    const res = await Swal.fire({
+      icon: "info",
+      title: "Este documento ya está registrado",
+      html: `<b>${escapeHtml(other.name)}</b> ya tiene el documento <b>${escapeHtml(other.document_number ?? "")}</b>${other.active ? "" : " (está inactivo)"}.<br/><small>No se pueden tener dos terceros con el mismo documento.</small>`,
+      showCancelButton: true,
+      showConfirmButton: creating,
+      confirmButtonText: "Usar ese tercero",
+      cancelButtonText: "Revisar el documento",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
+      confirmButtonColor: "#8b5cf6",
+    });
+    if (creating && res.isConfirmed) {
+      onSaved(other);
+      onClose();
+    }
+    return true;
+  }
+
   async function save() {
     if (saving) return;
     const warn = (title: string, text?: string) => Swal.fire({ icon: "warning", title, text, background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" });
@@ -138,26 +171,10 @@ export function ThirdPartyForm({
     if (draft.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
       return void Swal.fire({ icon: "warning", title: "Revisa el correo", background: "var(--t-bg-base)", color: "var(--t-text)" });
     }
-    // También se revisa en la base de datos por si el tercero no está en la lista cargada.
-    let dup = duplicate;
-    if (!dup && docDigits.length >= 5) {
-      const { data: found } = await supabaseBrowser().from("billing_customers").select("id,name,document_number").eq("store_id", storeId).eq("document_number", draft.document_number?.trim() ?? "").limit(1);
-      const hit = (found ?? []).find((x: { id: string }) => x.id !== draft.id) as { name: string; document_number: string } | undefined;
-      if (hit) dup = { ...(existing[0] ?? {}), name: hit.name, document_number: hit.document_number } as ThirdParty;
-    }
-    if (dup) {
-      const go = await Swal.fire({
-        icon: "question",
-        title: "Documento repetido",
-        text: `${dup.name} ya tiene el documento ${dup.document_number}. ¿Guardar de todas formas?`,
-        showCancelButton: true,
-        confirmButtonText: "Guardar",
-        cancelButtonText: "Revisar",
-        background: "var(--t-bg-base)",
-        color: "var(--t-text)",
-        confirmButtonColor: "#8b5cf6",
-      });
-      if (!go.isConfirmed) return;
+    // Un documento solo puede tenerlo un tercero de la tienda: se busca también en la base (incluye inactivos).
+    if (docDigits.length >= 5 || duplicate) {
+      const other = (await findByDocument(draft.document_number)) ?? duplicate;
+      if (other && (await offerExisting(other))) return;
     }
     if (draft.credit_blocked && !orNull(txt(draft.credit_blocked_reason))) {
       return void Swal.fire({ icon: "warning", title: "Escribe el motivo del bloqueo", background: "var(--t-bg-base)", color: "var(--t-text)" });
@@ -210,6 +227,19 @@ export function ThirdPartyForm({
       : await sb.from("billing_customers").insert(payload).select(FULL_COLUMNS).single();
     setSaving(false);
     if (result.error) {
+      // Documento repetido (la base no permite dos terceros con el mismo documento en la tienda).
+      if (result.error.code === "23505" && /doc/i.test(result.error.message)) {
+        const other = await findByDocument(draft.document_number);
+        if (other) return void (await offerExisting(other));
+        return void Swal.fire({
+          icon: "warning",
+          title: "Ese documento ya está registrado",
+          text: "Otro tercero de tu tienda ya tiene este número de documento (puede estar inactivo). Búscalo en Terceros y edítalo, o revisa el número.",
+          background: "var(--t-bg-base)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#8b5cf6",
+        });
+      }
       return void Swal.fire({ icon: "error", title: "No se pudo guardar", text: errorText(result.error), background: "var(--t-bg-base)", color: "var(--t-text)" });
     }
     onSaved(normalizeThird(result.data as unknown as Record<string, unknown>));
@@ -515,4 +545,8 @@ export function ThirdPartyForm({
     </AnimatePresence>,
     document.body,
   );
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 }

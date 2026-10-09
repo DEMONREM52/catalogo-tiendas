@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
+import { InstallButton } from "@/components/pwa/InstallButton";
 import {
   getDashboardStore,
 } from "@/lib/store-utils";
@@ -877,6 +878,13 @@ export default function DashboardShell({
               </Link>
             ) : null}
 
+            {/* Instalar RemHub (se oculta solo si ya está abierta como app). */}
+            <InstallButton
+              className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
+              style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 10%, transparent)", color: "var(--t-text)" }}
+            >
+              📲 <span className="hidden sm:inline">Instalar app</span>
+            </InstallButton>
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
             {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}

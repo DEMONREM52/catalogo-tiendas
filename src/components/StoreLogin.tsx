@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { storeStaffAuthEmail, isValidStoreUsername } from "@/lib/store-user-auth";
+import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } from "@/lib/store-user-auth";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 
@@ -69,7 +69,8 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
 
       const { data, error } = await sb.auth.signInWithPassword({
         email: loginEmail,
-        password,
+        // Los trabajadores pueden tener contraseñas cortas (desde 4); se completan igual que al crearlas.
+        password: storeLogin ? storeStaffAuthPassword(password) : password,
       });
 
       if (error) {

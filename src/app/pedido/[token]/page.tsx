@@ -20,6 +20,7 @@ function statusLabel(st: string) {
   if (st === "sent") return "Enviado (editable)";
   if (st === "confirmed") return "Confirmado (bloqueado)";
   if (st === "completed") return "Completado (bloqueado)";
+  if (st === "cancelled") return "ANULADO";
   return st;
 }
 
@@ -212,7 +213,7 @@ export default function PedidoPage() {
 
   const isLocked = useMemo(() => {
     const st = String(order?.status ?? "draft");
-    return st === "confirmed" || st === "completed";
+    return st === "confirmed" || st === "completed" || st === "cancelled";
   }, [order]);
 
   const hasUnsavedChanges = useMemo(
@@ -897,7 +898,7 @@ export default function PedidoPage() {
         }
         email={point?.email || billingDetails?.email}
         whatsapp={point?.phone || storeWhatsapp}
-        docTitle={docKindLabel}
+        docTitle={order?.status === "cancelled" ? `${docKindLabel} · ANULADO` : docKindLabel}
         docNumber={fiscalDoc?.full_number || erpDoc?.doc_number || `${billingDetails?.invoice_prefix || "FAC"}-${receiptNumber ?? "—"}`}
         pointName={point && point.legal_name && point.legal_name !== point.name ? point.name : null}
         pointAddress={null}
@@ -937,6 +938,11 @@ export default function PedidoPage() {
                   Estado: <span className="font-bold">{statusLabel(order.status)}</span>
                 </Pill>
               </div>
+              {order.status === "cancelled" ? (
+                <div className="mt-3 rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: "rgba(239,68,68,.5)", background: "rgba(239,68,68,.12)", color: "#ef4444" }}>
+                  ⊘ Este documento fue ANULADO y no tiene validez.
+                </div>
+              ) : null}
 
               <div className="mt-3 flex items-center gap-3">
                 {point?.logo_url || storeLogo ? (
@@ -1212,7 +1218,9 @@ export default function PedidoPage() {
               </p>
             ) : (
               <p className="mt-3 text-xs" style={{ color: "var(--t-muted)" }}>
-                Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo.
+                {order?.status === "cancelled"
+                  ? "Este documento fue anulado. Si necesitas comprar, crea un nuevo pedido desde el catálogo."
+                  : "Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo."}
               </p>
             )}
           </div>

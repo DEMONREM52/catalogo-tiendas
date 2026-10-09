@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, LogIn, User, UserRound } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { storeStaffAuthEmail, isValidStoreUsername } from "@/lib/store-user-auth";
+import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } from "@/lib/store-user-auth";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 
@@ -86,7 +86,8 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
       const sb = supabaseBrowser();
       const { data, error: authError } = await sb.auth.signInWithPassword({
         email: storeStaffAuthEmail(storeId, normalized),
-        password,
+        // Contraseñas cortas (desde 4): se completan igual que al crearlas.
+        password: storeStaffAuthPassword(password),
       });
       if (authError) return fail("Usuario o contraseña incorrectos.");
 

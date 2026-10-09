@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 import { STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";
 import { smartFilter } from "@/lib/search";
+import { PasswordStrength } from "@/components/PasswordStrength";
 
 type UserProfile = {
   user_id: string;
@@ -45,6 +46,8 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   store: "Mi tienda",
   billing: "Facturación",
   pos: "POS / ventas",
+  sales_void: "Anular documentos sin confirmar",
+  sales_return: "Devolución de venta",
   clients: "Terceros",
   clients_delete: "Eliminar terceros",
   credit: "Créditos",
@@ -492,7 +495,10 @@ export default function AdminUsuariosPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <input className={inputBase()} placeholder="Usuario interno" value={newUsername} onChange={(event) => setNewUsername(event.target.value)} />
                 <input className={inputBase()} placeholder="Nombre visible (opcional)" value={newDisplayName} onChange={(event) => setNewDisplayName(event.target.value)} />
-                <input className={inputBase()} type="password" autoComplete="new-password" placeholder="Contraseña inicial (mín. 8)" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                <div>
+                  <input className={inputBase()} type="password" autoComplete="new-password" placeholder="Contraseña inicial (mín. 4)" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <PasswordStrength password={newPassword} hints={[newUsername, newDisplayName]} />
+                </div>
                 <select
                   className={inputBase()}
                   value={newRole}
@@ -528,7 +534,7 @@ export default function AdminUsuariosPage() {
               <button
                 type="button"
                 className={`${buttonPrimary()} mt-4`}
-                disabled={saving || !newUsername.trim() || newPassword.length < 8}
+                disabled={saving || !newUsername.trim() || newPassword.length < 4}
                 onClick={createStoreMember}
                 style={{ borderColor: "color-mix(in oklab, var(--t-cta) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-cta) 18%, transparent)", color: "var(--t-text)" }}
               >
