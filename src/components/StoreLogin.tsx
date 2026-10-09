@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { storeStaffAuthEmail, isValidStoreUsername } from "@/lib/store-user-auth";
 import { getDashboardStore } from "@/lib/store-utils";
+import { logSessionEvent } from "@/lib/audit-client";
 
 export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   const router = useRouter();
@@ -92,6 +93,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
         document.cookie = `app_session=${data.session.access_token}; path=/; max-age=604800`;
       }
 
+      await logSessionEvent("auth.login", storeLogin?.id ?? null);
       router.push("/dashboard");
     } catch (e: unknown) {
       setMsg("❌ " + String((e as Error)?.message ?? "Error iniciando sesión"));

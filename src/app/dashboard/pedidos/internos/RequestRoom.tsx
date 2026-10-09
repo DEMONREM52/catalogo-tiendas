@@ -146,9 +146,24 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     }
     const items = data.items.filter((i) => (i.qty_approved ?? 0) > 0).map((i) => ({ product_id: i.product_id, received_qty: receiving[i.id] ?? i.qty_approved ?? 0 }));
     const missing = data.items.reduce((s, i) => s + Math.max(0, (i.qty_approved ?? 0) - (receiving[i.id] ?? i.qty_approved ?? 0)), 0);
+    const extra = data.items.reduce((s, i) => s + Math.max(0, (receiving[i.id] ?? i.qty_approved ?? 0) - (i.qty_approved ?? 0)), 0);
     let notes: string | null = null;
-    if (missing > 0) {
-      const res = await Swal.fire({ ...swal, icon: "warning", title: `Faltan ${missing} unidades`, text: "Lo que no llegó vuelve al inventario del origen. ¿Qué pasó?", input: "text", inputPlaceholder: "Ej: una caja llegó dañada", showCancelButton: true, confirmButtonText: "Confirmar recibido", cancelButtonText: "Revisar" });
+    if (missing > 0 || extra > 0) {
+      const res = await Swal.fire({
+        ...swal,
+        icon: "warning",
+        title: missing && extra ? "Llegó distinto a lo enviado" : missing ? `Faltan ${missing} unidades` : `Llegaron ${extra} unidades de más`,
+        html: [
+          missing ? `Lo que no llegó (<b>${missing}</b>) vuelve al inventario de <b>${data.request.to_name}</b>.` : "",
+          extra ? `Lo que llegó de más (<b>${extra}</b>) se suma a tu punto y se descuenta de <b>${data.request.to_name}</b>.` : "",
+          "¿Qué pasó?",
+        ].filter(Boolean).join("<br/>"),
+        input: "text",
+        inputPlaceholder: missing ? "Ej: una caja llegó dañada" : "Ej: el encargado decidió mandar más",
+        showCancelButton: true,
+        confirmButtonText: "Confirmar recibido",
+        cancelButtonText: "Revisar",
+      });
       if (!res.isConfirmed) return;
       notes = String(res.value ?? "");
     }
@@ -205,11 +220,20 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                     inputMode="numeric"
                     value={receiving[i.id] ?? i.qty_approved ?? 0}
                     onFocus={(e) => e.currentTarget.select()}
-                    onChange={(e) => setReceiving((cur) => ({ ...(cur ?? {}), [i.id]: Math.min(i.qty_approved ?? 0, Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0)) }))}
+                    onChange={(e) => setReceiving((cur) => ({ ...(cur ?? {}), [i.id]: Math.min(1000000, Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0)) }))}
                     className="mt-0.5 block h-9 w-16 rounded-lg border text-center text-sm font-black outline-none"
-                    style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
+                    style={{
+                      borderColor: (receiving[i.id] ?? i.qty_approved ?? 0) > (i.qty_approved ?? 0) ? "#0ea5e9" : (receiving[i.id] ?? i.qty_approved ?? 0) < (i.qty_approved ?? 0) ? "#f59e0b" : "var(--t-card-border)",
+                      background: "var(--t-card-bg)", color: "var(--t-text)",
+                    }}
                   />
-                  <span className="text-[10px] normal-case">de {i.qty_approved ?? 0}</span>
+                  <span className="text-[10px] normal-case">
+                    {(receiving[i.id] ?? i.qty_approved ?? 0) > (i.qty_approved ?? 0)
+                      ? `+${(receiving[i.id] ?? 0) - (i.qty_approved ?? 0)} de más`
+                      : (receiving[i.id] ?? i.qty_approved ?? 0) < (i.qty_approved ?? 0)
+                        ? `faltan ${(i.qty_approved ?? 0) - (receiving[i.id] ?? 0)}`
+                        : `de ${i.qty_approved ?? 0} enviadas`}
+                  </span>
                 </label>
               ) : (
                 <span className="text-right text-sm font-black tabular-nums">{i.qty_approved ?? i.qty_requested}<span className="block text-[10px] font-normal" style={{ color: "var(--t-muted)" }}>{i.qty_approved !== null ? "enviar" : "pedido"}</span></span>
@@ -290,7 +314,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           </button>
         ) : null}
       </div>
-      {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cuenta lo que llegó. Si algo falta, se devuelve al inventario de {r.to_name} y queda escrito en el chat.</p> : null}
+      {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Todo queda en el chat y el kardex.</p> : null}
       {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
     </div>
   ) : null;

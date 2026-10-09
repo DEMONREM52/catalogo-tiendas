@@ -9,6 +9,9 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { buildProductShareText, hasProductLanding, normalizeProductDetails } from "@/lib/product-details";
+import { useRouter } from "next/navigation";
+import { PhotoIndexStatus, PhotoSearchButton } from "../PhotoSearchControls";
+import { useErpFinderSource } from "../useErpFinder";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -31,6 +34,7 @@ type Product = {
   category_id: string | null;
   stock: number | null; // null = ilimitado
   product_details: unknown;
+  sku?: string | null;
 };
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -147,7 +151,7 @@ const SEARCH_PAGE = 50; // ✅ búsqueda pro
 
 type Cursor = { created_at: string; id: string } | null;
 
-const PRODUCT_COLUMNS = "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details";
+const PRODUCT_COLUMNS = "id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details,sku";
 /** Filtra por cualquiera de las categorías del producto (no solo la principal). */
 const CATEGORY_JOIN = ",product_category_links!inner(category_id)";
 let linksAvailable: boolean | null = null;
@@ -190,6 +194,8 @@ export default function ProductsListPage() {
   // filtros
   const [q, setQ] = useState("");
   const dq = useDebouncedValue(q, 250);
+  const router = useRouter();
+  const finderSource = useErpFinderSource(storeId);
   const isSearchMode = dq.trim().length > 0;
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -286,7 +292,7 @@ export default function ProductsListPage() {
       const byLinks = categoryFilter !== "all" && (await categoryLinksAvailable(sb));
       let query = sb
         .from("products")
-        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
+        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details,sku${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
         .eq("store_id", sId);
       if (statusFilter !== "all") query = query.eq("active", statusFilter === "active");
       if (categoryFilter !== "all") query = byLinks ? query.eq("product_category_links.category_id", categoryFilter) : query.eq("category_id", categoryFilter);
@@ -335,7 +341,7 @@ export default function ProductsListPage() {
       const byLinks = categoryFilter !== "all" && (await categoryLinksAvailable(sb));
       let query = sb
         .from("products")
-        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
+        .select(`id,store_id,created_at,name,description,price_retail,price_wholesale,price_1,price_2,price_3,price_4,price_5,min_wholesale,active,image_url,category_id,stock,product_details,sku${byLinks ? CATEGORY_JOIN : ""}` as typeof PRODUCT_COLUMNS)
         .eq("store_id", storeId)
         .or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
       if (statusFilter !== "all") query = query.eq("active", statusFilter === "active");
@@ -443,6 +449,7 @@ export default function ProductsListPage() {
       category_id: r.category_id == null ? null : String(r.category_id),
       stock: r.stock === null || r.stock === undefined ? null : Number(r.stock),
       product_details: r.product_details ?? {},
+      sku: r.sku == null ? null : String(r.sku),
     }));
 
     const { data: detailRows, error: detailsError } = await sb
@@ -740,12 +747,21 @@ export default function ProductsListPage() {
                 </div>
               </div>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_190px]">
-              <input
-                className={clsInput()}
-                placeholder='Busca tipo WhatsApp: "zapatera" / "belleza secador"'
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <input
+                  className={clsInput()}
+                  placeholder='Nombre o código: "zapatera", "belleza secador", "125"'
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+                <PhotoSearchButton
+                  source={finderSource}
+                  pickLabel="Editar"
+                  subtitle="Toma una foto del producto o escribe su nombre o código para abrirlo."
+                  storageKey={`products:${storeId ?? ""}`}
+                  onPick={(hit) => router.push(`/dashboard/products/${hit.id}`)}
+                />
+              </div>
 
               <select className={clsInput()} value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
                 <option value="newest">Más nuevos</option>
@@ -756,6 +772,7 @@ export default function ProductsListPage() {
                 <option value="stock">Stock</option>
               </select>
             </div>
+            <div className="mt-1.5 px-0.5"><PhotoIndexStatus storeId={storeId} /></div>
 
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <select className={clsInput()} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
@@ -904,7 +921,10 @@ export default function ProductsListPage() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="min-w-0 whitespace-normal break-words font-semibold leading-snug [overflow-wrap:anywhere]">{p.name}</p>
+                        <p className="min-w-0 whitespace-normal break-words font-semibold leading-snug [overflow-wrap:anywhere]">
+                          {p.name}
+                          {p.sku ? <span className="ml-1.5 whitespace-nowrap rounded-md bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-white/55">Cód. {p.sku}</span> : null}
+                        </p>
 
                         {!p.active ? (
                           <span

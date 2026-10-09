@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, PackageSearch, Search, Sparkles, X, Zap } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
+import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
 import { srError } from "./types";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
-type Line = { product_id: string; name: string; sku: string | null; qty: number; there: number; here: number | null };
+// levels (opcional): existencias por punto; las líneas que traen esto (p. ej. desde la lista general) se conservan al cambiar de punto.
+type Line = { product_id: string; name: string; sku: string | null; qty: number; there: number; here: number | null; levels?: Record<string, number> };
+export type PrefillLine = { product_id: string; name: string; sku: string | null; qty?: number; levels: Record<string, number> };
 type Suggestion = { product_id: string; name: string; sku: string | null; image_url: string | null; here: number; there: number };
 
 const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fuchsia-500/25";
@@ -24,6 +26,9 @@ export function NewStockRequest({
   points,
   myPoint,
   onCreated,
+  initialLines,
+  initialTo,
+  initialFrom,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,12 +36,21 @@ export function NewStockRequest({
   points: PointOption[];
   myPoint: string | null;
   onCreated: (id: string) => void;
+  initialLines?: PrefillLine[];
+  initialTo?: string | null;
+  initialFrom?: string | null;
 }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
-  const firstPoint = myPoint ?? points.find((p) => p.kind === "point")?.id ?? points[0]?.id ?? "";
+  const firstPoint = myPoint ?? (initialFrom && points.some((p) => p.id === initialFrom) ? initialFrom : null) ?? points.find((p) => p.kind === "point")?.id ?? points[0]?.id ?? "";
   const [from, setFrom] = useState(firstPoint);
-  const [to, setTo] = useState(() => points.find((p) => p.id !== firstPoint && p.is_default)?.id ?? points.find((p) => p.id !== firstPoint && p.kind !== "point")?.id ?? points.find((p) => p.id !== firstPoint)?.id ?? "");
-  const [lines, setLines] = useState<Line[]>([]);
+  const [to, setTo] = useState(() => (initialTo && initialTo !== firstPoint && points.some((p) => p.id === initialTo) ? initialTo : null) ?? points.find((p) => p.id !== firstPoint && p.is_default)?.id ?? points.find((p) => p.id !== firstPoint && p.kind !== "point")?.id ?? points.find((p) => p.id !== firstPoint)?.id ?? "");
+  const [lines, setLines] = useState<Line[]>(() => (initialLines ?? []).map((l) => ({
+    product_id: l.product_id, name: l.name, sku: l.sku, qty: Math.max(1, l.qty ?? 1), levels: l.levels,
+    there: Number(l.levels[to] ?? 0), here: firstPoint ? Number(l.levels[firstPoint] ?? 0) : null,
+  })));
+  // Al cambiar de punto: las líneas con existencias conocidas se recalculan; las demás se quitan (como antes).
+  const relocate = (nextFrom: string, nextTo: string) =>
+    setLines((cur) => cur.filter((l) => l.levels).map((l) => ({ ...l, there: Number(l.levels?.[nextTo] ?? 0), here: Number(l.levels?.[nextFrom] ?? 0) })));
   const [note, setNote] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [neededBy, setNeededBy] = useState("");
@@ -44,6 +58,11 @@ export function NewStockRequest({
   const [focus, setFocus] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Al agregar un producto, el cursor pasa directo a su cantidad (como en el ingreso de factura).
+  const qtyRefs = useRef(new Map<string, HTMLInputElement>());
+  const focusNext = useRef<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
   const { hits, loading } = useProductSearch({ storeId, warehouseId: to || null, query: q, enabled: open && focus && Boolean(to), limit: 12 });
   const thumbs = useThumbs([...lines.map((l) => l.product_id), ...hits.map((h) => h.id)]);
   const toName = points.find((p) => p.id === to)?.name ?? "allá";
@@ -67,9 +86,24 @@ export function NewStockRequest({
   const added = useMemo(() => new Set(lines.map((l) => l.product_id)), [lines]);
   const pendingSuggestions = (suggestions ?? []).filter((s) => !added.has(s.product_id));
 
-  function add(line: Line) {
+  function add(line: Line, focus = true) {
     setLines((cur) => (cur.some((l) => l.product_id === line.product_id) ? cur.map((l) => (l.product_id === line.product_id ? { ...l, qty: l.qty + 1 } : l)) : [...cur, line]));
+    if (focus) focusNext.current = line.product_id;
   }
+
+  useEffect(() => {
+    const id = focusNext.current;
+    if (!id) return;
+    const el = qtyRefs.current.get(id);
+    if (!el) return;
+    focusNext.current = null;
+    el.focus({ preventScroll: true });
+    el.select();
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashId(id);
+    const t = window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1300);
+    return () => window.clearTimeout(t);
+  }, [lines]);
 
   async function submit() {
     if (!from || !to) return void Swal.fire({ icon: "warning", title: "Elige los puntos", background: "var(--t-bg-base)", color: "var(--t-text)" });
@@ -117,14 +151,14 @@ export function NewStockRequest({
               <div className="grid items-end gap-2 sm:grid-cols-[1fr_auto_1fr]">
                 <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                   Pide (llega a)
-                  <select className={`${field} mt-1`} style={fieldStyle} value={from} disabled={Boolean(myPoint)} onChange={(e) => { setFrom(e.target.value); setLines([]); if (e.target.value === to) setTo(""); }}>
+                  <select className={`${field} mt-1`} style={fieldStyle} value={from} disabled={Boolean(myPoint)} onChange={(e) => { const next = e.target.value; const nextTo = next === to ? "" : to; setFrom(next); if (next === to) setTo(""); relocate(next, nextTo); }}>
                     {points.map((p) => <option key={p.id} value={p.id}>{p.kind === "point" ? "📍" : "🏬"} {p.name}</option>)}
                   </select>
                 </label>
                 <span className="hidden pb-3 sm:block"><ArrowRight size={18} style={{ color: "var(--t-muted)" }} className="rotate-180" /></span>
                 <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                   Le pide a (sale de)
-                  <select className={`${field} mt-1`} style={fieldStyle} value={to} onChange={(e) => { setTo(e.target.value); setLines([]); }}>
+                  <select className={`${field} mt-1`} style={fieldStyle} value={to} onChange={(e) => { setTo(e.target.value); relocate(from, e.target.value); }}>
                     <option value="">Elegir…</option>
                     {points.filter((p) => p.id !== from).map((p) => <option key={p.id} value={p.id}>{p.kind === "point" ? "📍" : "🏬"} {p.name}</option>)}
                   </select>
@@ -135,7 +169,7 @@ export function NewStockRequest({
                 <section className="rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, transparent)", background: "color-mix(in oklab, var(--t-accent) 8%, transparent)" }}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="flex items-center gap-2 text-sm font-bold"><Sparkles size={15} /> Agotados en tu punto que sí hay en {toName}</p>
-                    <button type="button" onClick={() => pendingSuggestions.forEach((s) => add({ product_id: s.product_id, name: s.name, sku: s.sku, qty: 1, there: s.there, here: s.here }))} className="rounded-full px-3 py-1 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
+                    <button type="button" onClick={() => pendingSuggestions.forEach((s) => add({ product_id: s.product_id, name: s.name, sku: s.sku, qty: 1, there: s.there, here: s.here }, false))} className="rounded-full px-3 py-1 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
                       Agregar todos ({pendingSuggestions.length})
                     </button>
                   </div>
@@ -206,7 +240,7 @@ export function NewStockRequest({
                 <div className="space-y-2">
                   <AnimatePresence initial={false}>
                     {lines.map((l) => (
-                      <motion.div key={l.product_id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="flex items-center gap-3 rounded-2xl border p-2.5" style={{ borderColor: l.qty > l.there ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
+                      <motion.div key={l.product_id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="flex items-center gap-3 rounded-2xl border p-2.5 transition-colors duration-500" style={{ borderColor: flashId === l.product_id ? "#22c55e" : l.qty > l.there ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)", background: flashId === l.product_id ? "color-mix(in oklab, #22c55e 10%, transparent)" : undefined }}>
                         <Thumb src={thumbs[l.product_id]} size={42} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{l.name}</p>
@@ -221,7 +255,16 @@ export function NewStockRequest({
                             type="text"
                             inputMode="numeric"
                             value={l.qty}
+                            ref={(el) => { if (el) qtyRefs.current.set(l.product_id, el); else qtyRefs.current.delete(l.product_id); }}
                             onFocus={(e) => e.currentTarget.select()}
+                            onMouseUp={(e) => e.preventDefault()}
+                            onKeyDown={(e) => {
+                              // Enter: listo este producto → buscar el siguiente.
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                setPickerOpen(true);
+                              }
+                            }}
                             onChange={(e) => setLines((cur) => cur.map((x) => (x.product_id === l.product_id ? { ...x, qty: Math.max(1, Number(e.target.value.replace(/\D/g, "")) || 1) } : x)))}
                             className="h-8 w-14 rounded-lg border text-center text-sm font-bold outline-none"
                             style={fieldStyle}
@@ -235,8 +278,27 @@ export function NewStockRequest({
                       </motion.div>
                     ))}
                   </AnimatePresence>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5"
+                    style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))", color: "var(--t-accent)" }}
+                  >
+                    <span className="grid h-7 w-7 place-items-center rounded-full text-base transition group-hover:scale-110" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }}>＋</span>
+                    Agregar otro producto
+                  </button>
                 </div>
               )}
+              <ProductSearchModal
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                storeId={storeId}
+                warehouseId={to || null}
+                addedQty={Object.fromEntries(lines.map((l) => [l.product_id, l.qty]))}
+                title={`Agregar producto · lo pides a ${toName}`}
+                stockLabel={(h) => (h.wh_qty > 0 ? `Hay ${h.wh_qty} allá` : "Agotado allá")}
+                onPick={(h) => add({ product_id: h.id, name: h.name, sku: h.sku, qty: 1, there: h.wh_qty, here: null })}
+              />
 
               <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <textarea className={`${field} min-h-20`} style={fieldStyle} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mensaje para quien prepara (opcional): para cuándo, para qué cliente…" />

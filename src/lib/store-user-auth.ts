@@ -8,6 +8,7 @@ export const STORE_MENU_PERMISSIONS = [
   "receivables",
   "users",
   "products",
+  "products_view",
   "categories",
   "orders",
   "inventory",
@@ -19,6 +20,15 @@ export const STORE_MENU_PERMISSIONS = [
   "suppliers",
   "payables",
   "audit",
+  "points",
+  "fiscal",
+  "fiscal_send",
+  "fiscal_notes",
+  "fiscal_download",
+  "fiscal_config",
+  "fiscal_numbering",
+  "fiscal_provider",
+  "fiscal_audit",
 ] as const;
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];

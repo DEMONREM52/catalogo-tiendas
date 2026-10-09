@@ -195,6 +195,13 @@ export default function PedidoPage() {
     } | null;
   } | null>(null);
 
+  // Documento electrónico de la venta (si existe): emisor, número, resolución y CUFE.
+  const [fiscalDoc, setFiscalDoc] = useState<{
+    full_number: string; document_type: string; environment: string; status: string; cufe: string | null; qr_data: string | null;
+    issuer: { legal_name: string; document_type: string; document_number: string; verification_digit: string | null; fiscal_address: string | null; city: string | null; email: string | null };
+    resolution: { number: string | null; date: string | null; from: number; to: number; valid_until: string | null; prefix: string };
+  } | null>(null);
+
   /* -------------------------
      Memo
   ------------------------- */
@@ -231,13 +238,24 @@ export default function PedidoPage() {
   }, [order]);
 
   // Remisión/factura del POS con su numeración por punto; si no existe, comprobante del pedido.
-  const docKindLabel = erpDoc?.doc_kind === "remision" ? "Remisión" : erpDoc?.doc_kind === "factura" ? "Factura de venta" : "Comprobante de pedido";
-  const docNumberLabel = erpDoc?.doc_number || (receiptNumber ? `#${receiptNumber}` : "—");
+  const docKindLabel = fiscalDoc
+    ? fiscalDoc.document_type === "pos_equivalent" ? "Documento equivalente electrónico POS" : "Factura electrónica de venta"
+    : erpDoc?.doc_kind === "remision" ? "Remisión" : erpDoc?.doc_kind === "factura" ? "Factura de venta" : "Comprobante de pedido";
+  const docNumberLabel = fiscalDoc?.full_number || erpDoc?.doc_number || (receiptNumber ? `#${receiptNumber}` : "—");
 
   const storeName = storeExtra?.name ?? store?.name ?? "Tienda";
   const point = erpDoc?.point ?? null;
   // Resolución de facturación del punto: solo se imprime en facturas.
   const resolutionText = (() => {
+    if (fiscalDoc) {
+      const d = (v?: string | null) => (v ? new Date(`${v}T12:00:00`).toLocaleDateString("es-CO") : "");
+      const r = fiscalDoc.resolution;
+      return [
+        r.number ? `Resolución DIAN N.º ${r.number}${r.date ? ` del ${d(r.date)}` : ""}. Numeración autorizada del ${r.prefix}${r.from} al ${r.prefix}${r.to}${r.valid_until ? `, vigente hasta ${d(r.valid_until)}` : ""}.` : "",
+        fiscalDoc.cufe ? `CUFE: ${fiscalDoc.cufe}` : "Documento electrónico en validación.",
+        fiscalDoc.environment === "sandbox" ? "DOCUMENTO DE PRUEBAS: SIN VALIDEZ FISCAL." : "",
+      ].filter(Boolean).join(" ");
+    }
     if (erpDoc?.doc_kind !== "factura" || !point?.resolution) return null;
     const d = (v?: string | null) => (v ? new Date(`${v}T12:00:00`).toLocaleDateString("es-CO") : "");
     const pre = erpDoc.doc_prefix ? `${erpDoc.doc_prefix}-` : "";
@@ -290,6 +308,9 @@ export default function PedidoPage() {
       setOrder(orderRpc);
       void sb.rpc("erp_order_doc_by_token", { p_token: token }).then(({ data: doc, error: docError }) => {
         if (!docError) setErpDoc((doc as typeof erpDoc) ?? null);
+      });
+      void sb.rpc("fiscal_public_receipt", { p_token: token }).then(({ data: fdoc, error: fError }) => {
+        if (!fError) setFiscalDoc((fdoc as typeof fiscalDoc) ?? null);
       });
 
       const loadedItems: Item[] = (data?.items ?? []).map((i: any) => ({
@@ -869,15 +890,15 @@ export default function PedidoPage() {
       <PrintReceipt
         format={printFormat}
         logo={point?.logo_url || storeLogo}
-        businessName={point ? point.legal_name || point.name : invoiceBusinessName}
-        nit={point?.nit || billingDetails?.nit}
+        businessName={fiscalDoc ? fiscalDoc.issuer.legal_name : point ? point.legal_name || point.name : invoiceBusinessName}
+        nit={fiscalDoc ? `${fiscalDoc.issuer.document_number}${fiscalDoc.issuer.verification_digit ? `-${fiscalDoc.issuer.verification_digit}` : ""}` : point?.nit || billingDetails?.nit}
         address={
           (point ? [point.address, point.city] : [billingDetails?.address, billingDetails?.city]).filter(Boolean).join(" · ") || null
         }
         email={point?.email || billingDetails?.email}
         whatsapp={point?.phone || storeWhatsapp}
         docTitle={docKindLabel}
-        docNumber={erpDoc?.doc_number || `${billingDetails?.invoice_prefix || "FAC"}-${receiptNumber ?? "—"}`}
+        docNumber={fiscalDoc?.full_number || erpDoc?.doc_number || `${billingDetails?.invoice_prefix || "FAC"}-${receiptNumber ?? "—"}`}
         pointName={point && point.legal_name && point.legal_name !== point.name ? point.name : null}
         pointAddress={null}
         sellerName={erpDoc?.seller_name ?? null}

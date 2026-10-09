@@ -8,6 +8,14 @@ import {
   Box,
   CalendarClock,
   CheckCheck,
+  FileX,
+  Hash,
+  Landmark,
+  PlugZap,
+  ShieldAlert,
+  TriangleAlert,
+  Users,
+  Webhook,
   ReceiptText,
   ShoppingBag,
   Tag,
@@ -28,6 +36,14 @@ const ICONS: Record<string, LucideIcon> = {
   "shopping-bag": ShoppingBag,
   tag: Tag,
   calendar: CalendarClock,
+  hash: Hash,
+  "file-x": FileX,
+  alert: TriangleAlert,
+  plug: PlugZap,
+  webhook: Webhook,
+  shield: ShieldAlert,
+  landmark: Landmark,
+  users: Users,
 };
 
 export const SEVERITY: Record<AlertSeverity, { label: string; color: string; order: number }> = {
@@ -42,9 +58,15 @@ export function useStoreAlerts(storeId: string | null | undefined) {
   const [alerts, setAlerts] = useState<StoreAlert[]>([]);
   const load = useCallback(async () => {
     if (!storeId) return;
-    const { data, error } = await supabaseBrowser().rpc("erp_alerts", { p_store: storeId });
-    if (!error && Array.isArray(data)) {
-      setAlerts([...(data as StoreAlert[])].sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order));
+    const sb = supabaseBrowser();
+    // Alertas del ERP + fiscales, de seguridad y de usuarios (si la migración fiscal no está, se ignoran).
+    const [base, extra] = await Promise.all([sb.rpc("erp_alerts", { p_store: storeId }), sb.rpc("erp_extra_alerts", { p_store: storeId })]);
+    const rows = [
+      ...(!base.error && Array.isArray(base.data) ? (base.data as StoreAlert[]) : []),
+      ...(!extra.error && Array.isArray(extra.data) ? (extra.data as StoreAlert[]) : []),
+    ].filter((a) => SEVERITY[a.severity]);
+    if (!base.error || !extra.error) {
+      setAlerts(rows.sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order));
     }
   }, [storeId]);
   useEffect(() => {

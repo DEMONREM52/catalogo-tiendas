@@ -61,6 +61,7 @@ export function ThirdPartyForm({
   balance,
   existing,
   onSaved,
+  prefill,
 }: {
   open: boolean;
   onClose: () => void;
@@ -71,10 +72,12 @@ export function ThirdPartyForm({
   balance?: Balance | null;
   existing: ThirdParty[];
   onSaved: (row: ThirdParty) => void;
+  /** Datos iniciales para un tercero nuevo (ej. lo que se escribió en el buscador del POS). */
+  prefill?: Partial<Pick<ThirdParty, "name" | "document_number" | "mobile" | "email" | "person_type" | "document_type">>;
 }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   // El panel se monta de nuevo (key) cada vez que se abre, así arranca con los datos correctos.
-  const [draft, setDraft] = useState<Draft>(() => (initial ? { ...initial } : emptyDraft(defaultKinds)));
+  const [draft, setDraft] = useState<Draft>(() => (initial ? { ...initial } : { ...emptyDraft(defaultKinds), ...(prefill ?? {}) }));
   const [saving, setSaving] = useState(false);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [tagText, setTagText] = useState("");
@@ -119,15 +122,34 @@ export function ThirdPartyForm({
 
   async function save() {
     if (saving) return;
-    if (draft.name.trim().length < 2) return void Swal.fire({ icon: "warning", title: juridica ? "Escribe la razón social" : "Escribe el nombre", background: "var(--t-bg-base)", color: "var(--t-text)" });
+    const warn = (title: string, text?: string) => Swal.fire({ icon: "warning", title, text, background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" });
+    const docDigits = (draft.document_number ?? "").replace(/\D/g, "");
+    // Lo importante según el tipo de persona.
+    if (juridica) {
+      if (draft.name.trim().length < 3) return void warn("Escribe la razón social", "Ej: DISTRIBUIDORA LA ESPERANZA S.A.S.");
+      if (!["NIT", "NIT_EXT"].includes(draft.document_type)) return void warn("Una empresa se identifica con NIT", "Cambia el tipo de documento a NIT.");
+      if (docDigits.length < 6) return void warn("Escribe el NIT de la empresa", "Sin el dígito de verificación: se calcula solo.");
+    } else {
+      if (draft.name.trim().length < 3) return void warn("Escribe el nombre completo", "Nombres y apellidos.");
+      if (draft.document_type === "NIT") return void warn("Una persona natural no usa NIT aquí", "Elige cédula u otro documento, o cambia a Empresa (jurídica).");
+      if (draft.document_type !== "OTRO" && docDigits.length < 5) return void warn("Escribe el número de documento", "Es necesario para facturar a su nombre.");
+    }
+    if (draft.mobile && draft.mobile.replace(/\D/g, "").length < 7) return void warn("Revisa el celular", "Debe tener al menos 7 dígitos.");
     if (draft.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
       return void Swal.fire({ icon: "warning", title: "Revisa el correo", background: "var(--t-bg-base)", color: "var(--t-text)" });
     }
-    if (duplicate) {
+    // También se revisa en la base de datos por si el tercero no está en la lista cargada.
+    let dup = duplicate;
+    if (!dup && docDigits.length >= 5) {
+      const { data: found } = await supabaseBrowser().from("billing_customers").select("id,name,document_number").eq("store_id", storeId).eq("document_number", draft.document_number?.trim() ?? "").limit(1);
+      const hit = (found ?? []).find((x: { id: string }) => x.id !== draft.id) as { name: string; document_number: string } | undefined;
+      if (hit) dup = { ...(existing[0] ?? {}), name: hit.name, document_number: hit.document_number } as ThirdParty;
+    }
+    if (dup) {
       const go = await Swal.fire({
         icon: "question",
         title: "Documento repetido",
-        text: `${duplicate.name} ya tiene el documento ${duplicate.document_number}. ¿Guardar de todas formas?`,
+        text: `${dup.name} ya tiene el documento ${dup.document_number}. ¿Guardar de todas formas?`,
         showCancelButton: true,
         confirmButtonText: "Guardar",
         cancelButtonText: "Revisar",

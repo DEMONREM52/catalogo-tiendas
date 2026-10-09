@@ -11,7 +11,8 @@ import {
   isSafeHttpUrl,
   normalizeProductDetails,
 } from "@/lib/product-details";
-import { ArrowLeft, Check, PackageCheck, PackageX, Sparkles } from "lucide-react";
+import { ArrowLeft, Camera, Check, PackageCheck, PackageX, ScanSearch, Sparkles } from "lucide-react";
+import { CatalogFinderButton } from "@/components/product-finder/CatalogFinder";
 import { TrackProductView } from "@/components/StorePixel";
 
 type PageProps = {
@@ -127,7 +128,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
 
   const { data: product, error: productError } = await sb
     .from("products")
-    .select("id,name,description,price_retail,price_wholesale,min_wholesale,image_url,stock,active,product_details,category_id")
+    .select("id,name,description,price_retail,price_wholesale,min_wholesale,image_url,stock,active,product_details,category_id,sku")
     .eq("id", id)
     .eq("store_id", store.id)
     .eq("active", true)
@@ -161,6 +162,8 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   const price = inCatalog ? inCatalog.price : Number(product.price_retail);
   const stock = inCatalog ? inCatalog.stock : product.stock;
   const backHref = inCatalog ? catalogHref(store.slug, inCatalog) : `/${store.slug}/detal`;
+  const finderCtx = { storeId: store.id, storeSlug: store.slug, catalogSlug: inCatalog?.slug ?? null, accessKey: inCatalog?.key ?? null };
+  const code = typeof product.sku === "string" && product.sku.trim() ? product.sku.trim() : null;
   const shareText = buildProductShareText({
     name: product.name,
     price,
@@ -176,12 +179,32 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
       <TrackProductView item={{ id: product.id, name: product.name, price: Number(price) || 0, category: categoryName }} store={store.slug} />
       <div className="mx-auto w-full max-w-[1440px]">
         <header className="product-landing-topbar mb-6 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5">
-          <Link href={backHref} className="inline-flex items-center gap-2 text-sm font-bold opacity-80 transition hover:opacity-100">
-            <ArrowLeft size={17} /> Volver a explorar
+          <Link href={backHref} className="inline-flex min-w-0 items-center gap-2 text-sm font-bold opacity-80 transition hover:opacity-100">
+            <ArrowLeft size={17} className="shrink-0" /> <span className="truncate">Volver a explorar</span>
           </Link>
-          <span className="product-landing-kicker hidden items-center gap-2 text-xs font-extrabold tracking-[0.16em] sm:inline-flex">
-            <Sparkles size={15} /> DESCUBRE CADA DETALLE
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="product-landing-kicker hidden items-center gap-2 text-xs font-extrabold tracking-[0.16em] lg:inline-flex">
+              <Sparkles size={15} /> DESCUBRE CADA DETALLE
+            </span>
+            <CatalogFinderButton
+              ctx={finderCtx}
+              className="inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold transition hover:-translate-y-0.5 sm:text-sm"
+              style={{ borderColor: "var(--t-card-border)" }}
+              title="Buscar otro producto por nombre, código o foto"
+            >
+              <ScanSearch size={16} /> <span className="sm:hidden">Buscar</span><span className="hidden sm:inline">Buscar otro producto</span>
+            </CatalogFinderButton>
+            <CatalogFinderButton
+              ctx={finderCtx}
+              mode="photo"
+              className="grid h-9 w-9 place-items-center rounded-full border transition hover:-translate-y-0.5"
+              style={{ borderColor: "var(--t-card-border)" }}
+              ariaLabel="Buscar otro producto con una foto"
+              title="Buscar con una foto"
+            >
+              <Camera size={16} />
+            </CatalogFinderButton>
+          </div>
         </header>
 
         <article className="product-landing-card product-landing-hero overflow-hidden rounded-[34px] border shadow-2xl backdrop-blur-xl">
@@ -199,6 +222,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
                   <PackageCheck size={14} /> Disponible
                 </span>
                 {categoryName ? <span className="product-landing-category rounded-full px-3 py-1.5 text-xs font-bold">{categoryName}</span> : null}
+                {code ? <span className="product-landing-category rounded-full px-3 py-1.5 text-xs font-bold">Código {code}</span> : null}
               </div>
               <h1 className="mt-5 text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-6xl">{product.name}</h1>
               <p className="product-landing-price mt-6 text-4xl font-black sm:text-5xl">{money(price)}</p>

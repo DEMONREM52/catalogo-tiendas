@@ -15,6 +15,7 @@ type MemberRow = {
   role: "store_admin" | "seller" | "accounting" | "viewer";
   permissions: string[];
   point_id?: string | null;
+  point_ids?: string[] | null;
   active: boolean;
   created_at: string;
 };
@@ -60,6 +61,7 @@ export default function StoreUsersPage() {
   const [points, setPoints] = useState<PointRow[]>([]);
   const [pointId, setPointId] = useState("");
   const [editingPointId, setEditingPointId] = useState("");
+  const [editingExtraPoints, setEditingExtraPoints] = useState<string[]>([]);
 
   useEffect(() => {
     load();
@@ -182,7 +184,7 @@ export default function StoreUsersPage() {
 
   async function updateMember(
     member: MemberRow,
-    changes: { permissions?: string[]; active?: boolean; point_id?: string | null },
+    changes: { permissions?: string[]; active?: boolean; point_id?: string | null; point_ids?: string[] },
   ) {
     if (!store) return;
     setSaving(true);
@@ -545,7 +547,7 @@ export default function StoreUsersPage() {
             <div>
               <label className="text-sm font-semibold">Permisos</label>
               <div className="mt-2">
-                <PermissionPicker value={selectedPermissions} onChange={setSelectedPermissions} disabled={saving} compact />
+                <PermissionPicker value={selectedPermissions} onChange={setSelectedPermissions} disabled={saving} compact storeId={store?.id} />
               </div>
             </div>
 
@@ -639,6 +641,9 @@ export default function StoreUsersPage() {
                       </div>
                       <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                         Punto: <b>{points.find((pt) => pt.id === member.point_id)?.name ?? "Todos"}</b>
+                        {member.point_id && member.point_ids?.length ? (
+                          <> · También consulta: <b>{member.point_ids.map((id) => points.find((pt) => pt.id === id)?.name ?? "Punto").join(", ")}</b></>
+                        ) : null}
                       </p>
                       <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                         Agregado: {new Date(member.created_at).toLocaleString("es-CO")}
@@ -667,6 +672,7 @@ export default function StoreUsersPage() {
                           setEditingUserId(editingUserId === member.user_id ? null : member.user_id);
                           setEditingPermissions(member.permissions ?? []);
                           setEditingPointId(member.point_id ?? "");
+                          setEditingExtraPoints(member.point_ids ?? []);
                         }}
                       >
                         {editingUserId === member.user_id ? "Cancelar" : "Permisos"}
@@ -704,13 +710,29 @@ export default function StoreUsersPage() {
                           <option key={pt.id} value={pt.id}>{pt.kind === "point" ? "📍" : "🏬"} {pt.name}</option>
                         ))}
                       </select>
+                      {editingPointId ? (
+                        <div className="mt-3">
+                          <p className="mb-1 text-sm font-semibold">También puede consultar (alcance «varios puntos»)</p>
+                          <p className="mb-2 text-xs" style={{ color: "var(--t-muted)" }}>Opera solo en su punto principal; en estos puntos puede ver documentos e informes según sus permisos.</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {points.filter((pt) => pt.id !== editingPointId).map((pt) => {
+                              const on = editingExtraPoints.includes(pt.id);
+                              return (
+                                <button key={pt.id} type="button" onClick={() => setEditingExtraPoints(on ? editingExtraPoints.filter((x) => x !== pt.id) : [...editingExtraPoints, pt.id])} className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={on ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
+                                  {pt.kind === "point" ? "📍" : "🏬"} {pt.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                       <p className="mb-2 mt-4 text-sm font-semibold">Permisos del usuario</p>
-                      <PermissionPicker value={editingPermissions} onChange={setEditingPermissions} disabled={saving} />
+                      <PermissionPicker value={editingPermissions} onChange={setEditingPermissions} disabled={saving} storeId={store?.id} />
                       <button
                         type="button"
                         className="btn-cta mt-4 px-4 py-2 text-sm font-semibold"
                         disabled={saving}
-                        onClick={() => updateMember(member, { permissions: editingPermissions, point_id: editingPointId || null })}
+                        onClick={() => updateMember(member, { permissions: editingPermissions, point_id: editingPointId || null, point_ids: editingPointId ? editingExtraPoints.filter((id) => id !== editingPointId) : [] })}
                       >
                         {saving ? "Guardando..." : "Guardar cambios"}
                       </button>

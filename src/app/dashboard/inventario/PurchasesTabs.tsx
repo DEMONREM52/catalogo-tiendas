@@ -324,13 +324,17 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     const sb = supabaseBrowser();
     const [{ data: head, error: headError }, { data: items, error: itemsError }] = await Promise.all([
       sb.from("erp_purchases").select("supplier_id,invoice_ref,invoice_date,payment_type,due_date,notes,checked_by_name,warehouse_id,status").eq("id", row.id).maybeSingle(),
-      sb.from("erp_purchase_items").select("product_id,qty,unit_cost,tax_rate,warehouse_id,products(name,sku)").eq("purchase_id", row.id),
+      sb.from("erp_purchase_items").select("product_id,qty,unit_cost,tax_rate,warehouse_id,note,line_no,products(name,sku)").eq("purchase_id", row.id)
+        // Si aún no existe la columna de comentarios, se abre igual sin ellos.
+        .then((res) => (res.error ? sb.from("erp_purchase_items").select("product_id,qty,unit_cost,tax_rate,warehouse_id,products(name,sku)").eq("purchase_id", row.id) : res)),
     ]);
     setLoadingEdit(null);
     if (headError || itemsError || !head) return void toast("No se pudo abrir el ingreso", "error", errorMessage(headError ?? itemsError));
     if (head.status !== "received") return void toast("Este ingreso está anulado y no se puede editar", "warning");
-    type ItemRow = { product_id: string; qty: number; unit_cost: number; tax_rate: number; warehouse_id: string | null; products: { name: string; sku: string | null } | { name: string; sku: string | null }[] | null };
-    const lines: Line[] = ((items ?? []) as unknown as ItemRow[]).map((it) => {
+    type ItemRow = { product_id: string; qty: number; unit_cost: number; tax_rate: number; warehouse_id: string | null; note?: string | null; line_no?: number | null; products: { name: string; sku: string | null } | { name: string; sku: string | null }[] | null };
+    // Mismo orden en que se agregaron (los ingresos viejos sin orden quedan como los devuelve la base).
+    const ordered = [...((items ?? []) as unknown as ItemRow[])].sort((a, b) => (a.line_no ?? 1e9) - (b.line_no ?? 1e9));
+    const lines: Line[] = ordered.map((it) => {
       const product = Array.isArray(it.products) ? it.products[0] : it.products;
       return {
         product_id: it.product_id,
@@ -341,6 +345,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         unit_cost: Number(it.unit_cost),
         tax_rate: Number(it.tax_rate ?? 0),
         warehouse_id: it.warehouse_id ?? head.warehouse_id,
+        note: it.note ?? "",
       };
     });
     await switchMode({ id: row.id, number: row.number }, {
@@ -385,6 +390,12 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     if (valid.length < f.lines.length && !(await confirmAction("Hay productos con cantidad 0", "Esos productos no se registrarán. ¿Continuar?", "Continuar"))) return;
     if (!navigator.onLine) return void toast("Sin conexión a internet", "warning", "Tu ingreso quedó guardado como borrador en este equipo. Regístralo cuando vuelva la conexión.");
     const items = valid.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, tax_rate: l.tax_rate, warehouse_id: l.warehouse_id }));
+    // Orden y comentario de cada producto (se guardan aparte para no tocar el registro del ingreso).
+    const notes = valid.map((l) => ({ product_id: l.product_id, warehouse_id: l.warehouse_id, note: (l.note ?? "").trim().toUpperCase() }));
+    const saveNotes = async (purchaseId: string) => {
+      const { error: noteError } = await supabaseBrowser().rpc("erp_purchase_set_notes", { p_purchase: purchaseId, p_notes: notes });
+      if (noteError) void toast("Los comentarios de los productos no se guardaron", "warning", /erp_purchase_set_notes|Could not find/i.test(noteError.message) ? "Ejecuta en Supabase la migración 20261029_orden_productos_ingreso.sql." : errorMessage(noteError));
+    };
 
     if (editing) {
       const ask = await Swal.fire({
@@ -412,6 +423,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         const missing = /erp_update_purchase|Could not find the function/i.test(error.message ?? "");
         return void toast("No se pudieron guardar los cambios", "error", missing ? "Ejecuta en Supabase la migración 20261016_smart_search_purchase_edit_tracking.sql." : errorMessage(error));
       }
+      await saveNotes(editing.id);
       const filesFailed = staged.length ? await uploadStaged(ctx.storeId, editing.id, staged) : 0;
       const done = editing;
       clearDraft(draftKey(done));
@@ -446,6 +458,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       setBusy(false);
       return void toast("No se pudo registrar la factura", "error", `${errorMessage(error)} · Tu borrador sigue guardado.`);
     }
+    if (purchaseId) await saveNotes(purchaseId as string);
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
       : { data: null };

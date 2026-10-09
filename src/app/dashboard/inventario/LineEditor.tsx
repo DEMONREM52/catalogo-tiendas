@@ -107,12 +107,15 @@ function HitRow({
   onPick,
   onHover,
   big,
+  stockLabel,
 }: {
   hit: ProductHit;
   thumb?: string | null;
   active: boolean;
   flash: boolean;
   showWarehouse: boolean;
+  /** Texto propio para la existencia (ej. "Hay 5 allá"). */
+  stockLabel?: (hit: ProductHit) => string;
   added?: number;
   onPick: () => void;
   onHover: () => void;
@@ -141,7 +144,7 @@ function HitRow({
         </span>
       </span>
       <span className="shrink-0 text-right text-xs" style={{ color: "var(--t-muted)" }}>
-        {showWarehouse ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
+        {stockLabel ? stockLabel(hit) : showWarehouse ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
         {added ? (
           <span className="mt-0.5 block font-bold" style={{ color: "#22c55e" }}>
             {flash ? "✓ " : ""}En la lista: {added}
@@ -306,6 +309,7 @@ export function ProductSearchModal({
   addedQty,
   title = "Agregar producto",
   onPick,
+  stockLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -316,6 +320,7 @@ export function ProductSearchModal({
   addedQty?: Record<string, number>;
   title?: string;
   onPick: (product: ProductHit) => void;
+  stockLabel?: (hit: ProductHit) => string;
 }) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -431,6 +436,7 @@ export function ProductSearchModal({
                   active={i === keys.active}
                   flash={false}
                   showWarehouse={Boolean(warehouseId)}
+                  stockLabel={stockLabel}
                   added={addedQty?.[hit.id]}
                   onPick={() => pick(hit)}
                   onHover={() => keys.setActive(i)}
@@ -530,7 +536,49 @@ export type Line = {
   unit_cost: number;
   tax_rate: number;
   warehouse_id: string;
+  /** Comentario corto del producto (sale en el comprobante entre paréntesis). */
+  note?: string;
 };
+
+/** Comentario sutil del producto: «(“…”)»; un clic para escribirlo o editarlo. */
+function LineNote({ value, onChange, name }: { value: string; onChange: (v: string) => void; name: string }) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        maxLength={200}
+        defaultValue={value}
+        placeholder="COMENTARIO (OPCIONAL)"
+        aria-label={`Comentario de ${name}`}
+        className="mt-1 w-full rounded-lg border bg-transparent px-2 py-1 text-[11px] uppercase tracking-wide outline-none"
+        style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") {
+            e.preventDefault();
+            if (e.key === "Enter") onChange(e.currentTarget.value.toUpperCase().trim());
+            setEditing(false);
+          }
+        }}
+        onBlur={(e) => {
+          onChange(e.currentTarget.value.toUpperCase().trim());
+          setEditing(false);
+        }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="mt-0.5 block max-w-full truncate text-left text-[11px] uppercase tracking-wide transition hover:opacity-100"
+      style={{ color: "var(--t-muted)", opacity: value ? 0.95 : 0.6 }}
+      title={value ? "Editar comentario" : "Agregar un comentario a este producto"}
+    >
+      {value ? `(“${value}”)` : "+ comentario"}
+    </button>
+  );
+}
 
 export function lineFromHit(hit: ProductHit, mode: "purchase" | "adjust", warehouseId: string): Line {
   return {
@@ -610,15 +658,20 @@ export function LineEditor({
     }
   }, [lines]);
 
-  // Si el producto ya está en la lista se suma una unidad (en compras); si no, se agrega una línea nueva.
+  // Producto nuevo: se agrega una línea. Si ya estaba, NO se suma nada: se lleva el cursor a su cantidad
+  // (resaltada) para que la cambies tú.
   function addHit(hit: ProductHit) {
-    const index = lines.findIndex((l) => l.product_id === hit.id);
+    const exists = lines.some((l) => l.product_id === hit.id);
     pendingFocus.current = hit.id;
-    if (index === -1) onChange([...lines, lineFromHit(hit, mode, warehouseId)]);
-    else if (isPurchase) patch(index, { qty: lines[index].qty + 1 });
-    else {
+    if (!exists) {
+      onChange([...lines, lineFromHit(hit, mode, warehouseId)]);
+      return;
+    }
+    if (focusCell(hit.id, "qty")) {
       pendingFocus.current = null;
-      focusCell(hit.id, "qty");
+      cells.current.get(`${hit.id}:qty`)?.select();
+      setFlashId(hit.id);
+      window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
     }
   }
 
@@ -715,6 +768,7 @@ export function LineEditor({
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold" title={line.name}>{line.name}</div>
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
+                      {isPurchase ? <LineNote value={line.note ?? ""} name={line.name} onChange={(v) => patch(index, { note: v })} /> : null}
                       {lineExtra ? lineExtra(line) : null}
                     </div>
                     <button

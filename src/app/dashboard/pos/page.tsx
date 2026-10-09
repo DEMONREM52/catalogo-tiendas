@@ -1,12 +1,17 @@
 "use client";
 
 import { WithDv, docWithDv } from "@/app/dashboard/nit";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
+import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
+import { ThirdPartyForm } from "../clientes/ThirdPartyForm";
+import { errorText as fiscalErrorText, fiscalApi, newIdempotencyKey } from "@/lib/fiscal/client";
+import type { PointReadiness } from "@/lib/fiscal/types";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
+import { PhotoSearchButton } from "../PhotoSearchControls";
+import { useErpFinderSource } from "../useErpFinder";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
 import { matchesSearch, smartFilter } from "@/lib/search";
 import { CreditMeter } from "../clientes/CreditMeter";
@@ -26,6 +31,8 @@ type Product = {
   stock: number | null;
   image_url: string | null;
   active: boolean;
+  sku?: string | null;
+  barcode?: string | null;
 };
 
 type Client = {
@@ -133,6 +140,9 @@ export default function PosPage() {
   const [allProducts, setProducts] = useState<Product[]>([]);
   const [visibleCount, setVisibleCount] = useState(48);
   const [savingClient, setSavingClient] = useState(false);
+  // Ventana completa para crear un tercero desde el POS.
+  const [newClient, setNewClient] = useState<{ key: number; prefill: { name?: string; document_number?: string } } | null>(null);
+  const [canCredit, setCanCredit] = useState(false);
   const [listOverride, setListOverride] = useState<number | null>(null);
   const [pointStock, setPointStock] = useState<Map<string, number> | null>(null);
   // Solo se ofrecen los productos con existencias en el punto elegido.
@@ -184,7 +194,10 @@ export default function PosPage() {
     const base = pointStock
       ? allProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }))
       : products;
-    return smartFilter(base, term, (product) => product.name);
+    // Código o código de barras exacto primero (sirve con lector de códigos).
+    const exact = base.filter((p) => isExactCode(p, term));
+    const rest = smartFilter(base.filter((p) => !exact.includes(p)), term, (product) => `${product.name} ${product.sku ?? ""} ${product.barcode ?? ""}`);
+    return [...exact, ...rest];
   }, [products, allProducts, pointStock, search]);
 
   const selectedClient = useMemo(
@@ -226,6 +239,22 @@ export default function PosPage() {
 
   const currentPriceList = (listOverride ?? selectedClient?.price_list ?? customerPriceList) as PriceLevel;
   const siigoConfigured = billingSettings?.electronic_provider?.toLowerCase() === "siigo";
+  // Facturación electrónica del punto (motor fiscal). Si el punto la tiene activa, «Factura» siempre es electrónica.
+  const [fiscal, setFiscal] = useState<PointReadiness | null>(null);
+  const fiscalOn = Boolean(fiscal && fiscal.enabled && fiscal.org_enabled);
+  const idemKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pointId) return;
+    let alive = true;
+    void supabaseBrowser().rpc("fiscal_point_readiness", { p_point: pointId }).then(({ data, error }) => {
+      if (!alive) return;
+      const r = data as (PointReadiness & { ok?: boolean }) | null;
+      setFiscal(!error && r && r.ok !== false ? r : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [pointId, docsRefresh]);
 
   const total = useMemo(
    () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
@@ -363,6 +392,7 @@ export default function PosPage() {
         throw new Error("No tienes acceso a ninguna tienda.");
       }
       setStore(access.store);
+      setCanCredit(hasStorePermission(access, "credit"));
       const sb = supabaseBrowser();
 
       const productPages: Product[] = [];
@@ -370,7 +400,7 @@ export default function PosPage() {
       for (let from = 0; ; from += 1000) {
         const { data, error } = await sb
           .from("products")
-          .select("id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active")
+          .select("id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active,sku,barcode")
           .eq("store_id", access.store.id)
           .order("name", { ascending: true })
           .order("id")
@@ -421,9 +451,8 @@ export default function PosPage() {
 
   function prefillNewClient() {
     const term = clientSearch.trim();
-    if (/^[\d.\-\s]+$/.test(term)) setCustomerDocument(term);
-    else setCustomerName(term.toUpperCase());
-    setSelectedClientId("");
+    const isDoc = /^[\d.\-\s]+$/.test(term);
+    setNewClient({ key: Date.now(), prefill: isDoc ? { document_number: term.replace(/\D/g, "") } : { name: term.toUpperCase() } });
   }
 
   async function saveNewClient() {
@@ -517,6 +546,8 @@ export default function PosPage() {
   function removeItem(productId: string) {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
+
+  const finderSource = useErpFinderSource(storeId, { activeOnly: true });
 
   function addProduct(product: Product) {
     setCart((prev) => {
@@ -655,6 +686,18 @@ export default function PosPage() {
 
     if (editingDoc) return saveEdit(editingDoc);
 
+    if (documentKind === "factura" && fiscalOn && fiscal && !fiscal.ready) {
+      await Swal.fire({
+        icon: "error",
+        title: "Este punto no está listo para facturar",
+        html: `<div style="text-align:left">${fiscal.missing.map((m) => `• ${m}`).join("<br/>")}</div><br/><small>Puedes hacer una remisión mientras se completa la configuración.</small>`,
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#ef4444",
+      });
+      return;
+    }
+
     // Venta a crédito: debe ser un tercero registrado y respetar su cupo.
     let creditOverride = false;
     let registerCredit = false;
@@ -720,7 +763,55 @@ export default function PosPage() {
       if (!token) throw new Error("No se generó token de factura.");
  
       let docNumber = "";
-      if (pointId || sellerId) {
+      let fiscalNote = "";
+      const electronic = documentKind === "factura" && fiscalOn;
+      if (electronic) {
+        idemKey.current ??= newIdempotencyKey("pos");
+        let issued: { document: { full_number: string; status: string; environment: string }; send: { ok: boolean; status: string | null; message: string } | null } | null = null;
+        while (!issued) {
+          try {
+            issued = await fiscalApi("/api/fiscal/pos/invoice", {
+              store_id: store.id, token, point_id: pointId || null, seller_id: sellerId || null,
+              customer_id: selectedClient?.id ?? null, customer_doc: customerDocument.trim() || null,
+              idempotency_key: idemKey.current, payment_form: paymentType === "credito" ? "credit" : "cash",
+            });
+          } catch (fiscalError) {
+            const choice = await Swal.fire({
+              icon: "error",
+              title: "No se pudo emitir la factura electrónica",
+              text: fiscalErrorText(fiscalError),
+              background: "#0b0b0b",
+              color: "#fff",
+              showDenyButton: true,
+              showCancelButton: true,
+              confirmButtonText: "Reintentar",
+              denyButtonText: "Guardar como remisión",
+              cancelButtonText: "Dejar pendiente",
+              confirmButtonColor: "#8b5cf6",
+              denyButtonColor: "#f59e0b",
+            });
+            if (choice.isConfirmed) continue;
+            if (choice.isDenied) {
+              const { data: tag, error: tagError } = await sb.rpc("erp_tag_order", { p_store: store.id, p_token: token, p_point: pointId || null, p_seller: sellerId || null, p_kind: "remision" });
+              if (tagError) throw tagError;
+              docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
+              fiscalNote = "<br/><small>Se guardó como remisión: aparece en Centro fiscal → «Por facturar».</small>";
+            } else {
+              fiscalNote = "<br/><small style=\"color:#f59e0b\">La venta quedó creada sin documento fiscal. Factúrala desde el Centro fiscal.</small>";
+            }
+            break;
+          }
+        }
+        if (issued) {
+          docNumber = issued.document.full_number;
+          const env = issued.document.environment === "production" ? "" : " · 🧪 pruebas";
+          fiscalNote = issued.send?.ok
+            ? `<br/><b>Factura electrónica:</b> ${issued.send.status === "ACCEPTED" ? "✅ aceptada" : "enviada"}${env}`
+            : `<br/><small style="color:#f59e0b">⚠️ ${issued.send?.message ?? "Quedó en cola: se enviará automáticamente."}</small>`;
+        }
+        idemKey.current = null;
+        if (customerDocument.trim()) await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
+      } else if (pointId || sellerId) {
         const { data: tag } = await sb.rpc("erp_tag_order", {
           p_store: store.id,
           p_token: token,
@@ -759,7 +850,7 @@ export default function PosPage() {
       else window.open(invoiceUrl, "_blank");
       setDocsRefresh((n) => n + 1);
  
-      if (requestElectronicInvoice && documentKind === "factura" && siigoConfigured) {
+      if (!electronic && requestElectronicInvoice && documentKind === "factura" && siigoConfigured) {
         try {
           const { data: sessionData, error: sessionError } = await supabaseBrowser().auth.getSession();
           if (sessionError) throw sessionError;
@@ -819,7 +910,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "success",
         title: `${kindLabel} creada`,
-        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}${creditNote}`,
+        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${fiscalNote}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}${creditNote}`,
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonText: "Ver comprobante",
@@ -889,15 +980,51 @@ export default function PosPage() {
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
         <div className="space-y-3">
           <div {...cardProps()}>
-            <input
-              {...inputProps()}
-              placeholder="🔍 Buscar producto por nombre…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setVisibleCount(48);
-              }}
-            />
+            <div className="flex gap-2">
+              <input
+                {...inputProps()}
+                placeholder="🔍 Nombre, código o código de barras…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setVisibleCount(48);
+                }}
+                onKeyDown={(e) => {
+                  // Enter con un código exacto agrega el producto (lector de códigos de barras).
+                  if (e.key !== "Enter") return;
+                  const hit = filteredProducts.find((p) => isExactCode(p, search.trim().toLowerCase()));
+                  if (!hit) return;
+                  e.preventDefault();
+                  if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
+                  addProduct(hit);
+                  setSearch("");
+                }}
+              />
+              <PhotoSearchButton
+                source={finderSource}
+                pickLabel="Agregar"
+                title="Agregar producto"
+                subtitle="Toma una foto del producto o escribe su nombre o código."
+                storageKey={`pos:${storeId ?? ""}`}
+                renderExtra={(hit) => {
+                  const stock = pointStock ? pointStock.get(hit.id) ?? 0 : allProducts.find((p) => p.id === hit.id)?.stock ?? null;
+                  return stock === null ? null : (
+                    <span className="mt-0.5 block text-[11px] font-semibold" style={{ color: stock > 0 ? "#16a34a" : "#dc2626" }}>
+                      {stock > 0 ? `${stock} disponibles aquí` : "Sin existencias aquí"}
+                    </span>
+                  );
+                }}
+                onPick={(hit) => {
+                  const product = allProducts.find((p) => p.id === hit.id);
+                  const stock = product ? (pointStock ? pointStock.get(product.id) ?? 0 : product.stock) : 0;
+                  if (!product || !product.active || stock === 0) {
+                    void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
+                    return;
+                  }
+                  addProduct({ ...product, stock });
+                }}
+              />
+            </div>
 
             {loading || (pointId && !pointStock) ? (
               <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
@@ -1071,6 +1198,9 @@ export default function PosPage() {
                 <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
                   {(() => {
                     const pt = points.find((x) => x.id === pointId);
+                    if (pt && documentKind === "factura" && fiscalOn) {
+                      return fiscal?.range ? `Próxima factura electrónica: ${fiscal.range.prefix}${fiscal.range.next_number} · quedan ${fiscal.range.remaining}` : "Sin numeración electrónica vigente";
+                    }
                     if (pt) {
                       const prefix = documentKind === "factura" ? pt.invoice_prefix : pt.remision_prefix;
                       const next = documentKind === "factura" ? pt.next_invoice_number : pt.next_remision_number;
@@ -1244,7 +1374,22 @@ export default function PosPage() {
                 </div>
               </div>
  
-              {documentKind === "factura" ? (
+              {documentKind === "factura" && fiscalOn && fiscal ? (
+                <div className="space-y-2 rounded-2xl border p-4" style={{ borderColor: fiscal.ready ? "rgba(34,197,94,.4)" : "rgba(239,68,68,.45)", background: fiscal.ready ? "rgba(34,197,94,.08)" : "rgba(239,68,68,.08)" }}>
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                    {fiscal.ready ? "🟢 Factura electrónica" : "🔴 Este punto no está listo para facturar"}
+                    <span className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>{fiscal.environment === "production" ? "🟢 Producción" : "🧪 Pruebas"}</span>
+                  </p>
+                  {fiscal.ready ? (
+                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                      {fiscal.entity?.legal_name} · NIT {fiscal.entity?.document_number}{fiscal.entity?.verification_digit ? `-${fiscal.entity.verification_digit}` : ""} · {fiscal.provider?.name}. El número, la resolución y el envío los resuelve el servidor.
+                    </p>
+                  ) : (
+                    <ul className="list-disc pl-5 text-xs" style={{ color: "var(--t-muted)" }}>{fiscal.missing.map((m) => <li key={m}>{m}</li>)}</ul>
+                  )}
+                  {fiscal.warnings.map((w) => <p key={w} className="text-xs text-amber-500">⚠️ {w}</p>)}
+                </div>
+              ) : documentKind === "factura" ? (
                 <div className="space-y-2 rounded-2xl border border-dashed border-slate-500/30 p-4">
                   <label className="flex items-center gap-2 text-sm font-semibold">
                     <input
@@ -1451,7 +1596,7 @@ export default function PosPage() {
                   ? "Creando factura..."
                   : "Creando remisión..."
                 : documentKind === "factura"
-                  ? requestElectronicInvoice
+                  ? requestElectronicInvoice || fiscalOn
                     ? "Crear factura electrónica"
                     : "Crear factura"
                   : "Crear remisión"}
@@ -1460,6 +1605,34 @@ export default function PosPage() {
 
         </div>
       </div>
+      {newClient && store ? (
+        <ThirdPartyForm
+          key={newClient.key}
+          open
+          onClose={() => setNewClient(null)}
+          storeId={store.id}
+          initial={null}
+          defaultKinds={["customer"]}
+          canCredit={canCredit}
+          existing={[]}
+          prefill={newClient.prefill}
+          onSaved={(row) => {
+            const created: Client = {
+              id: row.id, name: row.name, email: row.email, mobile: row.mobile, document_number: row.document_number, price_list: row.price_list,
+              kinds: row.kinds, active: row.active, credit_enabled: row.credit_enabled, credit_limit: row.credit_limit, credit_days: row.credit_days, credit_blocked: row.credit_blocked,
+            };
+            setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+            setClientSearch("");
+            setSelectedClientId(row.id);
+          }}
+        />
+      ) : null}
     </main>
   );
+}
+
+/** El texto es exactamente el código o el código de barras del producto. */
+function isExactCode(product: { sku?: string | null; barcode?: string | null }, term: string) {
+  const t = term.replace(/^#/, "").trim().toLowerCase();
+  return Boolean(t) && ((product.sku ?? "").trim().toLowerCase() === t || (product.barcode ?? "").trim().toLowerCase() === t);
 }

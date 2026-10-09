@@ -14,6 +14,8 @@ import {
   type ProductDetails,
 } from "@/lib/product-details";
 import { CategoryPicker, loadProductCategoryIds, saveProductCategoryIds } from "../CategoryPicker";
+import { requestImageIndex } from "@/lib/image-search/indexer";
+import { checkProductCode, cleanProductCode, loadProductCodes } from "../product-code";
 
 type Category = { id: string; name: string };
 
@@ -40,6 +42,11 @@ type Product = {
 
   stock: number | null; // null = ilimitado
   product_details: ProductDetails;
+
+  // Código editable (sku), código de barras y número interno fijo.
+  sku?: string | null;
+  barcode?: string | null;
+  product_no?: number | null;
 };
 
 /** Margen de ganancia de un precio frente al costo. */
@@ -264,6 +271,7 @@ export default function EditProductPage() {
         product_details: normalizeProductDetails((p as any).product_details),
       };
 
+      Object.assign(normalized, await loadProductCodes(normalized.id));
       setProduct(normalized);
       setDraft({ ...normalized });
       const ids = await loadProductCategoryIds(normalized.id, normalized.category_id, ((cats as Category[]) ?? []));
@@ -312,13 +320,19 @@ export default function EditProductPage() {
         image_url: draft.image_url,
         category_id: categoryIds[0] ?? null,
         product_details: draft.product_details,
+        sku: cleanProductCode(draft.sku),
+        barcode: (draft.barcode ?? "").trim() || null,
       };
+      await checkProductCode(storeId, payload.sku, draft.id);
 
       const { error } = await sb.from("products").update(payload).eq("id", draft.id).eq("store_id", storeId);
       if (error) throw error;
+      // Si se borró el código, la base le vuelve a poner su número interno.
+      const codes = await loadProductCodes(draft.id);
+      requestImageIndex();
 
       const categoryWarning = await saveProductCategoryIds(draft.id, categoryIds);
-      const savedDraft = { ...draft, category_id: categoryIds[0] ?? null };
+      const savedDraft = { ...draft, ...codes, category_id: categoryIds[0] ?? null };
       setDraft(savedDraft);
       setProduct(savedDraft);
       setSavedCategoryIds(categoryIds);
@@ -439,6 +453,40 @@ export default function EditProductPage() {
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Código del producto
+                </label>
+                <input
+                  className={`mt-1 ${inputSoftProps("uppercase").className}`}
+                  style={inputSoftProps().style}
+                  value={draft.sku ?? ""}
+                  maxLength={40}
+                  placeholder={draft.product_no ? String(draft.product_no) : "Ej: OLL-01"}
+                  onChange={(e) => setDraft({ ...draft, sku: e.target.value.toUpperCase() })}
+                />
+                <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                  {draft.product_no ? <>N.º interno <b>#{draft.product_no}</b> (no cambia). </> : null}
+                  Si lo dejas vacío se usa el número interno. Se puede buscar por código en todos los buscadores.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  Código de barras
+                </label>
+                <input
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
+                  value={draft.barcode ?? ""}
+                  maxLength={60}
+                  inputMode="numeric"
+                  placeholder="Opcional"
+                  onChange={(e) => setDraft({ ...draft, barcode: e.target.value })}
+                />
+              </div>
             </div>
 
             <div>

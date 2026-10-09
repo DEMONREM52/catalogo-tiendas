@@ -6,6 +6,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import AdminBell from "./AdminBell";
+import { logSessionEvent } from "@/lib/audit-client";
 
 /* =========================================================
    ✅ Context: evita doble AdminShell
@@ -141,6 +142,7 @@ function AdminMenu({ onNav, showHeader = true }: { onNav?: () => void; showHeade
         <NavItem href="/admin/productos" emoji="📦" label="Productos" onClick={onNav} />
         <NavItem href="/admin/categorias" emoji="🗂️" label="Categorías" onClick={onNav} />
         <NavItem href="/admin/usuarios" emoji="👤" label="Usuarios / Roles" onClick={onNav} />
+        <NavItem href="/admin/fiscal" emoji="🏛️" label="Fiscal y seguridad" onClick={onNav} />
         <NavItem href="/admin/themes" emoji="🎨" label="Themes" onClick={onNav} />
       </div>
 
@@ -354,6 +356,7 @@ function AdminShellRoot({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     const sb = supabaseBrowser();
+    await logSessionEvent("auth.logout");
     await sb.auth.signOut();
     router.replace("/login");
   }

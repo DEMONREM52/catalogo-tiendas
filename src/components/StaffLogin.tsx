@@ -8,6 +8,7 @@ import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, LogIn, User, UserRound }
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { storeStaffAuthEmail, isValidStoreUsername } from "@/lib/store-user-auth";
 import { getDashboardStore } from "@/lib/store-utils";
+import { logSessionEvent } from "@/lib/audit-client";
 
 type Status = "checking" | "ready" | "invalid";
 
@@ -104,6 +105,7 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
       if (data.session?.access_token) {
         document.cookie = `app_session=${data.session.access_token}; path=/; max-age=604800`;
       }
+      await logSessionEvent("auth.login", storeId);
       router.push("/dashboard");
     } catch (err: unknown) {
       fail(String((err as Error)?.message ?? "No se pudo iniciar sesión."));

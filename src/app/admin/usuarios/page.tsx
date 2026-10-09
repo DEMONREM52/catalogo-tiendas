@@ -50,7 +50,8 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   credit: "Créditos",
   receivables: "Cartera",
   users: "Usuarios",
-  products: "Productos y catálogos",
+  products: "Crear y editar productos y catálogos",
+  products_view: "Ver lista general de productos",
   categories: "Categorías",
   orders: "Pedidos",
   inventory: "Inventario y kardex",
@@ -62,6 +63,15 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   suppliers: "Proveedores",
   payables: "Cuentas por pagar",
   audit: "Auditoría e informes",
+  points: "Puntos",
+  fiscal: "Centro fiscal",
+  fiscal_send: "Emitir documentos electrónicos",
+  fiscal_notes: "Notas y anulaciones",
+  fiscal_download: "Descargar XML/PDF",
+  fiscal_config: "Configuración fiscal",
+  fiscal_numbering: "Resoluciones y numeración",
+  fiscal_provider: "Proveedor tecnológico",
+  fiscal_audit: "Auditoría fiscal",
 };
 
 /** =========================

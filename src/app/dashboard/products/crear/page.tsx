@@ -13,6 +13,8 @@ import {
   type ProductDetails,
 } from "@/lib/product-details";
 import { CategoryPicker, saveProductCategoryIds } from "../CategoryPicker";
+import { requestImageIndex } from "@/lib/image-search/indexer";
+import { checkProductCode, cleanProductCode } from "../product-code";
 
 type Category = { id: string; name: string };
 
@@ -89,6 +91,7 @@ export default function CreateProductPage() {
 
   // form
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
 
   const [costPrice, setCostPrice] = useState(0);
@@ -183,9 +186,13 @@ export default function CreateProductPage() {
     try {
       const sb = supabaseBrowser();
 
+      const sku = cleanProductCode(code);
+      if (storeId) await checkProductCode(storeId, sku);
       const payload = {
         store_id: storeId,
         name: n,
+        // Vacío: la base le pone su número interno como código.
+        ...(sku ? { sku } : {}),
         description: description?.trim() ? description.trim() : "",
         cost_price: Math.max(0, Number(costPrice || 0)),
         price_1: Math.max(0, Number(price1 || 0)),
@@ -207,6 +214,7 @@ export default function CreateProductPage() {
         product_details: productDetails,
       }).select("id").single();
       if (error) throw error;
+      requestImageIndex();
       const categoryWarning = data?.id && categoryIds.length > 1 ? await saveProductCategoryIds(String(data.id), categoryIds) : null;
 
       await Swal.fire({
@@ -287,6 +295,20 @@ export default function CreateProductPage() {
                 style={{
                   ...inputProps().style,
                 }}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Código del producto (opcional)
+              </label>
+              <input
+                {...inputProps("uppercase")}
+                value={code}
+                maxLength={40}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="Vacío = se usa el número interno (1, 2, 3…)"
+                style={{ ...inputProps().style }}
               />
             </div>
 

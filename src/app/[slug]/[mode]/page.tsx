@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, Search, Sparkles, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, Sparkles, X } from "lucide-react";
+import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
 import { AnimatePresence, motion } from "framer-motion";
 import Swal from "sweetalert2";
 
@@ -926,7 +927,7 @@ export default function StoreCatalogPage() {
 
     // Respaldo si aún no está la búsqueda inteligente en Supabase: todas las palabras, en cualquier orden.
     if (term.length >= 2) {
-      for (const filter of ilikeTokenFilters(["name", "description"], term)) query = query.or(filter);
+      for (const filter of ilikeTokenFilters(["name", "description", "sku"], term)) query = query.or(filter);
     }
 
     // orden estable + rango
@@ -1234,6 +1235,59 @@ export default function StoreCatalogPage() {
   }
   const glassBg = "color-mix(in oklab, var(--t-card-bg) 78%, transparent)";
   const glassBg2 = "color-mix(in oklab, var(--t-card-bg) 64%, transparent)";
+
+  // Buscador con ficha completa («Ver más»): por nombre, código o foto.
+  const finderCtx: CatalogFinderContext | null = store
+    ? { storeId: store.id, storeSlug: store.slug, catalogSlug: catalog?.slug ?? null, accessKey: key, wholesale: !catalog && safeMode === "mayor" }
+    : null;
+  const searchHeader = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+        Buscar producto
+      </label>
+      {finderCtx ? (
+        <CatalogFinderButton
+          ctx={finderCtx}
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition hover:-translate-y-0.5"
+          style={{ borderColor: "var(--t-border)", color: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 8%, transparent)" }}
+          title="Busca un producto por nombre, código o foto y mira toda su información"
+        >
+          <ScanSearch size={14} /> Ver ficha de un producto
+        </CatalogFinderButton>
+      ) : null}
+    </div>
+  );
+  const searchField = (
+    <div className="relative mt-2">
+      <input
+        className="t-ring w-full rounded-xl border py-2 pl-3 pr-11 text-sm"
+        style={{
+          borderColor: "var(--t-border)",
+          background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
+          color: "var(--t-text)",
+        }}
+        placeholder="Ej: camiseta roja, bolso, perfume o el código…"
+        value={q}
+        ref={searchInputRef}
+        type="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        onChange={(e) => setQ(e.target.value)}
+      />
+      {finderCtx ? (
+        <CatalogFinderButton
+          ctx={finderCtx}
+          mode="photo"
+          className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg transition hover:scale-105"
+          style={{ color: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}
+          ariaLabel="Buscar con una foto"
+          title="Buscar con una foto"
+        >
+          <Camera size={17} />
+        </CatalogFinderButton>
+      ) : null}
+    </div>
+  );
 
   return (
     <main data-store-catalog className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
@@ -1814,24 +1868,8 @@ export default function StoreCatalogPage() {
 
             {/* Buscador */}
             <div ref={searchBoxRef} className="mt-4 scroll-mt-24 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
-              <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-                Buscar producto
-              </label>
-              <input
-                className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
-                style={{
-                  borderColor: "var(--t-border)",
-                  background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
-                  color: "var(--t-text)",
-                }}
-                placeholder="Ej: camiseta roja, bolso, perfume..."
-                value={q}
-                ref={searchInputRef}
-                type="search"
-                enterKeyHint="search"
-                autoComplete="off"
-                onChange={(e) => setQ(e.target.value)}
-              />
+              {searchHeader}
+              {searchField}
               {q ? (
                 <button
                   type="button"
@@ -1846,24 +1884,8 @@ export default function StoreCatalogPage() {
           </div>
         ) : (
           <div ref={searchBoxRef} className="mt-2 scroll-mt-24 rounded-2xl border p-3" style={{ borderColor: "var(--t-border)", background: glassBg2 }}>
-            <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-              Buscar producto
-            </label>
-            <input
-              className="t-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm"
-              style={{
-                borderColor: "var(--t-border)",
-                background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)",
-                color: "var(--t-text)",
-              }}
-              placeholder="Ej: camiseta roja, bolso, perfume..."
-              value={q}
-              ref={searchInputRef}
-              type="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              onChange={(e) => setQ(e.target.value)}
-            />
+            {searchHeader}
+            {searchField}
           </div>
         )}
 
@@ -2219,6 +2241,27 @@ export default function StoreCatalogPage() {
               <Search size={20} />
               {q ? <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full border-2" style={{ background: "var(--t-accent)", borderColor: "var(--t-card-bg)" }} /> : null}
             </motion.button>
+          ) : null}
+          {!searchInView && !dailyCampaign && finderCtx ? (
+            <motion.div
+              key="float-finder"
+              initial={{ opacity: 0, scale: 0.6, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.6, y: 12 }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              className="pointer-events-auto"
+            >
+              <CatalogFinderButton
+                ctx={finderCtx}
+                mode="photo"
+                className="grid h-12 w-12 place-items-center rounded-full border shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:-translate-y-0.5 active:scale-95"
+                style={{ borderColor: "var(--t-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", color: "var(--t-accent)" }}
+                ariaLabel="Buscar un producto con foto o código"
+                title="Buscar con foto o código"
+              >
+                <Camera size={20} />
+              </CatalogFinderButton>
+            </motion.div>
           ) : null}
           {pastFirstProduct && !dailyCampaign ? (
             <motion.button

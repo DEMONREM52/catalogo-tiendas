@@ -12,6 +12,8 @@ import {
 } from "@/lib/store-utils";
 import { useNicknameUpdates } from "./Nickname";
 import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
+import { ImageIndexer } from "./ImageIndexer";
+import { logSessionEvent } from "@/lib/audit-client";
 
 type Role = "admin" | "store";
 
@@ -165,9 +167,13 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
 
 type ModuleKey = "inventory" | "billing" | "settings";
 
+// Quién puede abrir la lista general de productos (solo lectura); igual que erp_product_catalog_browse.
+const PRODUCT_LIST_PERMISSIONS = ["products_view", "products", "inventory", "stock_requests", "stock_requests_manage", "transfers", "pos"];
+
 const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permissions: string[]; adminOnly?: boolean }>> = {
   inventory: [
     { href: "/dashboard/products", label: "📦 Productos", permissions: ["products"] },
+    { href: "/dashboard/lista-productos", label: "📋 Lista general", permissions: PRODUCT_LIST_PERMISSIONS },
     { href: "/dashboard/categories", label: "🗂️ Categorías del catálogo", permissions: ["categories"] },
     { href: "/dashboard/inventario", label: "🏭 Stock, puntos, traslados y compras", permissions: ERP_PERMISSIONS },
   ],
@@ -184,7 +190,7 @@ const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permis
 function moduleOf(path: string): ModuleKey | null {
   if (path.startsWith("/dashboard/store/billing") || path.startsWith("/dashboard/pos")) return "billing";
   if (path.startsWith("/dashboard/store")) return "settings";
-  if (path.startsWith("/dashboard/products") || path.startsWith("/dashboard/categories") || path.startsWith("/dashboard/inventario")) return "inventory";
+  if (path.startsWith("/dashboard/products") || path.startsWith("/dashboard/lista-productos") || path.startsWith("/dashboard/categories") || path.startsWith("/dashboard/inventario")) return "inventory";
   return null;
 }
 
@@ -485,17 +491,23 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/pos") ? "pos" :
       pathname.startsWith("/dashboard/clientes") ? "clients" :
       pathname.startsWith("/dashboard/products") ? "products" :
+      pathname.startsWith("/dashboard/lista-productos") ? "products_view" :
       pathname.startsWith("/dashboard/social") ? "products" :
       pathname.startsWith("/dashboard/categories") ? "categories" :
       pathname.startsWith("/dashboard/pedidos") ? "orders" :
       pathname.startsWith("/dashboard/inventario") ? "inventory" :
+      pathname.startsWith("/dashboard/fiscal") ? "fiscal" :
+      pathname.startsWith("/dashboard/puntos") ? "points" :
       null;
 
     if (!permission) return;
     const allowed =
       permission === "inventory" ? ERP_PERMISSIONS.some((p) => canOpen(p)) :
+      permission === "products_view" ? PRODUCT_LIST_PERMISSIONS.some((p) => canOpen(p)) :
       permission === "clients" ? ["clients", "receivables", "credit"].some((p) => canOpen(p)) :
       permission === "orders" ? ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) :
+      permission === "fiscal" ? ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)) :
+      permission === "points" ? ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)) :
       canOpen(permission);
     if (allowed) return;
     void Swal.fire({
@@ -558,6 +570,7 @@ export default function DashboardShell({
 
   async function logout() {
     const sb = supabaseBrowser();
+    await logSessionEvent("auth.logout", store?.id ?? null);
     await sb.auth.signOut();
     router.replace("/login");
   }
@@ -574,6 +587,9 @@ export default function DashboardShell({
       { href: firstOf("billing"), emoji: "💳", label: "Facturación", show: store && anyOf("billing"), module: "billing" as ModuleKey | undefined },
       { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/fiscal", emoji: "🏛️", label: "Facturación electrónica", show: store && ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/puntos", emoji: "📍", label: "Puntos", show: store && ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
       { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
       { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },
@@ -863,6 +879,7 @@ export default function DashboardShell({
 
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
+            {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}
 
             <button
               onClick={logout}

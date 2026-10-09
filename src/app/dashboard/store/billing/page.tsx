@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { WithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
@@ -586,6 +587,12 @@ export default function BillingSettingsPage() {
 
   return (
     <main className="space-y-6">
+      <Link href="/dashboard/fiscal" className="flex items-start gap-3 rounded-2xl border p-4 text-sm transition hover:-translate-y-0.5" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 10%, transparent)" }}>
+        <span className="text-xl">🏛️</span>
+        <span>
+          <b>Facturación electrónica por punto:</b> contribuyentes (NIT), resoluciones, proveedor tecnológico con credenciales cifradas y documentos electrónicos ahora están en el <b>Centro fiscal</b>. Esta página conserva los datos del comprobante y la integración anterior.
+        </span>
+      </Link>
       <div {...cardProps()}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>

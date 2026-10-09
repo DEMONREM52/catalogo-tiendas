@@ -2,12 +2,14 @@
 
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { logSessionEvent } from "@/lib/audit-client";
 
 export function LogoutButton() {
   const router = useRouter();
 
   async function logout() {
     const sb = supabaseBrowser();
+    await logSessionEvent("auth.logout");
     await sb.auth.signOut();
 
     document.cookie = "app_session=; path=/; max-age=0";

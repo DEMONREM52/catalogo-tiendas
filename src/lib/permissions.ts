@@ -29,7 +29,8 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
     title: "Productos y catálogos",
     icon: "📦",
     items: [
-      { value: "products", label: "Productos y catálogos", description: "Productos, catálogos, campañas y precios por catálogo" },
+      { value: "products_view", label: "Ver lista general de productos", description: "Solo lectura: ver y filtrar todos los productos con las existencias de cada punto (no puede crear, editar ni desactivar)" },
+      { value: "products", label: "Crear y editar productos y catálogos", description: "Crear, editar, activar/desactivar productos; catálogos, campañas y precios por catálogo", sensitive: true },
       { value: "categories", label: "Categorías", description: "Organizar las categorías de la tienda" },
     ],
   },
@@ -57,6 +58,22 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
       { value: "store", label: "Mi tienda", description: "Datos, apariencia y medición de la tienda" },
       { value: "billing", label: "Datos de facturación", description: "Configuración de comprobantes y pagos" },
       { value: "users", label: "Usuarios", description: "Crear usuarios, cambiar permisos y eliminar accesos", sensitive: true },
+      { value: "points", label: "Puntos", description: "Crear puntos, editarlos, asignar responsable y activarlos o suspenderlos", sensitive: true },
+    ],
+  },
+  {
+    key: "fiscal",
+    title: "Facturación electrónica",
+    icon: "🏛️",
+    items: [
+      { value: "fiscal", label: "Ver centro fiscal", description: "Documentos electrónicos, estados, salud fiscal y numeración (solo lectura)" },
+      { value: "fiscal_send", label: "Emitir y reenviar", description: "Transmitir y reintentar documentos electrónicos, facturar remisiones pendientes" },
+      { value: "fiscal_notes", label: "Notas y anulaciones", description: "Notas crédito/débito y anular documentos que nunca se transmitieron", sensitive: true },
+      { value: "fiscal_download", label: "Descargar XML/PDF y exportar", description: "Descargas y expediente fiscal (queda auditado)" },
+      { value: "fiscal_config", label: "Configuración fiscal", description: "Contribuyentes (NIT), establecimientos y reglas fiscales del punto", sensitive: true },
+      { value: "fiscal_numbering", label: "Resoluciones y numeración", description: "Crear y cambiar resoluciones, prefijos y rangos", sensitive: true },
+      { value: "fiscal_provider", label: "Proveedor tecnológico", description: "Conectar, probar, reconectar y guardar credenciales del proveedor", sensitive: true },
+      { value: "fiscal_audit", label: "Auditoría fiscal", description: "Ver la auditoría fiscal y de seguridad" },
     ],
   },
 ];
@@ -66,10 +83,12 @@ export const permissionLabel = (value: string) => PERMISSION_LIST.find((p) => p.
 
 /** Plantillas para asignar permisos con un clic (luego se pueden ajustar). */
 export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: string; permissions: StoreMenuPermission[] }> = [
-  { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "clients", "orders", "stock_requests"] },
-  { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "clients", "orders", "receivables", "stock_requests"] },
+  { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "clients", "orders", "stock_requests", "products_view"] },
+  { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "clients", "orders", "receivables", "stock_requests", "fiscal_send", "products_view"] },
   { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "audit"] },
-  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "transfers", "purchases", "suppliers", "stock_requests_manage"] },
-  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "billing"] },
-  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "orders", "clients", "receivables", "credit", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage"] },
+  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view"] },
+  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
+  { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "fiscal", "fiscal_audit", "fiscal_download"] },
+  { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "audit", "fiscal", "fiscal_send", "fiscal_download"] },
+  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "orders", "clients", "receivables", "credit", "products_view", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage"] },
 ];

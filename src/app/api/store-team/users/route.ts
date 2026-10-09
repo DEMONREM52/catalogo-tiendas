@@ -28,6 +28,8 @@ type ManagerAccess = {
   isAdmin: boolean;
   role: string | null;
   permissions: string[];
+  /** Punto del administrador de punto: solo gestiona usuarios de su punto. */
+  pointId: string | null;
 };
 
 function getAdminClient() {
@@ -88,16 +90,17 @@ async function requireStoreManager(
       isAdmin: true,
       role: "store_admin",
       permissions: [...STORE_MENU_PERMISSIONS],
+      pointId: null,
     };
   }
 
   if (store.owner_id === userId) {
-    return { store: store as StoreAccess, isOwner: true, isAdmin: false, role: "store_admin", permissions: [...STORE_MENU_PERMISSIONS] };
+    return { store: store as StoreAccess, isOwner: true, isAdmin: false, role: "store_admin", permissions: [...STORE_MENU_PERMISSIONS], pointId: null };
   }
 
   const { data: membership, error: membershipError } = await admin
     .from("store_users")
-    .select("role,active,permissions")
+    .select("role,active,permissions,point_id")
     .eq("store_id", storeId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -115,7 +118,27 @@ async function requireStoreManager(
     isAdmin: false,
     role: membership.role,
     permissions: membership.permissions ?? [],
+    pointId: membership.role === "store_admin" ? null : (membership.point_id as string | null) ?? null,
   };
+}
+
+/** Un administrador de punto solo crea y edita usuarios de su propio punto. */
+function assertPointScope(manager: ManagerAccess, targetPointId: string | null | undefined) {
+  if (!manager.pointId) return;
+  if (targetPointId !== manager.pointId) {
+    throw new ApiError("Solo puedes gestionar usuarios de tu propio punto.", 403);
+  }
+}
+
+async function resolvePointIds(admin: SupabaseClient, storeId: string, value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new ApiError("Los puntos adicionales no son válidos.", 400);
+  const ids = [...new Set(value.map(String).filter(Boolean))];
+  if (!ids.length) return [];
+  const { data, error } = await admin.from("erp_warehouses").select("id").eq("store_id", storeId).in("id", ids);
+  if (error) throw new ApiError(error.message, 500);
+  if ((data ?? []).length !== ids.length) throw new ApiError("Alguno de los puntos adicionales no pertenece a esta tienda.", 400);
+  return ids;
 }
 
 function assertCanGrantPermissions(manager: ManagerAccess, permissions: string[]) {
@@ -156,13 +179,15 @@ export async function GET(request: Request) {
     const { admin, userId } = await authorizeRequest(request);
     const storeId = new URL(request.url).searchParams.get("store_id");
     if (!storeId) throw new ApiError("Falta el identificador de la tienda.", 400);
-    await requireStoreManager(admin, userId, storeId);
+    const manager = await requireStoreManager(admin, userId, storeId);
 
-    const { data, error } = await admin
+    let query = admin
       .from("store_users")
       .select("*")
       .eq("store_id", storeId)
       .order("created_at", { ascending: false });
+    if (manager.pointId) query = query.eq("point_id", manager.pointId);
+    const { data, error } = await query;
     if (error) throw new ApiError(error.message, 500);
 
     const users = (data ?? []).map((member) => ({
@@ -206,7 +231,8 @@ export async function POST(request: Request) {
     if (requestedRole === "store_admin" && !manager.isOwner && !manager.isAdmin) {
       throw new ApiError("Solo el dueño o administrador global puede crear otro administrador de tienda.", 403);
     }
-    const pointId = await resolvePointId(admin, storeId, body.point_id);
+    const pointId = manager.pointId ?? (await resolvePointId(admin, storeId, body.point_id));
+    assertPointScope(manager, pointId);
     const store = manager.store;
     const { data: duplicate, error: duplicateError } = await admin
       .from("store_users")
@@ -295,12 +321,13 @@ export async function DELETE(request: Request) {
 
     const { data: target, error: targetError } = await admin
       .from("store_users")
-      .select("user_id,role,username")
+      .select("user_id,role,username,point_id")
       .eq("store_id", storeId)
       .eq("user_id", targetUserId)
       .maybeSingle();
     if (targetError) throw new ApiError(targetError.message, 500);
     if (!target) throw new ApiError("El usuario no pertenece a esta tienda.", 404);
+    assertPointScope(manager, target.point_id as string | null);
     if (target.role === "store_admin" && !manager.isOwner && !manager.isAdmin) {
       throw new ApiError("Solo el dueño puede eliminar a otro administrador.", 403);
     }
@@ -344,24 +371,34 @@ export async function PATCH(request: Request) {
 
     const { data: target, error: targetError } = await admin
       .from("store_users")
-      .select("user_id,role")
+      .select("user_id,role,point_id")
       .eq("store_id", storeId)
       .eq("user_id", targetUserId)
       .maybeSingle();
     if (targetError) throw new ApiError(targetError.message, 500);
     if (!target) throw new ApiError("El usuario no pertenece a esta tienda.", 404);
+    assertPointScope(manager, target.point_id as string | null);
     if (target.role === "store_admin" && store.owner_id !== userId && !manager.isAdmin) {
       throw new ApiError("Solo el dueño puede administrar el acceso de otro administrador.", 403);
     }
 
-    const patch: { point_id?: string | null; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
+    const patch: { point_id?: string | null; point_ids?: string[]; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer" } = {};
     if (body.permissions !== undefined) {
       patch.permissions = normalizePermissions(body.permissions);
       assertCanGrantPermissions(manager, patch.permissions);
     }
     if (typeof body.active === "boolean") patch.active = body.active;
     const pointPatch = await resolvePointId(admin, storeId, body.point_id);
-    if (pointPatch !== undefined) patch.point_id = pointPatch;
+    if (pointPatch !== undefined) {
+      assertPointScope(manager, pointPatch);
+      patch.point_id = pointPatch;
+    }
+    const extraPoints = await resolvePointIds(admin, storeId, body.point_ids);
+    if (extraPoints !== undefined) {
+      if (manager.pointId) throw new ApiError("Solo la tienda madre define los puntos adicionales de un usuario.", 403);
+      const home = pointPatch !== undefined ? pointPatch : (target.point_id as string | null);
+      patch.point_ids = home ? extraPoints.filter((id) => id !== home) : [];
+    }
     if (body.role !== undefined) {
       const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
       if (!allowedRoles.includes(body.role)) throw new ApiError("El rol seleccionado no es válido.", 400);

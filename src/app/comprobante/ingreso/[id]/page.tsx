@@ -21,6 +21,8 @@ type Product = {
 };
 type Item = {
   id: string; qty: number; unit_cost: number; tax_rate: number; line_total: number | null; warehouse_id: string | null;
+  note?: string | null;
+  line_no?: number | null;
   products: Product | Product[] | null;
 };
 type Supplier = { name: string; nit: string | null; contact_name: string | null; phone: string | null; email: string | null; address: string | null };
@@ -69,8 +71,12 @@ async function loadDoc(id: string): Promise<Doc> {
   const [{ data: items }, { data: supplier }, { data: whs }, { data: billing }] = await Promise.all([
     sb
       .from("erp_purchase_items")
-      .select("id,qty,unit_cost,tax_rate,line_total,warehouse_id,products(name,sku,barcode,image_url,price_1,price_2,price_3,price_4,price_5)")
-      .eq("purchase_id", id),
+      .select("id,qty,unit_cost,tax_rate,line_total,warehouse_id,note,line_no,products(name,sku,barcode,image_url,price_1,price_2,price_3,price_4,price_5)")
+      .eq("purchase_id", id)
+      // Si aún no existe la columna de comentarios, el comprobante sale igual sin ellos.
+      .then((res) => (res.error
+        ? sb.from("erp_purchase_items").select("id,qty,unit_cost,tax_rate,line_total,warehouse_id,products(name,sku,barcode,image_url,price_1,price_2,price_3,price_4,price_5)").eq("purchase_id", id)
+        : res)),
     sb.from("erp_suppliers").select("name,nit,contact_name,phone,email,address").eq("id", purchase.supplier_id).maybeSingle(),
     sb.from("erp_warehouses").select("id,name").eq("store_id", purchase.store_id),
     sb.from("billing_settings").select("business_name,nit,address,city,phone,email,logo_url").eq("store_id", purchase.store_id).maybeSingle(),
@@ -78,7 +84,8 @@ async function loadDoc(id: string): Promise<Doc> {
 
   return {
     purchase: purchase as Purchase,
-    items: ((items ?? []) as unknown as Item[]).sort((a, b) => (product(a)?.name ?? "").localeCompare(product(b)?.name ?? "")),
+    // Mismo orden en que se agregaron en el ingreso de factura.
+    items: [...((items ?? []) as unknown as Item[])].sort((a, b) => (a.line_no ?? 1e9) - (b.line_no ?? 1e9)),
     supplier: (supplier as Supplier) ?? null,
     warehouses: new Map(((whs ?? []) as Array<{ id: string; name: string }>).map((w) => [w.id, w.name])),
     business: {
@@ -289,6 +296,7 @@ export default function PurchaseReceiptPage() {
                         )}
                         <span>
                           <span className="font-semibold">{prod?.name ?? "Producto"}</span>
+                          {i.note ? <span className="block text-[10px] uppercase tracking-wide text-slate-500">(“{i.note}”)</span> : null}
                           {destinations.length > 1 ? (
                             <span className="block text-[10px] text-slate-500">→ {warehouses.get(i.warehouse_id ?? "") ?? "—"}</span>
                           ) : null}
