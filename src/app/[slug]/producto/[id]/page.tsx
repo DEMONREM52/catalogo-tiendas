@@ -128,7 +128,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
 
   const { data: product, error: productError } = await sb
     .from("products")
-    .select("id,name,description,price_retail,price_wholesale,min_wholesale,image_url,stock,active,product_details,category_id,sku")
+    .select("id,name,description,price_retail,price_wholesale,min_wholesale,image_url,stock,active,product_details,category_id")
     .eq("id", id)
     .eq("store_id", store.id)
     .eq("active", true)
@@ -163,7 +163,10 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   const stock = inCatalog ? inCatalog.stock : product.stock;
   const backHref = inCatalog ? catalogHref(store.slug, inCatalog) : `/${store.slug}/detal`;
   const finderCtx = { storeId: store.id, storeSlug: store.slug, catalogSlug: inCatalog?.slug ?? null, accessKey: inCatalog?.key ?? null };
-  const code = typeof product.sku === "string" && product.sku.trim() ? product.sku.trim() : null;
+  // El código se pide aparte: si el público aún no tiene permiso de verlo, la página carga igual.
+  const { data: codeRow } = await sb.from("products").select("sku").eq("id", product.id).maybeSingle();
+  const rawCode = (codeRow as { sku?: unknown } | null)?.sku;
+  const code = typeof rawCode === "string" && rawCode.trim() ? rawCode.trim() : null;
   const shareText = buildProductShareText({
     name: product.name,
     price,

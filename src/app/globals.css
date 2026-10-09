@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(html.dark, html.dark *));
+/* Pantallas bajitas (celular acostado, ventanas pequeñas). */
+@custom-variant short (@media (max-height: 560px));
 
 /* =========================================================
    ✅ THEME TOKENS (AUTO: SISTEMA OSCURO / CLARO)

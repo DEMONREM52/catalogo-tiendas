@@ -927,7 +927,7 @@ export default function StoreCatalogPage() {
 
     // Respaldo si aún no está la búsqueda inteligente en Supabase: todas las palabras, en cualquier orden.
     if (term.length >= 2) {
-      for (const filter of ilikeTokenFilters(["name", "description", "sku"], term)) query = query.or(filter);
+      for (const filter of ilikeTokenFilters(["name", "description"], term)) query = query.or(filter);
     }
 
     // orden estable + rango

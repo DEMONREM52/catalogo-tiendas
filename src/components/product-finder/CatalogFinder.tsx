@@ -16,12 +16,14 @@ export type CatalogFinderContext = {
 };
 
 type StoreProduct = { id: string; name: string; image_url: string | null; price_retail: number | null; price_wholesale: number | null; sku?: string | null };
-type CatalogItem = { id: string; name: string; image_url: string | null; price: number | null; code?: string | null; score?: number };
+type CatalogItem = { id: string; name: string; image_url: string | null; price: number | null; code?: string | null; score?: number; match?: FinderHit["match"] };
 
 async function storeProducts(storeId: string, ids: string[]) {
   if (!ids.length) return new Map<string, StoreProduct>();
   const sb = supabaseBrowser();
-  const res = await sb.from("products").select("id,name,image_url,price_retail,price_wholesale,sku").eq("store_id", storeId).in("id", ids);
+  let res = await sb.from("products").select("id,name,image_url,price_retail,price_wholesale,sku").eq("store_id", storeId).in("id", ids);
+  // Sin permiso para ver el código (falta 20261101_codigo_publico.sql): se busca igual, sin código.
+  if (res.error) res = (await sb.from("products").select("id,name,image_url,price_retail,price_wholesale").eq("store_id", storeId).in("id", ids)) as typeof res;
   if (res.error) throw res.error;
   return new Map(((res.data ?? []) as StoreProduct[]).map((p) => [p.id, p]));
 }
@@ -29,16 +31,18 @@ async function storeProducts(storeId: string, ids: string[]) {
 export function useCatalogFinderSource(ctx: CatalogFinderContext): FinderSource {
   const { storeId, storeSlug, catalogSlug, accessKey, wholesale } = ctx;
   return useMemo<FinderSource>(() => {
-    const sb = supabaseBrowser();
-    const fromStore = (p: StoreProduct, score?: number): FinderHit => ({
+    // Se pide al buscar (no al dibujar la página en el servidor).
+    const sb = { rpc: (fn: string, args: Record<string, unknown>) => supabaseBrowser().rpc(fn, args) };
+    const fromStore = (p: StoreProduct, score?: number, match?: FinderHit["match"]): FinderHit => ({
       id: p.id,
       name: p.name,
       image_url: p.image_url,
       code: p.sku ?? null,
       price: Number((wholesale ? p.price_wholesale : p.price_retail) ?? 0),
       score: score ?? null,
+      match: match ?? null,
     });
-    const fromCatalog = (i: CatalogItem): FinderHit => ({ id: i.id, name: i.name, image_url: i.image_url, code: i.code ?? null, price: Number(i.price ?? 0), score: i.score ?? null });
+    const fromCatalog = (i: CatalogItem): FinderHit => ({ id: i.id, name: i.name, image_url: i.image_url, code: i.code ?? null, price: Number(i.price ?? 0), score: i.score ?? null, match: i.match ?? null });
 
     if (catalogSlug) {
       return {
@@ -49,9 +53,9 @@ export function useCatalogFinderSource(ctx: CatalogFinderContext): FinderSource 
           if (error) throw error;
           return (((data as { items?: CatalogItem[] } | null)?.items ?? []) as CatalogItem[]).map(fromCatalog);
         },
-        async searchPhoto(embedding) {
+        async searchPhoto(embedding, terms) {
           const { data, error } = await sb.rpc("catalog_public_image_search", {
-            p_store: storeSlug, p_catalog: catalogSlug, p_key: accessKey ?? null, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24,
+            p_store: storeSlug, p_catalog: catalogSlug, p_key: accessKey ?? null, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_terms: terms,
           });
           if (error) throw error;
           const res = (data ?? {}) as { indexed?: number; items?: CatalogItem[] };
@@ -68,15 +72,15 @@ export function useCatalogFinderSource(ctx: CatalogFinderContext): FinderSource 
         const byId = await storeProducts(storeId, ids);
         return ids.flatMap((id) => (byId.get(id) ? [fromStore(byId.get(id)!)] : []));
       },
-      async searchPhoto(embedding) {
-        const { data, error } = await sb.rpc("store_public_image_search", { p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24 });
+      async searchPhoto(embedding, terms) {
+        const { data, error } = await sb.rpc("store_public_image_search", { p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_terms: terms });
         if (error) throw error;
-        const res = (data ?? {}) as { indexed?: number; items?: Array<{ id: string; score: number }> };
+        const res = (data ?? {}) as { indexed?: number; items?: Array<{ id: string; score: number; match?: FinderHit["match"] }> };
         const items = res.items ?? [];
         const byId = await storeProducts(storeId, items.map((i) => i.id));
         return {
           indexed: Number(res.indexed ?? 0),
-          items: items.flatMap((i) => (byId.get(i.id) ? [fromStore(byId.get(i.id)!, Number(i.score))] : [])),
+          items: items.flatMap((i) => (byId.get(i.id) ? [fromStore(byId.get(i.id)!, Number(i.score), i.match)] : [])),
         };
       },
     };

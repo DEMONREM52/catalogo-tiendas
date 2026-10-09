@@ -5,7 +5,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_MODEL } from "@/lib/image-search/embed";
 import type { FinderHit, FinderSource } from "@/components/product-finder/ProductFinder";
 
-type Row = { id: string; name: string; sku: string | null; product_no?: number | null; image_url: string | null; active: boolean | null; price_1?: number | null; price_3?: number | null; stock?: number | null; score?: number };
+type Row = { id: string; name: string; sku: string | null; product_no?: number | null; image_url: string | null; active: boolean | null; price_1?: number | null; price_3?: number | null; stock?: number | null; score?: number; match?: FinderHit["match"] };
 
 const toHit = (r: Row, priceLevel: 1 | 3): FinderHit => ({
   id: r.id,
@@ -15,6 +15,7 @@ const toHit = (r: Row, priceLevel: 1 | 3): FinderHit => ({
   price: Number((priceLevel === 1 ? r.price_1 : r.price_3) ?? 0),
   meta: [r.product_no ? `N.º ${r.product_no}` : null, r.active === false ? "Inactivo" : null].filter(Boolean).join(" · ") || null,
   score: r.score ?? null,
+  match: r.match ?? null,
 });
 
 /** Buscador del panel: todos los productos de la tienda por nombre, código o foto. */
@@ -27,10 +28,10 @@ export function useErpFinderSource(storeId: string | null | undefined, opts: { a
       if (error) throw error;
       return (((data ?? {}) as { items?: Row[] }).items ?? []).map((r) => toHit(r, priceLevel));
     },
-    async searchPhoto(embedding) {
+    async searchPhoto(embedding, terms) {
       if (!storeId) return { items: [], indexed: 0 };
       const { data, error } = await supabaseBrowser().rpc("erp_product_image_search", {
-        p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_active_only: activeOnly,
+        p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_active_only: activeOnly, p_terms: terms,
       });
       if (error) throw error;
       const res = (data ?? {}) as { indexed?: number; items?: Row[] };

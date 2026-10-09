@@ -764,4 +764,7 @@ end;
 $$;
 grant execute on function public.erp_product_image_search(uuid, real[], text, integer, boolean) to authenticated;
 
+-- El público puede ver el código y el número interno (no el costo).
+grant select (sku, product_no) on public.products to anon;
+
 notify pgrst, 'reload schema';
