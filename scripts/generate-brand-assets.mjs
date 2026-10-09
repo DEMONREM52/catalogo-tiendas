@@ -1,4 +1,4 @@
-// Genera el logo completo de RemHub (logo + etiqueta «RemHub») y todo lo que sale de él:
+// Genera, desde el logo oficial de RemHub (sin textos), todo lo que sale de él:
 // vista previa de enlaces (cuadrada, para que WhatsApp la muestre completa) e iconos de la app.
 // Parte de public/remhub-icon-1024.png (no se modifica). Uso: node scripts/generate-brand-assets.mjs
 import sharp from "sharp";
@@ -9,13 +9,8 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace
 const pub = (...p) => path.join(root, "public", ...p);
 const S = 1024;
 
-// 1) Logo completo: el logo oficial + etiqueta «RemHub» abajo.
-const base = await sharp(pub("remhub-icon-1024.png")).png().toBuffer();
-const badge = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}">
-  <rect x="292" y="676" width="440" height="132" rx="34" fill="#0b0b0b" stroke="#ffffff" stroke-width="10"/>
-  <text x="512" y="768" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="92" font-weight="900" fill="#ffffff" letter-spacing="-2">RemHub</text>
-</svg>`);
-const logo = await sharp(base).composite([{ input: badge }]).png({ compressionLevel: 9 }).toBuffer();
+// 1) Logo oficial tal cual (sin textos): es el que se usa en todo (iconos, vista previa, tarjetas).
+const logo = await sharp(pub("remhub-icon-1024.png")).png({ compressionLevel: 9 }).toBuffer();
 await sharp(logo).toFile(pub("remhub-logo.png"));
 
 // 2) Vista previa de enlaces: cuadrada (WhatsApp recorta las anchas en el cuadrito).
