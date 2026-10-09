@@ -1,5 +1,14 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(html.dark, html.dark *));
+/* App instalada (celular): el contenido respeta la barra de estado, la muesca y la barra de inicio. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
 /* Pantallas bajitas (celular acostado, ventanas pequeñas). */
 @custom-variant short (@media (max-height: 560px));
 

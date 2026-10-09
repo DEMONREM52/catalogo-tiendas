@@ -8,6 +8,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
 import { InstallButton } from "@/components/pwa/InstallButton";
+import { ManifestLink } from "@/components/pwa/ManifestLink";
+import { forgetStaffAccess } from "@/lib/session-resume";
 import {
   getDashboardStore,
 } from "@/lib/store-utils";
@@ -399,6 +401,7 @@ export default function DashboardShell({
   const [storePermissions, setStorePermissions] = useState<string[]>([]);
   const [storeIsOwner, setStoreIsOwner] = useState(false);
   const [storeMemberRole, setStoreMemberRole] = useState<string | null>(null);
+  const [staffUsername, setStaffUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   useNicknameUpdates(setDisplayName);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
@@ -418,6 +421,7 @@ export default function DashboardShell({
       }
 
       const internalUsername = String(data.user.user_metadata?.internal_username ?? "");
+      setStaffUsername(internalUsername);
       setEmail(internalUsername ? `Usuario: ${internalUsername}` : data.user.email ?? "");
       setDisplayName(String(data.user.user_metadata?.display_name ?? internalUsername));
 
@@ -573,6 +577,8 @@ export default function DashboardShell({
     const sb = supabaseBrowser();
     await logSessionEvent("auth.logout", store?.id ?? null);
     await sb.auth.signOut();
+    document.cookie = "app_session=; path=/; max-age=0";
+    forgetStaffAccess();
     router.replace("/login");
   }
 
@@ -878,6 +884,17 @@ export default function DashboardShell({
               </Link>
             ) : null}
 
+            {/* Trabajador de un punto: la app se instala con su enlace de acceso (vuelve a su espacio con la sesión guardada).
+                El dueño y el administrador usan la app normal, que abre el panel principal. */}
+            {role === "store" && store?.id && !storeIsOwner && staffUsername ? (
+              <ManifestLink
+                base="/manifest.webmanifest"
+                param="start"
+                start={`/acceso/${encodeURIComponent(store.slug)}?${new URLSearchParams({ sid: store.id, usuario: staffUsername, next: pathname }).toString()}`}
+              />
+            ) : role ? (
+              <ManifestLink base="/manifest.webmanifest" param="start" start={pathname} />
+            ) : null}
             {/* Instalar RemHub (se oculta solo si ya está abierta como app). */}
             <InstallButton
               className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
@@ -943,6 +960,9 @@ export default function DashboardShell({
             className="absolute left-0 top-0 h-full w-[86%] max-w-[360px] overflow-y-auto border-r p-4 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               transform: drawerOpen ? "translateX(0px)" : "translateX(-18px)",
+              // App instalada: el menú no queda detrás de la barra de estado ni de la barra de inicio.
+              paddingTop: "max(1rem, env(safe-area-inset-top))",
+              paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
               borderColor: "var(--t-card-border)",
               background:
                 "color-mix(in oklab, var(--t-card-bg) 88%, black 10%)",

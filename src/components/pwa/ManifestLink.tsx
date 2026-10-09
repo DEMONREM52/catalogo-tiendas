@@ -8,7 +8,7 @@ import { setManifestHref } from "@/lib/pwa/client";
  *   · «key» de un catálogo privado/mayorista → la app instalada abre el catálogo ya desbloqueado.
  *   · enlace de acceso del equipo (/acceso/…?sid=…) → la app instalada abre esa pantalla de ingreso.
  */
-export function ManifestLink({ base, param }: { base: string; param: "key" | "start" }) {
+export function ManifestLink({ base, param, start }: { base: string; param: "key" | "start"; start?: string | null }) {
   useEffect(() => {
     const apply = () => {
       const params = new URLSearchParams(window.location.search);
@@ -16,7 +16,7 @@ export function ManifestLink({ base, param }: { base: string; param: "key" | "st
         const key = params.get("key");
         setManifestHref(key ? `${base}?key=${encodeURIComponent(key)}` : base);
       } else {
-        setManifestHref(`${base}?start=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+        setManifestHref(`${base}?start=${encodeURIComponent(start ?? window.location.pathname + window.location.search)}`);
       }
     };
     apply();
@@ -27,6 +27,6 @@ export function ManifestLink({ base, param }: { base: string; param: "key" | "st
       window.clearTimeout(t);
       document.head.querySelectorAll("[data-remhub-pwa]").forEach((el) => el.remove());
     };
-  }, [base, param]);
+  }, [base, param, start]);
   return null;
 }

@@ -3,6 +3,7 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { logSessionEvent } from "@/lib/audit-client";
+import { forgetStaffAccess } from "@/lib/session-resume";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export function LogoutButton() {
     await sb.auth.signOut();
 
     document.cookie = "app_session=; path=/; max-age=0";
+    forgetStaffAccess();
     router.push("/login");
   }
 

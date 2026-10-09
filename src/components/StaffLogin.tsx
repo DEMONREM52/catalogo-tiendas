@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, LogIn, User, UserRound } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } from "@/lib/store-user-auth";
+import { rememberStaffAccess, resumeExistingSession } from "@/lib/session-resume";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 
@@ -57,6 +58,12 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
       try {
         const res = await fetch(`/api/store-team/login-context?slug=${encodeURIComponent(slug)}&store_id=${encodeURIComponent(sid)}`);
         if (!res.ok) throw new Error();
+        // Sesión ya guardada de un usuario de esta tienda (ej. al abrir la app instalada): entra directo.
+        if (await resumeExistingSession(sid)) {
+          rememberStaffAccess(`/acceso/${slug}?${new URLSearchParams({ sid, ...(prefilled || saved ? { usuario: prefilled || saved } : {}) }).toString()}`);
+          router.replace(nextDashboardPath(params.get("next")));
+          return;
+        }
         setStoreId(sid);
         setUsername(prefilled || saved);
         setLockedUser(Boolean(prefilled));
@@ -65,7 +72,7 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
         setStatus("invalid");
       }
     })();
-  }, [slug]);
+  }, [slug, router]);
 
   function fail(message: string) {
     setError(message);
@@ -107,7 +114,8 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
         document.cookie = `app_session=${data.session.access_token}; path=/; max-age=604800`;
       }
       await logSessionEvent("auth.login", storeId);
-      router.push("/dashboard");
+      rememberStaffAccess(`/acceso/${slug}?${new URLSearchParams({ sid: storeId, usuario: username.trim() }).toString()}`);
+      router.push(nextDashboardPath(new URLSearchParams(window.location.search).get("next")));
     } catch (err: unknown) {
       fail(String((err as Error)?.message ?? "No se pudo iniciar sesión."));
     } finally {
@@ -301,4 +309,9 @@ export default function StaffLogin({ storeSlug }: { storeSlug: string }) {
       </motion.section>
     </main>
   );
+}
+
+/** Página del panel a la que vuelve después de entrar (solo secciones del panel). */
+function nextDashboardPath(next: string | null) {
+  return next && /^\/dashboard(\/[a-z0-9_-]+){0,4}$/i.test(next) ? next : "/dashboard";
 }

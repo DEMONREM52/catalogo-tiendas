@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: "Instala RemHub en tu celular",
     description: "Ventas, pedidos, inventario y catálogos de tu tienda a un toque.",
     url: "https://remhub.store/instalar",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, type: "image/png", alt: "RemHub" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 1200, type: "image/png", alt: "RemHub" }],
   },
 };
 

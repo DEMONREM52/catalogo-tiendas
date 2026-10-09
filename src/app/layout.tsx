@@ -40,7 +40,8 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "RemHub",
-    statusBarStyle: "black-translucent",
+    // «default»: el contenido empieza debajo de la hora y la batería (no se esconde detrás).
+    statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
 
@@ -73,7 +74,7 @@ export const metadata: Metadata = {
       {
         url: "/og-image.png",
         width: 1200,
-        height: 630,
+        height: 1200,
         type: "image/png",
         alt: "RemHub",
       },

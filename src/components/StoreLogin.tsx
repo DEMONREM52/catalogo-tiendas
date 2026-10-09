@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } from "@/lib/store-user-auth";
+import { forgetStaffAccess, resumeExistingSession } from "@/lib/session-resume";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 
@@ -21,6 +22,18 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Ingreso del dueño: si ya hay una sesión guardada (ej. al abrir la app instalada), entra directo al panel.
+  useEffect(() => {
+    if (storeSlug || new URLSearchParams(window.location.search).get("tienda")) return;
+    let alive = true;
+    void resumeExistingSession().then((ok) => {
+      if (ok && alive) router.replace(nextDashboardPath(new URLSearchParams(window.location.search).get("next")));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [storeSlug, router]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -95,7 +108,9 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
       }
 
       await logSessionEvent("auth.login", storeLogin?.id ?? null);
-      router.push("/dashboard");
+      // Ingreso del dueño (correo): la app del panel abre la tienda madre, no un enlace de trabajador.
+      if (!storeLogin) forgetStaffAccess();
+      router.push(nextDashboardPath(new URLSearchParams(window.location.search).get("next")));
     } catch (e: unknown) {
       setMsg("❌ " + String((e as Error)?.message ?? "Error iniciando sesión"));
     } finally {
@@ -340,4 +355,9 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
       </div>
     </main>
   );
+}
+
+/** Página del panel a la que vuelve después de entrar (solo secciones del panel). */
+function nextDashboardPath(next: string | null) {
+  return next && /^\/dashboard(\/[a-z0-9_-]+){0,4}$/i.test(next) ? next : "/dashboard";
 }

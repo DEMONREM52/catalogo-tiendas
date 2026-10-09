@@ -14,6 +14,8 @@ export function middleware(req: NextRequest) {
     if (!session) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
+      // Al entrar (o retomar la sesión) vuelve a esta sección del panel.
+      url.search = pathname === "/dashboard" ? "" : `?next=${encodeURIComponent(pathname)}`;
       return NextResponse.redirect(url);
     }
   }
