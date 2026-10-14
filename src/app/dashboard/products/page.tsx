@@ -411,14 +411,17 @@ export default function ProductsListPage() {
 
     const query = dq.trim();
 
-    const { data, error } = await sb.rpc("search_products_pro", {
+    const searchArgs = {
       p_store_id: storeId,
       p_query: query,
       p_limit: SEARCH_PAGE,
       p_offset: offset,
       p_status: statusFilter, // 'all'|'active'|'inactive'
       p_category_id: categoryFilter === "all" ? null : categoryFilter,
-    });
+    };
+    // Búsqueda segura (sin costo). Si aún no existe la migración 20261111, se usa la anterior.
+    let { data, error } = await sb.rpc("search_products_safe", searchArgs);
+    if (error && /Could not find the function|schema cache/i.test(error.message)) ({ data, error } = await sb.rpc("search_products_pro", searchArgs));
 
     if (reqIdRef.current !== myReq) return; // cancelado por escribir más
 
