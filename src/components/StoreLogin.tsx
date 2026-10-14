@@ -40,6 +40,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
     const slug = storeSlug?.trim().toLowerCase() ?? params.get("tienda")?.trim().toLowerCase();
     const id = params.get("sid")?.trim();
     const prefilledUsername = params.get("usuario") ?? "";
+    if (params.get("reset") === "1") setMsg("✅ Contraseña cambiada. Inicia sesión con tu contraseña nueva.");
 
     const resolvedSlug = storeSlug?.trim().toLowerCase() ?? slug;
     if (resolvedSlug) {
