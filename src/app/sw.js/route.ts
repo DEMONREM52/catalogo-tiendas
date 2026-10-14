@@ -78,6 +78,58 @@ self.addEventListener("fetch", (event) => {
   }
   // Todo lo demás (API, datos, imágenes de productos…): el navegador lo maneja normal, sin caché del SW.
 });
+
+// ---- Notificaciones del celular (pedidos internos) ----
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: "RemHub", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "RemHub";
+  const options = {
+    body: data.body || "",
+    icon: data.icon || "/icons/remhub-192.png",
+    badge: "/icons/remhub-192.png",
+    tag: data.tag || undefined,
+    renotify: Boolean(data.tag),
+    requireInteraction: Boolean(data.urgent),
+    vibrate: data.urgent ? [120, 60, 120, 60, 220] : [90, 50, 90],
+    timestamp: Date.now(),
+    data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/pedidos?tab=internos" },
+  };
+  event.waitUntil(
+    (async () => {
+      // Si la app está abierta y visible, ella misma suena con el tono elegido; se avisa igual por si acaso.
+      const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      list.forEach((c) => c.postMessage({ type: "REMHUB_PUSH", payload: data }));
+      if (list.some((c) => c.visibilityState === "visible" && c.focused)) return;
+      await self.registration.showNotification(title, options);
+    })()
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "/dashboard/pedidos?tab=internos", self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const same = list.find((c) => new URL(c.url).origin === self.location.origin);
+      if (same) {
+        await same.focus();
+        try {
+          await same.navigate(target);
+        } catch (e) {
+          same.postMessage({ type: "REMHUB_OPEN", url: target });
+        }
+        return;
+      }
+      await self.clients.openWindow(target);
+    })()
+  );
+});
 `;
 
 export async function GET() {

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { RefreshCw, X } from "lucide-react";
 import { applyUpdate, startPwa } from "@/lib/pwa/client";
 import { usePwa } from "./InstallSheet";
+import { ConnectionBanner } from "./ConnectionBanner";
 
 /** Registra el Service Worker y avisa (sin interrumpir) cuando hay una versión nueva de RemHub. */
 export function PwaProvider() {
@@ -13,6 +14,8 @@ export function PwaProvider() {
   useEffect(() => startPwa(), []);
 
   return (
+    <>
+    <ConnectionBanner />
     <AnimatePresence>
       {pwa.updateReady && !hidden ? (
         <motion.div
@@ -41,5 +44,6 @@ export function PwaProvider() {
         </motion.div>
       ) : null}
     </AnimatePresence>
+    </>
   );
 }

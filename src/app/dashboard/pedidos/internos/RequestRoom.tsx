@@ -9,6 +9,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
 import { RequestSignatures } from "./RequestSignatures";
+import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
@@ -66,6 +67,17 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   }, [requestId, load]);
 
   const messageCount = data?.messages.length ?? 0;
+  // Suena cuando otra persona escribe mientras el pedido está abierto (no al abrirlo ni con mis mensajes).
+  const heard = useRef<{ id: string; last: string | null } | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const last = [...data.messages].reverse().find((m) => m.kind === "message") ?? null;
+    const prev = heard.current;
+    heard.current = { id: data.request.id, last: last?.id ?? null };
+    if (!prev || prev.id !== data.request.id || !last || last.id === prev.last || last.mine) return;
+    void soundFor(data.request.store_id, "message");
+  }, [data]);
+
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messageCount, mobileTab]);
@@ -83,6 +95,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
   async function run(fn: string, args: Record<string, unknown>, ok: string) {
     setBusy(true);
+    if (requestId) markOwnAction(requestId);
     const { data: res, error: err } = await supabaseBrowser().rpc(fn, args);
     setBusy(false);
     if (err) {

@@ -171,6 +171,8 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
 type ModuleKey = "inventory" | "billing" | "settings";
 
 // Quién puede abrir la lista general de productos (solo lectura); igual que erp_product_catalog_browse.
+const FINANCE_PERMISSIONS = ["expenses", "expenses_pay", "budgets", "payroll", "payroll_approve", "payroll_pay"];
+const PROFIT_PERMISSIONS = ["profit_view", "profit_rules", "profit_approve", "profit_beneficiaries", "profit_settle", "profit_settle_approve", "profit_pay"];
 const PRODUCT_LIST_PERMISSIONS = ["products_view", "products", "inventory", "stock_requests", "stock_requests_manage", "transfers", "pos"];
 
 const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permissions: string[]; adminOnly?: boolean }>> = {
@@ -503,6 +505,8 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/inventario") ? "inventory" :
       pathname.startsWith("/dashboard/fiscal") ? "fiscal" :
       pathname.startsWith("/dashboard/puntos") ? "points" :
+      pathname.startsWith("/dashboard/rentabilidad") ? "profit" :
+      pathname.startsWith("/dashboard/gastos") ? "finance" :
       null;
 
     if (!permission) return;
@@ -512,6 +516,8 @@ export default function DashboardShell({
       permission === "clients" ? ["clients", "receivables", "credit"].some((p) => canOpen(p)) :
       permission === "orders" ? ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) :
       permission === "fiscal" ? ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)) :
+      permission === "profit" ? PROFIT_PERMISSIONS.some((p) => canOpen(p)) :
+      permission === "finance" ? FINANCE_PERMISSIONS.some((p) => canOpen(p)) :
       permission === "points" ? ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)) :
       canOpen(permission);
     if (allowed) return;
@@ -597,6 +603,8 @@ export default function DashboardShell({
       { href: "/dashboard/fiscal", emoji: "🏛️", label: "Facturación electrónica", show: store && ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/puntos", emoji: "📍", label: "Puntos", show: store && ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/gastos", emoji: "💸", label: "Gastos y nómina", show: store && FINANCE_PERMISSIONS.some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
+      { href: "/dashboard/rentabilidad", emoji: "📈", label: "Rentabilidad", show: store && PROFIT_PERMISSIONS.some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
       { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
       { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
       { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },

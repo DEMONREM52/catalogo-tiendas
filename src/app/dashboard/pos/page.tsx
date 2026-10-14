@@ -1,7 +1,7 @@
 "use client";
 
 import { WithDv, docWithDv } from "@/app/dashboard/nit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -16,6 +16,9 @@ import { PosDocuments, type PosDocument } from "./PosDocuments";
 import { matchesSearch, smartFilter } from "@/lib/search";
 import { CreditMeter } from "../clientes/CreditMeter";
 import type { CreditState } from "../clientes/terceros";
+import { OfflineDrafts } from "./OfflineDrafts";
+import { removeDraft, saveDraft, type PosDraft } from "@/lib/pos/drafts";
+import { isNetworkError, isOnline, reportNetworkError, useNetStatus } from "@/lib/net/status";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -186,6 +189,9 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingDoc, setEditingDoc] = useState<PosDocument | null>(null);
   const [docsRefresh, setDocsRefresh] = useState(0);
+  // Venta guardada sin internet que está cargada en el carrito (se borra al registrarla).
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const net = useNetStatus();
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -266,6 +272,29 @@ export default function PosPage() {
   }, []);
 
   const storeId = store?.id;
+  // Precios propios del punto (reglas de la madre). Sin reglas o sin la migración: precios 1-5 de la madre.
+  const [pointPrices, setPointPrices] = useState<Map<string, number[]>>(() => new Map());
+  useEffect(() => {
+    let alive = true;
+    if (!storeId || !pointId) return;
+    void supabaseBrowser()
+      .rpc("erp_point_prices", { p_store: storeId, p_point: pointId })
+      .then(({ data, error }) => {
+        if (!alive) return;
+        const map = new Map<string, number[]>();
+        if (!error) for (const r of (data ?? []) as Array<{ product_id: string; price_1: number; price_2: number; price_3: number; price_4: number; price_5: number }>)
+          map.set(r.product_id, [r.price_1, r.price_2, r.price_3, r.price_4, r.price_5].map(Number));
+        setPointPrices(map);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [storeId, pointId]);
+  const priceOf = useCallback(
+    (product: Product, level: PriceLevel) => pointPrices.get(product.id)?.[level - 1] ?? getProductPrice(product, level),
+    [pointPrices],
+  );
+
   useEffect(() => {
     if (!storeId || !pointId) return;
     let alive = true;
@@ -345,11 +374,11 @@ export default function PosPage() {
       prev.map((item) => {
         const product = productMap.get(item.productId);
         if (!product) return item;
-        const price = getProductPrice(product, currentPriceList);
+        const price = priceOf(product, currentPriceList);
         return { ...item, price, priceLevel: currentPriceList as PriceLevel };
       }),
     );
-  }, [currentPriceList, productMap]);
+  }, [currentPriceList, productMap, priceOf]);
 
   async function loadErp(storeId: string) {
     const sb = supabaseBrowser();
@@ -526,7 +555,7 @@ export default function PosPage() {
     if (!product) return;
     setCart((prev) =>
       prev.map((item) =>
-        item.productId === productId ? { ...item, price: getProductPrice(product, level), priceLevel: level } : item,
+        item.productId === productId ? { ...item, price: priceOf(product, level), priceLevel: level } : item,
       ),
     );
   }
@@ -552,7 +581,7 @@ export default function PosPage() {
   function addProduct(product: Product) {
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
-      const price = getProductPrice(product, currentPriceList);
+      const price = priceOf(product, currentPriceList);
       if (existing) {
         return prev.map((item) =>
           item.productId === product.id ? { ...item, qty: item.qty + 1 } : item,
@@ -598,6 +627,44 @@ export default function PosPage() {
       background: "var(--t-bg-base)",
       color: "var(--t-text)",
     });
+  }
+
+  function storeDraft() {
+    if (!store) return;
+    saveDraft({
+      storeId: store.id, cart, total, customerName: customerName.trim(), customerNote: customerNote.trim(),
+      customerWhatsApp: customerWhatsApp.trim(), customerDocument: customerDocument.trim(), selectedClientId,
+      documentKind, pointId, sellerId,
+    });
+    if (draftId) removeDraft(store.id, draftId);
+    setDraftId(null);
+    setCart([]);
+    setCustomerNote("");
+    setSelectedClientId("");
+    void Swal.fire({
+      icon: "info",
+      title: "Guardada sin internet",
+      html: "La venta quedó como <b>borrador</b> en este equipo.<br/><small>Cuando vuelva la conexión, regístrala desde «Ventas guardadas sin internet». Hasta entonces no descuenta inventario ni tiene número.</small>",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
+      confirmButtonColor: "#f59e0b",
+    });
+  }
+
+  function loadDraft(d: PosDraft) {
+    if (cart.length && !window.confirm("Tienes productos en el carrito. ¿Reemplazarlos por el borrador?")) return;
+    setEditingDoc(null);
+    setCart(d.cart.map((i) => ({ ...i, priceLevel: (Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel) })));
+    setCustomerName(d.customerName || DEFAULT_CLIENT_NAME);
+    setCustomerNote(d.customerNote);
+    setCustomerWhatsApp(d.customerWhatsApp);
+    setCustomerDocument(d.customerDocument);
+    setSelectedClientId(d.selectedClientId);
+    setDocumentKind(d.documentKind);
+    if (!lockedPoint && d.pointId) setPointId(d.pointId);
+    if (d.sellerId) setSellerId(d.sellerId);
+    setDraftId(d.id);
+    void Swal.fire({ icon: "info", title: "Borrador cargado", text: "Revisa precios y existencias y pulsa el botón para registrarla.", timer: 2200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
   }
 
   function cancelEdit() {
@@ -686,6 +753,15 @@ export default function PosPage() {
 
     if (editingDoc) return saveEdit(editingDoc);
 
+    // Sin internet: la venta se guarda como borrador (el crédito necesita validar el cupo en línea).
+    if (!isOnline()) {
+      if (paymentType === "credito") {
+        await Swal.fire({ icon: "warning", title: "El crédito necesita internet", text: "Para vender a crédito hay que revisar el cupo del cliente. Cambia a contado o espera la conexión.", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        return;
+      }
+      return storeDraft();
+    }
+
     if (documentKind === "factura" && fiscalOn && fiscal && !fiscal.ready) {
       await Swal.fire({
         icon: "error",
@@ -734,6 +810,7 @@ export default function PosPage() {
 
     setSaving(true);
     let receiptWindow: Window | null = null;
+    let createdToken: string | null = null;
 
     try {
       let siigoTrackingWarning: string | null = null;
@@ -761,6 +838,7 @@ export default function PosPage() {
       if (error) throw error;
       const token = (data as { token?: string } | null)?.token;
       if (!token) throw new Error("No se generó token de factura.");
+      createdToken = token;
  
       let docNumber = "";
       let fiscalNote = "";
@@ -920,12 +998,24 @@ export default function PosPage() {
       setCart([]);
       setCustomerNote("");
       setSelectedClientId("");
+      if (draftId) removeDraft(store.id, draftId);
+      setDraftId(null);
     } catch (err: unknown) {
       if (receiptWindow && !receiptWindow.closed) receiptWindow.close();
+      // Se cayó la red antes de crear la venta: se ofrece guardarla como borrador (nunca si ya se creó).
+      if (!createdToken && isNetworkError(err) && paymentType !== "credito") {
+        reportNetworkError();
+        setSaving(false);
+        const go = await Swal.fire({ icon: "warning", title: "Se perdió la conexión", text: "La venta no alcanzó a registrarse. ¿La guardas como borrador para enviarla cuando vuelva internet?", showCancelButton: true, confirmButtonText: "Guardar borrador", cancelButtonText: "Seguir intentando", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        if (go.isConfirmed) storeDraft();
+        return;
+      }
       await Swal.fire({
         icon: "error",
         title: documentKind === "factura" ? "No se pudo crear la factura" : "No se pudo crear la remisión",
-        text: String((err as Error)?.message ?? err),
+        text: /PRICE_MISMATCH/.test(String((err as Error)?.message ?? err))
+          ? `El precio de «${(err as { details?: string })?.details ?? "un producto"}» cambió o no está autorizado. Recarga la página para traer los precios actuales.`
+          : String((err as Error)?.message ?? err),
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
@@ -937,6 +1027,7 @@ export default function PosPage() {
 
   return (
     <main className="space-y-3">
+      <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} />
       <div {...cardProps()}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -1066,7 +1157,7 @@ export default function PosPage() {
                         <span className="min-w-0 flex-1">
                           <span className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</span>
                           <span className="mt-0.5 block text-[11px]" style={{ color: "var(--t-muted)" }}>
-                            {money(getProductPrice(product, currentPriceList))}
+                            {money(priceOf(product, currentPriceList))}
                             {product.stock === 0 ? " · Agotado" : product.stock !== null ? ` · ${product.stock} disp.` : ""}
                           </span>
                         </span>
@@ -1591,6 +1682,8 @@ export default function PosPage() {
                 ? saving
                   ? "Guardando cambios..."
                   : `💾 Guardar cambios en ${editingDoc.doc_number ?? `#${editingDoc.receipt_no}`}`
+                : !net.online
+                ? "💾 Guardar sin internet (borrador)"
                 : saving
                 ? documentKind === "factura"
                   ? "Creando factura..."

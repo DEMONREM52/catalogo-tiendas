@@ -18,6 +18,7 @@ export const STORE_MENU_PERMISSIONS = [
   "transfers",
   "stock_requests",
   "stock_requests_manage",
+  "notifications_config",
   "purchases",
   "suppliers",
   "payables",
@@ -31,6 +32,19 @@ export const STORE_MENU_PERMISSIONS = [
   "fiscal_numbering",
   "fiscal_provider",
   "fiscal_audit",
+  "profit_view",
+  "profit_rules",
+  "profit_approve",
+  "profit_beneficiaries",
+  "profit_settle",
+  "profit_settle_approve",
+  "profit_pay",
+  "expenses",
+  "expenses_pay",
+  "budgets",
+  "payroll",
+  "payroll_approve",
+  "payroll_pay",
 ] as const;
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];

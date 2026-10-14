@@ -3,16 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircle, PackagePlus, X } from "lucide-react";
+import { MessageCircle, PackagePlus, Repeat, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { OPEN_REQUEST_EVENT } from "./types";
+import { isOwnRecent, loadStoreSoundConfig, soundFor } from "@/lib/sounds/notify";
+import { getStoreConfigCache, statusEvent } from "@/lib/sounds/prefs";
+import { unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
+import { OPEN_REQUEST_EVENT, SR_STATUS, type SrStatus } from "./types";
 
 type Inbox = {
   incoming: Array<{ id: string; number: number; from_name: string; to_name: string; priority: string; items: number }>;
   arriving: number;
   unread: Array<{ id: string; number: number; from_name: string; to_name: string; count: number; last: string | null; last_user: string | null }>;
 };
-type Toast = { key: string; id: string; kind: "request" | "message"; title: string; body: string; urgent?: boolean };
+type Toast = { key: string; id: string; kind: "request" | "message" | "status"; title: string; body: string; urgent?: boolean; color?: string };
+type ReqRow = { id: string; number?: number; status?: string; from_point_id?: string; to_point_id?: string };
 
 /**
  * Avisos al instante de pedidos internos: un pedido nuevo por atender (se queda hasta que lo veas)
@@ -24,6 +28,8 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenKey = `remhub:sr-seen:${storeId}`;
   const msgBase = useRef<Map<string, number> | null>(null);
+  const statusHeard = useRef(new Set<string>());
+  const statusKnown = useRef(new Map<string, string>());
 
   const open = useCallback((id: string) => {
     setToasts((cur) => cur.filter((t) => t.id !== id));
@@ -51,7 +57,7 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
     }));
     if (fresh.length) {
       try { window.localStorage.setItem(seenKey, JSON.stringify([...seen, ...fresh.map((r) => r.id)].slice(-300))); } catch { /* sin almacenamiento */ }
-      try { navigator.vibrate?.(180); } catch { /* sin vibración */ }
+      void soundFor(storeId, fresh.some((r) => r.priority === "urgent") ? "urgent_request" : "new_request");
     }
     // Mensajes: solo los que llegan después de abrir el panel (sin avalancha al entrar).
     const current = new Map(inbox.unread.map((u) => [u.id, u.count]));
@@ -64,17 +70,66 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
         }
       });
     }
+    if (next.some((n) => n.kind === "message")) void soundFor(storeId, "message");
     msgBase.current = current;
     if (next.length) setToasts((cur) => [...next.filter((n) => !cur.some((c) => c.key === n.key)), ...cur.filter((c) => !(c.kind === "message" && next.some((n) => n.id === c.id && n.kind === "message")))].slice(0, 4));
   }, [storeId, seenKey]);
 
+  // Cambio de estado: suena para el otro lado (recibido/cancelado → quien atiende; lo demás → quien pidió).
+  const onStatus = useCallback(async (row: ReqRow, trusted = false) => {
+    if (!row.id || !row.status) return;
+    // Cada mensaje también actualiza el pedido: solo cuenta si el estado cambió de verdad.
+    const before = statusKnown.current.get(row.id);
+    statusKnown.current.set(row.id, row.status);
+    if (!trusted && (before === undefined || before === row.status)) return;
+    const event = statusEvent(row.status);
+    if (!event) return;
+    const key = `${row.id}:${row.status}`;
+    if (statusHeard.current.has(key) || isOwnRecent(row.id)) return;
+    statusHeard.current.add(key);
+    await loadStoreSoundConfig(storeId);
+    const myPoint = getStoreConfigCache(storeId)?.myPoint ?? null;
+    const side = event === "received" || event === "cancelled" ? row.to_point_id : row.from_point_id;
+    if (myPoint && side && myPoint !== side) return;
+    const played = await soundFor(storeId, event, side ?? null);
+    const st = SR_STATUS[row.status as SrStatus];
+    if (!st || (!played && !myPoint)) return;
+    const openRoom = (window as Window & { __remhubOpenRequest?: string | null }).__remhubOpenRequest;
+    if (openRoom === row.id) return;
+    setToasts((cur) => [{ key: `st-${key}`, id: row.id, kind: "status" as const, color: st.color, title: `${st.icon} ${st.label}${row.number ? ` · #${row.number}` : ""}`, body: "Toca para ver el pedido." }, ...cur.filter((c) => c.key !== `st-${key}`)].slice(0, 4));
+  }, [storeId]);
+
+  useEffect(() => {
+    unlockAudioOnFirstTouch();
+    void loadStoreSoundConfig(storeId);
+    // Avisos que llegan por la notificación push mientras la app está abierta.
+    const onSw = (e: MessageEvent) => {
+      const msg = e.data as { type?: string; url?: string; payload?: { event?: string; id?: string } } | null;
+      if (msg?.type === "REMHUB_OPEN" && msg.url) return router.push(new URL(msg.url).pathname + new URL(msg.url).search);
+      if (msg?.type !== "REMHUB_PUSH") return;
+      if (msg.payload?.id && statusEvent(msg.payload.event)) void onStatus({ id: msg.payload.id, status: msg.payload.event }, true);
+      else void check();
+    };
+    navigator.serviceWorker?.addEventListener("message", onSw);
+    return () => navigator.serviceWorker?.removeEventListener("message", onSw);
+  }, [storeId, check, onStatus, router]);
+
   useEffect(() => {
     const sb = supabaseBrowser();
     const first = window.setTimeout(() => void check(), 1500);
+    // Estados actuales, para saber cuándo cambian.
+    void sb.rpc("erp_stock_requests_list", { p_store: storeId }).then(({ data }) => {
+      for (const r of (data ?? []) as Array<{ id: string; status: string }>) if (!statusKnown.current.has(r.id)) statusKnown.current.set(r.id, r.status);
+    });
     const channel = sb
       .channel(`sr-watch-${storeId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, () => void check())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => {
+        const row = p.new as ReqRow;
+        if (row.id && row.status) statusKnown.current.set(row.id, row.status);
+        void check();
+      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `store_id=eq.${storeId}` }, () => void check())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => void onStatus(p.new as ReqRow))
       .subscribe();
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 20000);
     const onFocus = () => void check();
@@ -85,12 +140,12 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
       window.removeEventListener("focus", onFocus);
       void sb.removeChannel(channel);
     };
-  }, [storeId, check]);
+  }, [storeId, check, onStatus]);
 
   // Los mensajes se ocultan solos; los pedidos nuevos se quedan hasta que los veas.
   useEffect(() => {
-    if (!toasts.some((t) => t.kind === "message")) return;
-    const timer = window.setTimeout(() => setToasts((cur) => cur.filter((t) => t.kind !== "message")), 9000);
+    if (!toasts.some((t) => t.kind !== "request")) return;
+    const timer = window.setTimeout(() => setToasts((cur) => cur.filter((t) => t.kind === "request")), 9000);
     return () => window.clearTimeout(timer);
   }, [toasts]);
 
@@ -98,7 +153,7 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
     <div className="pointer-events-none fixed right-3 top-3 z-130 flex w-[min(380px,calc(100vw-1.5rem))] flex-col gap-2 sm:right-5 sm:top-5" aria-live="polite">
       <AnimatePresence initial={false}>
         {toasts.map((t) => {
-          const color = t.kind === "message" ? "#8b5cf6" : t.urgent ? "#ef4444" : "#f59e0b";
+          const color = t.color ?? (t.kind === "message" ? "#8b5cf6" : t.urgent ? "#ef4444" : "#f59e0b");
           return (
             <motion.div
               key={t.key}
@@ -113,7 +168,7 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
             >
               <div className="flex gap-3 p-3.5">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: `color-mix(in oklab, ${color} 18%, transparent)`, color }}>
-                  {t.kind === "message" ? <MessageCircle size={19} /> : <PackagePlus size={19} />}
+                  {t.kind === "message" ? <MessageCircle size={19} /> : t.kind === "status" ? <Repeat size={19} /> : <PackagePlus size={19} />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-black">{t.title}</p>

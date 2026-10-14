@@ -70,6 +70,6 @@ export type PreviewItem = {
   catalog_stock: number | null;
 };
 
-export const PRODUCT_LITE_COLUMNS ="id,name,sku,image_url,category_id,stock,active,cost_price,price_1,price_2,price_3,price_4,price_5";
+export const PRODUCT_LITE_COLUMNS ="id,name,sku,image_url,category_id,stock,active,price_1,price_2,price_3,price_4,price_5";
 
 export type CatalogDraft = StoreCatalog;

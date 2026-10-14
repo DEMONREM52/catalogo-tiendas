@@ -16,6 +16,7 @@ import {
 import { CategoryPicker, loadProductCategoryIds, saveProductCategoryIds } from "../CategoryPicker";
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode, loadProductCodes } from "../product-code";
+import { fetchProductCosts } from "@/lib/profit/costs";
 
 type Category = { id: string; name: string };
 
@@ -159,6 +160,8 @@ export default function EditProductPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Si el costo no se pudo leer (sin permiso o sin conexión) no se muestra ni se guarda: así nunca se borra.
+  const [costKnown, setCostKnown] = useState(true);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -233,7 +236,7 @@ export default function EditProductPage() {
       const { data: p, error: pErr } = await sb
         .from("products")
         .select(
-          "id,store_id,created_at,name,description,cost_price,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
+          "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
         )
         .eq("id", id)
         .eq("store_id", access.store.id)
@@ -253,9 +256,12 @@ export default function EditProductPage() {
         return;
       }
 
+      // El costo se pide aparte: solo lo ve quien tiene permiso.
+      const costs = await fetchProductCosts(access.store.id, [id]).catch(() => null);
+      setCostKnown(Boolean(costs?.has(id)));
       const normalized: Product = {
         ...(p as any),
-        cost_price: clampNum((p as any).cost_price, 0),
+        cost_price: clampNum(costs?.get(id) ?? 0, 0),
         price_1: clampNum((p as any).price_1, 0),
         price_2: clampNum((p as any).price_2, 0),
         price_3: clampNum((p as any).price_3, 0),
@@ -306,7 +312,7 @@ export default function EditProductPage() {
       const payload = {
         name: draft.name,
         description: draft.description,
-        cost_price: clampNum(draft.cost_price, 0),
+        ...(costKnown ? { cost_price: clampNum(draft.cost_price, 0) } : {}),
         price_1: clampNum(draft.price_1, 0),
         price_2: clampNum(draft.price_2, 0),
         price_3: clampNum(draft.price_3, 0),
@@ -508,12 +514,18 @@ export default function EditProductPage() {
               <label className="text-xs font-semibold" style={{ color: "var(--t-text)" }}>
                 💰 Costo del producto
               </label>
-              <MoneyInput
-                className={`mt-1 ${inputSoftProps().className}`}
-                style={inputSoftProps().style}
-                value={draft.cost_price ?? 0}
-                onValueChange={(v) => setDraft({ ...draft, cost_price: v ?? 0 })}
-              />
+              {costKnown ? (
+                <MoneyInput
+                  className={`mt-1 ${inputSoftProps().className}`}
+                  style={inputSoftProps().style}
+                  value={draft.cost_price ?? 0}
+                  onValueChange={(v) => setDraft({ ...draft, cost_price: v ?? 0 })}
+                />
+              ) : (
+                <p className="mt-1 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                  🔒 No disponible (sin permiso para ver costos o sin conexión). Al guardar, el costo actual se conserva.
+                </p>
+              )}
               <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
                 Se recalcula como costo promedio en cada ingreso de factura. Puedes corregirlo aquí cuando lo necesites.
               </p>

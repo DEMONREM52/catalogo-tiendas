@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Inbox, MessageCircle, Plus, RefreshCw, Search, Send, Truck } from "lucide-react";
+import { ArrowRight, BellRing, Inbox, MessageCircle, Plus, RefreshCw, Search, Send, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption } from "./NewStockRequest";
+import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
 import { OPEN_REQUEST_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
 
@@ -23,6 +24,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState<number | null>(null);
+  const [sounds, setSounds] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabaseBrowser().rpc("erp_stock_requests_list", { p_store: storeId });
@@ -120,6 +122,9 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         <button type="button" onClick={() => { setLoading(true); void load(); }} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar" title="Actualizar">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
         </button>
+        <button type="button" onClick={() => setSounds(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Sonidos y avisos">
+          <BellRing size={15} /> <span className="hidden sm:inline">Sonidos</span>
+        </button>
         {canRequest ? (
           <button type="button" onClick={() => setCreating(Date.now())} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
             <Plus size={16} /> Pedir mercancía
@@ -200,6 +205,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
           }}
         />
       ) : null}
+      <NotificationSettings open={sounds} onClose={() => setSounds(false)} storeId={storeId} points={points} />
       <RequestRoom requestId={openId} onClose={() => { setOpenId(null); void load(); }} onChanged={() => void load()} />
     </section>
   );
