@@ -60,6 +60,9 @@ export default function InventarioPage() {
           .rpc("erp_my_point", { p_store: storeId })
           .then(({ data }) => {
             if (!alive) return;
+            // Abrir una pestaña desde un enlace (ej.: ?tab=purchases desde una alerta).
+            const wanted = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
+            if (wanted && TABS.some((t) => t.key === wanted)) setTab(wanted);
             setCtx({
               storeId,
               pointId: isPlatformAdmin ? null : ((data as string | null) ?? null),

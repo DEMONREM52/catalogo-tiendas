@@ -15,6 +15,7 @@ export const STORE_MENU_PERMISSIONS = [
   "orders",
   "inventory",
   "inventory_adjust",
+  "inventory_alerts",
   "transfers",
   "stock_requests",
   "stock_requests_manage",

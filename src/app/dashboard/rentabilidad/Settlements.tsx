@@ -7,6 +7,8 @@ import { Banknote, Check, ChevronDown, Download, FileCheck2, History, Plus, Refr
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cardStyle, cop, downloadCsv, esc, inputStyle, rpcError, swalTheme, type Point } from "./shared";
+import { DateField, Field, NumberField } from "@/components/forms/Fields";
+import { PaymentSheet, Sheet as FormSheet } from "@/components/forms/Sheet";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -76,21 +78,14 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
     return () => window.clearTimeout(t);
   }, [load]);
 
-  async function prepare() {
-    const r = await Swal.fire({
-      ...swalTheme,
-      title: "Preparar liquidación",
-      html: `<p style="font-size:14px;opacity:.8">Incluye todo lo pendiente hasta la fecha de corte: ventas de contado y lo ya cobrado de las ventas a crédito.</p>
-        <input id="cut" type="datetime-local" class="swal2-input" value="${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}" />
-        <input id="note" class="swal2-input" placeholder="Nota (opcional)" />`,
-      showCancelButton: true, confirmButtonText: "Calcular", cancelButtonText: "Cancelar",
-      preConfirm: () => ({ cut: (document.getElementById("cut") as HTMLInputElement).value, note: (document.getElementById("note") as HTMLInputElement).value }),
-    });
-    if (!r.isConfirmed) return;
-    const { data, error: e } = await supabaseBrowser().rpc("erp_settlement_calculate", { p_store: storeId, p_point: point, p_cutoff: r.value.cut ? new Date(r.value.cut).toISOString() : null, p_notes: r.value.note || null });
-    if (e) return fail(e);
+  const [preparing, setPreparing] = useState(false);
+  async function prepare(cut: string, note: string) {
+    const { data, error: e } = await supabaseBrowser().rpc("erp_settlement_calculate", { p_store: storeId, p_point: point, p_cutoff: cut ? new Date(cut).toISOString() : null, p_notes: note || null });
+    if (e) { fail(e); return false; }
+    setPreparing(false);
     await load();
     setOpenId((data as { id: string }).id);
+    return true;
   }
 
   if (!pools.length) return <p className="rounded-2xl border p-4 text-sm" style={cardStyle}>No tienes pozos asignados.</p>;
@@ -125,7 +120,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
               {open ? (
                 <button type="button" onClick={() => setOpenId(open.id)} className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: STATUS[open.status as Status]?.color ?? "#3987e5" }}>Ver liquidación #{open.number} abierta</button>
               ) : ov.can.settle ? (
-                <button type="button" disabled={!ov.split} onClick={() => void prepare()} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }} title={ov.split ? "" : "Define primero el reparto"}>
+                <button type="button" disabled={!ov.split} onClick={() => setPreparing(true)} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }} title={ov.split ? "" : "Define primero el reparto"}>
                   <FileCheck2 size={16} /> Preparar liquidación
                 </button>
               ) : null}
@@ -173,6 +168,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
         <div className="space-y-2">{Array.from({ length: 3 }, (_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl" style={{ background: "var(--t-card-bg)" }} />)}</div>
       ) : null}
 
+      <AnimatePresence>{preparing ? <PrepareSheet key="prep" poolName={pools.find((p) => p.id === pool)?.name ?? ""} onClose={() => setPreparing(false)} onConfirm={prepare} /> : null}</AnimatePresence>
       <AnimatePresence>{openId && ov ? <SettlementSheet key={openId} id={openId} can={ov.can} onClose={() => setOpenId(null)} onChanged={() => void load()} /> : null}</AnimatePresence>
     </div>
   );
@@ -244,9 +240,8 @@ function SplitEditor({ storeId, point, ov, onSaved }: { storeId: string; point: 
                 <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>{KINDS[b.kind] ?? b.kind}{b.document ? ` · ${b.document}` : ""}{b.active ? "" : " · inactivo"}</span>
               </span>
               {b.active ? (
-                <div className="flex w-24 items-center rounded-lg border px-2" style={inputStyle}>
-                  <input type="number" inputMode="decimal" min={0} max={100} step={0.5} disabled={!can} value={values[b.id] ?? 0} onChange={(e) => setDraft({ ...values, [b.id]: Number(e.target.value) })} className="w-full bg-transparent py-1.5 text-right font-bold tabular-nums outline-none disabled:opacity-60" aria-label={`Porcentaje de ${b.name}`} />
-                  <span className="text-xs">%</span>
+                <div className="w-28">
+                  <NumberField value={values[b.id] ?? 0} onChange={(v) => setDraft({ ...values, [b.id]: v ?? 0 })} suffix="%" min={0} max={100} decimals={4} disabled={!can} ariaLabel={`Porcentaje de ${b.name}`} />
                 </div>
               ) : null}
               {can ? <button type="button" onClick={() => void toggle(b)} className="rounded-lg border px-2 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}>{b.active ? "Desactivar" : "Activar"}</button> : null}
@@ -314,22 +309,10 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
     onChanged();
   }
 
-  async function pay(line: Detail["lines"][number]) {
-    const left = n(line.amount) - n(line.paid);
-    const key = `pay-${crypto.randomUUID()}`; // se genera una vez: si se reintenta, no se duplica
-    const r = await Swal.fire({
-      ...swalTheme,
-      title: `Pago a ${esc(line.name)}`,
-      html: `<p style="font-size:13px;opacity:.8">Pendiente ${cop(left)}. Se registra en RemHub; no confirma que el banco haya hecho la transferencia.</p>
-        <input id="amt" type="number" class="swal2-input" value="${left}" min="0" step="0.01" />
-        <select id="met" class="swal2-select"><option value="transfer">Transferencia</option><option value="cash">Efectivo</option><option value="nequi">Nequi / Daviplata</option><option value="other">Otro</option></select>
-        <input id="ref" class="swal2-input" placeholder="Referencia o comprobante" />`,
-      showCancelButton: true, confirmButtonText: "Registrar pago", cancelButtonText: "Cancelar",
-      preConfirm: () => ({ amount: Number((document.getElementById("amt") as HTMLInputElement).value), method: (document.getElementById("met") as HTMLSelectElement).value, ref: (document.getElementById("ref") as HTMLInputElement).value }),
-    });
-    if (!r.isConfirmed) return;
-    const { error: e } = await supabaseBrowser().rpc("erp_settlement_pay", { p_line: line.id, p_amount: r.value.amount, p_method: r.value.method, p_reference: r.value.ref || null, p_note: null, p_paid_at: null, p_idempotency_key: key });
-    if (e) return fail(e);
+  const [paying, setPaying] = useState<Detail["lines"][number] | null>(null);
+  async function pay(line: Detail["lines"][number], p: { amount: number; method: string; ref: string; key: string }) {
+    const { error: e } = await supabaseBrowser().rpc("erp_settlement_pay", { p_line: line.id, p_amount: p.amount, p_method: p.method, p_reference: p.ref || null, p_note: null, p_paid_at: null, p_idempotency_key: p.key });
+    if (e) { fail(e); return false; }
     await load();
     onChanged();
   }
@@ -415,7 +398,7 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
                           </div>
                           <span className="text-xs tabular-nums" style={{ color: "var(--t-muted)" }}>pagado {cop(l.paid)}{left > 0 ? ` · falta ${cop(left)}` : ""}</span>
                           {payable && can.pay && left > 0 ? (
-                            <button type="button" onClick={() => void pay(l)} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: "#8b5cf6" }}><Banknote size={13} /> Pagar</button>
+                            <button type="button" onClick={() => setPaying(l)} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: "#8b5cf6" }}><Banknote size={13} /> Pagar</button>
                           ) : left <= 0 ? <span className="text-xs font-bold text-emerald-400">✓ Pagado</span> : null}
                         </div>
                       ) : null}
@@ -457,8 +440,34 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
             </>
           ) : !error ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
         </div>
+        <PaymentSheet open={Boolean(paying)} title="Pago de liquidación" who={paying ? `👤 ${paying.name}${paying.document ? " · " + paying.document : ""}` : ""} pending={paying ? n(paying.amount) - n(paying.paid) : 0}
+          onClose={() => setPaying(null)} onConfirm={(p) => (paying ? pay(paying, p) : Promise.resolve(false))} />
       </motion.div>
     </motion.div>,
     document.body,
+  );
+}
+
+function PrepareSheet({ poolName, onClose, onConfirm }: { poolName: string; onClose: () => void; onConfirm: (cut: string, note: string) => Promise<boolean> }) {
+  const [now] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+  const [cut, setCut] = useState(now);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <FormSheet title="Preparar liquidación" subtitle={poolName} icon={<FileCheck2 size={18} />} onClose={onClose} dirty={cut !== now || note !== ""} footer={
+      <>
+        <span className="flex-1" />
+        <button type="button" disabled={!cut || saving} onClick={async () => { setSaving(true); await onConfirm(cut, note); setSaving(false); }}
+          className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}>
+          <FileCheck2 size={15} /> {saving ? "Calculando…" : "Calcular"}
+        </button>
+      </>
+    }>
+      <p className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+        Incluye todo lo pendiente hasta la fecha de corte: <b style={{ color: "var(--t-text)" }}>ventas de contado</b> y lo <b style={{ color: "var(--t-text)" }}>ya cobrado</b> de las ventas a crédito. Lo que se cobre después entra en la siguiente.
+      </p>
+      <Field label="Fecha y hora de corte" hint="Normalmente: ahora mismo o el último día del mes."><DateField withTime value={cut} max={now} onChange={setCut} /></Field>
+      <Field label="Nota (opcional)"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: cierre de octubre" className="w-full rounded-xl border px-3 py-2 text-sm outline-none" style={inputStyle} /></Field>
+    </FormSheet>
   );
 }

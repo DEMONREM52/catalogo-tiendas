@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Banknote, Camera, Download, FileText, Paperclip, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Banknote, Camera, Check, Download, FileText, Hash, Paperclip, Pencil, Plus, Receipt, Search, Store, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { compressImage, MAX_PDF_BYTES } from "../inventario/attachments";
+import { PAY_METHODS } from "@/components/forms/Sheet";
 import {
-  METHODS, Sheet, ask, askPayment, cardStyle, cop, done, downloadCsv, fail, fdate, field, ghostBtn, inputStyle, iso, label, n, primaryBg, primaryBtn, rpcError, swalTheme,
+  ChoiceChips, DateField, Field, METHODS, MoneyField, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, fail, fdate, field, ghostBtn, inputStyle, iso, label, n, primaryBg, primaryBtn, rpcError, swalTheme,
   type Catalog, type Point,
 } from "./shared";
 
@@ -68,7 +69,7 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-full border px-3 py-1.5" style={inputStyle} aria-label="Estado">
-          <option value="">Todos</option><option value="open">Por pagar</option><option value="overdue">Vencidos</option><option value="paid">Pagados</option><option value="void">Anulados</option>
+          <option value="">Todos (sin anulados)</option><option value="open">Por pagar</option><option value="overdue">Vencidos</option><option value="paid">Pagados</option><option value="void">Anulados / eliminados</option><option value="all">Todo, incluso anulados</option>
         </select>
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-full border px-3 py-1.5" style={inputStyle} aria-label="Categoría">
           <option value="">Todas las categorías</option>{cat.categories.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
@@ -78,8 +79,9 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
             <option value="">{cat.can.madre ? "Madre y puntos" : "Mis puntos"}</option>{visible.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         ) : null}
-        <input type="date" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} className="rounded-full border px-3 py-1.5" style={inputStyle} aria-label="Desde" />
-        <input type="date" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} className="rounded-full border px-3 py-1.5" style={inputStyle} aria-label="Hasta" />
+        <div className="w-40"><DateField value={range[0]} onChange={(v) => setRange([v, range[1]])} ariaLabel="Desde" /></div>
+        <span className="text-xs" style={{ color: "var(--t-muted)" }}>a</span>
+        <div className="w-40"><DateField value={range[1]} onChange={(v) => setRange([range[0], v])} ariaLabel="Hasta" /></div>
         <span className="flex-1 text-right text-xs" style={{ color: "var(--t-muted)" }}>{total.n} gastos · {cop(total.sum)}</span>
         <button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> CSV</button>
       </div>
@@ -125,84 +127,89 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
 
 function ExpenseForm({ storeId, points, cat, initial, onClose, onSaved }: { storeId: string; points: Point[]; cat: Catalog; initial: Expense | null; onClose: () => void; onSaved: (id: string) => void }) {
   const active = cat.categories.filter((c) => c.active || c.id === initial?.category_id);
-  const [f, setF] = useState({
-    category: initial?.category_id ?? "", amount: initial ? String(n(initial.amount)) : "", description: initial?.description ?? "", payee: initial?.payee_name ?? "",
+  const start = {
+    category: initial?.category_id ?? "", amount: initial ? n(initial.amount) : null as number | null, description: initial?.description ?? "", payee: initial?.payee_name ?? "",
     reference: initial?.reference ?? "", incurred: initial?.incurred_on ?? iso(new Date()), due: initial?.due_on ?? "", notes: initial?.notes ?? "",
     point: initial ? initial.point_id ?? "" : cat.can.madre ? "" : points[0]?.id ?? "", payNow: false, method: "cash",
-  });
+  };
+  const [f, setF] = useState(start);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [key] = useState(() => `exp-${crypto.randomUUID()}`);
-  const ok = f.category && Number(f.amount) > 0 && f.description.trim().length >= 2 && f.incurred;
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const dirty = JSON.stringify(f) !== JSON.stringify(start) || file !== null;
+  const missing = !f.category ? "Elige una categoría" : !(f.amount && f.amount > 0) ? "Escribe el valor" : f.description.trim().length < 2 ? "Escribe en qué se gastó" : !f.incurred ? "Elige la fecha" : null;
+  const tooLowForPaid = initial && f.amount !== null && f.amount < n(initial.paid);
 
   async function save() {
+    if (missing || tooLowForPaid) return;
     setSaving(true);
     const { data, error } = await supabaseBrowser().rpc("erp_expense_save", {
       p_store: storeId, p_id: initial?.id ?? null, p_point: f.point || null, p_category: f.category, p_description: f.description, p_payee: f.payee, p_reference: f.reference,
-      p_amount: Number(f.amount), p_incurred: f.incurred, p_due: f.due || null, p_notes: f.notes, p_pay_now: f.payNow, p_method: f.method, p_key: key,
+      p_amount: f.amount, p_incurred: f.incurred, p_due: f.due || null, p_notes: f.notes, p_pay_now: f.payNow, p_method: f.method, p_key: key,
     });
     if (error) { setSaving(false); return fail(error); }
     const id = (data as { id: string }).id;
     if (file) await uploadAttachment(storeId, f.point || null, id, file).catch((e) => fail(e));
     setSaving(false);
-    done(initial ? "Gasto actualizado" : "Gasto registrado");
+    done(initial ? "Gasto actualizado" : f.payNow ? "Gasto registrado y pagado" : "Gasto registrado");
     onSaved(id);
   }
 
   return (
-    <Sheet title={initial ? `Editar gasto #${initial.number}` : "Nuevo gasto"} onClose={onClose} footer={
+    <Sheet title={initial ? `Editar gasto #${initial.number}` : "Nuevo gasto"} subtitle={initial ? `${initial.category_name} · ${initial.point_name ?? "Madre"}` : "Registra lo que salió o lo que hay que pagar"}
+      icon={<Receipt size={18} />} onClose={onClose} dirty={dirty} footer={
       <>
-        <span className="flex-1 text-xs" style={{ color: "var(--t-muted)" }}>{initial && n(initial.paid) > 0 ? `Ya tiene ${cop(initial.paid)} pagado.` : ""}</span>
-        <button type="button" disabled={!ok || saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}>{saving ? "Guardando…" : "Guardar"}</button>
+        <span className="min-w-0 flex-1 text-xs" style={{ color: missing ? "#eda100" : "var(--t-muted)" }}>{missing ? `⚠️ ${missing}` : initial && n(initial.paid) > 0 ? `Ya tiene ${cop(initial.paid)} pagado.` : "✓ Listo para guardar"}</span>
+        <button type="button" disabled={Boolean(missing) || Boolean(tooLowForPaid) || saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}><Check size={16} /> {saving ? "Guardando…" : "Guardar"}</button>
       </>
     }>
+      <Field label="¿Cuánto fue? (valor total, con impuestos)" error={tooLowForPaid ? `No puede ser menor a lo ya pagado (${cop(initial!.paid)}).` : undefined}>
+        <MoneyField big autoFocus value={f.amount} onChange={(v) => set("amount", v)} />
+      </Field>
       <div>
-        <span className="text-xs font-bold">Categoría</span>
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {active.map((c) => (
-            <button key={c.id} type="button" onClick={() => setF({ ...f, category: c.id })} className="rounded-full px-3 py-1.5 text-xs font-bold" style={f.category === c.id ? { background: "var(--t-accent)", color: "#fff" } : { border: "1px solid var(--t-card-border)" }}>{c.emoji} {c.name}</button>
-          ))}
-        </div>
+        <span className="mb-1.5 block text-xs font-bold">Categoría</span>
+        <ChoiceChips value={f.category} onChange={(v) => set("category", v)} options={active.map((c) => ({ value: c.id, label: c.name, icon: <span>{c.emoji}</span> }))} />
       </div>
-      <label className="block"><span className="text-xs font-bold">Valor total (con impuestos)</span>
-        <div className="mt-1 flex items-center gap-2 rounded-xl border px-3 py-2" style={inputStyle}>
-          <span className="font-bold">$</span>
-          <input autoFocus type="number" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} className="w-full bg-transparent text-2xl font-black tabular-nums outline-none" placeholder="0" />
-        </div>
-      </label>
-      <label className="block"><span className="text-xs font-bold">¿En qué se gastó?</span><input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Ej.: Recibo de energía octubre" className={field} style={inputStyle} /></label>
+      <Field label="¿En qué se gastó?">
+        <input value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Ej.: Recibo de energía de octubre" className={field} style={inputStyle} />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block"><span className="text-xs font-bold">Proveedor / a quién</span><input value={f.payee} onChange={(e) => setF({ ...f, payee: e.target.value })} className={field} style={inputStyle} /></label>
-        <label className="block"><span className="text-xs font-bold">N.º de factura o recibo</span><input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} className={field} style={inputStyle} /></label>
-        <label className="block"><span className="text-xs font-bold">Fecha del gasto</span><input type="date" value={f.incurred} onChange={(e) => setF({ ...f, incurred: e.target.value })} className={field} style={inputStyle} /></label>
-        <label className="block"><span className="text-xs font-bold">Vence (opcional)</span><input type="date" value={f.due} min={f.incurred} onChange={(e) => setF({ ...f, due: e.target.value })} className={field} style={inputStyle} /></label>
+        <Field label={<><Store size={12} className="mr-1 inline" />Proveedor o a quién se paga</>}>
+          <input value={f.payee} onChange={(e) => set("payee", e.target.value)} placeholder="Ej.: EPM" className={field} style={inputStyle} />
+        </Field>
+        <Field label={<><Hash size={12} className="mr-1 inline" />N.º de factura o recibo</>}>
+          <input value={f.reference} onChange={(e) => set("reference", e.target.value)} placeholder="Opcional" className={field} style={inputStyle} />
+        </Field>
+        <Field label="Fecha del gasto"><DateField value={f.incurred} onChange={(v) => set("incurred", v)} /></Field>
+        <Field label="Fecha límite de pago (opcional)" hint="Te avisamos cuando se acerque.">
+          <DateField value={f.due} min={f.incurred} onChange={(v) => set("due", v)} />
+        </Field>
       </div>
       {!initial && (points.length > 0 || cat.can.madre) ? (
-        <label className="block"><span className="text-xs font-bold">¿De quién es el gasto?</span>
-          <select value={f.point} onChange={(e) => setF({ ...f, point: e.target.value })} className={field} style={inputStyle}>
-            {cat.can.madre ? <option value="">🏬 Madre (general)</option> : null}
-            {points.map((p) => <option key={p.id} value={p.id}>📍 {p.name}</option>)}
-          </select>
-        </label>
+        <div>
+          <span className="mb-1.5 block text-xs font-bold">¿De quién es el gasto?</span>
+          <ChoiceChips value={f.point} onChange={(v) => set("point", v)} options={[...(cat.can.madre ? [{ value: "", label: "Madre (general)", icon: <span>🏬</span> }] : []), ...points.map((p) => ({ value: p.id, label: p.name, icon: <span>📍</span> }))]} />
+        </div>
       ) : null}
-      <label className="block"><span className="text-xs font-bold">Notas</span><input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} className={field} style={inputStyle} /></label>
+      <Field label="Notas (opcional)"><input value={f.notes} onChange={(e) => set("notes", e.target.value)} className={field} style={inputStyle} /></Field>
       {!initial ? (
         <>
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
-            <Camera size={16} />
-            <span className="min-w-0 flex-1 truncate">{file ? file.name : "Foto o PDF del soporte (opcional)"}</span>
+          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed px-4 py-3 text-sm transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)" }}><Camera size={16} /></span>
+            <span className="min-w-0 flex-1"><b className="block truncate">{file ? file.name : "Foto o PDF del soporte"}</b><span className="text-xs" style={{ color: "var(--t-muted)" }}>{file ? "Toca para cambiarlo" : "Opcional · se comprime solo"}</span></span>
             <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
           {cat.can.pay ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={f.payNow} onChange={(e) => setF({ ...f, payNow: e.target.checked })} className="h-4 w-4 accent-violet-500" />
-              Ya está pagado
+            <div className="rounded-2xl border p-3" style={{ borderColor: f.payNow ? "rgba(34,197,94,.5)" : "var(--t-card-border)" }}>
+              <label className="flex cursor-pointer items-center gap-3 text-sm font-bold">
+                <input type="checkbox" checked={f.payNow} onChange={(e) => set("payNow", e.target.checked)} className="h-5 w-5 accent-emerald-500" />
+                <Banknote size={16} /> Ya está pagado
+              </label>
               {f.payNow ? (
-                <select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} className="ml-auto rounded-lg border px-2 py-1 text-sm" style={inputStyle}>
-                  {Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <div className="mt-2.5"><ChoiceChips value={f.method} onChange={(v) => set("method", v)} options={PAY_METHODS.map((m) => ({ value: m.value, label: m.label, icon: m.icon }))} /></div>
               ) : null}
-            </label>
+            </div>
           ) : null}
         </>
       ) : null}
@@ -248,12 +255,11 @@ function ExpenseDetail({ id, cat, onClose, onEdit, onChanged }: { id: string; ca
   const pending = e ? n(e.amount) - n(e.paid) : 0;
   const after = async () => { await load(); onChanged(); };
 
-  async function pay() {
-    if (!e) return;
-    const p = await askPayment(`Pagar «${e.description}»`, pending);
-    if (!p) return;
+  const [paying, setPaying] = useState(false);
+  async function pay(p: { amount: number; method: string; ref: string; key: string }) {
+    if (!e) return false;
     const { error } = await supabaseBrowser().rpc("erp_expense_pay", { p_expense: e.id, p_amount: p.amount, p_method: p.method, p_reference: p.ref || null, p_paid_at: null, p_key: p.key });
-    if (error) return fail(error);
+    if (error) { fail(error); return false; }
     done("Pago registrado");
     await after();
   }
@@ -266,7 +272,7 @@ function ExpenseDetail({ id, cat, onClose, onEdit, onChanged }: { id: string; ca
   }
   async function voidExpense() {
     if (!e) return;
-    const r = await ask(`¿Por qué anulas el gasto #${e.number}?`);
+    const r = await askDelete(`el gasto #${e.number}`, "Queda guardado como anulado para la auditoría y deja de contar en los totales.");
     if (!r) return;
     const { error } = await supabaseBrowser().rpc("erp_expense_void", { p_expense: e.id, p_reason: r });
     if (error) return fail(error);
@@ -300,9 +306,9 @@ function ExpenseDetail({ id, cat, onClose, onEdit, onChanged }: { id: string; ca
       footer={e && e.status !== "void" ? (
         <>
           {cat.can.expenses ? <button type="button" onClick={() => onEdit(e)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Pencil size={13} /> Editar</button> : null}
-          {cat.can.expenses && cat.can.pay && n(e.paid) === 0 ? <button type="button" onClick={() => void voidExpense()} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Trash2 size={13} /> Anular</button> : null}
+          {cat.can.expenses && cat.can.pay && n(e.paid) === 0 ? <button type="button" onClick={() => void voidExpense()} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Trash2 size={13} /> Eliminar</button> : null}
           <span className="flex-1" />
-          {cat.can.pay && pending > 0 ? <button type="button" onClick={() => void pay()} className={primaryBtn} style={{ background: "#8b5cf6" }}><Banknote size={15} /> Registrar pago</button> : null}
+          {cat.can.pay && pending > 0 ? <button type="button" onClick={() => setPaying(true)} className={primaryBtn} style={{ background: "linear-gradient(135deg,#22c55e,#3987e5)" }}><Banknote size={15} /> Registrar pago</button> : null}
         </>
       ) : null}>
       {e ? (
@@ -355,6 +361,7 @@ function ExpenseDetail({ id, cat, onClose, onEdit, onChanged }: { id: string; ca
           </section>
         </>
       ) : <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>}
+      {e ? <PaymentSheet open={paying} title="Registrar pago" who={`${e.emoji} ${e.description}${e.payee_name ? " · " + e.payee_name : ""}`} pending={pending} defaultMethod="cash" onClose={() => setPaying(false)} onConfirm={pay} /> : null}
     </Sheet>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { isPermissionOrMissing, searchProductsDirect } from "@/lib/products/safe-search";
 import { IMAGE_MODEL } from "@/lib/image-search/embed";
 import type { FinderHit, FinderSource } from "@/components/product-finder/ProductFinder";
 
@@ -25,6 +26,8 @@ export function useErpFinderSource(storeId: string | null | undefined, opts: { a
     async searchText(q) {
       if (!storeId) return [];
       const { data, error } = await supabaseBrowser().rpc("erp_product_finder", { p_store: storeId, p_q: q, p_active_only: activeOnly, p_limit: 30 });
+      // Respaldo si el buscador falla por el costo protegido.
+      if (isPermissionOrMissing(error)) return ((await searchProductsDirect(storeId, q, { limit: 30, activeOnly })) as unknown as Row[]).map((r) => toHit(r, priceLevel));
       if (error) throw error;
       return (((data ?? {}) as { items?: Row[] }).items ?? []).map((r) => toHit(r, priceLevel));
     },

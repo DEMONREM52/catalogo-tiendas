@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Calculator, Info, Plus, Search, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
+import { Field, MoneyField, NumberField } from "@/components/forms/Fields";
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { distribute, marginOnSale, markupOnCost, priceFromCost, saleLine, toCents, type PriceMode, type PriceResult, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
 
@@ -28,16 +29,13 @@ const money = (c: number) => (c < 0 ? "−$" : "$") + (Math.abs(c) / 100).toLoca
 const pct = (n: number | null) => (n === null ? "—" : n.toLocaleString("es-CO", { maximumFractionDigits: 2 }) + " %");
 const card = { borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" };
 
-function NumField({ label, value, onChange, suffix, step = 0.5, min = 0, max = 1000, hint }: { label: string; value: number; onChange: (v: number) => void; suffix: string; step?: number; min?: number; max?: number; hint?: string }) {
+function NumField({ label, value, onChange, suffix, min = 0, max = 1000, hint }: { label: string; value: number; onChange: (v: number) => void; suffix: string; step?: number; min?: number; max?: number; hint?: string }) {
   return (
-    <label className="block">
-      <span className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>{label}</span>
-      <div className="mt-1 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-        <input type="number" inputMode="decimal" className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums outline-none" value={Number.isFinite(value) ? value : ""} step={step} min={min} max={max} onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))} />
-        <span className="text-sm font-bold" style={{ color: "var(--t-muted)" }}>{suffix}</span>
-      </div>
-      {hint ? <span className="mt-1 block text-[11px]" style={{ color: "var(--t-muted)" }}>{hint}</span> : null}
-    </label>
+    <Field label={label} hint={hint}>
+      {suffix === "COP"
+        ? <MoneyField value={value} onChange={(v) => onChange(v ?? 0)} allowEmpty={false} />
+        : <NumberField value={value} onChange={(v) => onChange(v ?? 0)} suffix={suffix} min={min} max={max} decimals={4} />}
+    </Field>
   );
 }
 
@@ -322,9 +320,8 @@ export function Simulator({ storeId }: { storeId: string }) {
                 {people.map((p, i) => (
                   <li key={p.id} className="flex items-center gap-2">
                     <input value={p.name} onChange={(e) => setPeople(people.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} className="min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} aria-label="Beneficiario" />
-                    <div className="flex w-20 shrink-0 items-center rounded-lg border px-2" style={{ borderColor: "var(--t-card-border)" }}>
-                      <input type="number" inputMode="decimal" value={p.pct} onChange={(e) => setPeople(people.map((x, j) => (j === i ? { ...x, pct: Number(e.target.value) } : x)))} className="w-full bg-transparent py-1.5 text-right text-sm font-bold tabular-nums outline-none" aria-label={`Porcentaje de ${p.name}`} />
-                      <span className="text-xs">%</span>
+                    <div className="w-24 shrink-0">
+                      <NumberField value={p.pct} onChange={(v) => setPeople(people.map((x, j) => (j === i ? { ...x, pct: v ?? 0 } : x)))} suffix="%" min={0} max={100} decimals={4} ariaLabel={`Porcentaje de ${p.name}`} />
                     </div>
                     <b className="w-[5.5rem] shrink-0 text-right text-xs tabular-nums sm:w-24 sm:text-sm">{dist.ok ? money(dist.parts[i]?.amount ?? 0) : "—"}</b>
                     <button type="button" onClick={() => setPeople(people.filter((_, j) => j !== i))} className="grid h-8 w-8 place-items-center rounded-lg border" style={{ borderColor: "var(--t-card-border)" }} aria-label={`Quitar ${p.name}`}><Trash2 size={13} /></button>

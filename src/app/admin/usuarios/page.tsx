@@ -59,6 +59,7 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   orders: "Pedidos",
   inventory: "Inventario y kardex",
   inventory_adjust: "Ajustes de inventario",
+  inventory_alerts: "Alertas de inventario",
   transfers: "Traslados",
   stock_requests: "Pedidos internos",
   stock_requests_manage: "Gestión de pedidos internos",

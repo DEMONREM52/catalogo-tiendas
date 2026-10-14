@@ -1,6 +1,7 @@
 "use client";
 
 import { MoneyInput } from "@/app/dashboard/MoneyInput";
+import { isPermissionOrMissing, searchProductsDirect } from "@/lib/products/safe-search";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Eye, Megaphone, Pencil, Power } from "lucide-react";
@@ -422,6 +423,13 @@ export default function ProductsListPage() {
     // Búsqueda segura (sin costo). Si aún no existe la migración 20261111, se usa la anterior.
     let { data, error } = await sb.rpc("search_products_safe", searchArgs);
     if (error && /Could not find the function|schema cache/i.test(error.message)) ({ data, error } = await sb.rpc("search_products_pro", searchArgs));
+    // Si el buscador avanzado falla por el costo protegido, se busca directo (sin el costo).
+    if (isPermissionOrMissing(error)) {
+      try {
+        data = await searchProductsDirect(storeId, query, { limit: SEARCH_PAGE, offset, status: statusFilter, categoryId: categoryFilter === "all" ? null : categoryFilter });
+        error = null;
+      } catch (e) { error = e as typeof error; }
+    }
 
     if (reqIdRef.current !== myReq) return; // cancelado por escribir más
 

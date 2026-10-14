@@ -62,13 +62,6 @@ function clampNum(v: any, fallback = 0): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
-function safeIntOrNull(v: any) {
-  const t = String(v ?? "").trim();
-  if (!t) return null; // vacío => ilimitado
-  const n = Math.floor(Number(t));
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, n);
-}
 function isOutOfStock(stock: number | null) {
   return stock !== null && stock <= 0;
 }
@@ -196,17 +189,6 @@ export default function AdminProductosPage() {
         if (x.id !== id) return x;
         const cur = x.active_draft ?? x.active;
         return { ...x, active_draft: !cur };
-      })
-    );
-  }
-
-  function setStockWithRule(id: string, newStock: number | null) {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const next: Product = { ...p, stock: newStock };
-        if (newStock !== null && newStock <= 0) next.active_draft = false;
-        return next;
       })
     );
   }
@@ -523,7 +505,6 @@ export default function AdminProductosPage() {
       const sb = supabaseBrowser();
       const validCategory = cats.some((c) => c.id === p.category_id);
 
-      const payloadStock = p.stock === null ? null : Math.max(0, Math.floor(clampNum(p.stock, 0)));
       const payloadActive = !!(p.active_draft ?? p.active);
 
       const { error } = await sb
@@ -534,7 +515,7 @@ export default function AdminProductosPage() {
           price_retail: clampNum(p.price_retail, 0),
           price_wholesale: clampNum(p.price_wholesale, 0),
           min_wholesale: Math.max(1, clampNum(p.min_wholesale, 1)),
-          stock: payloadStock,
+          // Las unidades no se editan aquí: solo con ingreso de factura, ajustes o traslados.
           active: payloadActive,
           image_url: p.image_url,
           category_id: validCategory ? p.category_id : null,
@@ -546,7 +527,6 @@ export default function AdminProductosPage() {
       patch(p.id, {
         active: payloadActive,
         active_draft: payloadActive,
-        stock: payloadStock,
       });
 
       await Swal.fire({
@@ -1089,16 +1069,9 @@ export default function AdminProductosPage() {
                             <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
                               Stock <span style={{ opacity: 0.55 }}>(vacío = ilimitado)</span>
                             </label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className={`mt-1 ${inputBase()}`}
-                              value={(p.stock ?? "") as any}
-                              placeholder="Ej: 10 o vacío"
-                              onChange={(e) => setStockWithRule(p.id, safeIntOrNull(e.target.value))}
-                            />
+                            <p className={`mt-1 ${inputBase()}`} aria-readonly>🔒 {stockLabel(p.stock)}</p>
                             <p className="mt-2 text-[11px]" style={{ color: "var(--ap-muted)" }}>
-                              Si el stock llega a <b>0</b>, se marca <b>inactivo (sin guardar)</b>.
+                              Las unidades solo cambian con <b>ingreso de factura</b>, <b>ajustes</b> o <b>traslados</b> (Inventario).
                             </p>
                           </div>
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
@@ -17,6 +16,7 @@ import { CategoryPicker, loadProductCategoryIds, saveProductCategoryIds } from "
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode, loadProductCodes } from "../product-code";
 import { fetchProductCosts } from "@/lib/profit/costs";
+import { PricingPanel, type Markups } from "../PricingPanel";
 
 type Category = { id: string; name: string };
 
@@ -43,6 +43,7 @@ type Product = {
 
   stock: number | null; // null = ilimitado
   product_details: ProductDetails;
+  markups?: Markups;
 
   // Código editable (sku), código de barras y número interno fijo.
   sku?: string | null;
@@ -50,17 +51,6 @@ type Product = {
   product_no?: number | null;
 };
 
-/** Margen de ganancia de un precio frente al costo. */
-function Margin({ cost, price }: { cost: number; price: number }) {
-  if (!cost || !price) return null;
-  const pct = ((price - cost) / price) * 100;
-  const color = pct < 0 ? "#ef4444" : pct < 15 ? "#f59e0b" : "#22c55e";
-  return (
-    <p className="mt-1 text-[11px] font-semibold" style={{ color }}>
-      {pct < 0 ? "Pierdes" : "Ganas"} {"$" + Math.abs(price - cost).toLocaleString("es-CO")} · margen {pct.toFixed(1)}%
-    </p>
-  );
-}
 
 // ✅ Styles con tokens (auto claro/oscuro por sistema)
 function inputSoftProps(extraClassName = "") {
@@ -129,23 +119,16 @@ function panelProps(extraClassName = "") {
     } as React.CSSProperties,
   };
 }
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function clampNum(raw: any, fallback = 0) {
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
 function digitsOnlyToNumber(raw: string, fallback = 0) {
-  const digits = String(raw ?? "").replace(/\D/g, "");
+  const digits = String(raw ?? "").replace(/D/g, "");
   if (!digits) return fallback;
   const n = Number(digits);
   return Number.isFinite(n) ? n : fallback;
-}
-function clampIntOrNull(raw: string): number | null {
-  const t = String(raw ?? "").trim();
-  if (!t) return null;
-  const n = Math.floor(Number(t));
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, n);
 }
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -162,6 +145,8 @@ export default function EditProductPage() {
   const [saving, setSaving] = useState(false);
   // Si el costo no se pudo leer (sin permiso o sin conexión) no se muestra ni se guarda: así nunca se borra.
   const [costKnown, setCostKnown] = useState(true);
+  // false si la base aún no tiene la migración 20261113 (precios por %).
+  const [markupsReady, setMarkupsReady] = useState(true);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -233,14 +218,13 @@ export default function EditProductPage() {
       if (catsErr) throw catsErr;
       setCategories((cats as any[]) ?? []);
 
-      const { data: p, error: pErr } = await sb
-        .from("products")
-        .select(
-          "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details"
-        )
-        .eq("id", id)
-        .eq("store_id", access.store.id)
-        .maybeSingle();
+      const baseCols = "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details";
+      // Con la migración 20261113 el producto trae su % de ganancia por precio.
+      let { data: p, error: pErr } = await sb.from("products").select(`${baseCols},markup_1,markup_2,markup_3,markup_4,markup_5`).eq("id", id).eq("store_id", access.store.id).maybeSingle();
+      if (pErr && /markup_/.test(pErr.message)) {
+        setMarkupsReady(false);
+        ({ data: p, error: pErr } = await sb.from("products").select(baseCols).eq("id", id).eq("store_id", access.store.id).maybeSingle());
+      }
 
       if (pErr) throw pErr;
 
@@ -275,6 +259,7 @@ export default function EditProductPage() {
             ? null
             : Math.max(0, Math.floor(clampNum((p as any).stock, 0))),
         product_details: normalizeProductDetails((p as any).product_details),
+        markups: [1, 2, 3, 4, 5].map((l) => { const v = (p as Record<string, unknown>)[`markup_${l}`]; return v === null || v === undefined ? null : Number(v); }) as Markups,
       };
 
       Object.assign(normalized, await loadProductCodes(normalized.id));
@@ -312,16 +297,10 @@ export default function EditProductPage() {
       const payload = {
         name: draft.name,
         description: draft.description,
-        ...(costKnown ? { cost_price: clampNum(draft.cost_price, 0) } : {}),
-        price_1: clampNum(draft.price_1, 0),
-        price_2: clampNum(draft.price_2, 0),
-        price_3: clampNum(draft.price_3, 0),
-        price_4: clampNum(draft.price_4, 0),
-        price_5: clampNum(draft.price_5, 0),
-        price_retail: clampNum(draft.price_3, 0),
-        price_wholesale: clampNum(draft.price_2, 0),
+        // El costo y las unidades NO se envían: solo cambian con ingreso de factura, ajustes o traslados.
+        // Los precios tampoco: los calcula la base con el % de ganancia.
+        ...(markupsReady && draft.markups ? Object.fromEntries(draft.markups.map((m, i) => [`markup_${i + 1}`, m])) : {}),
         min_wholesale: Math.max(1, clampNum(draft.min_wholesale, 1)),
-        stock: draft.stock === null ? null : Math.max(0, Math.floor(clampNum(draft.stock, 0))),
         active: !!draft.active,
         image_url: draft.image_url,
         category_id: categoryIds[0] ?? null,
@@ -507,124 +486,39 @@ export default function EditProductPage() {
               />
             </div>
 
-            <div
-              className="rounded-2xl border p-3"
-              style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}
-            >
-              <label className="text-xs font-semibold" style={{ color: "var(--t-text)" }}>
-                💰 Costo del producto
-              </label>
-              {costKnown ? (
-                <MoneyInput
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  value={draft.cost_price ?? 0}
-                  onValueChange={(v) => setDraft({ ...draft, cost_price: v ?? 0 })}
-                />
-              ) : (
-                <p className="mt-1 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-                  🔒 No disponible (sin permiso para ver costos o sin conexión). Al guardar, el costo actual se conserva.
-                </p>
-              )}
-              <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                Se recalcula como costo promedio en cada ingreso de factura. Puedes corregirlo aquí cuando lo necesites.
+            {markupsReady ? (
+              <PricingPanel
+                storeId={storeId ?? ""}
+                productId={draft.id}
+                cost={clampNum(draft.cost_price, 0)}
+                costKnown={costKnown}
+                prices={[draft.price_1, draft.price_2, draft.price_3, draft.price_4, draft.price_5].map((x) => clampNum(x, 0))}
+                markups={draft.markups ?? [null, null, null, null, null]}
+                onChange={(m) => setDraft({ ...draft, markups: m })}
+              />
+            ) : (
+              <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                Falta ejecutar en Supabase la migración <b>20261113_inventario_precios_devoluciones.sql</b> para manejar los precios por porcentaje. Mientras tanto los precios no cambian al guardar.
               </p>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 1 (mínimo)
-                </label>
-                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_1 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_1: v ?? 0 })} />
-                <Margin cost={draft.cost_price} price={draft.price_1} />
-              </div>
-
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 2 (mayor)
-                </label>
-                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_2 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_2: v ?? 0 })} />
-                <Margin cost={draft.cost_price} price={draft.price_2} />
-              </div>
-
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 3 (detal)
-                </label>
-                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_3 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_3: v ?? 0 })} />
-                <Margin cost={draft.cost_price} price={draft.price_3} />
-              </div>
-
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 4
-                </label>
-                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_4 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_4: v ?? 0 })} />
-                <Margin cost={draft.cost_price} price={draft.price_4} />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 5
-                </label>
-                <MoneyInput className={`mt-1 ${inputSoftProps().className}`} style={inputSoftProps().style} value={draft.price_5 ?? 0} onValueChange={(v) => setDraft({ ...draft, price_5: v ?? 0 })} />
-                <Margin cost={draft.cost_price} price={draft.price_5} />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Mínimo Mayor
-                </label>
-                <input
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  type="text"
-                  inputMode="numeric"
-                  value={String(draft.min_wholesale ?? 1)}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)),
-                    })
-                  }
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Stock (vacío = ilimitado)
-                </label>
-                <input
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  type="text"
-                  inputMode="numeric"
-                  value={draft.stock ?? ""}
-                  placeholder="Vacío = ilimitado"
-                  onChange={(e) => setDraft({ ...draft, stock: clampIntOrNull(e.target.value) })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                className={softBtn.className}
-                style={softBtn.style}
-                type="button"
-                onClick={() => setDraft({ ...draft, stock: null })}
-              >
-                Stock ilimitado
-              </button>
-
-              <button
-                className={softBtn.className}
-                style={softBtn.style}
-                type="button"
-                onClick={() => setDraft({ ...draft, stock: 0 })}
-              >
-                Agotado (0)
-              </button>
+            <div>
+              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
+                Mínimo para precio mayorista (unidades)
+              </label>
+              <input
+                className={`mt-1 ${inputSoftProps().className}`}
+                style={inputSoftProps().style}
+                type="text"
+                inputMode="numeric"
+                value={String(draft.min_wholesale ?? 1)}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)),
+                  })
+                }
+              />
             </div>
 
             <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />

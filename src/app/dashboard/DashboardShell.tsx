@@ -16,6 +16,7 @@ import {
 import { useNicknameUpdates } from "./Nickname";
 import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
 import { ImageIndexer } from "./ImageIndexer";
+import { InventoryAlertWatcher } from "./inventario/InventoryAlertWatcher";
 import { logSessionEvent } from "@/lib/audit-client";
 
 type Role = "admin" | "store";
@@ -913,6 +914,7 @@ export default function DashboardShell({
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
             {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}
+            {role === "store" && store?.id && canOpen("inventory_alerts") ? <InventoryAlertWatcher storeId={store.id} /> : null}
 
             <button
               onClick={logout}

@@ -1,9 +1,8 @@
 "use client";
 
-import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
-import { X } from "lucide-react";
 import Swal from "sweetalert2";
+export { Sheet, PaymentSheet, confirmDiscard, type PaymentInput } from "@/components/forms/Sheet";
+export { Field, MoneyField, NumberField, DateField, ChoiceChips, ddmmyyyy } from "@/components/forms/Fields";
 
 export { cop, cardStyle, inputStyle, swalTheme, Stat, downloadCsv, esc } from "../rentabilidad/shared";
 import { esc, swalTheme } from "../rentabilidad/shared";
@@ -32,7 +31,7 @@ export const METHODS: Record<string, string> = { cash: "Efectivo", transfer: "Tr
 export const n = (v: unknown) => Number(v ?? 0);
 
 export const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-export const fdate = (d: string | null | undefined) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" }) : "—");
+export const fdate = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "—");
 export const label = "text-xs font-bold uppercase tracking-wide";
 export const field = "mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none";
 
@@ -57,45 +56,24 @@ export function rpcError(e: unknown) {
 export const fail = (e: unknown) => void Swal.fire({ ...swalTheme, icon: "error", title: "No se pudo", text: rpcError(e) });
 export const done = (title: string, text?: string) => void Swal.fire({ ...swalTheme, icon: "success", title, text, timer: 1600, showConfirmButton: false });
 
+/** Confirma eliminar algo con un motivo (con opciones rápidas). Devuelve el motivo o null. */
+export async function askDelete(what: string, extra = "") {
+  const r = await Swal.fire({
+    ...swalTheme, icon: "warning", title: `¿Eliminar ${esc(what)}?`,
+    html: `<p style="font-size:13px;opacity:.8">${esc(extra)}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px">${["Lo registré mal", "Está duplicado", "Ya no aplica"].map((t) => `<button type="button" class="swal2-styled rh-reason" data-r="${t}" style="margin:0;background:transparent;border:1px solid rgba(150,150,150,.4);color:inherit;font-size:12px;padding:6px 12px;border-radius:999px">${t}</button>`).join("")}</div>`,
+    input: "text", inputPlaceholder: "Motivo", showCancelButton: true, confirmButtonText: "Eliminar", cancelButtonText: "Cancelar", confirmButtonColor: "#ef4444", reverseButtons: true,
+    didOpen: () => document.querySelectorAll<HTMLButtonElement>(".rh-reason").forEach((b) => (b.onclick = () => { const i = Swal.getInput(); if (i) i.value = b.dataset.r ?? ""; })),
+    inputValidator: (v) => (v.trim().length < 3 ? "Escribe o elige un motivo" : null),
+  });
+  return r.isConfirmed ? String(r.value).trim() : null;
+}
+
 export async function ask(title: string, placeholder = "Motivo") {
   const r = await Swal.fire({ ...swalTheme, title: esc(title), input: "text", inputPlaceholder: placeholder, showCancelButton: true, confirmButtonText: "Confirmar", cancelButtonText: "Cancelar", inputValidator: (v) => (v.trim().length < 3 ? "Escribe al menos 3 letras" : null) });
   return r.isConfirmed ? String(r.value).trim() : null;
 }
 
-/** Pide un pago (valor, método, referencia). La llave se crea una vez: si se reintenta, no se duplica. */
-export async function askPayment(title: string, pending: number, hint = "Se registra en RemHub; no confirma que el banco haya hecho la transferencia.") {
-  const r = await Swal.fire({
-    ...swalTheme,
-    title: esc(title),
-    html: `<p style="font-size:13px;opacity:.8">Pendiente $${pending.toLocaleString("es-CO")}. ${hint}</p>
-      <input id="amt" type="number" class="swal2-input" value="${pending}" min="0" step="0.01" />
-      <select id="met" class="swal2-select">${Object.entries(METHODS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select>
-      <input id="ref" class="swal2-input" placeholder="Referencia o comprobante (opcional)" />`,
-    showCancelButton: true, confirmButtonText: "Registrar pago", cancelButtonText: "Cancelar",
-    preConfirm: () => ({ amount: Number((document.getElementById("amt") as HTMLInputElement).value), method: (document.getElementById("met") as HTMLSelectElement).value, ref: (document.getElementById("ref") as HTMLInputElement).value }),
-  });
-  return r.isConfirmed ? { ...(r.value as { amount: number; method: string; ref: string }), key: `pay-${crypto.randomUUID()}` } : null;
-}
-
-export function Sheet({ title, subtitle, onClose, children, footer, wide }: { title: string; subtitle?: React.ReactNode; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
-  return createPortal(
-    <motion.div className="fixed inset-0 z-140 flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div role="dialog" aria-modal="true" aria-label={title} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", stiffness: 380, damping: 34 }} onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[94dvh] w-full ${wide ? "max-w-4xl" : "max-w-xl"} flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl`} style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <header className="flex items-center gap-3 border-b px-5 py-4" style={{ borderColor: "var(--t-card-border)" }}>
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-black">{title}</h2>
-            {subtitle ? <div className="text-xs" style={{ color: "var(--t-muted)" }}>{subtitle}</div> : null}
-          </div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
-        </header>
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">{children}</div>
-        {footer ? <footer className="flex flex-wrap items-center gap-2 border-t px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>{footer}</footer> : null}
-      </motion.div>
-    </motion.div>,
-    document.body,
-  );
-}
 
 export function Chips<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: Array<[T, string]> }) {
   return (

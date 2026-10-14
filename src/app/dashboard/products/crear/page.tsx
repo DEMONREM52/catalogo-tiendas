@@ -1,7 +1,6 @@
 "use client";
 
-import { MoneyInput } from "@/app/dashboard/MoneyInput";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -15,6 +14,7 @@ import {
 import { CategoryPicker, saveProductCategoryIds } from "../CategoryPicker";
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode } from "../product-code";
+import { PricingPanel, loadDefaultMarkup, type Markups } from "../PricingPanel";
 
 type Category = { id: string; name: string };
 
@@ -72,14 +72,6 @@ function digitsOnlyToNumber(raw: string, fallback = 0) {
   const n = Number(digits);
   return Number.isFinite(n) ? n : fallback;
 }
-function clampIntOrNull(raw: string): number | null {
-  const t = String(raw ?? "").trim();
-  if (!t) return null;
-  const n = Math.floor(Number(t));
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, n);
-}
-
 export default function CreateProductPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,15 +86,10 @@ export default function CreateProductPage() {
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
 
-  const [costPrice, setCostPrice] = useState(0);
-  const [price1, setPrice1] = useState(0);
-  const [price2, setPrice2] = useState(0);
-  const [price3, setPrice3] = useState(0);
-  const [price4, setPrice4] = useState(0);
-  const [price5, setPrice5] = useState(0);
+  // Sin costo ni unidades: llegan con el ingreso de factura, y ahí se calculan los precios con el %.
+  const [markups, setMarkups] = useState<Markups>([15, 15, 15, 15, 15]);
   const [minWholesale, setMinWholesale] = useState(1);
 
-  const [stockRaw, setStockRaw] = useState<string>(""); // "" => ilimitado
   const [active, setActive] = useState(true);
 
   // Categorías donde aparece (la primera es la principal).
@@ -110,7 +97,6 @@ export default function CreateProductPage() {
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [productDetails, setProductDetails] = useState<ProductDetails>({ ...EMPTY_PRODUCT_DETAILS });
-  const computedStock = useMemo(() => clampIntOrNull(stockRaw), [stockRaw]);
 
   async function loadBase() {
     setLoading(true);
@@ -141,6 +127,7 @@ export default function CreateProductPage() {
         return;
       }
       setStoreId(access.store.id);
+      void loadDefaultMarkup(access.store.id).then((m) => setMarkups([m, m, m, m, m])).catch(() => {});
 
       const { data: cats, error: catsErr } = await sb
         .from("product_categories")
@@ -194,25 +181,22 @@ export default function CreateProductPage() {
         // Vacío: la base le pone su número interno como código.
         ...(sku ? { sku } : {}),
         description: description?.trim() ? description.trim() : "",
-        cost_price: Math.max(0, Number(costPrice || 0)),
-        price_1: Math.max(0, Number(price1 || 0)),
-        price_2: Math.max(0, Number(price2 || 0)),
-        price_3: Math.max(0, Number(price3 || 0)),
-        price_4: Math.max(0, Number(price4 || 0)),
-        price_5: Math.max(0, Number(price5 || 0)),
-        price_retail: Math.max(0, Number(price3 || 0)),
-        price_wholesale: Math.max(0, Number(price2 || 0)),
+        cost_price: 0,
+        price_1: 0, price_2: 0, price_3: 0, price_4: 0, price_5: 0,
+        price_retail: 0,
+        price_wholesale: 0,
         min_wholesale: Math.max(1, Number(minWholesale || 1)),
-        stock: computedStock, // null si vacío
+        stock: 0,
         active: !!active,
         image_url: imageUrl,
         category_id: categoryIds[0] ?? null,
       };
 
-      const { data, error } = await sb.from("products").insert({
-        ...payload,
-        product_details: productDetails,
-      }).select("id").single();
+      const base = { ...payload, product_details: productDetails };
+      const pct = Object.fromEntries(markups.map((m, i) => [`markup_${i + 1}`, m]));
+      let { data, error } = await sb.from("products").insert({ ...base, ...pct }).select("id").single();
+      // Si la base aún no tiene los porcentajes (migración 20261113), se crea igual sin ellos.
+      if (error && /markup_/.test(error.message)) ({ data, error } = await sb.from("products").insert(base).select("id").single());
       if (error) throw error;
       requestImageIndex();
       const categoryWarning = data?.id && categoryIds.length > 1 ? await saveProductCategoryIds(String(data.id), categoryIds) : null;
@@ -327,47 +311,9 @@ export default function CreateProductPage() {
               />
             </div>
 
-            <div>
-              <label className="text-xs font-semibold" style={{ color: "var(--t-text)" }}>
-                💰 Costo del producto
-              </label>
-              <MoneyInput {...inputProps()} value={costPrice} onValueChange={(v) => setCostPrice(v ?? 0)} />
-              <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                Opcional. Luego se actualiza como costo promedio con cada ingreso de factura.
-              </p>
-            </div>
+            {storeId ? <PricingPanel isNew storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 1 (mínimo)
-                </label>
-                <MoneyInput {...inputProps()} value={price1} onValueChange={(v) => setPrice1(v ?? 0)} />
-              </div>
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 2 (mayor predeterminado)
-                </label>
-                <MoneyInput {...inputProps()} value={price2} onValueChange={(v) => setPrice2(v ?? 0)} />
-              </div>
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 3 (detal predeterminado)
-                </label>
-                <MoneyInput {...inputProps()} value={price3} onValueChange={(v) => setPrice3(v ?? 0)} />
-              </div>
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 4
-                </label>
-                <MoneyInput {...inputProps()} value={price4} onValueChange={(v) => setPrice4(v ?? 0)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Precio 5
-                </label>
-                <MoneyInput {...inputProps()} value={price5} onValueChange={(v) => setPrice5(v ?? 0)} />
-              </div>
               <div className="sm:col-span-2">
                 <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Mínimo mayor
@@ -385,25 +331,6 @@ export default function CreateProductPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Stock (vacío = ilimitado)
-                </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={stockRaw}
-                  onChange={(e) => setStockRaw(e.target.value.replace(/[^\d]/g, ""))}
-                  placeholder="Ej: 10"
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
-                <p className="mt-1 text-[11px]" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
-                  Actual: <b>{computedStock === null ? "Ilimitado" : computedStock}</b>
-                </p>
-              </div>
-
               <div>
                 <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
 

@@ -43,6 +43,7 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
     items: [
       { value: "inventory", label: "Inventario y kardex", description: "Ver existencias, bodegas y movimientos" },
       { value: "inventory_adjust", label: "Ajustes de inventario", description: "Corregir existencias con motivo", sensitive: true },
+      { value: "inventory_alerts", label: "Alertas de inventario 🔔", description: "Recibe avisos urgentes con sonido cuando hay productos creados sin ingreso de factura (sin costo, sin precio, sin unidades)" },
       { value: "transfers", label: "Traslados", description: "Mover productos entre bodegas y puntos (y atender pedidos internos de su punto)" },
       { value: "stock_requests", label: "Pedidos internos", description: "Pedir mercancía agotada a otro punto o bodega, chatear y confirmar el recibido" },
       { value: "stock_requests_manage", label: "Gestión de pedidos internos", description: "Ver todos los pedidos internos y atenderlos (preparar, despachar, rechazar)" },
@@ -116,7 +117,7 @@ export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: strin
   { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "clients", "orders", "stock_requests", "products_view"] },
   { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal_send", "products_view"] },
   { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "audit"] },
-  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view"] },
+  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "inventory_alerts", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view"] },
   { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
   { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "fiscal", "fiscal_audit", "fiscal_download"] },
   { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "audit", "fiscal", "fiscal_send", "fiscal_download"] },

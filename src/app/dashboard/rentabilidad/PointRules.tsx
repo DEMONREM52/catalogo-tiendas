@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Clock, History, Plus, Search, Settings2, ShieldCheck, X } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { Check, Clock, History, Plus, Search, Settings2, ShieldCheck, Tags, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { pointPrice, toCents, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
 import { cardStyle, cop, esc, inputStyle, rpcError, swalTheme, type Point } from "./shared";
+import { DateField, Field, MoneyField, NumberField } from "@/components/forms/Fields";
+import { Sheet } from "@/components/forms/Sheet";
 
 export type ProfitSettings = {
   rounding_step: RoundingStep; rounding_dir: RoundingDir; point_min_pct: number; point_max_pct: number; require_approval: boolean;
@@ -186,23 +187,6 @@ export function PointRules({ storeId, points, settings, onSettings }: { storeId:
   );
 }
 
-function Sheet({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode }) {
-  return createPortal(
-    <motion.div className="fixed inset-0 z-140 flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div role="dialog" aria-modal="true" aria-label={title} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", stiffness: 380, damping: 34 }} onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:rounded-3xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <header className="flex items-center gap-3 border-b px-5 py-4" style={{ borderColor: "var(--t-card-border)" }}>
-          <h2 className="flex-1 text-lg font-black">{title}</h2>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
-        </header>
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">{children}</div>
-        <footer className="flex items-center gap-2 border-t px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>{footer}</footer>
-      </motion.div>
-    </motion.div>,
-    document.body,
-  );
-}
-
 const label = "text-xs font-bold";
 const field = "mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none";
 
@@ -243,6 +227,8 @@ function RuleDialog({ storeId, points, settings, onClose, onSaved }: { storeId: 
   const outOfLimits = kind === "pct" && !approver && (value < settings.point_min_pct || value > settings.point_max_pct);
   const belowCost = kind === "fixed" && product && value < Number(product.cost_price ?? 0);
   const ready = pointId && (scope === "point" || target) && reason.trim().length >= 3 && Number.isFinite(value) && !outOfLimits && !(belowCost && !approver);
+  const missing = !pointId ? "Elige el punto" : scope !== "point" && !target ? (scope === "product" ? "Busca y elige el producto" : "Busca y elige la categoría") : outOfLimits ? "El % está fuera de los límites" : belowCost && !approver ? "Precio bajo el costo" : reason.trim().length < 3 ? "Escribe el motivo" : null;
+  const dirty = Boolean(target) || reason !== "" || from !== "" || to !== "" || value !== 15 || kind !== "pct" || scope !== "product";
 
   async function save() {
     setSaving(true);
@@ -258,9 +244,9 @@ function RuleDialog({ storeId, points, settings, onClose, onSaved }: { storeId: 
   }
 
   return (
-    <Sheet title="Nueva regla de precio" onClose={onClose} footer={
+    <Sheet title="Nueva regla de precio" subtitle="Encadenado sobre los precios 1-5 de la madre" icon={<Tags size={18} />} dirty={dirty} onClose={onClose} footer={
       <>
-        <span className="flex-1 text-xs" style={{ color: "var(--t-muted)" }}>{approver || !settings.require_approval ? "Quedará vigente al guardar." : "La madre la revisará antes de aplicarla."}</span>
+        <span className="min-w-0 flex-1 text-xs" style={{ color: missing ? "#eda100" : "var(--t-muted)" }}>{missing ? `⚠️ ${missing}` : approver || !settings.require_approval ? "✓ Quedará vigente al guardar." : "✓ La madre la revisará antes de aplicarla."}</span>
         <button type="button" disabled={!ready || saving} onClick={() => void save()} className="rounded-full px-5 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}>{saving ? "Guardando…" : "Guardar regla"}</button>
       </>
     }>
@@ -301,9 +287,10 @@ function RuleDialog({ storeId, points, settings, onClose, onSaved }: { storeId: 
           ))}
         </div>
         {kind !== "none" ? (
-          <div className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={inputStyle}>
-            <input type="number" inputMode="decimal" value={value} onChange={(e) => setValue(Number(e.target.value))} step={kind === "pct" ? 0.5 : 100} className="w-full bg-transparent text-lg font-black tabular-nums outline-none" aria-label="Valor" />
-            <span className="font-bold" style={{ color: "var(--t-muted)" }}>{kind === "pct" ? "%" : "COP"}</span>
+          <div className="mt-2">
+            {kind === "pct"
+              ? <NumberField value={value} onChange={(v) => setValue(v ?? 0)} suffix="%" min={-90} max={1000} decimals={4} ariaLabel="Porcentaje" />
+              : <MoneyField big value={value} onChange={(v) => setValue(v ?? 0)} ariaLabel="Precio fijo" />}
           </div>
         ) : null}
         {outOfLimits ? <p className="mt-1 text-xs text-amber-400">La madre permite entre {settings.point_min_pct} % y {settings.point_max_pct} %.</p> : null}
@@ -330,9 +317,9 @@ function RuleDialog({ storeId, points, settings, onClose, onSaved }: { storeId: 
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block"><span className={label}>Desde (opcional)</span><input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} className={field} style={inputStyle} /></label>
-        <label className="block"><span className={label}>Hasta (opcional)</span><input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className={field} style={inputStyle} /></label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Desde (opcional)" hint="Vacío = desde ya"><DateField withTime value={from} onChange={setFrom} /></Field>
+        <Field label="Hasta (opcional)" hint="Vacío = sin fecha final"><DateField withTime value={to} min={from || undefined} onChange={setTo} /></Field>
       </div>
       <label className="block"><span className={label}>Motivo (queda en el historial)</span>
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej.: punto con más gastos de arriendo" className={field} style={inputStyle} />
@@ -357,7 +344,7 @@ function SettingsDialog({ storeId, settings, onClose, onSaved }: { storeId: stri
     onSaved();
   }
   return (
-    <Sheet title="Configuración de la madre" onClose={onClose} footer={
+    <Sheet title="Configuración de la madre" icon={<Settings2 size={18} />} dirty={JSON.stringify(s) !== JSON.stringify({ rounding_step: settings.rounding_step, rounding_dir: settings.rounding_dir, point_min_pct: settings.point_min_pct, point_max_pct: settings.point_max_pct, require_approval: settings.require_approval, price_guard: settings.price_guard }) || reason !== ""} onClose={onClose} footer={
       <>
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo del cambio" className="min-w-0 flex-1 rounded-full border px-3 py-2 text-sm" style={inputStyle} />
         <button type="button" disabled={reason.trim().length < 3 || saving || s.point_min_pct > s.point_max_pct} onClick={() => void save()} className="rounded-full px-5 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}>Guardar</button>
@@ -370,8 +357,8 @@ function SettingsDialog({ storeId, settings, onClose, onSaved }: { storeId: stri
         </select>
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block"><span className={label}>Mínimo para los puntos (%)</span><input type="number" value={s.point_min_pct} onChange={(e) => setS({ ...s, point_min_pct: Number(e.target.value) })} className={field} style={inputStyle} /></label>
-        <label className="block"><span className={label}>Máximo para los puntos (%)</span><input type="number" value={s.point_max_pct} onChange={(e) => setS({ ...s, point_max_pct: Number(e.target.value) })} className={field} style={inputStyle} /></label>
+        <Field label="Mínimo para los puntos"><NumberField value={s.point_min_pct} onChange={(v) => setS({ ...s, point_min_pct: v ?? 0 })} suffix="%" min={-90} max={1000} align="left" /></Field>
+        <Field label="Máximo para los puntos"><NumberField value={s.point_max_pct} onChange={(v) => setS({ ...s, point_max_pct: v ?? 0 })} suffix="%" min={-90} max={1000} align="left" /></Field>
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.require_approval} onChange={(e) => setS({ ...s, require_approval: e.target.checked })} className="h-4 w-4 accent-violet-500" /> Las reglas de los puntos necesitan aprobación de la madre</label>
       <div>
