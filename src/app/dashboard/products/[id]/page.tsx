@@ -221,7 +221,8 @@ export default function EditProductPage() {
       const baseCols = "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details";
       // Con la migración 20261113 el producto trae su % de ganancia por precio.
       let { data: p, error: pErr } = await sb.from("products").select(`${baseCols},markup_1,markup_2,markup_3,markup_4,markup_5`).eq("id", id).eq("store_id", access.store.id).maybeSingle();
-      if (pErr && /markup_/.test(pErr.message)) {
+      // Sin la migración 20261113, o sin permiso de lectura de esas columnas (falta 20261114): se abre sin el %.
+      if (pErr && /markup_|permission denied/i.test(pErr.message)) {
         setMarkupsReady(false);
         ({ data: p, error: pErr } = await sb.from("products").select(baseCols).eq("id", id).eq("store_id", access.store.id).maybeSingle());
       }

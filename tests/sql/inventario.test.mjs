@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// Carpeta de migraciones (se puede cambiar si ya se movieron después de ejecutarlas).
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
 // Piezas de producción que no están en los fixtures (reglas de pedidos y anulaciones).
 const prod = `
 alter table public.orders add column if not exists cancelled_at timestamptz;
@@ -35,7 +37,7 @@ create trigger orders_cancel_guard before update of status on public.orders for 
 `;
 const combined = path.join(os.tmpdir(), `remhub_inv_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"), prod,
-  ...["20261106_rentabilidad_precios_punto.sql", "20261113_inventario_precios_devoluciones.sql"].map((f) => fs.readFileSync(path.join(here, "../../supabase/migrations", f), "utf8"))].join("\n"));
+  ...["20261106_rentabilidad_precios_punto.sql", "20261107_proteger_costo.sql", "20261113_inventario_precios_devoluciones.sql"].map((f) => fs.readFileSync(path.join(MIG, f), "utf8"))].join("\n"));
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); });
 const { db } = await makeDb(combined);
 fs.unlinkSync(combined);
@@ -108,6 +110,21 @@ await raw("select set_config('erp.skip_reprice', '1', false)");
 await raw("update products set cost_price = 99999 where id = $1", [N]);
 await raw("select set_config('erp.skip_reprice', '', false)");
 ok(Number((await raw("select price_2 from products where id = $1", [N]))[0].price_2) === 50100, "El ajuste masivo puede pedir no recalcular precios");
+
+console.log("Leer el producto con el costo protegido (Editar producto)");
+const readP = "select id, name, price_2, stock, markup_1, markup_2, markup_3, markup_4, markup_5 from products where id = $1";
+ok((await as(EDITOR, readP, [P])).length === 1, "Se leen el producto y su % de ganancia");
+ok(/permission denied/i.test(await err(EDITOR, "select cost_price from products where id = $1", [P]) ?? ""), "…pero el costo sigue protegido");
+// Como quedó en producción (20261113 sin el permiso de lectura del %): falla, y 20261114 lo arregla.
+await raw("revoke select (markup_1, markup_2, markup_3, markup_4, markup_5) on public.products from authenticated");
+ok(/permission denied/i.test(await err(EDITOR, readP, [P]) ?? ""), "Sin 20261114: «permission denied for table products» (el error de Editar producto)");
+const fix = fs.readFileSync(path.join(MIG, "20261114_permisos_columnas_productos.sql"), "utf8");
+await db.exec(fix); await db.exec(fix);
+ok((await as(EDITOR, readP, [P])).length === 1, "Con 20261114 (2 veces): Editar producto vuelve a abrir");
+ok(/permission denied/i.test(await err(EDITOR, "select cost_price from products where id = $1", [P]) ?? ""), "…el costo sigue protegido");
+ok(/permission denied/i.test(await err(EDITOR, "update products set stock = 1 where id = $1", [P]) ?? ""), "…y las unidades siguen bloqueadas");
+await as(EDITOR, "update products set markup_1 = 18 where id = $1", [P]);
+ok(Number((await raw("select markup_1 from products where id = $1", [P]))[0].markup_1) === 18, "…y el % se sigue editando");
 
 console.log("Existencias por punto");
 const st = await as(EDITOR, "select * from public.erp_product_stock_by_point($1)", [P]);

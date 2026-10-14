@@ -30,7 +30,7 @@ export async function searchProductsDirect(storeId: string, q: string, opts: { l
     return query.order("name").range(offset, offset + limit - 1);
   };
   let res = await run(SAFE_PRODUCT_COLUMNS);
-  if (res.error && /product_no/.test(res.error.message)) res = await run(SAFE_PRODUCT_COLUMNS.replace(",product_no", ""));
+  if (res.error && /product_no|permission denied/i.test(res.error.message)) res = await run(SAFE_PRODUCT_COLUMNS.replace(",product_no", ""));
   if (res.error) throw res.error;
   return (res.data ?? []) as unknown as Array<Record<string, unknown>>;
 }

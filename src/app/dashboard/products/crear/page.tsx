@@ -196,7 +196,7 @@ export default function CreateProductPage() {
       const pct = Object.fromEntries(markups.map((m, i) => [`markup_${i + 1}`, m]));
       let { data, error } = await sb.from("products").insert({ ...base, ...pct }).select("id").single();
       // Si la base aún no tiene los porcentajes (migración 20261113), se crea igual sin ellos.
-      if (error && /markup_/.test(error.message)) ({ data, error } = await sb.from("products").insert(base).select("id").single());
+      if (error && /markup_|permission denied/i.test(error.message)) ({ data, error } = await sb.from("products").insert(base).select("id").single());
       if (error) throw error;
       requestImageIndex();
       const categoryWarning = data?.id && categoryIds.length > 1 ? await saveProductCategoryIds(String(data.id), categoryIds) : null;
