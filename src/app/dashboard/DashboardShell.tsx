@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
@@ -170,70 +171,92 @@ function StoreExpiryNotice({ store }: { store: StoreRow }) {
   );
 }
 
-type ModuleKey = "inventory" | "billing" | "settings";
+type ModuleKey = "inventory" | "billing" | "finance" | "settings";
 
 // Quién puede abrir la lista general de productos (solo lectura); igual que erp_product_catalog_browse.
 const FINANCE_PERMISSIONS = ["expenses", "expenses_pay", "budgets", "payroll", "payroll_approve", "payroll_pay"];
 const PROFIT_PERMISSIONS = ["profit_view", "profit_rules", "profit_approve", "profit_beneficiaries", "profit_settle", "profit_settle_approve", "profit_pay", "price_approve"];
 const PRODUCT_LIST_PERMISSIONS = ["products_view", "products", "inventory", "stock_requests", "stock_requests_manage", "transfers", "pos"];
+const FISCAL_PERMISSIONS = ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"];
+const POINTS_PERMISSIONS = ["points", "inventory", "users", "audit", ...FISCAL_PERMISSIONS];
 
-const MODULE_TABS: Record<ModuleKey, Array<{ href: string; label: string; permissions: string[]; adminOnly?: boolean }>> = {
+type ModuleTab = { href: string; icon: string; label: string; short?: string; permissions: string[]; adminOnly?: boolean };
+/** Cada módulo del menú y sus secciones (las pestañas de arriba de la página). */
+const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   inventory: [
-    { href: "/dashboard/products", label: "📦 Productos", permissions: ["products"] },
-    { href: "/dashboard/lista-productos", label: "📋 Lista general", permissions: PRODUCT_LIST_PERMISSIONS },
-    { href: "/dashboard/categories", label: "🗂️ Categorías del catálogo", permissions: ["categories"] },
-    { href: "/dashboard/inventario", label: "🏭 Stock, puntos, traslados y compras", permissions: ERP_PERMISSIONS },
+    { href: "/dashboard/products", icon: "📦", label: "Productos", permissions: ["products"] },
+    { href: "/dashboard/lista-productos", icon: "📋", label: "Lista general", short: "Lista", permissions: PRODUCT_LIST_PERMISSIONS },
+    { href: "/dashboard/categories", icon: "🗂️", label: "Categorías", permissions: ["categories"] },
+    { href: "/dashboard/inventario", icon: "🏭", label: "Stock y compras", short: "Stock", permissions: ERP_PERMISSIONS },
   ],
   billing: [
-    { href: "/dashboard/pos", label: "💳 POS / Facturar", permissions: ["pos"] },
-    { href: "/dashboard/store/billing", label: "🧾 Datos de facturación", permissions: ["billing"], adminOnly: true },
+    { href: "/dashboard/pos", icon: "💳", label: "POS / Vender", short: "POS", permissions: ["pos"] },
+    { href: "/dashboard/fiscal", icon: "🏛️", label: "Factura electrónica", short: "Electrónica", permissions: FISCAL_PERMISSIONS },
+    { href: "/dashboard/store/billing", icon: "🧾", label: "Datos de facturación", short: "Datos", permissions: ["billing"], adminOnly: true },
+  ],
+  finance: [
+    { href: "/dashboard/rentabilidad", icon: "📈", label: "Rentabilidad", permissions: PROFIT_PERMISSIONS },
+    { href: "/dashboard/gastos", icon: "💸", label: "Gastos y nómina", short: "Gastos", permissions: FINANCE_PERMISSIONS },
   ],
   settings: [
-    { href: "/dashboard/store", label: "🏪 Mi tienda", permissions: ["store"] },
-    { href: "/dashboard/store/users", label: "👤 Usuarios y vendedores", permissions: ["users"] },
+    { href: "/dashboard/store", icon: "🏪", label: "Mi tienda", permissions: ["store"] },
+    { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
+    { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
   ],
 };
 
+/** La sección activa es la de ruta más larga que coincide (así /store/users no marca también /store). */
+function activeTab(path: string, tabs: ModuleTab[]) {
+  return tabs
+    .filter((t) => path === t.href || path.startsWith(t.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
 function moduleOf(path: string): ModuleKey | null {
-  if (path.startsWith("/dashboard/store/billing") || path.startsWith("/dashboard/pos")) return "billing";
-  if (path.startsWith("/dashboard/store")) return "settings";
-  if (path.startsWith("/dashboard/products") || path.startsWith("/dashboard/lista-productos") || path.startsWith("/dashboard/categories") || path.startsWith("/dashboard/inventario")) return "inventory";
+  for (const key of Object.keys(MODULE_TABS) as ModuleKey[]) if (activeTab(path, MODULE_TABS[key])) return key;
   return null;
 }
 
-function ModuleNav({ canOpen, isAdmin }: { canOpen: (permission: string) => boolean; isAdmin: boolean }) {
-  const path = usePathname();
+/** Secciones del módulo: barra de segmentos con indicador que se desliza. */
+export function ModuleNav({ canOpen, isAdmin, at }: { canOpen: (permission: string) => boolean; isAdmin: boolean; at?: string }) {
+  const pathname = usePathname();
+  const path = at ?? pathname;
   const key = moduleOf(path);
   if (!key) return null;
   const tabs = MODULE_TABS[key].filter((t) => t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || isAdmin));
   if (tabs.length < 2) return null;
+  const current = activeTab(path, tabs);
   return (
-    <nav className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Secciones del módulo">
-      {tabs.map((t) => {
-        const on = key === "billing" || key === "settings" ? path === t.href : path.startsWith(t.href);
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5"
-            style={
-              on
-                ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", color: "var(--t-cta-text, #fff)", borderColor: "transparent" }
-                : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
-            }
-          >
-            {t.label}
-          </Link>
-        );
-      })}
+    <nav className="mb-3 -mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" aria-label="Secciones del módulo">
+      <div className="inline-flex min-w-full gap-1 rounded-2xl border p-1 sm:min-w-0" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+        {tabs.map((t) => {
+          const on = current?.href === t.href;
+          return (
+            <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined}
+              className="relative flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition sm:flex-none sm:px-4"
+              style={{ color: on ? "#fff" : "color-mix(in oklab, var(--t-text) 72%, transparent)" }}>
+              {on ? (
+                <motion.span layoutId="module-tab" className="absolute inset-0 rounded-xl" transition={{ type: "spring", stiffness: 460, damping: 36 }}
+                  style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))", boxShadow: "0 8px 22px color-mix(in oklab, var(--t-accent) 35%, transparent)" }} />
+              ) : null}
+              <span className="relative text-sm leading-none">{t.icon}</span>
+              <span className="relative">
+                <span className="sm:hidden">{t.short ?? t.label}</span>
+                <span className="hidden sm:inline">{t.label}</span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
 
-function NavItem({
+export function NavItem({
   href,
   label,
   emoji,
+  hint,
   show = true,
   module,
   onClick,
@@ -241,12 +264,13 @@ function NavItem({
   href: string;
   label: string;
   emoji: string;
+  hint?: string;
   show?: boolean;
   module?: ModuleKey;
   onClick?: () => void;
 }) {
   const path = usePathname();
-  const active = module ? moduleOf(path) === module : path === href;
+  const active = module ? moduleOf(path) === module : href === "/dashboard" ? path === href : path === href || path.startsWith(href + "/");
 
   if (!show) return null;
 
@@ -281,21 +305,24 @@ function NavItem({
       href={href}
       onClick={onClick}
       className={cx(
-        "group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
+        "group relative flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition active:scale-[0.99]",
         "border backdrop-blur-xl",
       )}
       style={active ? activeStyle : base}
     >
       <span
         className={cx(
-          "grid h-9 w-9 place-items-center rounded-2xl border text-[16px] transition",
+          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-[16px] transition group-hover:scale-105",
         )}
         style={active ? iconActive : iconBase}
       >
         {emoji}
       </span>
 
-      <span className="font-medium">{label}</span>
+      <span className="min-w-0">
+        <span className="block font-semibold leading-tight">{label}</span>
+        {hint ? <span className="block truncate text-[11px] leading-tight" style={{ color: "var(--t-muted)" }}>{hint}</span> : null}
+      </span>
 
       {active ? (
         <span
@@ -594,23 +621,39 @@ export default function DashboardShell({
 
   const menu = useMemo(() => {
     const store = canAccessStorePages;
-    const firstOf = (key: ModuleKey) => MODULE_TABS[key].find((t) => t.permissions.some((p) => canOpen(p)))?.href ?? "/dashboard";
-    const anyOf = (key: ModuleKey) => MODULE_TABS[key].some((t) => t.permissions.some((p) => canOpen(p)));
-    return [
-      { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true, module: undefined as ModuleKey | undefined },
-      { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", show: store && anyOf("inventory"), module: "inventory" as ModuleKey | undefined },
-      { href: firstOf("billing"), emoji: "💳", label: "Facturación", show: store && anyOf("billing"), module: "billing" as ModuleKey | undefined },
-      { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/fiscal", emoji: "🏛️", label: "Facturación electrónica", show: store && ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/puntos", emoji: "📍", label: "Puntos", show: store && ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/gastos", emoji: "💸", label: "Gastos y nómina", show: store && FINANCE_PERMISSIONS.some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/rentabilidad", emoji: "📈", label: "Rentabilidad", show: store && PROFIT_PERMISSIONS.some((p) => canOpen(p)), module: undefined as ModuleKey | undefined },
-      { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products"), module: undefined as ModuleKey | undefined },
-      { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", show: store && anyOf("settings"), module: "settings" as ModuleKey | undefined },
-      { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin", module: undefined as ModuleKey | undefined },
+    const tabsOf = (key: ModuleKey) => MODULE_TABS[key].filter((t) => t.permissions.some((p) => canOpen(p)));
+    const firstOf = (key: ModuleKey) => tabsOf(key)[0]?.href ?? "/dashboard";
+    const anyOf = (key: ModuleKey) => tabsOf(key).length > 0;
+    const hintOf = (key: ModuleKey) => tabsOf(key).map((t) => t.short ?? t.label).join(" · ");
+    type Item = { href: string; emoji: string; label: string; hint?: string; show: boolean; module?: ModuleKey };
+    const groups: Array<{ title: string; items: Item[] }> = [
+      {
+        title: "Día a día",
+        items: [
+          { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true },
+          { href: firstOf("billing"), emoji: "💳", label: "Facturación", hint: hintOf("billing"), show: store && anyOf("billing"), module: "billing" },
+          { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", hint: "Catálogos e internos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) },
+          { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", hint: "Documentos y movimientos", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)) },
+        ],
+      },
+      {
+        title: "Negocio",
+        items: [
+          { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", hint: hintOf("inventory"), show: store && anyOf("inventory"), module: "inventory" },
+          { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", hint: "Clientes, proveedores, créditos", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)) },
+          { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products") },
+        ],
+      },
+      {
+        title: "Dinero y ajustes",
+        items: [
+          { href: firstOf("finance"), emoji: "💰", label: "Finanzas", hint: hintOf("finance"), show: store && anyOf("finance"), module: "finance" },
+          { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", hint: hintOf("settings"), show: store && anyOf("settings"), module: "settings" },
+          { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin" },
+        ],
+      },
     ];
+    return groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length);
   }, [canAccessStorePages, role, canOpen]);
 
   const detalUrl = useMemo(() => {
@@ -1020,20 +1063,27 @@ export default function DashboardShell({
               </button>
             </div>
 
-            <div className="mt-4 space-y-2">
-              {menu.map((m) => (
-                <NavItem
-                  key={m.href}
-                  href={m.href}
-                  emoji={m.emoji}
-                  label={m.label}
-                  show={m.show}
-                  module={m.module}
-                  onClick={() => {
-                    haptic(6);
-                    closeDrawer();
-                  }}
-                />
+            <div className="mt-3 space-y-4">
+              {menu.map((g, gi) => (
+                <motion.section key={g.title} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * gi, duration: 0.25 }}>
+                  <p className="mb-1.5 px-1 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: "color-mix(in oklab, var(--t-text) 45%, transparent)" }}>{g.title}</p>
+                  <div className="space-y-1.5">
+                    {g.items.map((m) => (
+                      <NavItem
+                        key={m.href + m.label}
+                        href={m.href}
+                        emoji={m.emoji}
+                        label={m.label}
+                        hint={m.hint}
+                        module={m.module}
+                        onClick={() => {
+                          haptic(6);
+                          closeDrawer();
+                        }}
+                      />
+                    ))}
+                  </div>
+                </motion.section>
               ))}
             </div>
 
@@ -1042,7 +1092,7 @@ export default function DashboardShell({
             ) : null}
 
             <div
-              className="mt-4 text-[11px]"
+              className="mt-4 hidden text-[11px] sm:block"
               style={{
                 color: "color-mix(in oklab, var(--t-text) 55%, transparent)",
               }}
