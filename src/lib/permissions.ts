@@ -12,6 +12,7 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
       { value: "pos", label: "POS / Facturar", description: "Vender, crear remisiones y facturas, editar documentos" },
       { value: "sales_void", label: "Anular documentos sin confirmar", description: "Anular facturas y remisiones que aún no se confirman (no mueven inventario)" },
       { value: "sales_return", label: "Devolución de venta", description: "Anular facturas y remisiones ya confirmadas: devuelve el inventario al punto y anula la cartera", sensitive: true },
+      { value: "price_approve", label: "Autorizar precios 🔓", description: "Vender a cualquier precio y aprobar (con aviso y sonido) las solicitudes de vender por debajo del límite. Los límites de cada punto y usuario se configuran en Rentabilidad → Límites de precio", sensitive: true },
       { value: "orders", label: "Pedidos", description: "Ver pedidos de catálogos y cambiar su estado" },
     ],
   },
@@ -121,5 +122,5 @@ export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: strin
   { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
   { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "fiscal", "fiscal_audit", "fiscal_download"] },
   { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "audit", "fiscal", "fiscal_send", "fiscal_download"] },
-  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "sales_void", "sales_return", "orders", "clients", "receivables", "credit", "products_view", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage", "notifications_config"] },
+  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage", "notifications_config"] },
 ];

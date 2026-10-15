@@ -19,6 +19,13 @@ import type { CreditState } from "../clientes/terceros";
 import { OfflineDrafts } from "./OfflineDrafts";
 import { removeDraft, saveDraft, type PosDraft } from "@/lib/pos/drafts";
 import { isNetworkError, isOnline, reportNetworkError, useNetStatus } from "@/lib/net/status";
+import { AnimatePresence, motion } from "framer-motion";
+import { Pause, Play, Search, UserRound, X } from "lucide-react";
+import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
+import { useHeldSales } from "@/lib/pos/held";
+import { PosCartLines, lineStatus, type CartLine } from "./PosCart";
+import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
+import { LIMIT_LABEL, useApprovals, usePriceFloors } from "./usePriceFloors";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -71,7 +78,8 @@ async function loadPosClients(storeId: string) {
     all.push(...((res.data ?? []) as unknown as Client[]));
     if (!res.data || res.data.length < 1000) break;
   }
-  return { data: all.filter((c) => c.active !== false), error: null };
+  // Solo clientes: un tercero que es solo proveedor o empleado no aparece en el POS.
+  return { data: all.filter((c) => c.active !== false && (!c.kinds?.length || c.kinds.includes("customer"))), error: null };
 }
 
 type CartItem = {
@@ -81,6 +89,8 @@ type CartItem = {
   price: number;
   priceLevel: PriceLevel;
   note: string;
+  /** El vendedor cambió el precio a mano: el cambio de lista no lo pisa. */
+  manual?: boolean;
 };
 
 function money(n: number) {
@@ -148,13 +158,15 @@ export default function PosPage() {
   const [canCredit, setCanCredit] = useState(false);
   const [listOverride, setListOverride] = useState<number | null>(null);
   const [pointStock, setPointStock] = useState<Map<string, number> | null>(null);
+  // Los productos inactivos no se muestran nunca; los agotados (activos) sí, al buscarlos.
+  const activeProducts = useMemo(() => allProducts.filter((p) => p.active !== false), [allProducts]);
   // Solo se ofrecen los productos con existencias en el punto elegido.
   const products = useMemo(() => {
-    if (!pointStock) return allProducts;
-    return allProducts
+    if (!pointStock) return activeProducts;
+    return activeProducts
       .filter((p) => (pointStock.get(p.id) ?? 0) > 0)
       .map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }));
-  }, [allProducts, pointStock]);
+  }, [activeProducts, pointStock]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -198,13 +210,13 @@ export default function PosPage() {
     if (!term) return products;
     // Al buscar también se muestran los productos sin existencias en este punto (deshabilitados).
     const base = pointStock
-      ? allProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }))
+      ? activeProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }))
       : products;
     // Código o código de barras exacto primero (sirve con lector de códigos).
     const exact = base.filter((p) => isExactCode(p, term));
     const rest = smartFilter(base.filter((p) => !exact.includes(p)), term, (product) => `${product.name} ${product.sku ?? ""} ${product.barcode ?? ""}`);
     return [...exact, ...rest];
-  }, [products, allProducts, pointStock, search]);
+  }, [products, activeProducts, pointStock, search]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -269,9 +281,18 @@ export default function PosPage() {
 
   useEffect(() => {
     load();
+    unlockAudioOnFirstTouch();
   }, []);
 
   const storeId = store?.id;
+  // Hasta cuánto puede bajar el precio quien vende (la base lo revisa en cada venta).
+  const floors = usePriceFloors(storeId, pointId, cart.map((i) => i.productId));
+  const { approvals, request: requestApproval, forget: forgetApproval } = useApprovals(storeId, pointId);
+  const [payment, setPayment] = useState<PaymentState>(EMPTY_PAYMENT);
+  const { held, hold, take } = useHeldSales(storeId, pointId);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
+  const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
   // Precios propios del punto (reglas de la madre). Sin reglas o sin la migración: precios 1-5 de la madre.
   const [pointPrices, setPointPrices] = useState<Map<string, number[]>>(() => new Map());
   useEffect(() => {
@@ -373,7 +394,7 @@ export default function PosPage() {
     setCart((prev) =>
       prev.map((item) => {
         const product = productMap.get(item.productId);
-        if (!product) return item;
+        if (!product || item.manual) return item;
         const price = priceOf(product, currentPriceList);
         return { ...item, price, priceLevel: currentPriceList as PriceLevel };
       }),
@@ -555,30 +576,81 @@ export default function PosPage() {
     if (!product) return;
     setCart((prev) =>
       prev.map((item) =>
-        item.productId === productId ? { ...item, price: priceOf(product, level), priceLevel: level } : item,
+        item.productId === productId ? { ...item, price: priceOf(product, level), priceLevel: level, manual: false } : item,
       ),
     );
   }
 
-  function adjustQty(productId: string, delta: number) {
-    setCart((prev) => {
-      const next = [...prev];
-      const idx = next.findIndex((item) => item.productId === productId);
-      if (idx === -1) return prev;
-      const item = next[idx];
-      const qty = Math.max(1, item.qty + delta);
-      next[idx] = { ...item, qty };
-      return next;
-    });
+  function setQty(productId: string, qty: number) {
+    setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty: Math.max(1, Math.floor(qty)) } : item)));
+  }
+
+  function setItemPrice(productId: string, price: number) {
+    const product = allProducts.find((p) => p.id === productId);
+    setCart((prev) => prev.map((item) => {
+      if (item.productId !== productId) return item;
+      const level = product ? priceOf(product, item.priceLevel) : item.price;
+      return { ...item, price: Math.max(0, Math.round(price)), manual: Math.round(price) !== level };
+    }));
   }
 
   function removeItem(productId: string) {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
+    forgetApproval(productId);
   }
 
   const finderSource = useErpFinderSource(storeId, { activeOnly: true });
 
-  function addProduct(product: Product) {
+  const lines: CartLine[] = useMemo(() => cart.map((item) => {
+    const p = productById.get(item.productId);
+    return {
+      ...item,
+      image: p?.image_url ?? null,
+      stock: pointStock ? pointStock.get(item.productId) ?? 0 : p?.stock ?? null,
+      levels: p ? ([1, 2, 3, 4, 5] as const).map((l) => priceOf(p, l)) : [item.price, item.price, item.price, item.price, item.price],
+    };
+  }), [cart, productById, pointStock, priceOf]);
+  const listTotal = lines.reduce((sum, l) => sum + (l.levels[l.priceLevel - 1] ?? l.price) * l.qty, 0);
+  const units = cart.reduce((sum, i) => sum + i.qty, 0);
+
+  async function askApproval(productId: string, note: string) {
+    const item = cart.find((i) => i.productId === productId);
+    if (!item) return;
+    const res = await requestApproval(productId, item.price, item.qty, note);
+    if (!res.ok) await Swal.fire({ icon: "error", title: "No se pudo pedir la autorización", text: res.message, background: "var(--t-bg-base)", color: "var(--t-text)" });
+    else if (res.notNeeded) void Swal.fire({ icon: "success", title: "No hace falta", text: "Ese precio está dentro de tu límite.", timer: 1400, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
+    else playTone("pop", 0.4);
+  }
+
+  /** Deja la venta en espera (el cliente fue por la billetera) y limpia el carrito para atender a otro. */
+  function holdSale() {
+    if (!cart.length || editingDoc) return;
+    hold({ cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(), customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim() });
+    setCart([]);
+    setCustomerNote("");
+    setSelectedClientId("");
+    setPayment(EMPTY_PAYMENT);
+    forgetApproval();
+    playTone("pop", 0.4);
+  }
+
+  function resumeSale(id: string) {
+    if (editingDoc) return;
+    if (cart.length) holdSale();
+    const h = take(id);
+    if (!h) return;
+    setCart(h.cart.map((i) => ({ ...i, priceLevel: Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel })));
+    setSelectedClientId(h.selectedClientId);
+    window.setTimeout(() => {
+      setCustomerName(h.customerName || DEFAULT_CLIENT_NAME);
+      setCustomerDocument(h.customerDocument);
+      setCustomerWhatsApp(h.customerWhatsApp);
+      setCustomerNote(h.customerNote);
+    }, 0);
+  }
+
+  function addProduct(product: Product, scanned = false) {
+    playTone(scanned ? "escaner" : "pop", scanned ? 0.6 : 0.25);
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       const price = priceOf(product, currentPriceList);
@@ -611,6 +683,7 @@ export default function PosPage() {
         price: Number(it.price),
         priceLevel: currentPriceList,
         note: "",
+        manual: true,
       })),
     );
     setEditingDoc(doc);
@@ -748,6 +821,24 @@ export default function PosPage() {
         color: "#fff",
         confirmButtonColor: "#f59e0b",
       });
+      return;
+    }
+
+    const blocked = lines.filter((l) => ["blocked", "pending"].includes(lineStatus(l, floors, approvals[l.productId])));
+    if (blocked.length) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Hay precios por autorizar",
+        html: `${blocked.map((l) => `• ${l.name.replace(/[<>&]/g, "")}`).join("<br/>")}<br/><br/><small>Sube el precio hasta tu límite o toca «🔓 Pedir autorización» en el producto.</small>`,
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#f59e0b",
+      });
+      return;
+    }
+    const pay = paymentSummary(payment, total);
+    if (paymentType === "contado" && payment.method === "mixto" && pay.missing > 0) {
+      await Swal.fire({ icon: "warning", title: "Falta completar el pago", text: `Faltan ${money(pay.missing)} para cubrir el total.`, background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
       return;
     }
 
@@ -904,6 +995,11 @@ export default function PosPage() {
         }
       }
 
+      if (paymentType === "contado" && docNumber) {
+        // Forma de pago y vuelto (si falta la migración 20261115 se ignora).
+        await sb.rpc("erp_pos_set_payment", { p_token: token, p_payment: pay }).then(() => null, () => null);
+      }
+
       let creditNote = "";
       if (registerCredit && selectedClient) {
         const { data: reg, error: regError } = await sb.rpc("erp_credit_register", {
@@ -988,7 +1084,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "success",
         title: `${kindLabel} creada`,
-        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${fiscalNote}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName}<br/><b>Total:</b> ${money(total)}${creditNote}`,
+        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${fiscalNote}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName.replace(/[<>&]/g, "")}<br/><b>Total:</b> ${money(total)}${paymentType === "contado" && pay.change > 0 ? `<br/><b style="color:#22c55e">💵 Vuelto: ${money(pay.change)}</b>` : ""}${creditNote}`,
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonText: "Ver comprobante",
@@ -998,6 +1094,9 @@ export default function PosPage() {
       setCart([]);
       setCustomerNote("");
       setSelectedClientId("");
+      setPayment(EMPTY_PAYMENT);
+      forgetApproval();
+      playTone("caja-registradora", 0.5);
       if (draftId) removeDraft(store.id, draftId);
       setDraftId(null);
     } catch (err: unknown) {
@@ -1013,7 +1112,9 @@ export default function PosPage() {
       await Swal.fire({
         icon: "error",
         title: documentKind === "factura" ? "No se pudo crear la factura" : "No se pudo crear la remisión",
-        text: /PRICE_MISMATCH/.test(String((err as Error)?.message ?? err))
+        text: /PRICE_BELOW_LIMIT/.test(String((err as Error)?.message ?? err))
+          ? `«${(err as { details?: string })?.details ?? "Un producto"}» está por debajo de tu precio mínimo. ${(err as { hint?: string })?.hint ?? "Pide autorización."}`
+          : /PRICE_MISMATCH/.test(String((err as Error)?.message ?? err))
           ? `El precio de «${(err as { details?: string })?.details ?? "un producto"}» cambió o no está autorizado. Recarga la página para traer los precios actuales.`
           : String((err as Error)?.message ?? err),
         background: "#0b0b0b",
@@ -1025,8 +1126,20 @@ export default function PosPage() {
     }
   }
 
+  const shortcuts = useRef({ submit: createInvoice, hold: holdSale });
+  useEffect(() => { shortcuts.current = { submit: createInvoice, hold: holdSale }; });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
+      else if (e.key === "F4") { e.preventDefault(); void shortcuts.current.submit(); }
+      else if (e.key === "F8") { e.preventDefault(); shortcuts.current.hold(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <main className="space-y-3">
+    <main className="space-y-3 pb-20 lg:pb-0">
       <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} />
       <div {...cardProps()}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1068,13 +1181,384 @@ export default function PosPage() {
         </div>
       </div>
 
+      <div {...cardProps()}>
+        <div className="flex flex-wrap items-center gap-2">
+          <motion.button
+            type="button"
+            layout
+            onClick={() => setSelectedClientId("")}
+            className="inline-flex max-w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left"
+            style={{ borderColor: selectedClient ? "var(--t-accent)" : "var(--t-card-border)", background: selectedClient ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : "transparent" }}
+            title={selectedClient ? "Volver a Consumidor final" : "Cliente predeterminado"}
+          >
+            <UserRound size={16} className="shrink-0" />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
+              <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>
+                {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito" : " · 💳 crédito") : ""}` : "Predeterminado · Lista P3"}
+              </span>
+            </span>
+            {selectedClient ? <X size={14} className="shrink-0 opacity-70" /> : null}
+          </motion.button>
+          <div className="relative min-w-[220px] flex-1">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+            <input
+              {...inputProps()}
+              style={{ ...inputProps().style, paddingLeft: 34 }}
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); }
+                if (e.key === "Escape") setClientSearch("");
+              }}
+              placeholder="Buscar cliente por nombre, cédula/NIT o teléfono…"
+              aria-label="Buscar cliente"
+            />
+            <AnimatePresence>
+              {clientSearch.trim() ? (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl"
+                  style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}
+                >
+                  {filteredClients.slice(0, 8).map((client) => (
+                    <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }}>
+                        {client.name.slice(0, 1)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold">{client.name}</span>
+                        <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                          {client.document_number ? docWithDv(client.document_number) : "Sin documento"}{client.mobile ? ` · 📱 ${client.mobile}` : ""} · P{client.price_list}{client.credit_enabled ? (client.credit_blocked ? " · 🔒" : " · 💳") : ""}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredClients.length === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                      <span>No encontramos ese cliente.</span>
+                      <button type="button" onClick={prefillNewClient} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}>
+                        ➕ Crear cliente
+                      </button>
+                    </div>
+                  ) : null}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </div>
+        <details className="mt-2">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+          <span className="min-w-0">
+            <span className="text-base font-black">👤 Cliente y documento</span>
+            <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
+              {documentKind === "factura" ? "🧾 Factura" : "📄 Remisión"} · {paymentType === "credito" ? "💳 Crédito" : "💵 Contado"} · {points.find((pt) => pt.id === pointId)?.name ?? "Sin punto"}
+              {sellerId ? ` · 🧑‍💼 ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Más opciones ▾</span>
+        </summary>
+
+        <div className="mt-3 space-y-3">
+          <div>
+            <p
+              className="mt-2 text-sm"
+              style={{ color: "var(--t-muted)" }}
+            >
+              Cliente activo: {effectiveClient.name} · Doc: {effectiveClient.document_number ? docWithDv(effectiveClient.document_number) : "CF"} · Lista {effectiveClient.price_list}
+            </p>
+            {selectedClient?.credit_enabled && creditState?.for === selectedClient.id ? (
+              <div className="mt-2 rounded-xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
+                <CreditMeter size="sm" enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+              </div>
+            ) : null}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-semibold">Punto de venta / bodega</label>
+                <select
+                  {...inputProps()}
+                  value={pointId}
+                  onChange={(e) => {
+                    if (editingDoc) cancelEdit();
+                    setPointStock(null);
+                    setPointId(e.target.value);
+                    // Al cambiar de punto se muestran solo sus vendedores.
+                    const ofPoint = sellersForPoint(sellers, e.target.value);
+                    setSellerId((current) => (ofPoint.some((r) => r.user_id === current) ? current : ofPoint[0]?.user_id ?? ""));
+                  }}
+                  disabled={lockedPoint}
+                >
+                  {points.map((pt) => (
+                    <option key={pt.id} value={pt.id}>{pt.kind === "warehouse" ? "🏬" : "📍"} {pt.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Solo se venden las existencias de este lugar.</p>
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Vendedor</label>
+                <select {...inputProps()} value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+                  <option value="">Sin vendedor</option>
+                  {sellersForPoint(sellers, pointId).map((r) => (
+                    <option key={r.user_id} value={r.user_id}>{r.name}</option>
+                  ))}
+                </select>
+                {sellersForPoint(sellers, pointId).length === 0 ? (
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Este punto aún no tiene vendedores. Créalos en Ajustes → Usuarios y asígnales este punto.</p>
+                ) : null}
+              </div>
+            </div>
+            <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
+              {(() => {
+                const pt = points.find((x) => x.id === pointId);
+                if (pt && documentKind === "factura" && fiscalOn) {
+                  return fiscal?.range ? `Próxima factura electrónica: ${fiscal.range.prefix}${fiscal.range.next_number} · quedan ${fiscal.range.remaining}` : "Sin numeración electrónica vigente";
+                }
+                if (pt) {
+                  const prefix = documentKind === "factura" ? pt.invoice_prefix : pt.remision_prefix;
+                  const next = documentKind === "factura" ? pt.next_invoice_number : pt.next_remision_number;
+                  return `Próximo documento: ${prefix}-${String(next).padStart(5, "0")}`;
+                }
+                return billingSettings
+                  ? `Prefijos: ${billingSettings.invoice_prefix ?? "FAC"} / ${billingSettings.remision_prefix ?? "REM"}`
+                  : "Configura facturación para usar remisiones, facturas y Siigo.";
+              })()}{" "}
+              <Link href="/dashboard/inventario" className="font-semibold underline" style={{ color: "var(--t-accent)" }}>Editar prefijos y puntos</Link>
+            </p>
+          </div>
+ 
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="text-sm font-semibold">Nombre</label>
+              <input
+                {...inputProps()}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Nombre del cliente"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Documento</label>
+              <WithDv value={customerDocument}>
+                <input
+                  {...inputProps()}
+                  value={customerDocument}
+                  onChange={(e) => setCustomerDocument(e.target.value)}
+                  placeholder="NIT o cédula"
+                />
+              </WithDv>
+            </div>
+          </div>
+ 
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="text-sm font-semibold">Email</label>
+              <input
+                {...inputProps()}
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                placeholder="correo@cliente.com"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-semibold">WhatsApp</label>
+              <input
+                {...inputProps()}
+                value={customerWhatsApp}
+                onChange={(e) => setCustomerWhatsApp(e.target.value)}
+                placeholder="57XXXXXXXXX"
+              />
+            </div>
+          </div>
+
+          {!selectedClient && customerName.trim() && customerName.trim() !== DEFAULT_CLIENT_NAME ? (
+            <button
+              type="button"
+              onClick={saveNewClient}
+              disabled={savingClient}
+              className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+              style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
+            >
+              {savingClient ? "Guardando…" : "💾 Guardar como cliente nuevo"}
+            </button>
+          ) : null}
+ 
+          {selectedClient ? (
+            <button
+              type="button"
+              onClick={updateClient}
+              disabled={savingClient}
+              className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+              style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
+            >
+              {savingClient ? "Guardando…" : "✏️ Modificar tercero (guardar cambios)"}
+            </button>
+          ) : null}
+
+          <div>
+            <label className="text-sm font-semibold">Tipo de pago</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { value: "contado", label: "Contado" },
+                { value: "credito", label: "Crédito" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="rounded-2xl border px-4 py-2 text-sm font-semibold"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background:
+                      paymentType === option.value
+                        ? "var(--t-cta)"
+                        : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                    color:
+                      paymentType === option.value ? "#0b0b0b" : "var(--t-text)",
+                  }}
+                  onClick={() => setPaymentType(option.value as "contado" | "credito")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+ 
+          {paymentType === "credito" ? (
+            <div className="space-y-2">
+              {!selectedClient ? (
+                <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                  💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
+                </p>
+              ) : creditUnavailable ? (
+                <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
+              ) : creditState?.for === selectedClient.id ? (
+                <div
+                  className="rounded-xl border p-3"
+                  style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
+                >
+                  <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+                  <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
+                    {creditState.can_sell
+                      ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
+                      : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
+              )}
+              <label className="text-sm font-semibold">Días de crédito</label>
+              <input
+                {...inputProps()}
+                type="number"
+                min={1}
+                value={dueDays}
+                onChange={(e) => setDueDays(Number(e.target.value))}
+                placeholder="30"
+              />
+            </div>
+          ) : null}
+ 
+          <div>
+            <label className="text-sm font-semibold">Tipo de comprobante</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { value: "remision", label: "Remisión" },
+                { value: "factura", label: "Factura" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="rounded-2xl border px-4 py-2 text-sm font-semibold"
+                  style={{
+                    borderColor: "var(--t-card-border)",
+                    background:
+                      documentKind === option.value
+                        ? "var(--t-cta)"
+                        : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
+                    color:
+                      documentKind === option.value ? "#0b0b0b" : "var(--t-text)",
+                  }}
+                  onClick={() => setDocumentKind(option.value as "remision" | "factura")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+ 
+          {documentKind === "factura" && fiscalOn && fiscal ? (
+            <div className="space-y-2 rounded-2xl border p-4" style={{ borderColor: fiscal.ready ? "rgba(34,197,94,.4)" : "rgba(239,68,68,.45)", background: fiscal.ready ? "rgba(34,197,94,.08)" : "rgba(239,68,68,.08)" }}>
+              <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                {fiscal.ready ? "🟢 Factura electrónica" : "🔴 Este punto no está listo para facturar"}
+                <span className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>{fiscal.environment === "production" ? "🟢 Producción" : "🧪 Pruebas"}</span>
+              </p>
+              {fiscal.ready ? (
+                <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                  {fiscal.entity?.legal_name} · NIT {fiscal.entity?.document_number}{fiscal.entity?.verification_digit ? `-${fiscal.entity.verification_digit}` : ""} · {fiscal.provider?.name}. El número, la resolución y el envío los resuelve el servidor.
+                </p>
+              ) : (
+                <ul className="list-disc pl-5 text-xs" style={{ color: "var(--t-muted)" }}>{fiscal.missing.map((m) => <li key={m}>{m}</li>)}</ul>
+              )}
+              {fiscal.warnings.map((w) => <p key={w} className="text-xs text-amber-500">⚠️ {w}</p>)}
+            </div>
+          ) : documentKind === "factura" ? (
+            <div className="space-y-2 rounded-2xl border border-dashed border-slate-500/30 p-4">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={requestElectronicInvoice}
+                  disabled={!siigoConfigured}
+                  onChange={(e) => setRequestElectronicInvoice(e.target.checked)}
+                />
+                Solicitar factura electrónica (Siigo)
+              </label>
+              <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                {siigoConfigured
+                  ? "Se usará la configuración de Siigo de tu tienda para generar la factura electrónica cuando esté disponible."
+                  : "Activa y configura Siigo en Facturación para poder emitir factura electrónica desde el POS."}
+              </p>
+            </div>
+          ) : null}
+ 
+          <div>
+            <label className="text-sm font-semibold">Formato de impresión</label>
+            <select
+              {...inputProps()}
+              value={printSize}
+              onChange={(e) => setPrintSize(e.target.value as "tirilla" | "carta")}
+            >
+              <option value="tirilla">Tirilla</option>
+              <option value="carta">Carta</option>
+            </select>
+          </div>
+ 
+          <div>
+            <label className="text-sm font-semibold">
+              Observaciones / Nota
+            </label>
+            <textarea
+              {...inputProps()}
+              className="w-full rounded-2xl border px-4 py-3 text-sm outline-none min-h-[120px]"
+              value={customerNote}
+              onChange={(e) => setCustomerNote(e.target.value)}
+              placeholder="Por ejemplo: venta en vitrina, factura a crédito, entrega inmediata"
+            />
+          </div>
+        </div>
+        </details>
+      </div>
+
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
         <div className="space-y-3">
           <div {...cardProps()}>
             <div className="flex gap-2">
               <input
                 {...inputProps()}
-                placeholder="🔍 Nombre, código o código de barras…"
+                ref={searchRef}
+                placeholder="🔍 Nombre, código o código de barras…  (F2)"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -1087,7 +1571,7 @@ export default function PosPage() {
                   if (!hit) return;
                   e.preventDefault();
                   if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
-                  addProduct(hit);
+                  addProduct(hit, true);
                   setSearch("");
                 }}
               />
@@ -1185,368 +1669,28 @@ export default function PosPage() {
             )}
           </div>
 
-          <div {...cardProps()}>
-            <details>
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
-              <span>
-                <span className="text-base font-semibold">2. Cliente y documento</span>
-                <span className="block text-xs" style={{ color: "var(--t-muted)" }}>
-                  {effectiveClient.name} · {documentKind === "factura" ? "Factura" : "Remisión"} · {paymentType === "credito" ? "Crédito" : "Contado"}
-                </span>
-              </span>
-              <span className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Editar ▾</span>
-            </summary>
-
-            <div className="mt-3 space-y-3">
-              <div>
-                <label className="text-sm font-semibold">Buscar cliente</label>
-                <input
-                  {...inputProps()}
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  placeholder="Buscar por nombre, documento o teléfono"
-                />
-                {clientSearch.trim() && filteredClients.length === 0 ? (
-                  <div
-                    className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed p-3 text-sm"
-                    style={{ borderColor: "var(--t-accent)" }}
-                  >
-                    <span>No encontramos al tercero buscado. ¿Deseas crearlo?</span>
-                    <button
-                      type="button"
-                      onClick={prefillNewClient}
-                      className="rounded-full px-3 py-1.5 text-xs font-semibold"
-                      style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}
-                    >
-                      ➕ Crear tercero
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold">
-                  Cliente guardado
-                </label>
-                <select
-                  {...inputProps()}
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
-                >
-                  <option value="">Selecciona un cliente</option>
-                  {filteredClients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}{client.document_number ? ` · ${client.document_number}` : ""}{client.credit_enabled ? (client.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 crédito") : ""}
-                    </option>
-                  ))}
-                </select>
-                <p
-                  className="mt-2 text-sm"
-                  style={{ color: "var(--t-muted)" }}
-                >
-                  Cliente activo: {effectiveClient.name} · Doc: {effectiveClient.document_number ? docWithDv(effectiveClient.document_number) : "CF"} · Lista {effectiveClient.price_list}
-                </p>
-                {selectedClient?.credit_enabled && creditState?.for === selectedClient.id ? (
-                  <div className="mt-2 rounded-xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
-                    <CreditMeter size="sm" enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
-                  </div>
-                ) : null}
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-semibold">Punto de venta / bodega</label>
-                    <select
-                      {...inputProps()}
-                      value={pointId}
-                      onChange={(e) => {
-                        if (editingDoc) cancelEdit();
-                        setPointStock(null);
-                        setPointId(e.target.value);
-                        // Al cambiar de punto se muestran solo sus vendedores.
-                        const ofPoint = sellersForPoint(sellers, e.target.value);
-                        setSellerId((current) => (ofPoint.some((r) => r.user_id === current) ? current : ofPoint[0]?.user_id ?? ""));
-                      }}
-                      disabled={lockedPoint}
-                    >
-                      {points.map((pt) => (
-                        <option key={pt.id} value={pt.id}>{pt.kind === "warehouse" ? "🏬" : "📍"} {pt.name}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Solo se venden las existencias de este lugar.</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold">Vendedor</label>
-                    <select {...inputProps()} value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
-                      <option value="">Sin vendedor</option>
-                      {sellersForPoint(sellers, pointId).map((r) => (
-                        <option key={r.user_id} value={r.user_id}>{r.name}</option>
-                      ))}
-                    </select>
-                    {sellersForPoint(sellers, pointId).length === 0 ? (
-                      <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>Este punto aún no tiene vendedores. Créalos en Ajustes → Usuarios y asígnales este punto.</p>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="mt-2 text-sm" style={{ color: "var(--t-muted)" }}>
-                  {(() => {
-                    const pt = points.find((x) => x.id === pointId);
-                    if (pt && documentKind === "factura" && fiscalOn) {
-                      return fiscal?.range ? `Próxima factura electrónica: ${fiscal.range.prefix}${fiscal.range.next_number} · quedan ${fiscal.range.remaining}` : "Sin numeración electrónica vigente";
-                    }
-                    if (pt) {
-                      const prefix = documentKind === "factura" ? pt.invoice_prefix : pt.remision_prefix;
-                      const next = documentKind === "factura" ? pt.next_invoice_number : pt.next_remision_number;
-                      return `Próximo documento: ${prefix}-${String(next).padStart(5, "0")}`;
-                    }
-                    return billingSettings
-                      ? `Prefijos: ${billingSettings.invoice_prefix ?? "FAC"} / ${billingSettings.remision_prefix ?? "REM"}`
-                      : "Configura facturación para usar remisiones, facturas y Siigo.";
-                  })()}{" "}
-                  <Link href="/dashboard/inventario" className="font-semibold underline" style={{ color: "var(--t-accent)" }}>Editar prefijos y puntos</Link>
-                </p>
-              </div>
- 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="text-sm font-semibold">Nombre</label>
-                  <input
-                    {...inputProps()}
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Nombre del cliente"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold">Documento</label>
-                  <WithDv value={customerDocument}>
-                    <input
-                      {...inputProps()}
-                      value={customerDocument}
-                      onChange={(e) => setCustomerDocument(e.target.value)}
-                      placeholder="NIT o cédula"
-                    />
-                  </WithDv>
-                </div>
-              </div>
- 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="text-sm font-semibold">Email</label>
-                  <input
-                    {...inputProps()}
-                    type="email"
-                    value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    placeholder="correo@cliente.com"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold">WhatsApp</label>
-                  <input
-                    {...inputProps()}
-                    value={customerWhatsApp}
-                    onChange={(e) => setCustomerWhatsApp(e.target.value)}
-                    placeholder="57XXXXXXXXX"
-                  />
-                </div>
-              </div>
-
-              {!selectedClient && customerName.trim() && customerName.trim() !== DEFAULT_CLIENT_NAME ? (
-                <button
-                  type="button"
-                  onClick={saveNewClient}
-                  disabled={savingClient}
-                  className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
-                  style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
-                >
-                  {savingClient ? "Guardando…" : "💾 Guardar como cliente nuevo"}
-                </button>
-              ) : null}
- 
-              {selectedClient ? (
-                <button
-                  type="button"
-                  onClick={updateClient}
-                  disabled={savingClient}
-                  className="w-full rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
-                  style={{ borderColor: "var(--t-accent)", color: "var(--t-text)" }}
-                >
-                  {savingClient ? "Guardando…" : "✏️ Modificar tercero (guardar cambios)"}
-                </button>
-              ) : null}
-
-              <div>
-                <label className="text-sm font-semibold">Tipo de pago</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[
-                    { value: "contado", label: "Contado" },
-                    { value: "credito", label: "Crédito" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className="rounded-2xl border px-4 py-2 text-sm font-semibold"
-                      style={{
-                        borderColor: "var(--t-card-border)",
-                        background:
-                          paymentType === option.value
-                            ? "var(--t-cta)"
-                            : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                        color:
-                          paymentType === option.value ? "#0b0b0b" : "var(--t-text)",
-                      }}
-                      onClick={() => setPaymentType(option.value as "contado" | "credito")}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
- 
-              {paymentType === "credito" ? (
-                <div className="space-y-2">
-                  {!selectedClient ? (
-                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                      💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
-                    </p>
-                  ) : creditUnavailable ? (
-                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
-                  ) : creditState?.for === selectedClient.id ? (
-                    <div
-                      className="rounded-xl border p-3"
-                      style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
-                    >
-                      <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
-                      <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
-                        {creditState.can_sell
-                          ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
-                          : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
-                  )}
-                  <label className="text-sm font-semibold">Días de crédito</label>
-                  <input
-                    {...inputProps()}
-                    type="number"
-                    min={1}
-                    value={dueDays}
-                    onChange={(e) => setDueDays(Number(e.target.value))}
-                    placeholder="30"
-                  />
-                </div>
-              ) : null}
- 
-              <div>
-                <label className="text-sm font-semibold">Tipo de comprobante</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[
-                    { value: "remision", label: "Remisión" },
-                    { value: "factura", label: "Factura" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className="rounded-2xl border px-4 py-2 text-sm font-semibold"
-                      style={{
-                        borderColor: "var(--t-card-border)",
-                        background:
-                          documentKind === option.value
-                            ? "var(--t-cta)"
-                            : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                        color:
-                          documentKind === option.value ? "#0b0b0b" : "var(--t-text)",
-                      }}
-                      onClick={() => setDocumentKind(option.value as "remision" | "factura")}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
- 
-              {documentKind === "factura" && fiscalOn && fiscal ? (
-                <div className="space-y-2 rounded-2xl border p-4" style={{ borderColor: fiscal.ready ? "rgba(34,197,94,.4)" : "rgba(239,68,68,.45)", background: fiscal.ready ? "rgba(34,197,94,.08)" : "rgba(239,68,68,.08)" }}>
-                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                    {fiscal.ready ? "🟢 Factura electrónica" : "🔴 Este punto no está listo para facturar"}
-                    <span className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>{fiscal.environment === "production" ? "🟢 Producción" : "🧪 Pruebas"}</span>
-                  </p>
-                  {fiscal.ready ? (
-                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                      {fiscal.entity?.legal_name} · NIT {fiscal.entity?.document_number}{fiscal.entity?.verification_digit ? `-${fiscal.entity.verification_digit}` : ""} · {fiscal.provider?.name}. El número, la resolución y el envío los resuelve el servidor.
-                    </p>
-                  ) : (
-                    <ul className="list-disc pl-5 text-xs" style={{ color: "var(--t-muted)" }}>{fiscal.missing.map((m) => <li key={m}>{m}</li>)}</ul>
-                  )}
-                  {fiscal.warnings.map((w) => <p key={w} className="text-xs text-amber-500">⚠️ {w}</p>)}
-                </div>
-              ) : documentKind === "factura" ? (
-                <div className="space-y-2 rounded-2xl border border-dashed border-slate-500/30 p-4">
-                  <label className="flex items-center gap-2 text-sm font-semibold">
-                    <input
-                      type="checkbox"
-                      checked={requestElectronicInvoice}
-                      disabled={!siigoConfigured}
-                      onChange={(e) => setRequestElectronicInvoice(e.target.checked)}
-                    />
-                    Solicitar factura electrónica (Siigo)
-                  </label>
-                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                    {siigoConfigured
-                      ? "Se usará la configuración de Siigo de tu tienda para generar la factura electrónica cuando esté disponible."
-                      : "Activa y configura Siigo en Facturación para poder emitir factura electrónica desde el POS."}
-                  </p>
-                </div>
-              ) : null}
- 
-              <div>
-                <label className="text-sm font-semibold">Formato de impresión</label>
-                <select
-                  {...inputProps()}
-                  value={printSize}
-                  onChange={(e) => setPrintSize(e.target.value as "tirilla" | "carta")}
-                >
-                  <option value="tirilla">Tirilla</option>
-                  <option value="carta">Carta</option>
-                </select>
-              </div>
- 
-              <div>
-                <label className="text-sm font-semibold">
-                  Observaciones / Nota
-                </label>
-                <textarea
-                  {...inputProps()}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none min-h-[120px]"
-                  value={customerNote}
-                  onChange={(e) => setCustomerNote(e.target.value)}
-                  placeholder="Por ejemplo: venta en vitrina, factura a crédito, entrega inmediata"
-                />
-              </div>
-            </div>
-            </details>
-          </div>
         </div>
 
-        <div className="space-y-3 lg:sticky lg:top-2">
+        <div className="space-y-3 lg:sticky lg:top-2" ref={cartRef}>
           <div {...cardProps()}>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold">🛒 Carrito ({cart.length})</h2>
-              </div>
-              <div
-                className="rounded-2xl border px-4 py-2 text-sm"
-                style={{
-                  borderColor: "var(--t-card-border)",
-                  background:
-                    "color-mix(in oklab, var(--t-card-bg) 90%, transparent)",
-                  color: "var(--t-text)",
-                }}
-              >
-                Total: <span className="font-semibold">{money(total)}</span>
-              </div>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-black">🛒 Carrito <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{cart.length ? `${cart.length} producto${cart.length === 1 ? "" : "s"} · ${units} und.` : ""}</span></h2>
+              {cart.length && !editingDoc ? (
+                <span className="text-[11px]"><button type="button" onClick={holdSale} title="Dejar en espera (F8)" className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+                  <Pause size={12} /> En espera
+                </button></span>
+              ) : null}
             </div>
-
+            {held.length ? (
+              <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 text-[11px] [scrollbar-width:none]">
+                {held.map((h) => (
+                  <motion.button key={h.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} type="button" onClick={() => resumeSale(h.id)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "color-mix(in oklab, #f59e0b 50%, var(--t-card-border))", background: "rgba(245,158,11,.1)" }}>
+                    <Play size={11} /> {h.customerName || DEFAULT_CLIENT_NAME} · {money(h.total)} · {new Date(h.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                  </motion.button>
+                ))}
+              </div>
+            ) : null}
             {editingDoc ? (
               <div
                 className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs"
@@ -1580,97 +1724,40 @@ export default function PosPage() {
               ))}
             </div>
 
-            {cart.length === 0 ? (
-              <p className="mt-3 text-sm" style={{ color: "var(--t-muted)" }}>
-                El carrito está vacío. Agrega productos para comenzar.
-              </p>
-            ) : (
-              <div className="mt-3 max-h-[40vh] space-y-2 overflow-y-auto pr-1">
-                {cart.map((item) => (
-                  <div
-                    key={item.productId}
-                    className="rounded-xl border p-2.5"
-                    style={{
-                      borderColor: "var(--t-card-border)",
-                      background:
-                        "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
-                    }}
-                  >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-semibold">{item.name}</p>
-                        <p
-                          className="mt-1 text-sm"
-                          style={{ color: "var(--t-muted)" }}
-                        >
-                          {money(item.price)} x {item.qty} ={" "}
-                          {money(item.price * item.qty)}
-                        </p>
-                      </div>
+            <PosCartLines
+              lines={lines}
+              floors={floors}
+              approvals={approvals}
+              onQty={setQty}
+              onPrice={setItemPrice}
+              onLevel={(id, lv) => setItemLevel(id, lv as PriceLevel)}
+              onRemove={removeItem}
+              onRequest={askApproval}
+            />
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          aria-label="Precio de esta línea"
-                          value={item.priceLevel}
-                          onChange={(e) => setItemLevel(item.productId, Number(e.target.value) as PriceLevel)}
-                          className="rounded-xl border px-1.5 py-1.5 text-xs"
-                          style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
-                        >
-                          {([1, 2, 3, 4, 5] as const).map((lvl) => (
-                            <option key={lvl} value={lvl}>P{lvl}</option>
-                          ))}
-                        </select>
-                        <button
-                          className="rounded-2xl border px-3 py-2 text-sm font-semibold"
-                          style={{
-                            borderColor: "var(--t-card-border)",
-                            background:
-                              "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                            color: "var(--t-text)",
-                          }}
-                          onClick={() => adjustQty(item.productId, -1)}
-                        >
-                          -
-                        </button>
-                        <div className="min-w-[2rem] text-center text-sm font-semibold">
-                          {item.qty}
-                        </div>
-                        <button
-                          className="rounded-2xl border px-3 py-2 text-sm font-semibold"
-                          style={{
-                            borderColor: "var(--t-card-border)",
-                            background:
-                              "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                            color: "var(--t-text)",
-                          }}
-                          onClick={() => adjustQty(item.productId, 1)}
-                        >
-                          +
-                        </button>
-                        <button
-                          className="rounded-2xl border px-3 py-2 text-sm font-semibold"
-                          style={{
-                            borderColor:
-                              "color-mix(in oklab, #ef4444 35%, var(--t-card-border))",
-                            background:
-                              "color-mix(in oklab, #ef4444 12%, transparent)",
-                            color: "var(--t-text)",
-                          }}
-                          onClick={() => removeItem(item.productId)}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            {cart.length ? (
+              <div className="mt-3 space-y-1 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                {listTotal > total ? (
+                  <>
+                    <p className="flex justify-between" style={{ color: "var(--t-muted)" }}><span>Precio de lista</span><span className="tabular-nums line-through">{money(listTotal)}</span></p>
+                    <p className="flex justify-between text-amber-400"><span>🏷️ Descuento</span><span className="tabular-nums">−{money(listTotal - total)}</span></p>
+                  </>
+                ) : null}
+                <p className="flex items-end justify-between">
+                  <span className="font-bold">Total</span>
+                  <motion.span key={total} initial={{ scale: 1.12 }} animate={{ scale: 1 }} className="text-2xl font-black tabular-nums">{money(total)}</motion.span>
+                </p>
+                {floors ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>🔐 {LIMIT_LABEL[floors.mode] ?? ""}{floors.mode === "margin" ? ` (+${floors.margin_pct} % sobre el costo)` : ""}.</p> : null}
               </div>
-            )}
+            ) : null}
+
+            {cart.length && paymentType === "contado" && !editingDoc ? <PosPayment total={total} value={payment} onChange={setPayment} /> : null}
 
             <button
               onClick={createInvoice}
               disabled={saving}
-              className="mt-3 w-full rounded-xl border px-4 py-3 text-sm font-semibold transition hover:brightness-110 disabled:opacity-60"
+              title="Cobrar (F4)"
+              className="mt-3 w-full rounded-2xl border px-4 py-3.5 text-base font-black transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
               style={{
                 borderColor:
                   "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))",
@@ -1693,11 +1780,28 @@ export default function PosPage() {
                     ? "Crear factura electrónica"
                     : "Crear factura"
                   : "Crear remisión"}
+              {cart.length && !saving ? ` · ${money(total)}` : ""}
             </button>
+            <p className="mt-2 hidden text-center text-[10px] sm:block" style={{ color: "var(--t-muted)" }}>⌨️ F2 buscar · Enter agrega con el lector · F4 cobrar · F8 en espera</p>
           </div>
 
         </div>
       </div>
+      {/* Celular: el carrito queda abajo de los productos; esta barra lo trae con un toque. */}
+      <AnimatePresence>
+        {cart.length ? (
+          <motion.div initial={{ y: 80 }} animate={{ y: 0 }} exit={{ y: 80 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            className="fixed inset-x-3 bottom-3 z-40 lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+            <button type="button" onClick={() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-white shadow-[0_14px_40px_rgba(0,0,0,.45)]" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
+              <span className="text-xl">🛒</span>
+              <span className="min-w-0 flex-1 text-sm font-bold">{units} und. · {cart.length} producto{cart.length === 1 ? "" : "s"}</span>
+              <motion.span key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="text-lg font-black tabular-nums">{money(total)}</motion.span>
+              <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-black">Ver carrito ↓</span>
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       {newClient && store ? (
         <ThirdPartyForm
           key={newClient.key}

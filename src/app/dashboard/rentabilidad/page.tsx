@@ -1,22 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Calculator, HandCoins, Tags, TrendingUp } from "lucide-react";
+import { BarChart3, Calculator, HandCoins, ShieldCheck, Tags, TrendingUp } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { Simulator } from "./Simulator";
 import { Summary } from "./Summary";
 import { PointRules, type ProfitSettings } from "./PointRules";
 import { Settlements } from "./Settlements";
+import { PriceLimits } from "./PriceLimits";
 import { cardStyle, rpcError, type Point } from "./shared";
 
-type Tab = "summary" | "rules" | "settle" | "sim";
+type Tab = "summary" | "rules" | "limits" | "settle" | "sim";
 
 /** Centro de rentabilidad: informe, precios por punto y simulador. */
 export default function RentabilidadPage() {
   const [ready, setReady] = useState(false);
   const [storeId, setStoreId] = useState<string | null>(null);
-  const [perm, setPerm] = useState({ view: false, rules: false, approve: false, settle: false });
+  const [perm, setPerm] = useState({ view: false, rules: false, approve: false, settle: false, price: false });
   const [points, setPoints] = useState<Point[]>([]);
   const [settings, setSettings] = useState<ProfitSettings | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export default function RentabilidadPage() {
       const store = access?.store;
       if (!store) return setReady(true);
       const can = (p: string) => hasStorePermission(access, p);
-      setPerm({ view: can("profit_view"), rules: can("profit_rules"), approve: can("profit_approve"), settle: ["profit_beneficiaries", "profit_settle", "profit_settle_approve", "profit_pay"].some(can) });
+      setPerm({ view: can("profit_view"), rules: can("profit_rules"), approve: can("profit_approve"), settle: ["profit_beneficiaries", "profit_settle", "profit_settle_approve", "profit_pay"].some(can), price: can("price_approve") });
       setStoreId(store.id);
       const { data: wh } = await supabaseBrowser().from("erp_warehouses").select("id,name").eq("store_id", store.id).eq("active", true).order("name");
       setPoints((wh ?? []) as Point[]);
@@ -46,7 +47,7 @@ export default function RentabilidadPage() {
 
   if (!ready) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>;
   const canCosts = perm.view || perm.approve;
-  if (!storeId || !(perm.view || perm.rules || perm.approve || perm.settle)) {
+  if (!storeId || !(perm.view || perm.rules || perm.approve || perm.settle || perm.price)) {
     return (
       <main className="p-6">
         <p className="rounded-2xl border p-4 text-sm" style={cardStyle}>🔒 Necesitas un permiso de <b>Rentabilidad</b>. Pídeselo al administrador de tu tienda.</p>
@@ -57,10 +58,11 @@ export default function RentabilidadPage() {
   const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode; show: boolean }> = [
     { key: "summary", label: "Resumen", icon: <BarChart3 size={15} />, show: perm.view },
     { key: "rules", label: "Precios por punto", icon: <Tags size={15} />, show: perm.view || perm.rules || perm.approve },
+    { key: "limits", label: "Límites de precio", icon: <ShieldCheck size={15} />, show: perm.view || perm.rules || perm.price },
     { key: "settle", label: "Repartos y liquidaciones", icon: <HandCoins size={15} />, show: perm.settle || perm.view },
     { key: "sim", label: "Simulador", icon: <Calculator size={15} />, show: canCosts },
   ];
-  const current: Tab = tab ?? (perm.view ? "summary" : perm.rules || perm.approve ? "rules" : "settle");
+  const current: Tab = tab ?? (perm.view ? "summary" : perm.rules || perm.approve ? "rules" : perm.price ? "limits" : "settle");
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-4 sm:px-6">
@@ -90,6 +92,7 @@ export default function RentabilidadPage() {
           <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{settingsError ?? "Cargando…"}</p>
         )
       ) : null}
+      {current === "limits" ? <PriceLimits storeId={storeId} /> : null}
       {current === "settle" ? <Settlements storeId={storeId} points={points} myPoints={settings?.my_points ?? null} /> : null}
       {current === "sim" && canCosts ? <Simulator storeId={storeId} /> : null}
     </main>
