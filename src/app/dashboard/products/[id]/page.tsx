@@ -125,7 +125,7 @@ function clampNum(raw: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 function digitsOnlyToNumber(raw: string, fallback = 0) {
-  const digits = String(raw ?? "").replace(/D/g, "");
+  const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return fallback;
   const n = Number(digits);
   return Number.isFinite(n) ? n : fallback;

@@ -2,8 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Lock, Minus, Plus, Trash2 } from "lucide-react";
-import { MoneyField } from "@/components/forms/Fields";
+import { ChevronDown, Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ApprovalState, FloorInfo } from "./usePriceFloors";
 
 export type CartLine = {
@@ -80,6 +79,34 @@ function QtyStepper({ qty, max, onChange }: { qty: number; max?: number | null; 
   );
 }
 
+/** Precio que se escribe directo en la línea: «$ 138.000». */
+function InlinePrice({ value, onChange, label, tone }: { value: number; onChange: (n: number) => void; label: string; tone: string }) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const shown = typed ?? `$ ${Math.round(value).toLocaleString("es-CO")}`;
+  return (
+    <label className="inline-flex cursor-text items-center gap-1 rounded-full border px-2.5 py-1 transition focus-within:ring-2" style={{ borderColor: tone, ["--tw-ring-color" as string]: "color-mix(in oklab, var(--t-accent) 35%, transparent)" }} title="Toca para cambiar el precio">
+      <Pencil size={11} className="shrink-0 opacity-70" />
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={label}
+        value={shown}
+        onFocus={(e) => { setTyped(String(Math.round(value))); window.setTimeout(() => e.target.select(), 0); }}
+        onChange={(e) => {
+          const d = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 11);
+          setTyped(d ? Number(d).toLocaleString("es-CO") : "");
+          onChange(d ? Number(d) : 0);
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        onBlur={() => setTyped(null)}
+        className="w-[88px] text-[13px] font-black tabular-nums"
+        style={bare}
+      />
+      <span className="text-[10px]" style={{ color: "var(--t-muted)" }}>c/u</span>
+    </label>
+  );
+}
+
 function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onRequest }: {
   line: CartLine; floors: FloorInfo | null; approval?: ApprovalState;
   onQty: (n: number) => void; onPrice: (p: number) => void; onLevel: (l: number) => void; onRemove: () => void; onRequest: (note: string) => Promise<void>;
@@ -115,14 +142,17 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
               <Trash2 size={14} />
             </button>
           </div>
-          <div className="text-[11px]">
-            <button type="button" onClick={() => setOpen((v) => !v)} className="mt-0.5 flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left" style={{ color: "var(--t-muted)" }} aria-expanded={open}>
-              <span><b style={{ color: "var(--t-text)" }}>{money(line.price)}</b> c/u · P{line.priceLevel}{pct > 0 ? ` · −${pct.toLocaleString("es-CO")} %` : ""}</span>
-              <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-px font-bold" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 14%, transparent)` }}>
-                {st.dot} {st.label} <ChevronDown size={11} className={`transition ${open ? "rotate-180" : ""}`} />
-              </span>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <InlinePrice value={line.price} onChange={onPrice} label={`Precio de ${line.name}`} tone={status === "blocked" ? "rgba(239,68,68,.7)" : status === "discount" ? "rgba(245,158,11,.6)" : "var(--t-card-border)"} />
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="inline-flex items-center gap-0.5 rounded-full px-2 py-1 font-bold" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 14%, transparent)` }}>
+              {st.dot} {st.label}{pct > 0 ? ` −${pct.toLocaleString("es-CO")} %` : ""} <ChevronDown size={11} className={`transition ${open ? "rotate-180" : ""}`} />
             </button>
           </div>
+          {floors && !floors.free && floor !== undefined && floor < list ? (
+            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}><Lock size={9} className="mr-0.5 inline" />Puedes dejarlo hasta <b style={{ color: "var(--t-text)" }}>{money(floor)}</b></p>
+          ) : floors && !floors.free && floor !== undefined ? (
+            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}><Lock size={9} className="mr-0.5 inline" />Sin descuento permitido (puedes subirlo)</p>
+          ) : null}
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <QtyStepper qty={line.qty} max={line.stock} onChange={onQty} />
             <motion.b key={line.qty * line.price} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="text-base font-black tabular-nums">{money(line.qty * line.price)}</motion.b>
@@ -144,22 +174,17 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
                 </button>
               ))}
             </div>
-            <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2">
-              <MoneyField value={line.price} onChange={(v) => onPrice(v ?? 0)} allowEmpty={false} ariaLabel={`Precio de ${line.name}`} />
-              <div className="flex gap-1 text-[11px]">
-                {[5, 10].map((d) => (
-                  <button key={d} type="button" onClick={() => onPrice(Math.round(list * (1 - d / 100) / 100) * 100)} className="rounded-xl border px-2 py-2 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+            <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
+              <span style={{ color: "var(--t-muted)" }}>Descuento rápido:</span>
+              <div className="flex gap-1">
+                {[5, 10, 15].map((d) => (
+                  <button key={d} type="button" onClick={() => onPrice(Math.round(list * (1 - d / 100) / 100) * 100)} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                     −{d}%
                   </button>
                 ))}
               </div>
             </div>
-            {floors && !floors.free && floor !== undefined ? (
-              <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                <Lock size={10} className="mr-0.5 inline" /> Puedes bajar hasta <b style={{ color: "var(--t-text)" }}>{money(floor)}</b>
-                {floor < list ? ` (−${(Math.round(((list - floor) / list) * 1000) / 10).toLocaleString("es-CO")} %)` : " · sin descuento"}
-              </p>
-            ) : floors?.free ? (
+            {floors?.free ? (
               <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>🔓 Tienes permiso para vender a cualquier precio.</p>
             ) : null}
 

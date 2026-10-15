@@ -1705,7 +1705,7 @@ export default function PosPage() {
               </div>
             ) : null}
 
-            <div className="mt-2 flex flex-wrap items-center gap-1">
+            <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
               <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>💲 Lista de precios:</span>
               {([1, 2, 3, 4, 5] as const).map((lvl) => (
                 <button
