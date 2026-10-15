@@ -143,6 +143,7 @@ function AdminMenu({ onNav, showHeader = true }: { onNav?: () => void; showHeade
         <NavItem href="/admin/categorias" emoji="🗂️" label="Categorías" onClick={onNav} />
         <NavItem href="/admin/usuarios" emoji="👤" label="Usuarios / Roles" onClick={onNav} />
         <NavItem href="/admin/fiscal" emoji="🏛️" label="Fiscal y seguridad" onClick={onNav} />
+        <NavItem href="/admin/auditoria" emoji="🕵️" label="Auditoría global" onClick={onNav} />
         <NavItem href="/admin/themes" emoji="🎨" label="Themes" onClick={onNav} />
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -391,7 +392,9 @@ export default function EditProductPage() {
           </div>
 
           {/* ✅ Botonera arriba a la derecha (incluye Activo/Inactivo) */}
-          <div className="flex flex-wrap gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {/* Historial del producto: quién lo creó, qué cambió (precios, %, datos) y cuándo. */}
+            <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
             <button
               className={toggleBtn.className}
               style={toggleBtn.style}

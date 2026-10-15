@@ -406,7 +406,52 @@ export default function StoreCatalogPage() {
   const [carouselInView, setCarouselInView] = useState(true);
   const [pageVisible, setPageVisible] = useState(true);
 
-  const { initCart, addItem } = useCart();
+  const { initCart, addItem, addItems, cart } = useCart();
+
+  // «Volver a pedir» desde un comprobante (?reorder=<token>): llena el carrito con esos productos
+  // a los precios de hoy de este catálogo; el cliente lo puede cambiar antes de enviarlo.
+  const reorderDone = useRef(false);
+  const cartStoreId = cart?.storeId;
+  useEffect(() => {
+    const reorderToken = searchParams.get("reorder");
+    if (!reorderToken || reorderDone.current || !store?.id || catalog || cartStoreId !== store.id) return;
+    reorderDone.current = true;
+    const storeId = store.id;
+    void (async () => {
+      const sb = supabaseBrowser();
+      const clean = new URLSearchParams(window.location.search);
+      clean.delete("reorder");
+      window.history.replaceState(null, "", window.location.pathname + (clean.toString() ? `?${clean}` : ""));
+      const { data, error } = await sb.rpc("get_order_by_token_v2", { p_token: reorderToken });
+      const order = (data as { order?: { store_id?: string } } | null)?.order;
+      if (error || !order || order.store_id !== storeId) return;
+      const lines = ((data as { items?: Array<{ product_id: string; name: string; qty: number }> }).items ?? []);
+      if (!lines.length) return;
+      const { data: rows } = await sb.from("products")
+        .select("id,name,price_retail,price_wholesale,min_wholesale,active,stock")
+        .eq("store_id", storeId)
+        .in("id", lines.map((l) => l.product_id));
+      const byId = new Map(((rows ?? []) as Array<{ id: string; name: string; price_retail: number; price_wholesale: number; min_wholesale: number | null; active: boolean; stock: number | null }>).map((r) => [r.id, r]));
+      const missing: string[] = [];
+      const list = lines.flatMap((l) => {
+        const p = byId.get(l.product_id);
+        if (!p || !p.active || (p.stock !== null && Number(p.stock) <= 0)) { missing.push(l.name); return []; }
+        const qty = Math.max(1, p.stock === null ? Number(l.qty) : Math.min(Number(l.qty), Number(p.stock)));
+        return [{ productId: p.id, name: p.name, qty, price: Number((safeMode === "detal" ? p.price_retail : p.price_wholesale) ?? 0), minWholesale: p.min_wholesale ?? null }];
+      });
+      addItems(list, { openDrawer: list.length > 0 });
+      const esc = (t: string) => t.replace(/[<>&]/g, "");
+      await Swal.fire({
+        icon: list.length ? "success" : "info",
+        title: list.length ? "🔁 Tu pedido está en el carrito" : "Esos productos ya no están disponibles",
+        html: `${list.length ? "Con los precios de hoy. Cambia lo que quieras y envíalo." : ""}${missing.length ? `<br/><br/><b>No disponibles:</b><br/>${missing.map((m) => `• ${esc(m)}`).join("<br/>")}` : ""}`,
+        timer: missing.length ? undefined : 2200,
+        showConfirmButton: Boolean(missing.length),
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
+    })();
+  }, [searchParams, store?.id, catalog, cartStoreId, safeMode, addItems]);
   // Mínimos por producto: catálogo mayorista clásico o catálogos con esa regla.
   const wholesaleRules = catalog ? catalog.wholesale_rules : safeMode === "mayor";
   const showStock = catalog ? catalog.show_stock : true;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { adminErrorResponse, authorizePlatformAdmin } from "@/lib/server/admin-auth";
 
 type Store = {
   id: string;
@@ -71,15 +71,12 @@ function buildMessage(store: Store, kind: "d10" | "d5" | "d3" | "d0" | "expired"
   };
 }
 
-export async function POST() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+export async function POST(req: Request) {
+  // Solo el administrador global (antes cualquiera podía llamar esta ruta).
+  let auth;
+  try { auth = await authorizePlatformAdmin(req); } catch (e) { return adminErrorResponse(e); }
 
-  if (!supabaseUrl || !serviceKey) {
-    return NextResponse.json({ ok: false, error: "Faltan env vars de Supabase" }, { status: 500 });
-  }
-
-  const sb = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const sb = auth.admin;
 
   // ✅ IMPORTANTE: aquí sí traemos active_until
   const { data: stores, error } = await sb

@@ -2,10 +2,13 @@
 
 import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Copy, Lock, MessageCircle, Minus, Plus, Printer, Save, Share2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, FileDown, Lock, MessageCircle, Minus, Plus, Printer, RotateCcw, Save, Share2 } from "lucide-react";
+import { PAY_LABEL, payLabel, type ReceiptPayment } from "./receipt-extras";
 
 export type ScreenItem = { product_id: string; name: string; image_url: string | null; price: number; qty: number };
 export type PaymentMethodLite = { id: string; name: string; provider: string };
+export type HistoryRow = { token: string; created_at: string; total: number; status: string; receipt_no: number | null; doc_number: string | null };
 
 const STATUS: Record<string, { emoji: string; label: string; hint: string; color: string }> = {
   draft: { emoji: "✏️", label: "Borrador", hint: "Aún puedes cambiar las cantidades", color: "#38bdf8" },
@@ -110,11 +113,19 @@ export function OrderScreen(props: {
   onWhatsApp: () => void;
   onPrint: () => void;
   onPay: (m: PaymentMethodLite) => void;
+  payment: ReceiptPayment | null;
+  qr: string | null;
+  history: HistoryRow[];
+  onPdf: () => Promise<void>;
+  /** Volver a pedir: en el catálogo (cliente) o en el POS (equipo de la tienda). */
+  reorderCatalog: string | null;
+  reorderPos: string | null;
 }) {
   const p = props;
   const st = STATUS[p.status] ?? { emoji: "📄", label: p.status, hint: "", color: "var(--t-accent)" };
   const units = p.items.reduce((s, i) => s + Number(i.qty), 0);
   const [copied, setCopied] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const paid = p.paymentStatus === "paid";
   const confirmed = p.status === "confirmed" || p.status === "completed";
   // Compartir nativo (celular): solo en el navegador, para que el servidor y el cliente pinten lo mismo.
@@ -237,6 +248,59 @@ export function OrderScreen(props: {
             </div>
           </motion.section>
 
+          {p.payment ? (
+            <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border p-5" style={card}>
+              <p className="text-sm font-black">💰 Forma de pago</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(p.payment.method === "mixto" ? p.payment.parts : [{ method: p.payment.method, amount: p.total }]).map((x, i) => (
+                  <span key={i} className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                    <span className="text-lg">{PAY_LABEL[x.method]?.emoji ?? "💳"}</span> {payLabel(x.method)} <span className="tabular-nums">{p.money(x.amount)}</span>
+                  </span>
+                ))}
+              </div>
+              {(p.payment.received ?? 0) > p.total || (p.payment.change ?? 0) > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
+                    <p className="text-[10px] font-black uppercase" style={{ color: "var(--t-muted)" }}>Recibido</p>
+                    <p className="text-lg font-black tabular-nums">{p.money(p.payment.received ?? p.total)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3">
+                    <p className="text-[10px] font-black uppercase text-emerald-400">Vuelto</p>
+                    <p className="text-lg font-black tabular-nums text-emerald-400">{p.money(p.payment.change ?? 0)}</p>
+                  </div>
+                </div>
+              ) : null}
+            </motion.section>
+          ) : null}
+
+          {p.history.length ? (
+            <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-3xl border" style={card}>
+              <div className="flex items-center justify-between gap-2 border-b px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>
+                <p className="text-sm font-black">🧾 Otros pedidos de {p.customerName.split(" ")[0] || "este cliente"}</p>
+                <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{p.history.length}</p>
+              </div>
+              <ul className="max-h-80 divide-y overflow-y-auto" style={{ borderColor: "var(--t-card-border)" }}>
+                {p.history.map((h) => {
+                  const hs = STATUS[h.status] ?? { emoji: "📄", label: h.status, hint: "", color: "var(--t-muted)" };
+                  return (
+                    <li key={h.token} style={{ borderColor: "var(--t-card-border)" }}>
+                      <Link href={`/pedido/${h.token}`} className="flex items-center gap-3 px-5 py-3 transition hover:bg-white/5">
+                        <span className="text-lg">{hs.emoji}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold">{h.doc_number ?? (h.receipt_no ? `Pedido #${h.receipt_no}` : "Pedido")}</span>
+                          <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>
+                            {new Date(h.created_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })} · {hs.label}
+                          </span>
+                        </span>
+                        <span className="text-sm font-black tabular-nums">{p.money(Number(h.total))}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </motion.section>
+          ) : null}
+
           {/* Pago en línea (solo con pasarela activa y pedido confirmado) */}
           {confirmed && p.paymentMethods.length ? (
             <section className="rounded-3xl border p-5" style={card}>
@@ -288,6 +352,10 @@ export function OrderScreen(props: {
               <button type="button" onClick={canShare ? share : copyLink} className="flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
                 {canShare ? <><Share2 size={15} /> Compartir</> : copied ? <><Check size={15} /> ¡Copiado!</> : <><Copy size={15} /> Copiar link</>}
               </button>
+              <button type="button" disabled={pdfBusy} onClick={async () => { setPdfBusy(true); try { await p.onPdf(); } finally { setPdfBusy(false); } }}
+                className="col-span-2 flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 font-bold transition hover:-translate-y-0.5 disabled:opacity-60" style={{ borderColor: "var(--t-card-border)" }}>
+                <FileDown size={15} /> {pdfBusy ? "Creando PDF…" : "Descargar PDF"}
+              </button>
             </div>
             {canShare ? (
               <div className="mt-2 text-[11px]"><button type="button" onClick={copyLink} className="w-full text-center text-[11px] font-semibold underline-offset-2 hover:underline" style={{ color: "var(--t-muted)" }}>
@@ -295,6 +363,34 @@ export function OrderScreen(props: {
               </button></div>
             ) : null}
           </section>
+          {p.reorderCatalog || p.reorderPos ? (
+            <section className="rounded-3xl border p-4" style={card}>
+              <p className="flex items-center gap-1.5 text-sm font-black"><RotateCcw size={15} /> Volver a pedir</p>
+              <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Arma un pedido nuevo con estos mismos productos, a los precios de hoy. Lo puedes cambiar antes de enviarlo.</p>
+              <div className="mt-3 grid gap-2 text-sm">
+                {p.reorderCatalog ? (
+                  <Link href={p.reorderCatalog} className="flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 font-black text-white transition hover:brightness-110" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>
+                    🛍️ Pedir otra vez
+                  </Link>
+                ) : null}
+                {p.reorderPos ? (
+                  <Link href={p.reorderPos} className="flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+                    💳 Cargar en el POS
+                  </Link>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {p.qr ? (
+            <section className="flex items-center gap-3 rounded-3xl border p-4" style={card}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.qr} alt="Código QR del comprobante" className="h-24 w-24 shrink-0 rounded-xl bg-white p-1.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-black">📲 Ábrelo en tu celular</p>
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Escanea el código con la cámara. También sale impreso en la tirilla y en el PDF.</p>
+              </div>
+            </section>
+          ) : null}
           <p className="px-2 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>🔖 Guarda este enlace: siempre podrás volver a ver tu comprobante.</p>
         </aside>
       </div>

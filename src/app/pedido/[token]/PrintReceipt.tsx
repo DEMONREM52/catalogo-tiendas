@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 // Comprobante solo para impresión: hoja carta o tirilla de impresora POS (80 mm / 58 mm).
+import { payLabel, type ReceiptPayment } from "./receipt-extras";
 
 export type PrintFormat = "carta" | "t80" | "t58";
 
@@ -45,7 +46,20 @@ type Props = {
   total: number;
   money: (n: number) => string;
   footer: string;
+  /** QR (imagen) que abre este comprobante en el celular. */
+  qr?: string | null;
+  /** Forma de pago y vuelto guardados por el POS. */
+  payment?: ReceiptPayment | null;
 };
+
+function payRows(p: Props) {
+  if (!p.payment) return [];
+  const parts = p.payment.method === "mixto" ? p.payment.parts : [{ method: p.payment.method, amount: p.total }];
+  const rows = parts.map((x) => [payLabel(x.method), p.money(x.amount)] as const);
+  if (p.payment.received && p.payment.received > p.total) rows.push(["Recibido", p.money(p.payment.received)]);
+  if (p.payment.change && p.payment.change > 0) rows.push(["Vuelto", p.money(p.payment.change)]);
+  return rows;
+}
 
 /** Reglas @page e impresión según el formato elegido. */
 export function PrintStyles({ format }: { format: PrintFormat }) {
@@ -161,6 +175,12 @@ function LetterReceipt(p: Props) {
         <div style={{ fontSize: 10.5, color: soft, maxWidth: "55%" }}>
           <div>{p.items.length} producto{p.items.length === 1 ? "" : "s"} · {units} unidad{units === 1 ? "" : "es"}</div>
           {p.resolution ? <div style={{ marginTop: 6 }}>{p.resolution}</div> : null}
+          {p.qr ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+              <img src={p.qr} alt="" style={{ width: 78, height: 78 }} />
+              <div style={{ color: soft }}>Escanea para ver este<br />comprobante en tu celular</div>
+            </div>
+          ) : null}
         </div>
         <div style={{ width: 250, border: `2px solid ${ink}`, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px" }}>
@@ -171,6 +191,14 @@ function LetterReceipt(p: Props) {
             <span>TOTAL</span>
             <span>{p.money(p.total)}</span>
           </div>
+          {payRows(p).length ? (
+            <div style={{ borderTop: `1px solid ${line}`, padding: "6px 12px", fontSize: 10.5 }}>
+              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: soft }}>Forma de pago</div>
+              {payRows(p).map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontWeight: k === "Vuelto" ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -231,12 +259,27 @@ function TicketReceipt(p: Props) {
         <span>Unidades</span>
         <span>{p.items.reduce((s, i) => s + i.qty, 0)}</span>
       </div>
+      {payRows(p).length ? (
+        <>
+          <div style={rule} />
+          <div style={{ fontWeight: 800 }}>FORMA DE PAGO</div>
+          {payRows(p).map(([k, v]) => (
+            <div key={k} style={{ ...row, fontWeight: k === "Vuelto" ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
+          ))}
+        </>
+      ) : null}
       <div style={rule} />
       <div style={{ textAlign: "center", fontSize: font - 1 }}>
         <div>{p.footer}</div>
         {p.resolution ? <div style={{ marginTop: 4, fontSize: font - 2 }}>{p.resolution}</div> : null}
         <div style={{ marginTop: 4 }}>No reemplaza la factura electrónica DIAN.</div>
       </div>
+      {p.qr ? (
+        <div style={{ textAlign: "center", marginTop: 6 }}>
+          <img src={p.qr} alt="" style={{ width: narrow ? "30mm" : "38mm", height: narrow ? "30mm" : "38mm" }} />
+          <div style={{ fontSize: font - 2 }}>Escanea y mira tu comprobante</div>
+        </div>
+      ) : null}
       <div style={{ height: "6mm" }} />
     </div>
   );

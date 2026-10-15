@@ -19,6 +19,8 @@ import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
 import { ImageIndexer } from "./ImageIndexer";
 import { InventoryAlertWatcher } from "./inventario/InventoryAlertWatcher";
 import { PriceApprovalWatcher } from "./pos/PriceApprovalWatcher";
+import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
+import { PermissionChangeWatcher } from "./PermissionChangeWatcher";
 import { logSessionEvent } from "@/lib/audit-client";
 
 type Role = "admin" | "store";
@@ -210,6 +212,22 @@ function activeTab(path: string, tabs: ModuleTab[]) {
   return tabs
     .filter((t) => path === t.href || path.startsWith(t.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
+/** Módulo de auditoría de la página actual (para el botón espía del encabezado). */
+function auditModuleOf(path: string): { module?: string; title: string } {
+  const m: Array<[string, string, string]> = [
+    ["/dashboard/products", "productos", "Auditoría de productos"], ["/dashboard/lista-productos", "productos", "Auditoría de productos"],
+    ["/dashboard/categories", "productos", "Auditoría de categorías"], ["/dashboard/social", "productos", "Auditoría de catálogos"],
+    ["/dashboard/inventario", "inventario", "Auditoría de inventario"], ["/dashboard/pos", "ventas", "Auditoría de ventas"],
+    ["/dashboard/pedidos", "ventas", "Auditoría de pedidos"], ["/dashboard/operaciones", "ventas", "Auditoría de operaciones"],
+    ["/dashboard/clientes", "terceros", "Auditoría de terceros y cartera"], ["/dashboard/gastos", "gastos_nomina", "Auditoría de gastos y nómina"],
+    ["/dashboard/rentabilidad", "precios", "Auditoría de precios y márgenes"], ["/dashboard/fiscal", "facturacion_electronica", "Auditoría fiscal"],
+    ["/dashboard/store/users", "usuarios", "Auditoría de usuarios y permisos"], ["/dashboard/store/billing", "configuracion", "Auditoría de configuración"],
+    ["/dashboard/store", "configuracion", "Auditoría de configuración"], ["/dashboard/puntos", "configuracion", "Auditoría de puntos"],
+  ];
+  const hit = m.find(([p]) => path === p || path.startsWith(p + "/"));
+  return hit ? { module: hit[1], title: hit[2] } : { title: "Auditoría de toda la tienda" };
 }
 
 function moduleOf(path: string): ModuleKey | null {
@@ -432,6 +450,7 @@ export default function DashboardShell({
   const [storePermissions, setStorePermissions] = useState<string[]>([]);
   const [storeIsOwner, setStoreIsOwner] = useState(false);
   const [storeMemberRole, setStoreMemberRole] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
   const [staffUsername, setStaffUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   useNicknameUpdates(setDisplayName);
@@ -451,6 +470,7 @@ export default function DashboardShell({
         return;
       }
 
+      setMyUserId(data.user.id);
       const internalUsername = String(data.user.user_metadata?.internal_username ?? "");
       setStaffUsername(internalUsername);
       setEmail(internalUsername ? `Usuario: ${internalUsername}` : data.user.email ?? "");
@@ -649,6 +669,7 @@ export default function DashboardShell({
         items: [
           { href: firstOf("finance"), emoji: "💰", label: "Finanzas", hint: hintOf("finance"), show: store && anyOf("finance"), module: "finance" },
           { href: firstOf("settings"), emoji: "⚙️", label: "Ajustes", hint: hintOf("settings"), show: store && anyOf("settings"), module: "settings" },
+          { href: "/dashboard/auditoria", emoji: "🕵️", label: "Auditoría", hint: "Quién hizo qué, cuándo y qué cambió", show: store && ["audit", "fiscal_audit"].some((p) => canOpen(p)) },
           { href: "/admin", emoji: "🛡️", label: "Panel Admin", show: role === "admin" },
         ],
       },
@@ -955,7 +976,12 @@ export default function DashboardShell({
             >
               📲 <span className="hidden sm:inline">Instalar app</span>
             </InstallButton>
+            {role === "store" && store?.id && !pathname.startsWith("/dashboard/auditoria") ? (
+              <AuditSpyButton storeId={store.id} title={auditModuleOf(pathname).title} filters={auditModuleOf(pathname).module ? { module: auditModuleOf(pathname).module } : {}} />
+            ) : null}
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
+            {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
+            {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}
             {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
             {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}
             {role === "store" && store?.id && canOpen("inventory_alerts") ? <InventoryAlertWatcher storeId={store.id} /> : null}

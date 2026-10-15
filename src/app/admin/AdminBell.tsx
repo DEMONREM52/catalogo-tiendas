@@ -2,6 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
+import { supabaseBrowser } from "@/lib/supabase/client";
+
+/** Las rutas de administración exigen la sesión del administrador (se valida en el servidor). */
+async function adminFetch(url: string, init: RequestInit = {}) {
+  const { data } = await supabaseBrowser().auth.getSession();
+  const headers = new Headers(init.headers);
+  if (data.session?.access_token) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  return fetch(url, { ...init, headers });
+}
 
 type Noti = {
   id: string;
@@ -35,7 +44,7 @@ export default function AdminBell() {
     setLoading(true);
     try {
       // 1) generar
-      const gen = await fetch("/api/admin/notifications/generate", { method: "POST" });
+      const gen = await adminFetch("/api/admin/notifications/generate", { method: "POST" });
       const genText = await gen.text();
 
       if (!gen.ok) {
@@ -50,7 +59,7 @@ export default function AdminBell() {
       }
 
       // 2) listar
-      const res = await fetch("/api/admin/notifications/list");
+      const res = await adminFetch("/api/admin/notifications/list");
       const listText = await res.text();
 
       if (!res.ok) {
@@ -93,7 +102,7 @@ export default function AdminBell() {
 
   async function markAllRead() {
     if (unreadIds.length === 0) return;
-    await fetch("/api/admin/notifications/mark-read", {
+    await adminFetch("/api/admin/notifications/mark-read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: unreadIds }),
@@ -104,10 +113,10 @@ export default function AdminBell() {
   // ✅ DEBUG: muestra en pantalla lo que devuelve generate/list
   async function debugPing() {
     try {
-      const gen = await fetch("/api/admin/notifications/generate", { method: "POST" });
+      const gen = await adminFetch("/api/admin/notifications/generate", { method: "POST" });
       const genBody = await gen.text();
 
-      const list = await fetch("/api/admin/notifications/list");
+      const list = await adminFetch("/api/admin/notifications/list");
       const listBody = await list.text();
 
       await Swal.fire({

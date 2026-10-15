@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, use, useCallback, useEffect, useState } from "react";
+import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Boxes, ClipboardList, Landmark, MapPin, Power, ShieldCheck, Users, Wallet, Wifi } from "lucide-react";
@@ -174,7 +175,8 @@ function PointDossier({ id }: { id: string }) {
             <h1 className="mt-1 truncate text-2xl font-black sm:text-3xl">{p.name}</h1>
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>{[p.address, p.city].filter(Boolean).join(" · ") || "Sin dirección"}{p.responsible_name ? ` · Responsable: ${p.responsible_name}` : ""}</p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <AuditSpyButton storeId={p.store_id} filters={{ point_id: p.id }} title={`Auditoría del punto ${p.name}`} size="sm" label="Auditoría" />
             <Badge tone={st.tone}>{st.label}</Badge>
             {data.readiness ? <Badge tone={data.readiness.ready ? "good" : "bad"}>{data.readiness.ready ? "🟢 Habilitado fiscalmente" : "🔴 Fiscal pendiente"}</Badge> : null}
           </div>

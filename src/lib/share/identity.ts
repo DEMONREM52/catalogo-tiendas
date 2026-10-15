@@ -21,7 +21,8 @@ export type PublicIdentity = {
   path: string | null;
 };
 
-export const PRODUCTION_ORIGIN = "https://remhub.store";
+import { PRODUCTION_ORIGIN } from "./origin";
+export { PRODUCTION_ORIGIN };
 
 export const REMHUB_IDENTITY: PublicIdentity = {
   kind: "remhub",
@@ -102,15 +103,51 @@ export async function resolveCatalogIdentity(slugRaw: string, modeRaw: string | 
   return null;
 }
 
+const MAX_IMAGE_BYTES = 8_000_000;
+
+/** URL de imagen segura para descargar desde el servidor: https, puerto estándar, dominio público. */
+export function publicImageUrl(src: string | null | undefined): string | null {
+  if (!src) return null;
+  let u: URL;
+  try { u = new URL(src); } catch { return null; }
+  if (u.protocol !== "https:" || (u.port && u.port !== "443") || u.username || u.password) return null;
+  const h = u.hostname.toLowerCase().replace(/\.$/, "");
+  // Sin IP directas (v4/v6, también en decimal u octal) ni nombres internos.
+  if (/^[\d.]+$/.test(h) || /^0x/.test(h) || h.includes(":") || h.startsWith("[")) return null;
+  if (!h.includes(".") || /(^|\.)(localhost|local|internal|intranet|lan|home|corp|localdomain)$/.test(h)) return null;
+  if (/^(metadata|instance-data)(\.|$)/.test(h)) return null;
+  return u.toString();
+}
+
+/** Lee el cuerpo con un tope real de bytes (no confía en content-length). */
+async function readLimited(body: ReadableStream<Uint8Array>, max: number): Promise<Buffer | null> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) { await reader.cancel().catch(() => null); return null; }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
 /** Descarga una imagen (cualquier formato) y la deja en PNG cuadrado. null si no se puede. */
 export async function fetchImageAsPng(src: string | null | undefined, size: number): Promise<Buffer | null> {
-  if (!src || !/^https?:\/\//i.test(src)) return null;
+  // El logo lo escribe cada tienda: solo https a un dominio público (nunca direcciones internas,
+  // IP directas ni redirecciones), y como máximo 8 MB leídos de verdad.
+  const target = publicImageUrl(src);
+  if (!target) return null;
   try {
-    const res = await fetch(src, { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) return null;
-    if (Number(res.headers.get("content-length") ?? 0) > 8_000_000) return null;
+    const res = await fetch(target, { signal: AbortSignal.timeout(6000), redirect: "error" });
+    if (!res.ok || !res.body) return null;
+    if (Number(res.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES) return null;
+    const bytes = await readLimited(res.body, MAX_IMAGE_BYTES);
+    if (!bytes) return null;
     const sharp = (await import("sharp")).default;
-    return await sharp(Buffer.from(await res.arrayBuffer()))
+    return await sharp(bytes, { limitInputPixels: 40_000_000 })
       .resize(size, size, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
       .png()
       .toBuffer();

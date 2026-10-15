@@ -1126,6 +1126,48 @@ export default function PosPage() {
     }
   }
 
+  // «Volver a pedir» desde un comprobante: /dashboard/pos?reorder=<token> arma el carrito con esos productos
+  // a los precios de hoy del punto (se pueden cambiar antes de cobrar).
+  const reorderDone = useRef(false);
+  useEffect(() => {
+    if (reorderDone.current || !storeId || loading || !allProducts.length || (pointId && !pointStock)) return;
+    const reorderToken = new URLSearchParams(window.location.search).get("reorder");
+    if (!reorderToken) return;
+    reorderDone.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    void (async () => {
+      const { data, error } = await supabaseBrowser().rpc("get_order_by_token_v2", { p_token: reorderToken });
+      const order = (data as { order?: { store_id?: string; receipt_no?: number } } | null)?.order;
+      if (error || !order || order.store_id !== storeId) {
+        await Swal.fire({ icon: "warning", title: "No se pudo cargar el pedido", text: "Ese pedido no existe o es de otra tienda.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+        return;
+      }
+      const lines = ((data as { items?: Array<{ product_id: string; name: string; qty: number }> }).items ?? []);
+      const missing: string[] = [];
+      const next: CartItem[] = [];
+      for (const it of lines) {
+        const p = allProducts.find((x) => x.id === it.product_id);
+        if (!p || p.active === false) { missing.push(it.name); continue; }
+        next.push({ productId: p.id, name: p.name, qty: Math.max(1, Number(it.qty) || 1), price: priceOf(p, currentPriceList), priceLevel: currentPriceList, note: "" });
+      }
+      if (cart.length && !window.confirm("Tienes productos en el carrito. ¿Reemplazarlos por el pedido a repetir?")) return;
+      setEditingDoc(null);
+      setCart(next);
+      const short = next.filter((i) => (pointStock ? pointStock.get(i.productId) ?? 0 : Infinity) < i.qty).map((i) => i.name);
+      const esc = (t: string) => t.replace(/[<>&]/g, "");
+      await Swal.fire({
+        icon: next.length ? "success" : "warning",
+        title: next.length ? "🔁 Pedido listo para repetir" : "No hay productos para repetir",
+        html: `${next.length} producto${next.length === 1 ? "" : "s"} con los precios de hoy. Revisa, cambia lo que necesites y cobra.${
+          missing.length ? `<br/><br/><b>Ya no están disponibles:</b><br/>${missing.map((m) => `• ${esc(m)}`).join("<br/>")}` : ""}${
+          short.length ? `<br/><br/><b>Sin unidades suficientes en este punto:</b><br/>${short.map((m) => `• ${esc(m)}`).join("<br/>")}` : ""}`,
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#8b5cf6",
+      });
+    })();
+  }, [storeId, loading, allProducts, pointId, pointStock, priceOf, currentPriceList, cart.length]);
+
   const shortcuts = useRef({ submit: createInvoice, hold: holdSale });
   useEffect(() => { shortcuts.current = { submit: createInvoice, hold: holdSale }; });
   useEffect(() => {

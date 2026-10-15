@@ -7,7 +7,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { AddiCustomerForm, type AddiCustomerInfo } from "@/lib/payments/AddiCustomerForm";
 import { PRINT_FORMAT_KEY, PrintReceipt, PrintStyles, parsePrintFormat, type PrintFormat } from "./PrintReceipt";
 import { PrintFormatPicker } from "./PrintFormatPicker";
-import { OrderScreen } from "./OrderScreen";
+import { OrderScreen, type HistoryRow } from "./OrderScreen";
+import { downloadReceiptPdf, normalizePayment, qrDataUrl, receiptUrl, type ReceiptPayment } from "./receipt-extras";
 
 /* =========================================================
    Helpers
@@ -41,6 +42,7 @@ type StoreExtra = {
   name: string;
   whatsapp: string;
   logo_url: string | null;
+  slug?: string | null;
 };
 
 type StoreProfileLite = {
@@ -126,6 +128,18 @@ export default function PedidoPage() {
   } | null>(null);
 
   // Documento electrónico de la venta (si existe): emisor, número, resolución y CUFE.
+  // Forma de pago del POS, otros pedidos del cliente, QR del comprobante y si quien mira es del equipo.
+  const [payInfo, setPayInfo] = useState<ReceiptPayment | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [qr, setQr] = useState<string | null>(null);
+  const [isStaff, setIsStaff] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void qrDataUrl(receiptUrl(token)).then((d) => alive && setQr(d));
+    void supabaseBrowser().auth.getSession().then(({ data }) => alive && setIsStaff(Boolean(data.session)));
+    return () => { alive = false; };
+  }, [token]);
+
   const [fiscalDoc, setFiscalDoc] = useState<{
     full_number: string; document_type: string; environment: string; status: string; cufe: string | null; qr_data: string | null;
     issuer: { legal_name: string; document_type: string; document_number: string; verification_digit: string | null; fiscal_address: string | null; city: string | null; email: string | null };
@@ -242,6 +256,13 @@ export default function PedidoPage() {
       void sb.rpc("fiscal_public_receipt", { p_token: token }).then(({ data: fdoc, error: fError }) => {
         if (!fError) setFiscalDoc((fdoc as typeof fiscalDoc) ?? null);
       });
+      // Si faltan las migraciones 20261115/20261116, simplemente no se muestran.
+      void sb.rpc("erp_order_payment_by_token", { p_token: token }).then(({ data: pay, error: payError }) => {
+        if (!payError) setPayInfo(normalizePayment(pay));
+      });
+      void sb.rpc("erp_customer_orders_by_token", { p_token: token }).then(({ data: hist, error: histError }) => {
+        if (!histError) setHistory(((hist as { rows?: HistoryRow[] } | null)?.rows ?? []) as HistoryRow[]);
+      });
 
       const loadedItems: Item[] = (data?.items ?? []).map((i: any) => ({
           product_id: i.product_id,
@@ -271,7 +292,7 @@ export default function PedidoPage() {
       // 3) tienda extra
       const { data: stData, error: stErr } = await sb
         .from("stores")
-        .select("id,name,whatsapp,logo_url")
+        .select("id,name,whatsapp,logo_url,slug")
         .eq("id", storeId)
         .maybeSingle();
 
@@ -727,6 +748,40 @@ export default function PedidoPage() {
     }
   }
 
+  async function downloadPdf() {
+    if (!order) return;
+    try {
+      await downloadReceiptPdf({
+        fileName: `${docKindLabel.replace(/\s+/g, "-")}-${docNumberLabel.replace(/[^\w-]+/g, "")}.pdf`,
+        businessName: fiscalDoc ? fiscalDoc.issuer.legal_name : point ? point.legal_name || point.name : invoiceBusinessName,
+        businessLines: [
+          point && point.legal_name && point.legal_name !== point.name ? point.name : "",
+          fiscalDoc ? `NIT ${fiscalDoc.issuer.document_number}${fiscalDoc.issuer.verification_digit ? `-${fiscalDoc.issuer.verification_digit}` : ""}` : point?.nit ? `NIT ${point.nit}` : billingDetails?.nit ? `NIT ${billingDetails.nit}` : "",
+          (point ? [point.address, point.city] : [billingDetails?.address, billingDetails?.city]).filter(Boolean).join(" · "),
+          [point?.phone || storeWhatsapp, point?.email || billingDetails?.email].filter(Boolean).join(" · "),
+        ],
+        docTitle: docKindLabel,
+        docNumber: docNumberLabel,
+        date: new Date(order.created_at).toLocaleString("es-CO"),
+        customer: customerNameShow,
+        customerDoc: erpDoc?.customer_doc ?? null,
+        seller: erpDoc?.seller_name ?? null,
+        note: customerNote || null,
+        items: items.map((i) => ({ name: i.name, qty: Number(i.qty), price: Number(i.price) })),
+        total,
+        payment: payInfo,
+        resolution: resolutionText,
+        footer: point?.receipt_footer || profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp.",
+        qr,
+        cancelled: order.status === "cancelled",
+        electronic: Boolean(fiscalDoc),
+        money,
+      });
+    } catch (err: unknown) {
+      await Swal.fire({ icon: "error", title: "No se pudo crear el PDF", text: String((err as Error)?.message ?? err), background: "color-mix(in oklab, var(--t-card-bg) 92%, black)", color: "var(--t-text)" });
+    }
+  }
+
   function sendWhatsApp() {
     if (!storeWhatsapp || !order) return;
 
@@ -841,6 +896,8 @@ export default function PedidoPage() {
         total={total}
         money={money}
         footer={point?.receipt_footer || profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp."}
+        qr={qr}
+        payment={payInfo}
       />
 
       {/* Comprobante en pantalla (la impresión usa PrintReceipt). */}
@@ -881,6 +938,12 @@ export default function PedidoPage() {
           onWhatsApp={sendWhatsApp}
           onPrint={printNow}
           onPay={(m) => void handlePayment(m as StorePaymentMethod)}
+          payment={payInfo}
+          qr={qr}
+          history={history}
+          onPdf={downloadPdf}
+          reorderCatalog={storeExtra?.slug && order.catalog_type === "retail" && order.status !== "cancelled" ? `/${storeExtra.slug}/detal?reorder=${encodeURIComponent(token)}` : null}
+          reorderPos={isStaff ? `/dashboard/pos?reorder=${encodeURIComponent(token)}` : null}
         />
       </div>
       {showAddiForm ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import Swal from "sweetalert2";
 import { AnimatePresence, motion } from "framer-motion";
 import { AtSign, Check, Copy, Eye, EyeOff, KeyRound, Link2, Loader2, MapPin, MessageCircle, Pencil, Power, Search, ShieldCheck, Trash2, UserPlus, UserRound, Users, X } from "lucide-react";
@@ -697,6 +698,7 @@ export default function StoreUsersPage() {
                         <ActionButton icon={<Link2 size={14} />} label="Enlace" onClick={() => void copyLoginLink(member)} />
                         <ActionButton icon={<Power size={14} />} label={member.active ? "Desactivar" : "Reactivar"} tone={member.active ? "warn" : "good"} onClick={() => void toggleMember(member)} disabled={saving} />
                         <ActionButton icon={<Trash2 size={14} />} label="Eliminar" tone="bad" onClick={() => void deleteMember(member)} disabled={saving} />
+                        <AuditSpyButton storeId={member.store_id} filters={{ entity_id: member.user_id }} title={`Historial de ${member.display_name || member.username || "este usuario"}`} size="sm" />
                       </div>
 
                       <AnimatePresence initial={false}>

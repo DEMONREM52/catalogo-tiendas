@@ -22,6 +22,8 @@ type CartCtx = {
   }) => void;
 
   addItem: (item: CartItem, opts?: { openDrawer?: boolean }) => void;
+  /** Agrega varios productos de una vez (p. ej. «volver a pedir»). */
+  addItems: (items: CartItem[], opts?: { openDrawer?: boolean }) => void;
   setQty: (productId: string, qty: number) => void;
   removeItem: (productId: string) => void;
   empty: () => void;
@@ -147,6 +149,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (opts?.openDrawer) open();
   }
 
+  function addItems(list: CartItem[], opts?: { openDrawer?: boolean }) {
+    if (!cart || !list.length) return;
+    const items = [...cart.items];
+    for (const item of list) {
+      const min = cartUsesMinimums(cart) ? (item.minWholesale ?? null) : null;
+      const baseQty = min ? Math.max(item.qty, min) : item.qty;
+      const idx = items.findIndex((i) => i.productId === item.productId);
+      if (idx >= 0) items[idx] = { ...items[idx], qty: items[idx].qty + baseQty };
+      else items.push({ ...item, qty: baseQty });
+    }
+    update({ ...cart, items });
+    if (opts?.openDrawer) open();
+  }
+
   function setQty(productId: string, qty: number) {
     if (!cart) return;
 
@@ -213,6 +229,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     close,
     initCart,
     addItem,
+    addItems,
     setQty,
     removeItem,
     empty,
