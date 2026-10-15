@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { AddiCustomerForm, type AddiCustomerInfo } from "@/lib/payments/AddiCustomerForm";
 import { PRINT_FORMAT_KEY, PrintReceipt, PrintStyles, parsePrintFormat, type PrintFormat } from "./PrintReceipt";
 import { PrintFormatPicker } from "./PrintFormatPicker";
+import { OrderScreen } from "./OrderScreen";
 
 /* =========================================================
    Helpers
@@ -82,78 +83,6 @@ function normalizePaymentMethods(value: unknown): StorePaymentMethod[] {
       show_on_invoice: method.show_on_invoice !== false,
     }];
   });
-}
-
-/* =========================================================
-   Small UI pieces
-========================================================= */
-function Pill({
-  children,
-  tone = "soft",
-}: {
-  children: React.ReactNode;
-  tone?: "soft" | "cta" | "green";
-}) {
-  const base =
-    "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border backdrop-blur-xl";
-
-  // ✅ ahora usa tokens (automático claro/oscuro)
-  const style =
-    tone === "cta"
-      ? {
-          borderColor: "var(--t-card-border)",
-          background: "var(--t-card-bg)",
-          color: "color-mix(in oklab, var(--t-text) 92%, transparent)",
-        }
-      : tone === "green"
-        ? {
-            borderColor: "color-mix(in oklab, var(--t-success, #22c55e) 35%, var(--t-card-border))",
-            background: "color-mix(in oklab, var(--t-success, #22c55e) 14%, transparent)",
-            color: "color-mix(in oklab, var(--t-text) 88%, var(--t-success, #22c55e) 12%)",
-          }
-        : {
-            borderColor: "var(--t-card-border)",
-            background: "var(--t-card-bg)",
-            color: "color-mix(in oklab, var(--t-text) 85%, transparent)",
-          };
-
-  return (
-    <span className={base} style={style as any}>
-      {children}
-    </span>
-  );
-}
-
-function SoftBtn({
-  children,
-  onClick,
-  disabled,
-  title,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  title?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="btn-soft px-4 py-2 text-sm font-semibold disabled:opacity-60"
-      type="button"
-      // ✅ si tu .btn-soft ya usa tokens, esto no estorba; si no, lo hace automático
-      style={
-        {
-          borderColor: "var(--t-card-border)",
-          background: "var(--t-card-bg)",
-          color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
-        } as any
-      }
-    >
-      {children}
-    </button>
-  );
 }
 
 /* =========================================================
@@ -870,7 +799,7 @@ export default function PedidoPage() {
      UI
   ========================================================= */
   return (
-    <main className="receipt-host relative min-h-screen px-4 py-10 text-[color:var(--t-text)] print:bg-white print:text-black">
+    <main className="receipt-host relative min-h-screen px-3 py-6 text-[color:var(--t-text)] sm:px-4 sm:py-10 print:bg-white print:text-black">
       {/* Fondo premium (auto claro/oscuro con tokens) */}
       <div className="no-print pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0" style={{ background: "var(--t-bg-base)" }} />
@@ -914,317 +843,45 @@ export default function PedidoPage() {
         footer={point?.receipt_footer || profile?.description || "Gracias por tu compra. Para cualquier información adicional, contáctanos por WhatsApp."}
       />
 
-      {/* =========================================================
-         ✅ COMPROBANTE (pantalla)
-      ========================================================= */}
-      <div className={printMode ? "hidden" : "no-print mx-auto w-full max-w-3xl"}>
-        <div
-          className="glass p-6 md:p-7"
-          style={{
-            borderColor: "var(--t-card-border)",
-            background: "var(--t-card-bg)",
-            color: "var(--t-text)",
-            boxShadow: "0 24px 70px color-mix(in oklab, black 45%, transparent)",
-          }}
-        >
-          {/* Header */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold">{docKindLabel}</h1>
-                {erpDoc?.doc_number ? <Pill tone="cta">{erpDoc.doc_number}</Pill> : null}
-                {receiptNumber ? <Pill tone="soft">Pedido #{receiptNumber}</Pill> : null}
-                <Pill tone="soft">
-                  Estado: <span className="font-bold">{statusLabel(order.status)}</span>
-                </Pill>
-              </div>
-              {order.status === "cancelled" ? (
-                <div className="mt-3 rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: "rgba(239,68,68,.5)", background: "rgba(239,68,68,.12)", color: "#ef4444" }}>
-                  ⊘ Este documento fue ANULADO y no tiene validez.
-                </div>
-              ) : null}
-
-              <div className="mt-3 flex items-center gap-3">
-                {point?.logo_url || storeLogo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={point?.logo_url || storeLogo || ""}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-xl border bg-white object-contain"
-                    style={{ borderColor: "var(--t-card-border)" }}
-                  />
-                ) : null}
-                <div className="min-w-0 text-sm">
-                  <p className="truncate font-semibold">{point ? point.legal_name || point.name : storeName}</p>
-                  <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>
-                    {[
-                      point && point.legal_name && point.legal_name !== point.name ? point.name : null,
-                      point?.nit ? `NIT ${point.nit}` : null,
-                      point ? [point.address, point.city].filter(Boolean).join(", ") || null : null,
-                      order.catalog_type === "retail" ? "Detal" : "Mayoristas",
-                    ].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-              </div>
-
-              {/* ✅ CLIENTE + OBSERVACIONES (PANTALLA) */}
-              <div className="mt-3 space-y-1">
-                <p className="text-sm">
-                  👋 Hola, <b className="opacity-100">{customerNameShow}</b>
-                </p>
-                <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                  📝 Observaciones: <b style={{ color: "var(--t-text)" }}>{customerNoteShow}</b>
-                </p>
-              </div>
-
-              <p className="mt-2 text-xs" style={{ color: "color-mix(in oklab, var(--t-muted) 92%, transparent)" }}>
-                Guarda este link: siempre podrás volver.
-              </p>
-
-              {isLocked ? (
-                <p
-                  className="mt-2 text-xs"
-                  style={{
-                    color: "color-mix(in oklab, var(--t-warn, #f59e0b) 65%, var(--t-text))",
-                  }}
-                >
-                  🔒 Este pedido está confirmado/completado y no se puede editar.
-                </p>
-              ) : null}
-
-              {/* Only show payment UI when the store has an enabled, implemented gateway. */}
-              {(order?.status === "confirmed" || order?.status === "completed") &&
-              availablePaymentMethods.length > 0 ? (
-                <div className="mt-4">
-                  <h3 className="text-sm font-semibold">Pago en línea</h3>
-                  <p className="text-xs mt-1" style={{ color: "var(--t-muted)" }}>
-                    Elige una forma de pago. La tienda recibirá la confirmación cuando la pasarela apruebe el pago.
-                  </p>
-
-                  <div className="mt-3 grid gap-3">
-                    {paymentStatus === "paid" ? (
-                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
-                        Pago aprobado y verificado{paymentMethodType ? ` con ${paymentMethodType}` : ""}. ¡Gracias por tu compra!
-                      </div>
-                    ) : paymentStatus === "pending" ? (
-                      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-                        Estamos esperando la respuesta de {paymentMethodType || "la pasarela de pago"}. Este estado se actualizará automáticamente.
-                      </div>
-                    ) : paymentStatus === "failed" ? (
-                      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm">
-                        El último intento no fue aprobado. Puedes intentar pagar nuevamente.
-                      </div>
-                    ) : null}
-
-                    {availablePaymentMethods.map((method) => (
-                      <div
-                        key={method.id}
-                        className="flex items-center justify-between gap-3 rounded-2xl border p-3"
-                      >
-                        <div>
-                          <div className="font-semibold">{method.name}</div>
-                          <div className="text-xs" style={{ color: "var(--t-muted)" }}>
-                            {method.provider === "addi"
-                              ? "Compra a cuotas con Addi, sujeta a evaluación y aprobación."
-                              : "Tarjetas débito/crédito · PSE · Nequi · otros métodos disponibles de Wompi"}
-                          </div>
-                        </div>
-                        <button
-                          className="btn-cta px-3 py-2 text-sm"
-                          onClick={() => handlePayment(method)}
-                          disabled={paymentStatus === "pending" || paymentStatus === "paid" || startingAddi}
-                          type="button"
-                        >
-                          {paymentStatus === "pending"
-                            ? "Esperando confirmación..."
-                            : `Pagar con ${method.name}`}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={sendWhatsApp}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                style={{
-                  background:
-                    "linear-gradient(90deg, color-mix(in oklab, var(--t-success, #22c55e) 95%, white 5%), color-mix(in oklab, var(--t-success, #22c55e) 75%, var(--t-accent2, #10b981) 25%))",
-                  color: "color-mix(in oklab, var(--t-bg-base) 82%, black)",
-                  boxShadow: "0 18px 45px color-mix(in oklab, var(--t-success, #22c55e) 22%, transparent)",
-                }}
-                disabled={saving || hasUnsavedChanges}
-                title={
-                  hasUnsavedChanges
-                    ? "Guarda los cambios antes de enviar el pedido"
-                    : undefined
-                }
-                type="button"
-              >
-                Enviar WhatsApp
-              </button>
-
-              <SoftBtn onClick={printNow} disabled={!order}>
-                Imprimir
-              </SoftBtn>
-            </div>
-          </div>
-
-          {/* Items */}
-          <div className="mt-6 space-y-3">
-            {items.map((i) => {
-              const subtotal = i.price * i.qty;
-
-              return (
-                <div
-                  key={i.product_id}
-                  className="glass-soft p-4"
-                  style={{
-                    borderColor: "var(--t-card-border)",
-                    background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
-                  }}
-                >
-                  <div className="flex gap-4">
-                    <div
-                      className="h-16 w-16 overflow-hidden rounded-2xl border"
-                      style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}
-                    >
-                      {i.image_url ? (
-                        <img src={i.image_url} className="h-full w-full object-cover" alt={i.name} />
-                      ) : null}
-                    </div>
-
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{i.name}</p>
-                          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                            {money(i.price)}
-                          </p>
-                        </div>
-
-                        <Pill tone="soft">{money(subtotal)}</Pill>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <button
-                          className="btn-soft px-3 py-2 text-sm font-semibold disabled:opacity-50"
-                          style={{
-                            borderColor: "var(--t-card-border)",
-                            background: "var(--t-card-bg)",
-                            color: "var(--t-text)",
-                          }}
-                          onClick={() => setQty(i.product_id, i.qty - 1)}
-                          disabled={saving || isLocked}
-                          type="button"
-                        >
-                          −
-                        </button>
-
-                        <input
-                          className="ring-focus w-24 px-3 py-2 text-center text-sm disabled:opacity-50"
-                          style={{
-                            background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                            border: "1px solid var(--t-card-border)",
-                            borderRadius: "16px",
-                            color: "var(--t-text)",
-                          }}
-                          value={i.qty}
-                          onChange={(e) => setQty(i.product_id, Number(e.target.value))}
-                          disabled={saving || isLocked}
-                        />
-
-                        <button
-                          className="btn-soft px-3 py-2 text-sm font-semibold disabled:opacity-50"
-                          style={{
-                            borderColor: "var(--t-card-border)",
-                            background: "var(--t-card-bg)",
-                            color: "var(--t-text)",
-                          }}
-                          onClick={() => setQty(i.product_id, i.qty + 1)}
-                          disabled={saving || isLocked}
-                          type="button"
-                        >
-                          +
-                        </button>
-
-                        <span className="ml-auto text-xs" style={{ color: "var(--t-muted)" }}>
-                          Subtotal: <b style={{ color: "var(--t-text)" }}>{money(subtotal)}</b>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Total + Save */}
-          <div
-            className="mt-6 glass-soft p-5"
-            style={{
-              borderColor: "var(--t-card-border)",
-              background: "color-mix(in oklab, var(--t-card-bg) 88%, transparent)",
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                Total
-              </p>
-              <p className="text-2xl font-extrabold">{money(total)}</p>
-            </div>
-
-            <button
-              onClick={saveChanges}
-              className="btn-cta mt-4 w-full px-4 py-3 text-sm font-semibold disabled:opacity-60"
-              disabled={saving || isLocked}
-              type="button"
-              style={
-                {
-                  // ✅ si tu .btn-cta ya usa tokens, esto no molesta; si no, lo hace automático
-                  borderColor: "color-mix(in oklab, var(--t-accent2) 35%, var(--t-card-border))",
-                  background: "color-mix(in oklab, var(--t-cta) 18%, transparent)",
-                  color: "color-mix(in oklab, var(--t-text) 92%, transparent)",
-                  boxShadow: "0 18px 45px color-mix(in oklab, var(--t-cta) 18%, transparent)",
-                } as any
-              }
-            >
-              {saving ? "Guardando..." : "Guardar cambios"}
-            </button>
-
-            {!isLocked ? (
-              <button
-                onClick={confirmOrder}
-                className="btn-soft mt-3 w-full px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={saving || hasUnsavedChanges}
-                type="button"
-                title={
-                  hasUnsavedChanges
-                    ? "Guarda los cambios antes de confirmar el pedido"
-                    : undefined
-                }
-              >
-                {saving ? "Procesando..." : "Confirmar pedido"}
-              </button>
-            ) : null}
-
-            {!isLocked ? (
-              <p className="mt-3 text-xs" style={{ color: "var(--t-muted)" }}>
-                Primero guarda las cantidades editadas. Cuando el guardado termine, confirma el pedido para bloquearlo.
-              </p>
-            ) : (
-              <p className="mt-3 text-xs" style={{ color: "var(--t-muted)" }}>
-                {order?.status === "cancelled"
-                  ? "Este documento fue anulado. Si necesitas comprar, crea un nuevo pedido desde el catálogo."
-                  : "Este pedido ya fue confirmado. Si necesitas cambios, crea un nuevo pedido desde el catálogo."}
-              </p>
-            )}
-          </div>
-        </div>
+      {/* Comprobante en pantalla (la impresión usa PrintReceipt). */}
+      <div className={printMode ? "hidden" : "no-print"}>
+        <OrderScreen
+          status={String(order.status ?? "draft")}
+          docKindLabel={docKindLabel}
+          docNumber={docNumberLabel}
+          orderNumber={erpDoc?.doc_number || fiscalDoc ? receiptNumber : null}
+          businessName={point ? point.legal_name || point.name : storeName}
+          businessLine={[
+            point && point.legal_name && point.legal_name !== point.name ? point.name : null,
+            point?.nit ? `NIT ${point.nit}` : billingDetails?.nit ? `NIT ${billingDetails.nit}` : null,
+            point ? [point.address, point.city].filter(Boolean).join(", ") || null : [profile?.address, profile?.city].filter(Boolean).join(", ") || null,
+          ].filter(Boolean).join(" · ")}
+          logo={point?.logo_url || storeLogo}
+          customerName={customerName}
+          customerDoc={erpDoc?.customer_doc ?? null}
+          customerNote={customerNote}
+          pointName={point?.name ?? null}
+          sellerName={erpDoc?.seller_name ?? null}
+          createdAt={new Date(order.created_at).toLocaleString("es-CO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+          catalogLabel={order.catalog_type === "retail" ? "🛍️ Detal" : "📦 Mayoristas"}
+          items={items}
+          total={total}
+          money={money}
+          locked={isLocked}
+          saving={saving}
+          dirty={hasUnsavedChanges}
+          canWhatsApp={Boolean(storeWhatsapp)}
+          paymentStatus={paymentStatus}
+          paymentMethodType={paymentMethodType}
+          paymentMethods={availablePaymentMethods}
+          startingAddi={startingAddi}
+          onQty={setQty}
+          onSave={() => void saveChanges()}
+          onConfirm={() => void confirmOrder()}
+          onWhatsApp={sendWhatsApp}
+          onPrint={printNow}
+          onPay={(m) => void handlePayment(m as StorePaymentMethod)}
+        />
       </div>
       {showAddiForm ? (
         <AddiCustomerForm
