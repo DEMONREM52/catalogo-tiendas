@@ -49,6 +49,8 @@ const STATUS: Record<LineStatus, { dot: string; label: string; color: string }> 
   unknown: { dot: "⚪", label: "Precio editado", color: "var(--t-muted)" },
 };
 
+const FLOOR_NAME: Record<string, string> = { mother: "🏠 precio madre", margin: "📈 mínimo con ganancia", cost: "⚖️ mínimo", list: "lista", free: "" };
+
 function QtyStepper({ qty, max, onChange }: { qty: number; max?: number | null; onChange: (n: number) => void }) {
   const [typed, setTyped] = useState<string | null>(null);
   const over = max !== null && max !== undefined && qty > max;
@@ -119,6 +121,9 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
   const list = line.levels[line.priceLevel - 1] ?? line.price;
   const floor = floors?.free ? 0 : floors?.floors[line.productId]?.floor;
   const pct = list > 0 && line.price < list ? Math.round(((list - line.price) / list) * 1000) / 10 : 0;
+  const floorName = FLOOR_NAME[floors?.mode ?? "list"] ?? "Mínimo";
+  const canLower = Boolean(floors && !floors.free && floor !== undefined && floor < list);
+  const pctOff = (v: number) => (list > 0 ? Math.round(((list - v) / list) * 1000) / 10 : 0);
 
   return (
     <motion.li
@@ -148,10 +153,13 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
               {st.dot} {st.label}{pct > 0 ? ` −${pct.toLocaleString("es-CO")} %` : ""} <ChevronDown size={11} className={`transition ${open ? "rotate-180" : ""}`} />
             </button>
           </div>
-          {floors && !floors.free && floor !== undefined && floor < list ? (
-            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}><Lock size={9} className="mr-0.5 inline" />Puedes dejarlo hasta <b style={{ color: "var(--t-text)" }}>{money(floor)}</b></p>
+          {canLower ? (
+            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}><Lock size={9} className="mr-0.5 inline" />Puedes dejarlo hasta {floorName} <b style={{ color: "var(--t-text)" }}>{money(floor!)}</b> (−{pctOff(floor!).toLocaleString("es-CO")} %)</p>
           ) : floors && !floors.free && floor !== undefined ? (
-            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}><Lock size={9} className="mr-0.5 inline" />Sin descuento permitido (puedes subirlo)</p>
+            <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}>
+              <Lock size={9} className="mr-0.5 inline" />
+              {floors.source === "default" ? "Sin descuento: tu punto aún no tiene límite configurado (lo define la madre)." : "Tu límite no deja bajar este precio (sí puedes subirlo)."}
+            </p>
           ) : null}
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <QtyStepper qty={line.qty} max={line.stock} onChange={onQty} />
@@ -174,14 +182,42 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
                 </button>
               ))}
             </div>
+            {canLower ? (
+              <div className="mt-2.5 rounded-xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span>Ajusta el precio</span>
+                  <span className="tabular-nums" style={{ color: line.price < list ? "#f59e0b" : "#22c55e" }}>{money(line.price)}{line.price < list ? ` · −${pctOff(line.price).toLocaleString("es-CO")} %` : ""}</span>
+                </div>
+                <input
+                  type="range"
+                  aria-label={`Precio de ${line.name} entre el mínimo y la lista`}
+                  min={floor}
+                  max={list}
+                  step={100}
+                  value={Math.min(list, Math.max(floor!, line.price))}
+                  onChange={(e) => onPrice(Number(e.target.value))}
+                  className="mt-2 w-full cursor-pointer"
+                  style={{ border: "none", background: "transparent", boxShadow: "none", minHeight: 0, padding: 0, accentColor: "var(--t-accent)" }}
+                />
+                <div className="mt-1 flex justify-between gap-2 text-[11px]">
+                  <button type="button" onClick={() => onPrice(floor!)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>{floorName} {money(floor!)}</button>
+                  <button type="button" onClick={() => onPrice(list)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>Lista {money(list)}</button>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
               <span style={{ color: "var(--t-muted)" }}>Descuento rápido:</span>
               <div className="flex gap-1">
-                {[5, 10, 15].map((d) => (
-                  <button key={d} type="button" onClick={() => onPrice(Math.round(list * (1 - d / 100) / 100) * 100)} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}>
-                    −{d}%
-                  </button>
-                ))}
+                {[5, 10, 15].map((d) => {
+                  const v = Math.round(list * (1 - d / 100) / 100) * 100;
+                  const locked = Boolean(floors && !floors.free && floor !== undefined && v < floor);
+                  return (
+                    <button key={d} type="button" onClick={() => onPrice(v)} title={locked ? "Queda por debajo de tu límite: necesitará autorización" : money(v)}
+                      className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: locked ? "rgba(239,68,68,.45)" : "var(--t-card-border)", opacity: locked ? 0.75 : 1 }}>
+                      {locked ? "🔒 " : ""}−{d}%
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {floors?.free ? (

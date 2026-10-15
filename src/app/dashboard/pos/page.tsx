@@ -1747,7 +1747,7 @@ export default function PosPage() {
                   <span className="font-bold">Total</span>
                   <motion.span key={total} initial={{ scale: 1.12 }} animate={{ scale: 1 }} className="text-2xl font-black tabular-nums">{money(total)}</motion.span>
                 </p>
-                {floors ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>🔐 {LIMIT_LABEL[floors.mode] ?? ""}{floors.mode === "margin" ? ` (+${floors.margin_pct} % sobre el costo)` : ""}.</p> : null}
+                {floors ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>🔐 {LIMIT_LABEL[floors.mode] ?? ""}{floors.mode === "margin" ? ` (+${floors.margin_pct} % sobre el costo)` : ""}{floors.source === "default" ? " · tu punto aún no tiene límite configurado (Rentabilidad → Límites de precio)" : floors.source === "user" ? " · límite personal" : ""}.</p> : null}
               </div>
             ) : null}
 

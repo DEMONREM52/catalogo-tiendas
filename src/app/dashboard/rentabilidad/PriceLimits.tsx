@@ -75,6 +75,19 @@ export function PriceLimits({ storeId }: { storeId: string }) {
     return () => { alive = false; };
   }, [storeId, tick]);
 
+  async function saveAll(mode: Mode | null, pct: number | null) {
+    if (!data || !mode) return;
+    const go = await Swal.fire({ icon: "question", title: "¿Aplicar a todos los puntos?", html: `Los <b>${data.points.length}</b> puntos y bodegas quedarán en <b>${esc(modeText(mode, pct))}</b>.<br/><small>Las excepciones por usuario se mantienen.</small>`, showCancelButton: true, confirmButtonText: "Aplicar", cancelButtonText: "Cancelar", ...swalTheme });
+    if (!go.isConfirmed) return;
+    for (const p of data.points) {
+      const { error: e } = await supabaseBrowser().rpc("erp_price_limit_save", { p_store: storeId, p_point: p.point_id, p_user: null, p_mode: mode, p_margin_pct: pct });
+      if (e) return void Swal.fire({ icon: "error", title: `No se pudo guardar ${esc(p.name)}`, html: esc(e.message), ...swalTheme });
+    }
+    void Swal.fire({ icon: "success", title: "Listo para todos los puntos", timer: 1300, showConfirmButton: false, ...swalTheme });
+    setOpen(null);
+    load();
+  }
+
   async function save(point: string | null, user: string | null, mode: Mode | null, pct: number | null) {
     const { error: e } = await supabaseBrowser().rpc("erp_price_limit_save", { p_store: storeId, p_point: point, p_user: user, p_mode: mode, p_margin_pct: pct });
     if (e) return void Swal.fire({ icon: "error", title: "No se pudo guardar", html: esc(e.message), ...swalTheme });
@@ -98,7 +111,21 @@ export function PriceLimits({ storeId }: { storeId: string }) {
       </section>
 
       <section className="rounded-2xl border p-4" style={cardStyle}>
-        <p className="flex items-center gap-1.5 text-sm font-black"><MapPin size={15} /> Por punto <span className="text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>(todos sus vendedores)</span></p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex flex-1 items-center gap-1.5 text-sm font-black"><MapPin size={15} /> Por punto <span className="text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>(todos sus vendedores)</span></p>
+          {!ro && data.points.length > 1 ? (
+            <span className="text-xs"><button type="button" onClick={() => setOpen(open === "__all" ? null : "__all")} className="rounded-full border px-3 py-1 font-bold" style={{ borderColor: "var(--t-accent)" }}>⚡ Aplicar a todos los puntos</button></span>
+          ) : null}
+        </div>
+        {open === "__all" ? (
+          <div className="mt-3 rounded-xl border p-3" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+            <p className="mb-2 text-xs font-bold">Elige el límite para todos los puntos y bodegas:</p>
+            <ModePicker mode={null} pct={10} disabled={ro} onSave={(m, pct) => void saveAll(m, pct)} />
+          </div>
+        ) : null}
+        {data.points.every((p) => !p.mode) ? (
+          <p className="mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">⚠️ Ningún punto tiene límite configurado: por ahora nadie puede bajar del precio de lista (solo quien tenga «Autorizar precios»).</p>
+        ) : null}
         <ul className="mt-3 space-y-2">
           {data.points.map((p) => (
             <motion.li layout key={p.point_id} className="rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
