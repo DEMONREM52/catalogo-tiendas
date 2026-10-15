@@ -10,6 +10,7 @@ import { DocumentsTab } from "@/app/dashboard/fiscal/DocumentsTab";
 import { AuditList } from "@/app/dashboard/fiscal/AuditTab";
 import { ReadinessCard } from "@/app/dashboard/fiscal/SummaryTab";
 import type { FiscalAccess } from "@/app/dashboard/fiscal/useFiscal";
+import { DateField } from "@/components/forms/Fields";
 
 type Overview = {
   period: { from: string; to: string };
@@ -75,8 +76,8 @@ export default function AdminFiscalPage() {
         <h1 className="mt-1 text-2xl font-black sm:text-3xl">Fiscal y seguridad</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>Contribuyentes, numeraciones, documentos, errores, webhooks e intentos sospechosos de toda la plataforma.</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-[auto_auto_1fr] sm:items-end">
-          <Field label="Desde"><input type="date" className={inputCls} style={inputStyle} value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} /></Field>
-          <Field label="Hasta"><input type="date" className={inputCls} style={inputStyle} value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} /></Field>
+          <Field label="Desde"><DateField value={range.from} onChange={(v) => setRange({ ...range, from: v })} /></Field>
+          <Field label="Hasta"><DateField value={range.to} onChange={(v) => setRange({ ...range, to: v })} /></Field>
         </div>
       </section>
 

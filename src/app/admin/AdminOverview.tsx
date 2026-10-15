@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { matchesSearch } from "@/lib/search";
+import { DateField } from "@/components/forms/Fields";
 
 type StoreRow = {
   id: string;
@@ -841,11 +842,11 @@ export default function AdminOverview() {
           </label>
           <label className="text-xs font-medium" style={{ color: "var(--t-muted)" }}>
             Desde
-            <input aria-label="Fecha inicial" type="date" className={`${inputClass} mt-1`} style={inputStyle} disabled={period === "all"} value={startDate} onChange={(event) => { setPeriod("custom"); setStartDate(event.target.value); }} />
+            <DateField value={startDate} onChange={(v) => { setPeriod("custom"); setStartDate(v); }} disabled={period === "all"} ariaLabel="Fecha inicial" className="mt-1" />
           </label>
           <label className="text-xs font-medium" style={{ color: "var(--t-muted)" }}>
             Hasta
-            <input aria-label="Fecha final" type="date" className={`${inputClass} mt-1`} style={inputStyle} disabled={period === "all"} value={endDate} onChange={(event) => { setPeriod("custom"); setEndDate(event.target.value); }} />
+            <DateField value={endDate} onChange={(v) => { setPeriod("custom"); setEndDate(v); }} disabled={period === "all"} ariaLabel="Fecha final" className="mt-1" />
           </label>
           <label className="text-xs font-medium" style={{ color: "var(--t-muted)" }}>
             Tienda

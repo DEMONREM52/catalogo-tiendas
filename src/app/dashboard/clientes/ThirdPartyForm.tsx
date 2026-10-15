@@ -10,6 +10,7 @@ import { MoneyInput } from "../MoneyInput";
 import { WithDv } from "../nit";
 import { CreditMeter } from "./CreditMeter";
 import { DOC_TYPES, KINDS, TAX_REGIMES, errorText, normalizeThird, FULL_COLUMNS, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
+import { DateField } from "@/components/forms/Fields";
 
 type Draft = Omit<ThirdParty, "id" | "store_id" | "created_at" | "credit_updated_at" | "credit_updated_by_name"> & { id?: string };
 type Seller = { user_id: string; name: string };
@@ -338,7 +339,7 @@ export function ThirdPartyForm({
                   </F>
                 ) : (
                   <F label="Cumpleaños">
-                    <input type="date" className={field} style={fieldStyle} value={txt(draft.birthday)} onChange={(e) => patch({ birthday: e.target.value || null })} />
+                    <DateField value={txt(draft.birthday)} onChange={(v) => patch({ birthday: v || null })} />
                   </F>
                 )}
               </Section>

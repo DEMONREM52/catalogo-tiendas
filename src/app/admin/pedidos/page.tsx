@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 import { smartFilter } from "@/lib/search";
+import { DateField } from "@/components/forms/Fields";
 
 /** =========================
  * Helpers
@@ -495,11 +496,11 @@ export default function AdminPedidosPage() {
 
           <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
             Desde
-            <input type="date" className={`${inputBase()} mt-1`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <DateField value={startDate} onChange={(v) => setStartDate(v)} className="mt-1" />
           </label>
           <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
             Hasta
-            <input type="date" className={`${inputBase()} mt-1`} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <DateField value={endDate} onChange={(v) => setEndDate(v)} className="mt-1" />
           </label>
         </div>
 

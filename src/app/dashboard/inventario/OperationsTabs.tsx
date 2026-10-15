@@ -7,6 +7,7 @@ import {
   ADJUST_REASONS, Btn, Empty, MOVEMENT_LABELS, Panel, confirmAction, dateTime, errorMessage,
   inputClass, inputStyle, tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type Warehouse,
 } from "./shared";
+import { DateField } from "@/components/forms/Fields";
 
 type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
@@ -140,8 +141,8 @@ export function KardexTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
           <option value="">Todas las bodegas</option>
           {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
-        <input type="date" className={inputClass} style={inputStyle} value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Desde" />
-        <input type="date" className={inputClass} style={inputStyle} value={to} onChange={(e) => setTo(e.target.value)} aria-label="Hasta" />
+        <DateField value={from} onChange={(v) => setFrom(v)} ariaLabel="Desde" />
+        <DateField value={to} onChange={(v) => setTo(v)} ariaLabel="Hasta" />
       </div>
       {loading ? <Empty text="Cargando…" /> : rows.length === 0 ? <Empty text="Sin movimientos para este filtro." /> : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>

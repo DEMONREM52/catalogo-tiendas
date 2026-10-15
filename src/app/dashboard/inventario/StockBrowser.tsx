@@ -5,6 +5,8 @@ import { Download, Filter, RotateCcw, Search, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, type ErpCtx, type Warehouse } from "./shared";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Row = {
   id: string; name: string; sku: string | null; barcode: string | null; image_url: string | null; active: boolean;
@@ -107,6 +109,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     try {
       const all = await fetchPage(5000, 0);
       if (!all) return;
+      logExport("existencias", all.rows.length);
       const header = ["Producto", "SKU", "Código de barras", "Categoría", ...active.map((w) => w.name), "Total", "Costo", "Valor"];
       const lines = all.rows.map((r) => [
         r.name, r.sku ?? "", r.barcode ?? "", r.category ?? "", ...active.map((w) => String(r.levels?.[w.id] ?? 0)),
@@ -141,7 +144,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       subtitle={whName ? `Revisando: ${whName}. Los filtros de estado usan las cantidades de este lugar.` : "Filtra por lugar, categoría y estado. Solo se descarga la página que ves."}
       actions={
         <div className="flex gap-2">
-          <Btn variant="ghost" onClick={() => void exportCsv()}><span className="inline-flex items-center gap-1.5"><Download size={14} /> Excel</span></Btn>
+          <ExportGate><Btn variant="ghost" onClick={() => void exportCsv()}><span className="inline-flex items-center gap-1.5"><Download size={14} /> Excel</span></Btn></ExportGate>
         </div>
       }
     >

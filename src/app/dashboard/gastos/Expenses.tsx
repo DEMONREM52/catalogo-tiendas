@@ -11,6 +11,8 @@ import {
   ChoiceChips, DateField, Field, METHODS, MoneyField, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, fail, fdate, field, ghostBtn, inputStyle, iso, label, n, primaryBg, primaryBtn, rpcError, swalTheme,
   type Catalog, type Point,
 } from "./shared";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Expense = {
   id: string; store_id: string; number: number; point_id: string | null; point_name: string | null; category_id: string; category_name: string; emoji: string; description: string;
@@ -53,6 +55,7 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
   }, [load, q]);
 
   function exportCsv() {
+    logExport("gastos", rows.length, { from: range[0], to: range[1] });
     downloadCsv(`gastos-${range[0]}-${range[1]}.csv`, ["N.º", "Fecha", "Vence", "Categoría", "Descripción", "Proveedor", "Factura", "Punto", "Valor", "Pagado", "Pendiente", "Estado"],
       rows.map((r) => [r.number, r.incurred_on, r.due_on ?? "", r.category_name, r.description, r.payee_name ?? "", r.reference ?? "", r.point_name ?? "Madre", n(r.amount), n(r.paid), n(r.amount) - n(r.paid), STATUS[r.status].label]),
       ["RemHub · Gastos", `Del ${range[0]} al ${range[1]}`, `Generado: ${new Date().toLocaleString("es-CO")}`, "Pagos registrados en RemHub (no confirmación bancaria)."]);
@@ -83,7 +86,7 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
         <span className="text-xs" style={{ color: "var(--t-muted)" }}>a</span>
         <div className="w-40"><DateField value={range[1]} onChange={(v) => setRange([range[0], v])} ariaLabel="Hasta" /></div>
         <span className="flex-1 text-right text-xs" style={{ color: "var(--t-muted)" }}>{total.n} gastos · {cop(total.sum)}</span>
-        <button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> CSV</button>
+        <ExportGate><button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> CSV</button></ExportGate>
       </div>
       {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p> : null}
       {rows.length === 0 && !error ? (

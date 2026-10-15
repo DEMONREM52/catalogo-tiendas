@@ -8,6 +8,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { askPayment } from "./StatementDrawer";
 import { errorText, methodLabel, money, shortDate, waLink, type ThirdParty } from "./terceros";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Item = {
   id: string; customer_id: string; customer: string; document: string | null; mobile: string | null; doc_number: string | null;
@@ -96,6 +98,7 @@ export function ReceivablesTab({
   }
 
   function exportCsv() {
+    logExport("cartera", items.length);
     const rows = [
       ["Cliente", "Documento cliente", "Documento", "Punto", "Emisión", "Vence", "Días de mora", "Total", "Saldo"],
       ...items.map((i) => [i.customer, i.document ?? "", i.doc_number ?? "", i.point ?? "", i.issue_date, i.due_date, String(Math.max(i.late, 0)), String(i.total), String(i.balance)]),
@@ -181,9 +184,9 @@ export function ReceivablesTab({
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
               <input className="w-full rounded-xl border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente o documento…" />
             </div>
-            <button type="button" onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+            <ExportGate><button type="button" onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
               <Download size={14} /> Excel
-            </button>
+            </button></ExportGate>
           </div>
         </div>
 

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../ImageUpload";
+import { DateField } from "@/components/forms/Fields";
 
 type Point = {
   id: string;
@@ -248,7 +249,9 @@ export default function PointBillingPanel({ storeId, onChanged }: { storeId: str
                                   {fields.map((f) => (
                                     <label key={f.key} className={`text-[11px] font-semibold ${f.wide ? "sm:col-span-2" : ""}`} style={{ color: "var(--t-muted)" }}>
                                       {f.label}
-                                      <input
+                                      {f.type === "date" ? (
+                                        <DateField className="mt-1" value={String(draft[f.key] ?? "").slice(0, 10)} onChange={(v) => set(f.key, v)} />
+                                      ) : <input
                                         className={inputCls}
                                         style={box}
                                         type={f.type ?? "text"}
@@ -257,7 +260,7 @@ export default function PointBillingPanel({ storeId, onChanged }: { storeId: str
                                         placeholder={f.placeholder}
                                         value={draft[f.key] ?? ""}
                                         onChange={(e) => set(f.key, e.target.value)}
-                                      />
+                                      />}
                                     </label>
                                   ))}
                                 </div>

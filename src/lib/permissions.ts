@@ -59,7 +59,8 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
     title: "Administración",
     icon: "⚙️",
     items: [
-      { value: "audit", label: "Informes y auditoría", description: "Ventas, ganancias, inventario e historial de operaciones" },
+      { value: "audit", label: "Informes y auditoría", description: "Informe de ventas e historial de operaciones (quién hizo qué, cuándo y qué cambió). Un usuario de punto ve solo lo de su punto" },
+      { value: "exports", label: "Exportar a Excel/CSV 📤", description: "Descargar listados: existencias, cartera, gastos, nómina, liquidaciones, rentabilidad e informes. Cada descarga queda en la auditoría", sensitive: true },
       { value: "store", label: "Mi tienda", description: "Datos, apariencia y medición de la tienda" },
       { value: "billing", label: "Datos de facturación", description: "Configuración de comprobantes y pagos" },
       { value: "users", label: "Usuarios", description: "Crear usuarios, cambiar permisos y eliminar accesos", sensitive: true },
@@ -117,10 +118,10 @@ export const permissionLabel = (value: string) => PERMISSION_LIST.find((p) => p.
 export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: string; permissions: StoreMenuPermission[] }> = [
   { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "clients", "orders", "stock_requests", "products_view"] },
   { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal_send", "products_view"] },
-  { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "audit"] },
+  { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "audit", "exports"] },
   { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "inventory_alerts", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view"] },
-  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
-  { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "fiscal", "fiscal_audit", "fiscal_download"] },
+  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "exports", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
+  { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "exports", "fiscal", "fiscal_audit", "fiscal_download"] },
   { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "audit", "fiscal", "fiscal_send", "fiscal_download"] },
   { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage", "notifications_config"] },
 ];

@@ -39,6 +39,9 @@ import {
   type ReportPayload,
 } from "@/lib/reports";
 import { BarList, Meter, ShareBar, Sparkline, TrendChart, TrendLegend } from "./charts";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
+import { DateField } from "@/components/forms/Fields";
 
 type PointOption = { id: string; name: string; kind: string };
 
@@ -207,6 +210,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
 
   function downloadCsv() {
     if (!report) return;
+    logExport("informe_ventas", 1, { from: range.from.toISOString().slice(0, 10) });
     const blob = new Blob([`﻿${toCsv(report)}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -260,9 +264,9 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
         {period === "custom" ? (
           <div className="flex items-center gap-1.5 rounded-2xl border px-2 py-1" style={card}>
             <CalendarRange size={15} style={{ color: "var(--t-muted)" }} />
-            <input type="date" className="bg-transparent text-xs outline-none" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} aria-label="Desde" />
+            <DateField value={custom.from} onChange={(v) => setCustom((c) => ({ ...c, from: v }))} ariaLabel="Desde" compact />
             <span className="text-xs" style={{ color: "var(--t-muted)" }}>a</span>
-            <input type="date" className="bg-transparent text-xs outline-none" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} aria-label="Hasta" />
+            <DateField value={custom.to} onChange={(v) => setCustom((c) => ({ ...c, to: v }))} ariaLabel="Hasta" compact />
           </div>
         ) : null}
         {points.length > 1 && !report?.meta.point_locked ? (
@@ -281,9 +285,9 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
           <button type="button" onClick={() => setTick((n) => n + 1)} className="grid h-9 w-9 place-items-center rounded-xl border" style={card} title="Actualizar" aria-label="Actualizar">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
           </button>
-          <button type="button" onClick={downloadCsv} disabled={!report} className="inline-flex items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50" style={card} title="Descargar CSV para Excel">
+          <ExportGate><button type="button" onClick={downloadCsv} disabled={!report} className="inline-flex items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50" style={card} title="Descargar CSV para Excel">
             <Download size={15} /> Excel
-          </button>
+          </button></ExportGate>
         </div>
       </div>
 

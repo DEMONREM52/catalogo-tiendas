@@ -106,8 +106,12 @@ function textToIso(t: string): string | null {
  * Fecha en formato DD/MM/AAAA (se escribe o se elige en el calendario).
  * Valor: «AAAA-MM-DD» o «» si está vacío. Con `withTime` el valor es «AAAA-MM-DDTHH:MM».
  */
-export function DateField({ value, onChange, min, max, disabled, withTime, placeholder = "DD/MM/AAAA", ariaLabel }: {
+export function DateField({ value, onChange, min, max, disabled, withTime, placeholder = "DD/MM/AAAA", ariaLabel, className = "", compact }: {
   value: string; onChange: (v: string) => void; min?: string; max?: string; disabled?: boolean; withTime?: boolean; placeholder?: string; ariaLabel?: string;
+  /** Clases del contenedor (ancho, margen). */
+  className?: string;
+  /** Versión pequeña para filtros en línea. */
+  compact?: boolean;
 }) {
   const datePart = value ? value.slice(0, 10) : "";
   const timePart = withTime && value && value.length >= 16 ? value.slice(11, 16) : "";
@@ -119,9 +123,9 @@ export function DateField({ value, onChange, min, max, disabled, withTime, place
   const outOfRange = (iso: string) => (min && iso < min.slice(0, 10)) || (max && iso > max.slice(0, 10));
 
   return (
-    <div>
+    <div className={className}>
     <div className="flex gap-2">
-      <div className="flex min-w-0 flex-1 items-center rounded-xl border pl-3 transition focus-within:ring-4" style={{ ...box, borderColor: bad ? "rgba(239,68,68,.6)" : box.borderColor, ["--tw-ring-color" as string]: "color-mix(in oklab, var(--t-accent) 30%, transparent)", opacity: disabled ? 0.6 : 1 }}>
+      <div className={`flex min-w-0 flex-1 items-center rounded-xl border transition focus-within:ring-4 ${compact ? "pl-2" : "pl-3"}`} style={{ ...box, borderColor: bad ? "rgba(239,68,68,.6)" : box.borderColor, ["--tw-ring-color" as string]: "color-mix(in oklab, var(--t-accent) 30%, transparent)", opacity: disabled ? 0.6 : 1, minHeight: compact ? 30 : 42 }}>
         <input
           type="text"
           inputMode="numeric"
@@ -141,11 +145,11 @@ export function DateField({ value, onChange, min, max, disabled, withTime, place
             else setBad(digits.length === 8);
           }}
           onBlur={() => { setTyped(null); setBad(false); }}
-          className="w-full min-w-0 bg-transparent text-sm font-semibold tabular-nums outline-none"
-          style={bare}
+          className={`w-full min-w-0 bg-transparent font-semibold tabular-nums outline-none ${compact ? "text-xs" : "text-sm"}`}
+          style={{ ...bare, padding: compact ? "4px 0" : bare.padding, fontSize: compact ? 12 : 14, width: compact ? "11ch" : undefined }}
         />
         <button type="button" disabled={disabled} onClick={() => { const p = picker.current; if (!p) return; try { p.showPicker(); } catch { p.focus(); p.click(); } }}
-          className="relative grid h-9 w-10 shrink-0 place-items-center rounded-r-xl" aria-label="Abrir calendario" title="Elegir en el calendario">
+          className={`relative grid shrink-0 place-items-center rounded-r-xl ${compact ? "h-7 w-8" : "h-9 w-10"}`} aria-label="Abrir calendario" title="Elegir en el calendario">
           <CalendarDays size={16} style={{ color: "var(--t-muted)" }} />
           <input ref={picker} type="date" tabIndex={-1} aria-hidden className="pointer-events-none absolute inset-0 opacity-0" value={datePart} min={min?.slice(0, 10)} max={max?.slice(0, 10)}
             onChange={(e) => { setTyped(null); setBad(false); emit(e.target.value, timePart); }} />
@@ -195,6 +199,9 @@ export function ChoiceChips<T extends string>({ value, onChange, options, disabl
     </div>
   );
 }
+
+/** «06/11/2026» (día/mes/año) → «2026-11-06»; null si la fecha no existe. */
+export const parseDdMmYyyy = (text: string) => textToIso(text.trim().replace(/[-.]/g, "/"));
 
 /** Fecha «AAAA-MM-DD» → «14/10/2026». */
 export const ddmmyyyy = (iso: string | null | undefined) => (iso ? isoToText(iso.slice(0, 10)) : "—");

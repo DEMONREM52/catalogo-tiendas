@@ -5,6 +5,7 @@ export const STORE_MENU_PERMISSIONS = [
   "sales_void",
   "sales_return",
   "price_approve",
+  "exports",
   "clients",
   "clients_delete",
   "credit",

@@ -6,7 +6,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { AdjustmentsTab, AuditTab, KardexTab } from "./OperationsTabs";
 import { TransfersTab } from "./TransfersTab";
 import { ManifestsTab } from "./ManifestsUI";
-import { PayablesTab, PurchasesTab, SuppliersTab } from "./PurchasesTabs";
+import { PurchasesTab, SuppliersTab } from "./PurchasesTabs";
+import { PayablesTab } from "./Payables";
 import { OverviewTab, WarehousesTab } from "./StockTabs";
 import { StockBrowser } from "./StockBrowser";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
@@ -27,8 +28,10 @@ const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: strin
   { key: "audit", icon: "🛡️", label: "Auditoría", permissions: ["audit"] },
 ];
 
-// Los usuarios asignados a un punto no ven datos globales ni compras.
-const POINT_HIDDEN: TabKey[] = ["overview", "purchases", "suppliers", "payables", "audit"];
+// Un usuario de punto ve las pestañas que su permiso le da, con alcance a SU punto (lo valida la base:
+// compras 20261118, cuentas por pagar 20261120, auditoría por RLS). Proveedores son de toda la tienda.
+// El «Resumen» muestra totales de toda la tienda: queda solo para la madre.
+const POINT_HIDDEN: TabKey[] = ["overview"];
 
 export default function InventarioPage() {
   const [ctx, setCtx] = useState<ErpCtx | null>(null);
@@ -120,7 +123,7 @@ export default function InventarioPage() {
       {current.key === "transfers" ? <TransfersTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "adjustments" ? <AdjustmentsTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "kardex" ? <KardexTab ctx={ctx} warehouses={warehouses} /> : null}
-      {current.key === "purchases" ? <PurchasesTab ctx={ctx} warehouses={warehouses} /> : null}
+      {current.key === "purchases" ? <PurchasesTab ctx={ctx} warehouses={ctx.pointId ? warehouses.filter((w) => w.id === ctx.pointId) : warehouses} /> : null}
       {current.key === "suppliers" ? <SuppliersTab ctx={ctx} /> : null}
       {current.key === "payables" ? <PayablesTab ctx={ctx} /> : null}
       {current.key === "manifests" ? <ManifestsTab ctx={ctx} /> : null}

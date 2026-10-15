@@ -5,6 +5,8 @@ import { AlertTriangle, Download, RefreshCw, Search, ShieldCheck } from "lucide-
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { Stat, cardStyle, cop, downloadCsv, inputStyle, margin, markup, pctText, rpcError, type Point } from "./shared";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Kpis = { revenue: number; cost: number; profit: number; mother: number; point: number; orders: number; units: number; lines: number; lines_estimated: number; lines_loss: number };
 type ByPoint = { point_id: string | null; name: string; revenue: number; cost: number; profit: number; mother: number; point: number; orders: number };
@@ -80,6 +82,7 @@ export function Summary({ storeId, points, myPoints }: { storeId: string; points
 
   function exportCsv() {
     if (!data) return;
+    logExport("rentabilidad", 1, { period: periodText });
     const notes = [
       "RemHub · Informe de rentabilidad",
       `Periodo: ${periodText}`,
@@ -116,9 +119,9 @@ export function Summary({ storeId, points, myPoints }: { storeId: string; points
         <button type="button" onClick={() => void load()} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
         </button>
-        <button type="button" onClick={exportCsv} disabled={!data} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }}>
+        <ExportGate><button type="button" onClick={exportCsv} disabled={!data} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }}>
           <Download size={14} /> <span className="hidden sm:inline">Exportar</span>
-        </button>
+        </button></ExportGate>
       </div>
 
       {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p> : null}

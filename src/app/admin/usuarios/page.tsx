@@ -49,6 +49,7 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   sales_void: "Anular documentos sin confirmar",
   sales_return: "Devolución de venta",
   price_approve: "Autorizar precios",
+  exports: "Exportar a Excel/CSV",
   clients: "Terceros",
   clients_delete: "Eliminar terceros",
   credit: "Créditos",

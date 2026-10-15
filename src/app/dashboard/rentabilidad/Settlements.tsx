@@ -9,6 +9,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { cardStyle, cop, downloadCsv, esc, inputStyle, rpcError, swalTheme, type Point } from "./shared";
 import { DateField, Field, NumberField } from "@/components/forms/Fields";
 import { PaymentSheet, Sheet as FormSheet } from "@/components/forms/Sheet";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -329,6 +331,7 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
   function exportCsv() {
     if (!d) return;
     const s = d.settlement;
+    logExport("liquidacion", d.lines.length, { settlement: s.number });
     downloadCsv(`liquidacion-${s.number}.csv`, ["Beneficiario", "Documento", "%", "Parte del periodo", "Saldo traído", "Total", "Pagado", "Pendiente"],
       d.lines.map((l) => [l.name, l.document ?? "", n(l.pct), n(l.share_amount), n(l.carried_amount), n(l.amount), n(l.paid), Math.max(0, n(l.amount) - n(l.paid))]),
       [`RemHub · Liquidación #${s.number} · ${s.point_name ? `Punto ${s.point_name}` : "Madre"}`, `Corte: ${when(s.cutoff)} · Estado: ${STATUS[s.status].label}`,
@@ -350,7 +353,7 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
             <h2 className="text-lg font-black">Liquidación {s ? `#${s.number}` : ""} {s ? <span className="text-sm font-semibold" style={{ color: "var(--t-muted)" }}>· {s.point_name ? `Punto ${s.point_name}` : "Madre"}</span> : null}</h2>
             {s && st ? <p className="text-xs"><span className="font-bold" style={{ color: st.color }}>{st.label}</span> · corte {when(s.cutoff)} · preparó {s.created_by_name ?? "—"}{s.decided_by_name ? ` · decidió ${s.decided_by_name}` : ""}</p> : null}
           </div>
-          <button type="button" onClick={exportCsv} disabled={!d} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Exportar"><Download size={15} /></button>
+          <ExportGate><button type="button" onClick={exportCsv} disabled={!d} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Exportar"><Download size={15} /></button></ExportGate>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">

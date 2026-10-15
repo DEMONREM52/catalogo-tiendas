@@ -19,7 +19,9 @@ const card = { borderColor: "var(--t-card-border)", background: "color-mix(in ok
 export function priceFromMarkup(cost: number, markup: number | null, step: RoundingStep, dir: RoundingDir) {
   if (!cost || markup === null) return null;
   const c = toCents(cost);
-  return roundCommercial(c + pctOf(c, markup), step, dir) / 100;
+  // Igual que la base: primero al peso y luego al paso de redondeo (así un precio escrito queda exacto).
+  const peso = Math.round((c + pctOf(c, markup)) / 100) * 100;
+  return roundCommercial(peso, step, dir) / 100;
 }
 
 /** Usa el % por defecto de la tienda (para productos nuevos). */
@@ -54,6 +56,16 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
   const total = useMemo(() => (stock ?? []).reduce((s, r) => s + r.qty, 0), [stock]);
   const setAll = (v: number | null) => onChange([v, v, v, v, v]);
   const setOne = (i: number, v: number | null) => { const m = [...markups] as Markups; m[i] = v; onChange(m); };
+  const [priceWarn, setPriceWarn] = useState<string | null>(null);
+  /** Escribiste el precio: se calcula el % exacto sobre el costo (4 decimales). */
+  const setPrice = (i: number, price: number) => {
+    if (!(cost > 0) || !(price > 0)) return;
+    if (price < cost) return setPriceWarn(`${LEVELS[i]}: ${cop(price)} está por debajo del costo (${cop(cost)}). Súbelo o revisa el costo.`);
+    setPriceWarn(null);
+    const pct = Math.min(1000, Math.round(((price / cost) - 1) * 100 * 10000) / 10000);
+    if (same) setSame(false);
+    setOne(i, pct);
+  };
   const implied = (i: number) => (cost > 0 && prices[i] > 0 ? Math.round(((prices[i] - cost) / cost) * 10000) / 100 : null);
 
   async function saveCfg(patch: Partial<Pricing>) {
@@ -150,18 +162,50 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
                   <li key={l} className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
                     <span className="min-w-0 flex-1 text-xs font-semibold">{l}</span>
                     {!same ? <div className="w-28"><NumberField value={markups[i]} onChange={(v) => setOne(i, v)} suffix="%" min={0} max={1000} decimals={2} ariaLabel={`Ganancia ${l}`} /></div> : null}
-                    <span className="w-28 text-right">
-                      <b className="block text-sm tabular-nums">{p !== null ? cop(p) : cost > 0 ? "—" : "Al ingresar"}</b>
+                    <span className="w-32 text-right">
+                      {cost > 0 ? (
+                        <PriceInput value={p} onCommit={(v) => setPrice(i, v)} label={`Precio ${l}`} />
+                      ) : (
+                        <b className="block text-sm tabular-nums">Al ingresar</b>
+                      )}
                       {margin !== null ? <span className="text-[10px]" style={{ color: "var(--t-muted)" }}>margen {margin.toFixed(1)} %</span> : null}
                     </span>
                   </li>
                 );
               })}
             </ul>
+            {priceWarn ? <p className="mt-2 rounded-xl border border-red-500/40 bg-red-500/10 p-2 text-xs">⚠️ {priceWarn}</p> : null}
+            {cost > 0 ? <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>✏️ Puedes escribir el <b>%</b> o el <b>precio</b>: si escribes el precio, el % se calcula solo.</p> : null}
             {!isNew && cost > 0 ? <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Precio actual en la tienda: {prices.map((x, i) => `P${i + 1} ${cop(x)}`).join(" · ")}. Al guardar se reemplazan por los calculados.</p> : null}
           </>
         )}
       </section>
     </div>
+  );
+}
+
+/** Precio que se escribe a mano; se aplica al salir del campo o con Enter. */
+function PriceInput({ value, onCommit, label }: { value: number | null; onCommit: (v: number) => void; label: string }) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const shown = typed ?? (value !== null ? `$ ${Math.round(value).toLocaleString("es-CO")}` : "");
+  const commit = () => {
+    if (typed !== null) { const n = Number(typed.replace(/\D/g, "")); if (n > 0) onCommit(n); }
+    setTyped(null);
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      aria-label={label}
+      title="Escribe el precio y el % se calcula solo"
+      value={shown}
+      placeholder="$ 0"
+      onFocus={(e) => { setTyped(value ? String(Math.round(value)) : ""); const el = e.currentTarget; window.setTimeout(() => el.select(), 0); }}
+      onChange={(e) => { const d = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 11); setTyped(d ? Number(d).toLocaleString("es-CO") : ""); }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      onBlur={commit}
+      className="w-full rounded-xl border px-2 text-right text-sm font-black tabular-nums"
+      style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)", minHeight: 34, padding: "4px 8px" }}
+    />
   );
 }

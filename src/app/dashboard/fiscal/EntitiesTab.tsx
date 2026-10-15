@@ -7,6 +7,7 @@ import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { ENTITY_DOC_TYPES, TAX_REGIME_OPTIONS, TAX_RESPONSIBILITY_SUGGESTIONS, type FiscalEntity, type FiscalEstablishment } from "@/lib/fiscal/types";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, ChipsInput, Drawer, EmptyState, Field, Notice, SectionTitle, Toggle, askReasonDialog, inputCls, inputStyle, notify } from "./ui";
+import { DateField } from "@/components/forms/Fields";
 
 export type EntityDraft = {
   id?: string; person_type: "natural" | "juridica"; legal_name: string; trade_name: string; document_type: string; document_number: string;
@@ -66,7 +67,7 @@ export function EntityFields({ value, onChange, locked = false }: { value: Entit
             {TAX_REGIME_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </Field>
-        <Field label="Fecha del RUT"><input type="date" className={inputCls} style={inputStyle} value={value.rut_date} onChange={(e) => set({ rut_date: e.target.value })} /></Field>
+        <Field label="Fecha del RUT"><DateField value={value.rut_date} onChange={(v) => set({ rut_date: v })} /></Field>
         <Field label="Responsabilidades tributarias (RUT, casilla 53)" required className="sm:col-span-2" hint="Copia las del RUT. Las sugerencias no reemplazan la validación de tu contadora.">
           <ChipsInput values={value.tax_responsibilities} onChange={(v) => set({ tax_responsibilities: v })} suggestions={TAX_RESPONSIBILITY_SUGGESTIONS} placeholder="Ej: O-13" />
         </Field>

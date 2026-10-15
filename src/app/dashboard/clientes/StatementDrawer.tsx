@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Ban, FileText, HandCoins, MessageCircle, PlusCircle, Printer, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { parseDdMmYyyy } from "@/components/forms/Fields";
 import { docWithDv } from "../nit";
 import { CreditMeter, KindBadge } from "./CreditMeter";
 import { PAY_METHODS, errorText, kindInfo, methodLabel, money, shortDate, waLink, type CreditState, type ThirdParty } from "./terceros";
@@ -144,19 +145,30 @@ export function StatementDrawer({
       title: "Agregar saldo por cobrar",
       html: `<div style="text-align:left;display:grid;gap:10px">
         <label style="font-size:12px;opacity:.8">Valor<input id="m-amount" class="swal2-input" inputmode="numeric" style="margin:6px 0 0;width:100%" /></label>
-        <label style="font-size:12px;opacity:.8">Vence<input id="m-due" type="date" class="swal2-input" style="margin:6px 0 0;width:100%" /></label>
+        <label style="font-size:12px;opacity:.8">Vence (DD/MM/AAAA, opcional)<input id="m-due" class="swal2-input" inputmode="numeric" autocomplete="off" placeholder="DD/MM/AAAA" maxlength="10" style="margin:6px 0 0;width:100%" /></label>
         <label style="font-size:12px;opacity:.8">Concepto<input id="m-desc" class="swal2-input" style="margin:6px 0 0;width:100%" placeholder="Saldo inicial, venta anterior…" /></label>
         <label style="font-size:12px;opacity:.8">N.º de documento (opcional)<input id="m-doc" class="swal2-input" style="margin:6px 0 0;width:100%" /></label>
       </div>`,
       showCancelButton: true,
       confirmButtonText: "Agregar",
       cancelButtonText: "Cancelar",
+      didOpen: () => {
+        // Fecha siempre en DD/MM/AAAA (el campo nativo usa el idioma del navegador: en inglés sale MM/DD).
+        const due = document.getElementById("m-due") as HTMLInputElement | null;
+        due?.addEventListener("input", () => {
+          const d = due.value.replace(/\D/g, "").slice(0, 8);
+          due.value = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+        });
+      },
       preConfirm: () => {
         const amount = Number(String((document.getElementById("m-amount") as HTMLInputElement).value).replace(/\D/g, ""));
         if (!amount) return Swal.showValidationMessage("Escribe el valor.");
+        const dueText = (document.getElementById("m-due") as HTMLInputElement).value.trim();
+        const due = dueText ? parseDdMmYyyy(dueText) : null;
+        if (dueText && !due) return Swal.showValidationMessage("La fecha de vencimiento debe ser DD/MM/AAAA, por ejemplo 06/11/2026.");
         return {
           amount,
-          due: (document.getElementById("m-due") as HTMLInputElement).value || null,
+          due,
           desc: (document.getElementById("m-desc") as HTMLInputElement).value,
           doc: (document.getElementById("m-doc") as HTMLInputElement).value,
         };

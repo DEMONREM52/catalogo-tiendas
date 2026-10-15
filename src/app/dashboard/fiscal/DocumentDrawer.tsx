@@ -6,6 +6,7 @@ import { errorText, fiscalApi, fiscalDownload, fiscalRpc, newIdempotencyKey } fr
 import { CREDIT_NOTE_CONCEPTS, DEBIT_NOTE_CONCEPTS, docLabel, statusLabel } from "@/lib/fiscal/types";
 import type { FiscalAccess } from "./useFiscal";
 import { Badge, Button, Card, Drawer, EnvBadge, ErrorBox, Field, Notice, Skeleton, StatusBadge, askReasonDialog, confirmDialog, fmtDateTime, fmtMoney, inputCls, inputStyle, notify } from "./ui";
+import { ddmmyyyy } from "@/components/forms/Fields";
 
 type Detail = {
   ok: true;
@@ -182,7 +183,7 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
               <QA q="¿Quién lo creó?" a={doc.created_by_name ?? "Sistema"} />
               <QA q="¿Desde qué punto?" a={data.point ? `${data.point.name} (${data.point.code})` : "—"} />
               <QA q="¿Para qué contribuyente? ¿Con qué NIT?" a={<>{issuer.legal_name}<br /><span className="font-mono text-xs">{issuer.document_type} {issuer.document_number}{issuer.verification_digit ? `-${issuer.verification_digit}` : ""}</span></>} />
-              <QA q="¿Qué resolución? ¿Prefijo y consecutivo?" a={data.range ? <>{data.range.resolution_number ?? "Sin resolución"} · prefijo {data.range.prefix || "—"} · n.º {doc.number}<br /><span className="text-xs font-normal">Rango {data.range.range_from}–{data.range.range_to}{data.range.valid_until ? ` · vence ${data.range.valid_until}` : ""}</span></> : "—"} />
+              <QA q="¿Qué resolución? ¿Prefijo y consecutivo?" a={data.range ? <>{data.range.resolution_number ?? "Sin resolución"} · prefijo {data.range.prefix || "—"} · n.º {doc.number}<br /><span className="text-xs font-normal">Rango {data.range.range_from}–{data.range.range_to}{data.range.valid_until ? ` · vence ${ddmmyyyy(data.range.valid_until)}` : ""}</span></> : "—"} />
               <QA q="¿Qué proveedor?" a={data.provider_account ? `${data.provider_account.name}${data.provider_account.label ? ` · ${data.provider_account.label}` : ""}` : "—"} />
               <QA q="¿Qué fecha?" a={fmtDateTime(doc.issue_date)} />
               <QA q="¿Qué respondió el proveedor?" a={doc.provider_status ? `${doc.provider_status}${doc.provider_message ? ` · ${doc.provider_message}` : ""}` : "Sin respuesta aún"} />

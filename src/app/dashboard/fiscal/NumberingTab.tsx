@@ -6,6 +6,7 @@ import { errorText, fiscalApi, fiscalRpc } from "@/lib/fiscal/client";
 import { DOC_TYPE_INFO, FISCAL_DOC_TYPES, type RangeInfo } from "@/lib/fiscal/types";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, Drawer, EmptyState, EnvBadge, Field, Notice, Progress, SectionTitle, askReasonDialog, fmtDate, inputCls, inputStyle, notify } from "./ui";
+import { DateField } from "@/components/forms/Fields";
 
 type RangeDraft = {
   id?: string; fiscal_entity_id: string; document_type: string; environment: string; name: string; resolution_number: string; resolution_date: string;
@@ -157,9 +158,9 @@ export function NumberingTab({ access, data, reload }: { access: FiscalAccess; d
               </Field>
               <Field label="Nombre interno (opcional)"><input className={inputCls} style={inputStyle} value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ej: Resolución 2026 Punto María" /></Field>
               <Field label={isNote ? "Número de resolución (si aplica)" : "Número de resolución"} required={!isNote}><input className={inputCls} style={inputStyle} value={draft.resolution_number} onChange={(e) => set({ resolution_number: e.target.value })} /></Field>
-              <Field label="Fecha de la resolución"><input type="date" className={inputCls} style={inputStyle} value={draft.resolution_date} onChange={(e) => set({ resolution_date: e.target.value })} /></Field>
-              <Field label="Vigente desde"><input type="date" className={inputCls} style={inputStyle} value={draft.valid_from} onChange={(e) => set({ valid_from: e.target.value })} /></Field>
-              <Field label="Vigente hasta" required={!isNote}><input type="date" className={inputCls} style={inputStyle} value={draft.valid_until} onChange={(e) => set({ valid_until: e.target.value })} /></Field>
+              <Field label="Fecha de la resolución"><DateField value={draft.resolution_date} onChange={(v) => set({ resolution_date: v })} /></Field>
+              <Field label="Vigente desde"><DateField value={draft.valid_from} onChange={(v) => set({ valid_from: v })} /></Field>
+              <Field label="Vigente hasta" required={!isNote}><DateField value={draft.valid_until} onChange={(v) => set({ valid_until: v })} /></Field>
               <Field label="Prefijo" hint="Letras y números, sin espacios (la DIAN suele usar hasta 4 caracteres; valídalo).">
                 <input className={`${inputCls} uppercase`} style={inputStyle} value={draft.prefix} maxLength={10} onChange={(e) => set({ prefix: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() })} />
               </Field>

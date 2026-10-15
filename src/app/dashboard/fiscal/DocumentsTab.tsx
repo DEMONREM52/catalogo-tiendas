@@ -7,6 +7,7 @@ import { DOC_TYPE_INFO, FISCAL_DOC_TYPES, STATUS_INFO, FISCAL_STATUSES, docLabel
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Button, Card, EmptyState, EnvBadge, ErrorBox, Field, Skeleton, StatusBadge, fmtDateTime, fmtMoney, inputCls, inputStyle } from "./ui";
 import { DocumentDrawer } from "./DocumentDrawer";
+import { DateField } from "@/components/forms/Fields";
 
 export type DocFilters = { q: string; statuses: string[]; types: string[]; point_id: string; environment: string; from: string; to: string; errors_only: boolean };
 
@@ -107,8 +108,8 @@ export function DocumentsTab({ access, data, initialQuery, initialStatus, onChan
       {showFilters ? (
         <Card className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Desde"><input type="date" value={filters.from} onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))} className={inputCls} style={inputStyle} /></Field>
-            <Field label="Hasta"><input type="date" value={filters.to} onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))} className={inputCls} style={inputStyle} /></Field>
+            <Field label="Desde"><DateField value={filters.from} onChange={(v) => setFilters((f) => ({ ...f, from: v }))} /></Field>
+            <Field label="Hasta"><DateField value={filters.to} onChange={(v) => setFilters((f) => ({ ...f, to: v }))} /></Field>
             {!admin && data ? (
               <Field label="Punto">
                 <select value={filters.point_id} onChange={(e) => setFilters((f) => ({ ...f, point_id: e.target.value }))} className={inputCls} style={inputStyle}>

@@ -9,6 +9,8 @@ import {
   ChoiceChips, DateField, Field, METHODS, MoneyField, NumberField, PERIOD_LABEL, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, fail, fdate, field, ghostBtn,
   inputStyle, label, n, periodWindow, primaryBg, primaryBtn, swalTheme, type Catalog, type Concept, type Employee, type Period, type Point,
 } from "./shared";
+import { ExportGate } from "@/components/ExportGate";
+import { logExport } from "@/lib/permission-runtime";
 
 type Run = { id: string; number: number; point_id: string | null; point_name: string | null; period_kind: Period; period_start: string; period_end: string; status: RunStatus;
   earnings: number; deductions: number; net: number; employer_cost: number; total_cost: number; created_by_name: string | null; approved_by_name: string | null; employees: number; paid: number };
@@ -322,6 +324,7 @@ function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; o
   }
   function exportCsv() {
     if (!d || !r) return;
+    logExport("nomina", d.lines.length, { run: r.number });
     const concepts = [...new Map(d.lines.flatMap((l) => l.items).map((i) => [i.concept_id, i])).values()];
     downloadCsv(`nomina-${r.number}-${r.period_start}.csv`, ["Empleado", "Documento", "Cargo", "Días", ...concepts.map((c) => c.name), "Devengado", "Deducciones", "Neto a pagar", "Aportes empleador", "Pagado", "Banco", "Cuenta"],
       d.lines.map((l) => [l.full_name, l.document ?? "", l.position ?? "", n(l.days), ...concepts.map((c) => n(l.items.find((i) => i.concept_id === c.concept_id)?.amount ?? 0)), n(l.earnings), n(l.deductions), n(l.net), n(l.employer_cost), n(l.paid), l.bank_name ?? "", l.bank_account ?? ""]),
@@ -334,7 +337,7 @@ function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; o
       subtitle={r ? <><span style={{ color: RUN_STATUS[r.status].color, fontWeight: 700 }}>{RUN_STATUS[r.status].icon} {RUN_STATUS[r.status].label}</span> · {fdate(r.period_start)} – {fdate(r.period_end)} · preparó {r.created_by_name ?? "—"}{r.approved_by_name ? ` · aprobó ${r.approved_by_name}` : ""}</> : null}
       onClose={onClose} footer={r ? (
         <>
-          <button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Planilla</button>
+          <ExportGate><button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Planilla</button></ExportGate>
           {r.status === "draft" && (cat.can.payroll || cat.can.payroll_approve) ? <button type="button" onClick={() => void removeDraft()} className={ghostBtn} style={{ borderColor: "var(--t-card-border)", color: "#e66767" }}><Trash2 size={13} /> Eliminar</button> : null}
           {(r.status === "approved" || r.status === "partial") && cat.can.payroll_approve && !anyPaid ? <button type="button" onClick={() => void transition("reopen")} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Undo2 size={13} /> Volver a borrador</button> : null}
           {r.status !== "void" && r.status !== "draft" && cat.can.payroll_approve && !anyPaid ? <button type="button" onClick={() => void transition("void")} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><XCircle size={13} /> Anular</button> : null}

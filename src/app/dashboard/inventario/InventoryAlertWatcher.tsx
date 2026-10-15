@@ -73,7 +73,7 @@ export function InventoryAlertWatcher({ storeId }: { storeId: string }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 30, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
-          className="fixed bottom-3 left-3 z-120 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-5 sm:left-5"
+          className="pointer-events-auto relative w-full overflow-hidden rounded-2xl border shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
           style={{ borderColor: `color-mix(in oklab, ${color} 55%, var(--t-card-border))`, background: "color-mix(in oklab, var(--t-bg-base) 93%, transparent)", color: "var(--t-text)" }}
           role="alert"
         >

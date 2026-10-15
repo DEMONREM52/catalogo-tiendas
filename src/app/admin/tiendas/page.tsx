@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import { fetchAdminData } from "@/lib/admin-data";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
+import { DateField } from "@/components/forms/Fields";
 
 type Store = {
   id: string;
@@ -788,12 +789,13 @@ export default function AdminTiendasPage() {
                     </label>
 
                     <div className="mt-1 flex flex-col gap-2 md:flex-row md:items-center">
-                      <input
-                        type="datetime-local"
-                        className={inputBase() + " w-full md:w-[340px]"}
+                      <DateField
+                        withTime
+                        className="w-full md:w-[340px]"
+                        ariaLabel="Activa hasta"
                         value={toLocalInputValue(s.active_until)}
-                        onChange={(e) => {
-                          const iso = e.target.value ? fromLocalInputValue(e.target.value) : null;
+                        onChange={(v) => {
+                          const iso = v ? fromLocalInputValue(v) : null;
                           patch(s.id, { active_until: iso });
                         }}
                       />

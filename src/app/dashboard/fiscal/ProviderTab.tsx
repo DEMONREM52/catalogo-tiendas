@@ -8,6 +8,7 @@ import { PROVIDER_CREDENTIAL_FIELDS, PROVIDER_SETTINGS_HELP } from "@/lib/fiscal
 import type { ProviderAccount } from "@/lib/fiscal/types";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, CopyButton, Drawer, EmptyState, EnvBadge, Field, Notice, SectionTitle, askReasonDialog, fmtDate, fmtDateTime, inputCls, inputStyle, notify, swal } from "./ui";
+import { DateField } from "@/components/forms/Fields";
 
 type AccountDraft = { id?: string; fiscal_entity_id: string; provider: string; environment: string; label: string; external_account_id: string; settings: Record<string, string>; credentials: Record<string, string> };
 
@@ -246,8 +247,8 @@ export function ProviderTab({ access, data, reload }: { access: FiscalAccess; da
             <Field label="Emisor"><input className={inputCls} style={inputStyle} value={cert.issuer} onChange={(e) => setCert({ ...cert, issuer: e.target.value })} /></Field>
             <Field label="Serial"><input className={inputCls} style={inputStyle} value={cert.serial_number} onChange={(e) => setCert({ ...cert, serial_number: e.target.value })} /></Field>
             <Field label="Estado"><select className={inputCls} style={inputStyle} value={cert.status} onChange={(e) => setCert({ ...cert, status: e.target.value })}><option value="active">Vigente</option><option value="replaced">Reemplazado</option><option value="revoked">Revocado</option><option value="expired">Vencido</option></select></Field>
-            <Field label="Válido desde"><input type="date" className={inputCls} style={inputStyle} value={cert.valid_from} onChange={(e) => setCert({ ...cert, valid_from: e.target.value })} /></Field>
-            <Field label="Válido hasta" required><input type="date" className={inputCls} style={inputStyle} value={cert.valid_until} onChange={(e) => setCert({ ...cert, valid_until: e.target.value })} /></Field>
+            <Field label="Válido desde"><DateField value={cert.valid_from} onChange={(v) => setCert({ ...cert, valid_from: v })} /></Field>
+            <Field label="Válido hasta" required><DateField value={cert.valid_until} onChange={(v) => setCert({ ...cert, valid_until: v })} /></Field>
           </div>
         ) : null}
       </Drawer>

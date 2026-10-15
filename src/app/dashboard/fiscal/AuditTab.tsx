@@ -7,6 +7,7 @@ import { AUDIT_CATEGORY_INFO, DOC_TYPE_INFO, FISCAL_DOC_TYPES, statusLabel, type
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, SectionTitle, Skeleton, fmtDateTime, fmtMoney, inputCls, inputStyle, notify } from "./ui";
 import { downloadText, toCsv } from "./DocumentsTab";
+import { DateField } from "@/components/forms/Fields";
 
 const d = (n: number) => new Date(Date.now() - n * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
@@ -74,8 +75,8 @@ export function AuditList({ load, initialCategory = "", showStore = false }: {
           <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 opacity-60" />
           <input value={draftQ} onChange={(e) => setDraftQ(e.target.value)} placeholder="Acción, usuario, IP, NIT, número…" className={inputCls} style={{ ...inputStyle, paddingLeft: "2.4rem" }} />
         </div>
-        <input type="date" value={filters.from} onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))} className={inputCls} style={inputStyle} />
-        <input type="date" value={filters.to} onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))} className={inputCls} style={inputStyle} />
+        <DateField value={filters.from} onChange={(v) => setFilters((f) => ({ ...f, from: v }))} />
+        <DateField value={filters.to} onChange={(v) => setFilters((f) => ({ ...f, to: v }))} />
         <select value={filters.severity} onChange={(e) => setFilters((f) => ({ ...f, severity: e.target.value }))} className={inputCls} style={inputStyle}>
           <option value="">Toda severidad</option><option value="critical">Crítica</option><option value="warning">Advertencia</option><option value="info">Informativa</option>
         </select>
@@ -184,8 +185,8 @@ export function AuditTab({ access, data, initialCategory }: { access: FiscalAcce
                 {data.points.map((p) => <option key={p.point.id} value={p.point.id}>{p.point.name}</option>)}
               </select>
             </Field>
-            <Field label="Desde"><input type="date" className={inputCls} style={inputStyle} value={dos.from} onChange={(e) => setDos({ ...dos, from: e.target.value })} /></Field>
-            <Field label="Hasta"><input type="date" className={inputCls} style={inputStyle} value={dos.to} onChange={(e) => setDos({ ...dos, to: e.target.value })} /></Field>
+            <Field label="Desde"><DateField value={dos.from} onChange={(v) => setDos({ ...dos, from: v })} /></Field>
+            <Field label="Hasta"><DateField value={dos.to} onChange={(v) => setDos({ ...dos, to: v })} /></Field>
             <div className="flex items-end"><Button variant="primary" className="w-full" busy={busy} onClick={() => void generate()}>Generar</Button></div>
           </div>
           <div className="flex flex-wrap gap-1.5">

@@ -5,7 +5,6 @@ import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { MoneyInput } from "../MoneyInput";
 import { AttachmentPicker, PurchaseFilesButton, uploadStaged, type Staged } from "./AttachmentsUI";
 import { LineEditor, type Line, type LineEditorHandle } from "./LineEditor";
 import { clearDraft, loadDraftFiles, readDraft, saveDraftFiles, timeAgo, writeDraft } from "./draft";
@@ -13,6 +12,7 @@ import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, useRunOnChange,
   type ErpCtx, type Warehouse,
 } from "./shared";
+import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
@@ -545,14 +545,14 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 <option value="">Proveedor…</option>
                 {suppliers.filter((s) => s.active || s.id === form.supplier).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              <input type="date" className={inputClass} style={inputStyle} value={form.invoiceDate} onChange={(e) => patchForm({ invoiceDate: e.target.value })} aria-label="Fecha de la factura" title="Fecha de la factura" />
+              <DateField value={form.invoiceDate} onChange={(v) => patchForm({ invoiceDate: v })} ariaLabel="Fecha de la factura" />
               <input className={inputClass} style={inputStyle} placeholder="N.º factura del proveedor *" value={form.invoiceRef} onChange={(e) => patchForm({ invoiceRef: e.target.value })} />
               <select className={inputClass} style={inputStyle} value={form.paymentType} onChange={(e) => patchForm({ paymentType: e.target.value as "cash" | "credit" })} aria-label="Forma de pago">
                 <option value="cash">Pago de contado</option>
                 <option value="credit">A crédito (cuenta por pagar)</option>
               </select>
               {form.paymentType === "credit" ? (
-                <input type="date" className={inputClass} style={inputStyle} value={form.dueDate} onChange={(e) => patchForm({ dueDate: e.target.value })} aria-label="Vencimiento" title="Vencimiento (vacío = según los días de crédito del proveedor)" />
+                <DateField value={form.dueDate} onChange={(v) => patchForm({ dueDate: v })} ariaLabel="Vencimiento" />
               ) : null}
               <input className={inputClass} style={inputStyle} placeholder="¿Quién revisó la mercancía? *" value={form.checkedBy} onChange={(e) => patchForm({ checkedBy: e.target.value })} />
               <input className={inputClass} style={inputStyle} placeholder="Notas (opcional)" value={form.notes} onChange={(e) => patchForm({ notes: e.target.value })} />
@@ -625,7 +625,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     <td className={td}>{r.invoice_date ?? dateTime(r.created_at)}</td>
                     <td className={td}>{supplierNames.get(r.supplier_id) ?? "—"}</td>
                     <td className={td}>{r.checked_by_name ?? "—"} / {r.received_by_name ?? r.created_by_name ?? "—"}</td>
-                    <td className={td}>{r.payment_type === "credit" ? `Crédito${r.due_date ? ` · vence ${r.due_date}` : ""}` : "Contado"}</td>
+                    <td className={td}>{r.payment_type === "credit" ? `Crédito${r.due_date ? ` · vence ${ddmmyyyy(r.due_date)}` : ""}` : "Contado"}</td>
                     <td className={td}>{money(r.total)}</td>
                     <td className={td}><StatusPill status={r.status} /></td>
                     <td className={td}>
@@ -648,84 +648,5 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         )}
       </Panel>
     </div>
-  );
-}
-
-type PayableRow = { id: string; supplier_id: string; purchase_id: string | null; total: number; balance: number; due_date: string | null; status: string; created_at: string };
-
-export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
-  const { suppliers } = useSuppliers(ctx.storeId);
-  const [rows, setRows] = useState<PayableRow[]>([]);
-  const [payingId, setPayingId] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("cash");
-  const [reference, setReference] = useState("");
-  const canPay = ctx.can("payables");
-  const names = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
-  const today = new Date().toISOString().slice(0, 10);
-
-  const load = useCallback(async () => {
-    const { data, error } = await supabaseBrowser()
-      .from("erp_payables")
-      .select("id,supplier_id,purchase_id,total,balance,due_date,status,created_at")
-      .eq("store_id", ctx.storeId)
-      .order("status")
-      .order("due_date", { ascending: true, nullsFirst: false })
-      .limit(100);
-    if (error) void toast("No se pudieron cargar las cuentas por pagar", "error", errorMessage(error));
-    else setRows((data ?? []) as PayableRow[]);
-  }, [ctx.storeId]);
-
-  useRunOnChange(load);
-
-  async function pay(row: PayableRow) {
-    const value = Number(amount);
-    if (!value || value <= 0) return void toast("Escribe el monto del pago", "warning");
-    const { error } = await supabaseBrowser().rpc("erp_pay_supplier", { p_payable: row.id, p_amount: value, p_method: method, p_reference: reference });
-    if (error) return void toast("No se pudo registrar el pago", "error", errorMessage(error));
-    setPayingId(null);
-    setAmount("");
-    setReference("");
-    void toast("Pago registrado");
-    void load();
-  }
-
-  const pending = rows.filter((r) => r.status === "open").reduce((s, r) => s + Number(r.balance), 0);
-
-  return (
-    <Panel title="Cuentas por pagar" subtitle={`Saldo pendiente con proveedores: ${money(pending)}`}>
-      {rows.length === 0 ? <Empty text="No hay cuentas por pagar. Se crean al registrar compras a crédito." /> : (
-        <div className="space-y-3">
-          {rows.map((r) => {
-            const overdue = r.status === "open" && r.due_date && r.due_date < today;
-            return (
-              <div key={r.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: overdue ? "color-mix(in oklab, #ef4444 45%, transparent)" : "var(--t-card-border)" }}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold">{names.get(r.supplier_id) ?? "Proveedor"}</p>
-                  <div className="flex items-center gap-2">{overdue ? <StatusPill status="cancelled" /> : null}<StatusPill status={r.status} /></div>
-                </div>
-                <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                  Total {money(r.total)} · Saldo <b style={{ color: "var(--t-text)" }}>{money(r.balance)}</b>{r.due_date ? ` · vence ${r.due_date}` : ""}{overdue ? " (vencida)" : ""}
-                </p>
-                {canPay && r.status === "open" ? (
-                  payingId === r.id ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                      <MoneyInput allowEmpty className={inputClass} style={inputStyle} placeholder="$ Monto" value={amount === "" ? null : Math.min(Number(amount), r.balance)} onValueChange={(v) => setAmount(v === null ? "" : String(Math.min(v, r.balance)))} />
-                      <select className={inputClass} style={inputStyle} value={method} onChange={(e) => setMethod(e.target.value)}>
-                        <option value="cash">Efectivo</option><option value="transfer">Transferencia</option><option value="card">Tarjeta</option><option value="other">Otro</option>
-                      </select>
-                      <input className={inputClass} style={inputStyle} placeholder="Referencia" value={reference} onChange={(e) => setReference(e.target.value)} />
-                      <div className="flex gap-2"><Btn onClick={() => void pay(r)}>Pagar</Btn><Btn variant="ghost" onClick={() => setPayingId(null)}>Cancelar</Btn></div>
-                    </div>
-                  ) : (
-                    <div className="mt-3"><Btn onClick={() => { setPayingId(r.id); setAmount(String(r.balance)); }}>💸 Registrar pago</Btn></div>
-                  )
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Panel>
   );
 }

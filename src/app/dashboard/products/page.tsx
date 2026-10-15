@@ -13,6 +13,7 @@ import { buildProductShareText, hasProductLanding, normalizeProductDetails } fro
 import { useRouter } from "next/navigation";
 import { PhotoIndexStatus, PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
+import { DateField } from "@/components/forms/Fields";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -847,11 +848,11 @@ export default function ProductsListPage() {
                 </label>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
                   Creado desde
-                  <input type="date" className={`${clsInput()} mt-1`} value={createdFrom} max={createdTo || undefined} onChange={(event) => setCreatedFrom(event.target.value)} />
+                  <DateField value={createdFrom} onChange={(v) => setCreatedFrom(v)} max={createdTo || undefined} className="mt-1" />
                 </label>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
                   Creado hasta
-                  <input type="date" className={`${clsInput()} mt-1`} value={createdTo} min={createdFrom || undefined} onChange={(event) => setCreatedTo(event.target.value)} />
+                  <DateField value={createdTo} onChange={(v) => setCreatedTo(v)} min={createdFrom || undefined} className="mt-1" />
                 </label>
               </div>
               {minPrice && maxPrice && Number(minPrice) > Number(maxPrice) ? (

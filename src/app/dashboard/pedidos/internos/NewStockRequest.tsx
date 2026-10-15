@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
 import { srError } from "./types";
+import { DateField } from "@/components/forms/Fields";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
 // levels (opcional): existencias por punto; las líneas que traen esto (p. ej. desde la lista general) se conservan al cambiar de punto.
@@ -308,7 +309,7 @@ export function NewStockRequest({
                   </button>
                   <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                     Lo necesito para
-                    <input type="date" className={`${field} mt-1`} style={fieldStyle} value={neededBy} onChange={(e) => setNeededBy(e.target.value)} />
+                    <DateField value={neededBy} onChange={(v) => setNeededBy(v)} className="mt-1" />
                   </label>
                 </div>
               </div>

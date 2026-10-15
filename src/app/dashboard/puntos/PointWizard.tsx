@@ -9,6 +9,7 @@ import type { FiscalAccess, FiscalOverview } from "../fiscal/useFiscal";
 import { Badge, Button, Card, Drawer, Field, Notice, Toggle, inputCls, inputStyle, notify } from "../fiscal/ui";
 import { EntityFields, EstablishmentFields, emptyEntity, entityPayload, type EntityDraft, type EstDraft } from "../fiscal/EntitiesTab";
 import { loadTeam, memberName, type TeamMember } from "./shared";
+import { DateField } from "@/components/forms/Fields";
 
 const STEPS = ["General", "Responsable", "Información fiscal", "Establecimiento", "Facturación electrónica", "Numeración", "Usuarios", "Revisión"];
 
@@ -253,10 +254,10 @@ export function PointWizard({ access, onClose, onCreated }: { access: FiscalAcce
                         </select>
                       </Field>
                       <Field label="Número de resolución"><input className={inputCls} style={inputStyle} value={num.resolution_number} onChange={(e) => setNum({ ...num, resolution_number: e.target.value })} /></Field>
-                      <Field label="Fecha de la resolución"><input type="date" className={inputCls} style={inputStyle} value={num.resolution_date} onChange={(e) => setNum({ ...num, resolution_date: e.target.value })} /></Field>
+                      <Field label="Fecha de la resolución"><DateField value={num.resolution_date} onChange={(v) => setNum({ ...num, resolution_date: v })} /></Field>
                       <Field label="Prefijo"><input className={`${inputCls} uppercase`} style={inputStyle} value={num.prefix} maxLength={10} onChange={(e) => setNum({ ...num, prefix: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() })} /></Field>
-                      <Field label="Vigente desde"><input type="date" className={inputCls} style={inputStyle} value={num.valid_from} onChange={(e) => setNum({ ...num, valid_from: e.target.value })} /></Field>
-                      <Field label="Vigente hasta"><input type="date" className={inputCls} style={inputStyle} value={num.valid_until} onChange={(e) => setNum({ ...num, valid_until: e.target.value })} /></Field>
+                      <Field label="Vigente desde"><DateField value={num.valid_from} onChange={(v) => setNum({ ...num, valid_from: v })} /></Field>
+                      <Field label="Vigente hasta"><DateField value={num.valid_until} onChange={(v) => setNum({ ...num, valid_until: v })} /></Field>
                       <Field label="Desde"><input inputMode="numeric" className={inputCls} style={inputStyle} value={num.range_from} onChange={(e) => setNum({ ...num, range_from: e.target.value.replace(/\D/g, "") })} /></Field>
                       <Field label="Hasta"><input inputMode="numeric" className={inputCls} style={inputStyle} value={num.range_to} onChange={(e) => setNum({ ...num, range_to: e.target.value.replace(/\D/g, "") })} /></Field>
                       <Toggle checked={num.status === "active"} onChange={(v) => setNum({ ...num, status: v ? "active" : "draft" })} label="Activar la numeración" hint="Requiere número, fecha y vigencia de la resolución." />
