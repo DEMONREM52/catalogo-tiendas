@@ -8,7 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { isOwnRecent, loadStoreSoundConfig, soundFor } from "@/lib/sounds/notify";
 import { getStoreConfigCache, statusEvent } from "@/lib/sounds/prefs";
 import { unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
-import { OPEN_REQUEST_EVENT, SR_STATUS, type SrStatus } from "./types";
+import { OPEN_REQUEST_EVENT, SR_STATUS, emitStockRequestsChanged, type SrStatus } from "./types";
 
 type Inbox = {
   incoming: Array<{ id: string; number: number; from_name: string; to_name: string; priority: string; items: number }>;
@@ -126,10 +126,17 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => {
         const row = p.new as ReqRow;
         if (row.id && row.status) statusKnown.current.set(row.id, row.status);
+        emitStockRequestsChanged(row.id);
         void check();
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `store_id=eq.${storeId}` }, () => void check())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => void onStatus(p.new as ReqRow))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `store_id=eq.${storeId}` }, (p) => {
+        emitStockRequestsChanged((p.new as { request_id?: string }).request_id);
+        void check();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => {
+        emitStockRequestsChanged((p.new as ReqRow).id);
+        void onStatus(p.new as ReqRow);
+      })
       .subscribe();
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 20000);
     const onFocus = () => void check();

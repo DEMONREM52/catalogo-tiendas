@@ -36,6 +36,8 @@ export default function PointsPage() {
 
   const org = scope?.scope === "organization" || scope?.scope === "global";
   const canCreate = org && canAny(["points", "inventory"]);
+  // Tiene el permiso «Puntos» pero está asignado a un punto: solo ve el suyo y no administra los demás.
+  const scopedAdmin = !org && canAny(["points"]);
   const list = useMemo(() => smartFilter((points ?? []).filter((p) => status === "all" || p.status === status), q,
     (p) => `${p.name} ${p.code} ${p.city ?? ""} ${p.responsible_name ?? ""} ${p.fiscal?.entity ?? ""}`, { keepOrder: !q.trim() }), [points, q, status]);
   const onlyPoints = (points ?? []).filter((p) => p.kind === "point");
@@ -66,6 +68,16 @@ export default function PointsPage() {
           <Stat label="Ventas de hoy" value={points ? fmtMoney(points.reduce((s, p) => s + Number(p.sales_today), 0)) : "…"} />
         </div>
       </section>
+
+      {scopedAdmin ? (
+        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, transparent)", background: "color-mix(in oklab, #f59e0b 10%, transparent)" }}>
+          <p className="font-bold">Estás asignado a un punto: solo ves ese punto.</p>
+          <p className="mt-1" style={{ color: "var(--t-muted)" }}>
+            Crear, editar y desactivar puntos es de la tienda madre. Si debes administrarlos, pide que en <b>Usuarios</b> te cambien el
+            «Punto asignado» a <b>Todos los puntos (sin restricción)</b>.
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">

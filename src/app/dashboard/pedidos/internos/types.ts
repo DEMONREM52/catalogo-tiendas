@@ -62,3 +62,11 @@ export function srError(error: unknown) {
 
 /** Abre un pedido interno desde cualquier parte del panel (notificaciones, avisos…). */
 export const OPEN_REQUEST_EVENT = "remhub-open-stock-request";
+/**
+ * Cambió un pedido interno (lo avisa StockRequestWatcher, la única conexión en vivo del panel).
+ * La lista y el chat escuchan este aviso en vez de abrir su propia conexión a la base.
+ */
+export const STOCK_REQUESTS_CHANGED_EVENT = "remhub-stock-requests-changed";
+export function emitStockRequestsChanged(requestId?: string | null) {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(STOCK_REQUESTS_CHANGED_EVENT, { detail: requestId ?? null }));
+}

@@ -9,7 +9,7 @@ import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
-import { OPEN_REQUEST_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
+import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
 
 type Scope = "attend" | "mine" | "active" | "closed";
 
@@ -49,16 +49,13 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     if (fromUrl) window.setTimeout(() => setOpenId(fromUrl), 0);
     const onOpen = (e: Event) => setOpenId(String((e as CustomEvent<string>).detail));
     window.addEventListener(OPEN_REQUEST_EVENT, onOpen);
-    // Cambios en vivo (si Realtime está activo) + respaldo cada 30 s.
-    const channel = sb
-      .channel(`sr-list-${storeId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, () => void load())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `store_id=eq.${storeId}` }, () => void load())
-      .subscribe();
+    // Cambios en vivo: aviso de la conexión única del panel (StockRequestWatcher) + respaldo cada 30 s.
+    const onChange = () => void load();
+    window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
     return () => {
       window.removeEventListener(OPEN_REQUEST_EVENT, onOpen);
-      void sb.removeChannel(channel);
+      window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
       window.clearInterval(timer);
     };
   }, [storeId, load]);

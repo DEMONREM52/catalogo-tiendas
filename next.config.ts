@@ -44,7 +44,7 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: SECURITY_HEADERS },
       // Las respuestas privadas de la API nunca se guardan en cachés compartidas (datos de cada tienda).
       // (QR, íconos y vistas previas son públicos y sí se pueden guardar.)
-      ...["admin", "fiscal", "payments", "store-team", "store-domains", "push", "siigo"].map((p) => ({
+      ...["admin", "fiscal", "payments", "store-team", "store-domains", "push", "siigo", "session"].map((p) => ({
         source: `/api/${p}/:path*`,
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       })),

@@ -32,7 +32,8 @@ export function useMyAccess(storeId: string | null | undefined, enabled: boolean
 
 /* ----------------------------- «Ver como este usuario» ----------------------------- */
 
-export type Simulation = { storeId: string; userId: string; name: string; permissions: string[] };
+/** pointName: el punto asignado (en su sesión real solo verá ese punto). */
+export type Simulation = { storeId: string; userId: string; name: string; permissions: string[]; pointName?: string | null };
 const SIM_KEY = "remhub:simulate";
 
 export function readSimulation(storeId: string | null | undefined): Simulation | null {
@@ -61,7 +62,10 @@ export function stopSimulation() {
 export function SimulationBanner({ sim }: { sim: Simulation }) {
   return (
     <div className="sticky top-0 z-130 flex flex-wrap items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-white" style={{ background: "linear-gradient(90deg,#7c3aed,#db2777)" }}>
-      <span>👁️ Estás viendo el menú como <b>{sim.name}</b>. Solo cambia lo que se ve (menús, pestañas y botones); los datos y acciones siguen siendo los tuyos.</span>
+      <span>
+        👁️ Estás viendo el menú como <b>{sim.name}</b>. Solo cambia lo que se ve (menús, pestañas y botones); los datos y acciones siguen siendo los tuyos.
+        {sim.pointName ? <> En su sesión real está asignado a <b>{sim.pointName}</b>: solo verá ese punto y no podrá crear ni editar puntos.</> : null}
+      </span>
       <button type="button" onClick={stopSimulation} className="rounded-full bg-white/20 px-3 py-1 font-bold hover:bg-white/30">Salir de la vista</button>
     </div>
   );

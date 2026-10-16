@@ -7,6 +7,9 @@ import { fetchAdminData } from "@/lib/admin-data";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { DateField } from "@/components/forms/Fields";
+import { PRODUCTION_HOST } from "@/lib/share/origin";
+
+const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
 
 type Store = {
   id: string;
@@ -60,11 +63,15 @@ function pill(on: boolean) {
 }
 
 function slugifyHint(v: string) {
+  // Solo letras, números y guiones (sirve de subdominio): «Tienda Ñoño» → tienda-nono.
   return (v || "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63);
 }
 
 /* =========================================================
@@ -132,6 +139,8 @@ export default function AdminTiendasPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [stores, setStores] = useState<Store[]>([]);
+  // Subdominio guardado de cada tienda (para avisar antes de cambiarlo).
+  const [savedSlugs, setSavedSlugs] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
     return smartFilter(
@@ -148,6 +157,7 @@ export default function AdminTiendasPage() {
       // ✅ Aplicamos auto-off de catálogos en el estado (si está expirada/inactiva)
       const normalized = data.map(applyCatalogAutoOff);
       setStores(normalized);
+      setSavedSlugs(Object.fromEntries(data.map((x) => [x.id, x.slug])));
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -193,6 +203,24 @@ export default function AdminTiendasPage() {
   }
 
   async function saveStore(s: Store) {
+    const slug = s.slug.trim().toLowerCase();
+    const before = savedSlugs[s.id];
+    if (before && slug !== before) {
+      if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(slug)) {
+        await Swal.fire({ icon: "warning", title: "Nombre inválido", text: "Solo letras minúsculas, números y guiones (mínimo 3; sin espacios, puntos ni tildes).", ...swalTheme() });
+        return;
+      }
+      const confirm = await Swal.fire({
+        icon: "question",
+        title: "¿Cambiar el subdominio?",
+        html: `<p><b>${before}</b> → <b>${slug}</b></p><p style="margin-top:10px">Los enlaces viejos de la tienda seguirán funcionando y llevarán solos al nombre nuevo. Ninguna otra tienda podrá usar <b>${before}</b>.</p>`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, cambiar",
+        cancelButtonText: "Cancelar",
+        ...swalTheme(),
+      });
+      if (!confirm.isConfirmed) return;
+    }
     setSaving(true);
     try {
       const sb = supabaseBrowser();
@@ -201,7 +229,7 @@ export default function AdminTiendasPage() {
       const liveActive = isStoreActiveNow(s);
       const payload = {
         name: s.name,
-        slug: s.slug,
+        slug,
         whatsapp: s.whatsapp,
         active: s.active,
         active_until: s.active_until,
@@ -215,9 +243,11 @@ export default function AdminTiendasPage() {
 
       // ✅ Refrescamos el state local con lo que se guardó
       patch(s.id, {
+        slug,
         catalog_retail: payload.catalog_retail,
         catalog_wholesale: payload.catalog_wholesale,
       });
+      setSavedSlugs((prev) => ({ ...prev, [s.id]: slug }));
 
       await Swal.fire({
         icon: "success",
@@ -347,11 +377,12 @@ export default function AdminTiendasPage() {
       html: `
         <div style="text-align:left; opacity:.9">
           <div style="opacity:.75; font-size:12px; margin-bottom:8px">
-            Consejo: el <b>slug</b> es el link público. Ej: <code>mi-tienda</code>
+            El <b>subdominio</b> es su espacio: catálogo, ingreso y panel. Ej: <code>mi-tienda</code> → mi-tienda.${PRODUCTION_HOST}
           </div>
 
           <input id="name" class="swal2-input" placeholder="Nombre">
-          <input id="slug" class="swal2-input" placeholder="Slug (ej: mi-tienda)">
+          <input id="slug" class="swal2-input" placeholder="Subdominio (ej: mi-tienda)" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <div id="slug-status" style="font-size:12px; margin:6px 2px 0; min-height:16px"></div>
           <input id="wa" class="swal2-input" placeholder="WhatsApp (57300...)">
           <input id="owner" class="swal2-input" placeholder="Owner ID (uuid del usuario)">
         </div>
@@ -361,14 +392,42 @@ export default function AdminTiendasPage() {
       confirmButtonText: "Crear",
       cancelButtonText: "Cancelar",
       ...swalTheme(),
-      preConfirm: () => {
+      didOpen: () => {
+        // Sugiere el subdominio desde el nombre y avisa en vivo si está libre.
+        const nameEl = document.getElementById("name") as HTMLInputElement;
+        const slugEl = document.getElementById("slug") as HTMLInputElement;
+        const status = document.getElementById("slug-status") as HTMLDivElement;
+        let touched = false;
+        let timer: number | undefined;
+        const check = () => {
+          window.clearTimeout(timer);
+          const slug = slugifyHint(slugEl.value);
+          if (!slug) { status.textContent = ""; return; }
+          status.textContent = "Revisando…";
+          timer = window.setTimeout(async () => {
+            const { data } = await supabaseBrowser().rpc("store_slug_available", { p_slug: slug });
+            const r = data as { ok?: boolean; reason?: string } | null;
+            if (slugifyHint(slugEl.value) !== slug) return;
+            status.textContent = !r ? "" : r.ok ? `✅ Disponible: https://${slug}.${PRODUCTION_HOST}` : `❌ ${r.reason ?? "No disponible"}`;
+          }, 350);
+        };
+        nameEl.addEventListener("input", () => { if (!touched) { slugEl.value = slugifyHint(nameEl.value); check(); } });
+        slugEl.addEventListener("input", () => { touched = true; check(); });
+      },
+      preConfirm: async () => {
         const name = (document.getElementById("name") as HTMLInputElement).value.trim();
-        const slug = (document.getElementById("slug") as HTMLInputElement).value.trim();
+        const slug = slugifyHint((document.getElementById("slug") as HTMLInputElement).value);
         const whatsapp = (document.getElementById("wa") as HTMLInputElement).value.trim();
         const owner_id = (document.getElementById("owner") as HTMLInputElement).value.trim();
 
         if (!name || !slug || !whatsapp || !owner_id) {
           Swal.showValidationMessage("Completa todos los campos.");
+          return;
+        }
+        const { data: avail } = await supabaseBrowser().rpc("store_slug_available", { p_slug: slug });
+        const r = avail as { ok?: boolean; reason?: string } | null;
+        if (r && r.ok === false) {
+          Swal.showValidationMessage(r.reason ?? "Ese subdominio no está disponible.");
           return;
         }
         return { name, slug, whatsapp, owner_id };
@@ -407,8 +466,9 @@ export default function AdminTiendasPage() {
       await Swal.fire({
         icon: "success",
         title: "Tienda creada",
-        timer: 1000,
-        showConfirmButton: false,
+        html: SUBDOMAINS
+          ? `Su espacio es <b>https://${res.value.slug}.${PRODUCTION_HOST}</b>.<br><span style="opacity:.75">El dueño entra por ${PRODUCTION_HOST}/login y queda solo en su espacio.</span>`
+          : undefined,
         ...swalTheme(),
       });
     } catch (e: any) {
@@ -747,15 +807,22 @@ export default function AdminTiendasPage() {
 
                   <div>
                     <label className="text-xs" style={{ color: "var(--ap-muted)" }}>
-                      Slug
+                      Subdominio (nombre de la tienda)
                     </label>
                     <input
                       className={inputBase() + " mt-1 w-full"}
                       value={s.slug}
                       onChange={(e) => patch(s.id, { slug: e.target.value })}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                     />
                     <p className="mt-1 text-xs" style={{ color: "var(--ap-muted)" }}>
-                      Link: <span style={{ color: "color-mix(in oklab, var(--ap-cta) 60%, var(--ap-text))" }}>/{s.slug}</span>
+                      Link:{" "}
+                      <span style={{ color: "color-mix(in oklab, var(--ap-cta) 60%, var(--ap-text))" }}>
+                        {SUBDOMAINS && /^[a-z0-9-]+$/.test(s.slug) ? `https://${s.slug}.${PRODUCTION_HOST}` : `/${s.slug}`}
+                      </span>
+                      {savedSlugs[s.id] && savedSlugs[s.id] !== s.slug ? " · los enlaces viejos seguirán funcionando" : ""}
                     </p>
                   </div>
 

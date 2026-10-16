@@ -58,17 +58,12 @@ export function PermissionChangeWatcher({ storeId, userId }: { storeId: string; 
   }, [storeId, userId]);
 
   useEffect(() => {
-    const sb = supabaseBrowser();
     const first = window.setTimeout(() => void check(), 1200);
-    // Al instante (tiempo real) y, por si no llega, cada 30 s y al volver a la pestaña.
-    const channel = sb
-      .channel(`perm-watch-${userId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "store_users", filter: `user_id=eq.${userId}` }, () => void check())
-      .subscribe();
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 30000);
+    // Cada 60 s y al volver a la pestaña (sin conexión en vivo: la base igual valida cada permiso al instante).
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 60000);
     const onFocus = () => void check();
     window.addEventListener("focus", onFocus);
-    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener("focus", onFocus); void sb.removeChannel(channel); };
+    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [check, userId]);
 
   const reload = () => window.location.reload();

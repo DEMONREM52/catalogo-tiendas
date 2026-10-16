@@ -439,7 +439,7 @@ export function CatalogEditor({
                         <Field label="Nombre del catálogo">
                           <input className={inputCls} style={inputStyle} value={draft.name} maxLength={80} onChange={(e) => patch({ name: e.target.value })} />
                         </Field>
-                        <Field label="Enlace" hint={slugError || (slugChanged ? "Al guardar, el enlace anterior dejará de funcionar." : undefined)}>
+                        <Field label="Enlace" hint={slugError || (slugChanged ? "El enlace anterior seguirá funcionando: queda en «Enlaces cortos» y lleva a este catálogo." : undefined)}>
                           <div className="flex items-center overflow-hidden rounded-xl border" style={{ ...inputStyle, borderColor: slugError ? "#ef4444" : inputStyle.borderColor }}>
                             <span className="shrink-0 truncate pl-3 font-mono text-xs" style={{ color: "var(--t-muted)" }}>/{store.slug}/</span>
                             <input className="min-w-0 flex-1 bg-transparent px-1 py-2.5 font-mono text-sm outline-none" value={draft.slug} maxLength={48} onChange={(e) => patch({ slug: catalogSlug(e.target.value) })} />

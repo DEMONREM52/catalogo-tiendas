@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Globe, ImagePlus, Link2, Loader2, MapPin, MessageCircle, Phone, Plus, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
 import { STORE_CONTACT_ICONS } from "@/lib/store-contacts";
 import { newLocalId, type CatalogLink, type CatalogLocation, type StoreCatalog } from "@/lib/catalogs";
 import { Field, Section, Switch, ToggleRow, errorText, inputCls, inputStyle, softBox } from "./ui";
@@ -83,13 +84,15 @@ export function ContactTab({
     const id = targetRef.current;
     if (!id) return;
     if (!file.type.startsWith("image/")) return setError("Elige una imagen (PNG o JPG).");
-    if (file.size > 2 * 1024 * 1024) return setError("La imagen debe pesar máximo 2 MB.");
+    if (file.size > 15 * 1024 * 1024) return setError("La imagen debe pesar máximo 15 MB.");
     setUploadingId(id);
     setError("");
     try {
       const sb = supabaseBrowser();
-      const path = `${storeId}/catalogs/${draft.id}/locations/${id}-${Date.now()}.${file.type.includes("png") ? "png" : "jpg"}`;
-      const { error: upError } = await sb.storage.from("store-assets").upload(path, file, { upsert: true, cacheControl: "3600" });
+      // Se reduce y se pasa a WebP antes de subir; cada subida tiene nombre nuevo, así se guarda en caché 1 año.
+      const prepared = await prepareImage(file);
+      const path = `${storeId}/catalogs/${draft.id}/locations/${id}-${Date.now()}.${prepared.ext}`;
+      const { error: upError } = await sb.storage.from("store-assets").upload(path, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
       if (upError) throw upError;
       patchLocation(id, { photo_url: sb.storage.from("store-assets").getPublicUrl(path).data.publicUrl });
     } catch (cause) {

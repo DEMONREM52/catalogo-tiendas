@@ -10,6 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { normalizeStoreContactChannels, STORE_CONTACT_ICONS, type StoreContactChannel } from "@/lib/store-contacts";
 import { MarketingPanel } from "./MarketingPanel";
 import { DomainPanel } from "./DomainPanel";
+import { PRODUCTION_HOST } from "@/lib/share/origin";
 import { EditableNickname, useNicknameUpdates } from "../Nickname";
 
 type StoreProfileDraft = {
@@ -82,11 +83,12 @@ function normalizeStoreSlug(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/[._-]{2,}/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[._-]+|[._-]+$/g, "");
+    // Solo letras, números y guiones: el nombre también es el subdominio (mitienda.remhub.co).
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
+
+const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
 
 function newId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -199,6 +201,8 @@ function Field({
 
 export default function StoreSettings() {
   const [store, setStore] = useState<DashboardStore | null>(null);
+  // Nombre guardado: si no se toca, se conserva tal cual (tiendas viejas con punto o guion bajo).
+  const [savedSlug, setSavedSlug] = useState("");
   const [profile, setProfile] = useState<StoreProfileDraft>({
     headline: "",
     address: "",
@@ -241,6 +245,7 @@ export default function StoreSettings() {
         if (!access.store) throw new Error("No se encontró la tienda de esta cuenta.");
         const sb = supabaseBrowser();
         setStore(access.store);
+        setSavedSlug(access.store.slug);
         setCanEdit(access.isOwner || access.profileRole === "admin");
         const [profileResult, linksResult, themeResult] = await Promise.all([
           sb.from("store_profiles").select("headline,address,city,contact_channels,quick_access,locations").eq("store_id", access.store.id).maybeSingle(),
@@ -333,7 +338,7 @@ export default function StoreSettings() {
     };
   }, []);
 
-  const slugPreview = useMemo(() => normalizeStoreSlug(store?.slug ?? ""), [store?.slug]);
+  const slugPreview = useMemo(() => (store?.slug === savedSlug ? savedSlug : normalizeStoreSlug(store?.slug ?? "")), [store?.slug, savedSlug]);
   const selectedTheme = themes.find((theme) => theme.id === store?.theme);
   const preview = themePreview(selectedTheme, previewLight);
 
@@ -533,7 +538,8 @@ export default function StoreSettings() {
       return;
     }
     const cleanName = store.name.trim();
-    const cleanSlug = normalizeStoreSlug(store.slug);
+    const cleanSlug = store.slug === savedSlug ? savedSlug : normalizeStoreSlug(store.slug);
+    const slugChanged = cleanSlug !== savedSlug;
     const cleanChannels = profile.contact_channels.map((channel) => ({
       ...channel,
       label: channel.label.trim(),
@@ -543,7 +549,7 @@ export default function StoreSettings() {
       await Swal.fire({ icon: "warning", title: "Faltan datos", text: "El nombre y el enlace corto de la tienda son obligatorios.", background: "var(--t-bg-base)", color: "var(--t-text)" });
       return;
     }
-    if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(cleanSlug)) {
+    if (slugChanged ? !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(cleanSlug) : !/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(cleanSlug)) {
       await Swal.fire({ icon: "warning", title: "Enlace inválido", text: "No se pudo convertir el texto en una dirección pública segura. Prueba con otro nombre.", background: "var(--t-bg-base)", color: "var(--t-text)" });
       return;
     }
@@ -595,6 +601,30 @@ export default function StoreSettings() {
         color: "var(--t-text)",
       });
       return;
+    }
+
+    if (slugChanged) {
+      const check = await supabaseBrowser().rpc("store_slug_check", { p_store: store.id, p_slug: cleanSlug });
+      const result = check.data as { ok?: boolean; reason?: string } | null;
+      if (!check.error && result && result.ok === false) {
+        await Swal.fire({ icon: "warning", title: "Ese nombre no está disponible", text: result.reason ?? "Prueba con otro.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+        return;
+      }
+      const from = SUBDOMAINS ? `${savedSlug}.${PRODUCTION_HOST}` : `${PRODUCTION_HOST}/${savedSlug}`;
+      const to = SUBDOMAINS ? `${cleanSlug}.${PRODUCTION_HOST}` : `${PRODUCTION_HOST}/${cleanSlug}`;
+      const confirm = await Swal.fire({
+        icon: "question",
+        title: "¿Cambiar la dirección de tu tienda?",
+        html: `<p>Tu tienda pasará de <b>${from}</b> a <b>${to}</b>.</p>`
+          + `<p style="margin-top:10px">Todos los enlaces viejos (WhatsApp, QR impresos, Google, redes) <b>seguirán funcionando</b> y llevarán solos a la dirección nueva. Ninguna otra tienda podrá quedarse con tu nombre de antes.</p>`
+          + `<p style="margin-top:10px;opacity:.75">No conviene cambiarlo seguido: Google tarda unas semanas en mostrar la dirección nueva.</p>`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, cambiar",
+        cancelButtonText: "Cancelar",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
+      if (!confirm.isConfirmed) return;
     }
 
     setSaving(true);
@@ -666,6 +696,7 @@ export default function StoreSettings() {
       }
 
       setStore({ ...store, name: cleanName, slug: cleanSlug, whatsapp: primary.phone });
+      setSavedSlug(cleanSlug);
       setProfile((current) => ({ ...current, contact_channels: extraChannels, locations: cleanLocations }));
       setLinks((savedLinks ?? []).map((link) => ({
         id: String(link.id),
@@ -775,13 +806,13 @@ export default function StoreSettings() {
             <Field label="Nombre de la tienda">
               <input className={inputClass()} style={inputStyle} value={store.name} onChange={(event) => patchStore({ name: event.target.value })} />
             </Field>
-            <Field label="Dirección pública de la tienda" hint="Puedes escribir espacios, tildes y símbolos; al guardar se convertirán automáticamente en una dirección web segura.">
+            <Field label="Dirección pública de la tienda" hint="Puedes escribir espacios y tildes; al guardar se convierten en letras, números y guiones. Si la cambias, los enlaces viejos siguen funcionando y llevan solos a la nueva.">
               <div className="flex gap-2">
                 <input className={`${inputClass()} min-w-0`} style={inputStyle} value={store.slug} onChange={(event) => patchStore({ slug: event.target.value })} placeholder="Nombre de tu tienda" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
                 <button type="button" className="btn-soft mt-1 shrink-0 rounded-xl px-3 text-xs font-bold" onClick={() => patchStore({ slug: normalizeStoreSlug(store.name) })}>Usar nombre</button>
               </div>
               <span className="mt-2 block break-all rounded-lg border px-3 py-2 font-mono text-xs font-normal" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
-                {siteOrigin}/{slugPreview || "tu-tienda"}/detal
+                {SUBDOMAINS && /^[a-z0-9-]+$/.test(slugPreview || "tu-tienda") ? `https://${slugPreview || "tu-tienda"}.${PRODUCTION_HOST}` : `${siteOrigin}/${slugPreview || "tu-tienda"}/detal`}
               </span>
             </Field>
             <Field label="Llave secreta mayorista" hint="Solo quien tenga esta clave podrá abrir el catálogo mayorista. Al cambiarla, el enlace anterior dejará de funcionar.">

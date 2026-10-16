@@ -1,4 +1,7 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { fetchImageAsPng, resolveCatalogIdentity } from "@/lib/share/identity";
+import { storeBrandAllowed } from "@/lib/share/app-brand";
 
 /**
  * Icono de un catálogo para instalarlo en el celular (pantalla de inicio).
@@ -38,6 +41,15 @@ export async function GET(request: Request) {
   const identity = store ? await resolveCatalogIdentity(store, mode) : null;
   if (!identity) {
     return new Response("Catálogo no encontrado", { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
+  }
+
+  // En remhub.co y en tienda.remhub.co la app lleva el logo de RemHub; el de la tienda, solo en su dominio propio.
+  if (!storeBrandAllowed(request.headers, identity.path?.split("/")[1] ?? store)) {
+    const file = path.join(process.cwd(), "public", "icons", maskable ? "remhub-maskable-512.png" : "remhub-512.png");
+    const remhub = await sharp(await fs.readFile(file)).resize(size, size).png().toBuffer();
+    return new Response(new Uint8Array(remhub), {
+      headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=3600, s-maxage=86400", Vary: "Host" },
+    });
   }
 
   // Zona segura: «maskable» necesita margen porque Android recorta el icono; iPhone (180) un margen pequeño.

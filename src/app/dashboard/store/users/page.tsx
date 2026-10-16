@@ -717,7 +717,7 @@ export default function StoreUsersPage() {
                         <ActionButton
                           icon={<Eye size={14} />}
                           label="Ver como"
-                          onClick={() => store && startSimulation({ storeId: store.id, userId: member.user_id, name: member.display_name || member.username || "usuario", permissions: member.role === "store_admin" ? PERMISSION_LIST.map((p) => p.value) : member.permissions })}
+                          onClick={() => store && startSimulation({ storeId: store.id, userId: member.user_id, name: member.display_name || member.username || "usuario", permissions: member.role === "store_admin" ? PERMISSION_LIST.map((p) => p.value) : member.permissions, pointName: member.role === "store_admin" ? null : points.find((pt) => pt.id === member.point_id)?.name ?? null })}
                         />
                         <ActionButton icon={<KeyRound size={14} />} label="Clave" onClick={() => { setEditFocusPassword(true); setEditMember(member); }} disabled={saving} />
                         <ActionButton icon={<Link2 size={14} />} label="Enlace" onClick={() => void copyLoginLink(member)} />
@@ -738,6 +738,12 @@ export default function StoreUsersPage() {
                                     <option key={pt.id} value={pt.id}>{pt.kind === "point" ? "📍" : "🏬"} {pt.name}</option>
                                   ))}
                                 </select>
+                                {editingPointId && editingPermissions.includes("points") ? (
+                                  <span className="mt-1.5 block rounded-lg border px-2.5 py-1.5 text-[11px] font-normal" style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, transparent)", background: "color-mix(in oklab, #f59e0b 10%, transparent)" }}>
+                                    ⚠️ Con un punto asignado solo verá ese punto y <b>no podrá crear, editar ni desactivar puntos</b> (eso es de la tienda madre).
+                                    Para que los administre, escoge «Todos los puntos (sin restricción)».
+                                  </span>
+                                ) : null}
                               </label>
                               {editingPointId ? (
                                 <div>

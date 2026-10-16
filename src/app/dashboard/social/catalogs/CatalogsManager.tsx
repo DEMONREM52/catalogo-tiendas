@@ -37,6 +37,16 @@ import {
   type StoreCatalog,
 } from "@/lib/catalogs";
 import { CatalogEditor, type ThemeOption, type WarehouseOption } from "./CatalogEditor";
+import { ShortLinksPanel } from "./ShortLinksPanel";
+import { storeShareUrl } from "@/lib/share/store-host";
+
+const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
+
+/** Enlace para compartir: en el subdominio de la tienda si están activos (lavitrina.remhub.co/zamora). */
+function shareUrl(storeSlug: string, catalog: Pick<StoreCatalog, "slug" | "access_key">) {
+  const path = catalogPath(storeSlug, catalog).slice(`/${encodeURIComponent(storeSlug)}`.length);
+  return storeShareUrl(storeSlug, path, SUBDOMAINS, window.location.origin);
+}
 import { Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "./ui";
 
 type Summary = { catalog_id: string; products: number; available: number; without_price: number; orders_30d: number };
@@ -50,6 +60,9 @@ export default function CatalogsManager() {
   const [store, setStore] = useState<DashboardStore | null>(null);
   const [qrFor, setQrFor] = useState<StoreCatalog | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  // Usuario de un punto: solo cambia los catálogos de su punto (null = tienda madre, todos).
+  const [myPoints, setMyPoints] = useState<string[] | null>(null);
+  const canEditCatalog = (c: Pick<StoreCatalog, "point_id">) => canEdit && (myPoints === null || Boolean(c.point_id && myPoints.includes(c.point_id)));
   const [catalogs, setCatalogs] = useState<StoreCatalog[]>([]);
   const [summaries, setSummaries] = useState<Record<string, Summary>>({});
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
@@ -60,7 +73,6 @@ export default function CatalogsManager() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [origin, setOrigin] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -76,6 +88,8 @@ export default function CatalogsManager() {
         sb.from("themes").select("id,name,config").eq("active", true).order("sort_order"),
         sb.rpc("catalog_admin_summary", { p_store: access.store.id }),
       ]);
+      const pointsRes = await sb.rpc("erp_my_points", { p_store: access.store.id });
+      setMyPoints(pointsRes.error ? null : ((pointsRes.data as string[] | null) ?? null));
       if (catalogsRes.error) {
         if (isMissingTable(catalogsRes.error)) {
           setMissingMigration(true);
@@ -98,7 +112,6 @@ export default function CatalogsManager() {
   }, []);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
     void load();
   }, [load]);
 
@@ -135,7 +148,9 @@ export default function CatalogsManager() {
       .single();
     if (insertError) {
       const duplicated = insertError.code === "23505";
-      throw new Error(duplicated ? "Ya tienes un catálogo con ese enlace. Usa otro nombre de enlace." : insertError.message);
+      const pointOnly = /row-level security/i.test(insertError.message);
+      throw new Error(duplicated ? "Ya tienes un catálogo con ese enlace. Usa otro nombre de enlace."
+        : pointOnly ? "Solo puedes crear catálogos de tu punto: escoge tu punto en «Inventario que muestra y vende»." : insertError.message);
     }
     const { data: baseCategories } = await sb
       .from("product_categories")
@@ -190,7 +205,7 @@ export default function CatalogsManager() {
 
   async function copyLink(catalog: StoreCatalog) {
     if (!store) return;
-    const url = `${origin}${catalogPath(store.slug, catalog)}`;
+    const url = shareUrl(store.slug, catalog);
     try {
       await navigator.clipboard.writeText(url);
       void Swal.fire({ ...swalTheme, toast: true, position: "top", icon: "success", title: "Enlace copiado", timer: 1400, showConfirmButton: false });
@@ -201,7 +216,7 @@ export default function CatalogsManager() {
 
   function shareWhatsApp(catalog: StoreCatalog) {
     if (!store) return;
-    const url = `${origin}${catalogPath(store.slug, catalog)}`;
+    const url = shareUrl(store.slug, catalog);
     const text = `🛍️ ${catalog.name} · ${store.name}\nMira nuestro catálogo y haz tu pedido aquí:\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
@@ -389,7 +404,7 @@ export default function CatalogsManager() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
                     <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-black/40 px-2 py-1 backdrop-blur">
                       <span className="text-[11px] font-semibold text-white">{catalog.active ? "Activo" : "Pausado"}</span>
-                      <Switch checked={catalog.active} onChange={() => void toggleActive(catalog)} label={`Activar ${catalog.name}`} disabled={!canEdit || busyId === catalog.id} />
+                      <Switch checked={catalog.active} onChange={() => void toggleActive(catalog)} label={`Activar ${catalog.name}`} disabled={!canEditCatalog(catalog) || busyId === catalog.id} />
                     </div>
                   </div>
                   <div className="relative px-4 pb-4">
@@ -425,7 +440,7 @@ export default function CatalogsManager() {
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-1.5">
-                      {canEdit ? (
+                      {canEditCatalog(catalog) ? (
                         <button
                           type="button"
                           onClick={() => setEditingId(catalog.id)}
@@ -455,7 +470,7 @@ export default function CatalogsManager() {
                       <button type="button" onClick={() => setQrFor(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Código QR del catálogo" aria-label="Código QR del catálogo">
                         <QrCode size={15} />
                       </button>
-                      {canEdit ? (
+                      {canEditCatalog(catalog) ? (
                         <>
                           <button type="button" disabled={busyId === catalog.id} onClick={() => void duplicate(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border disabled:opacity-50" style={softBox} title="Duplicar" aria-label="Duplicar">
                             <Sparkles size={15} />
@@ -474,11 +489,14 @@ export default function CatalogsManager() {
         </div>
       )}
 
+      {store ? <ShortLinksPanel key={catalogs.map((c) => c.slug).join()} storeId={store.id} canEdit={canEdit} /> : null}
+
       <AnimatePresence>
         {creating && store ? (
           <CreateCatalogDialog
             existingSlugs={catalogs.map((c) => c.slug)}
-            warehouses={warehouses}
+            warehouses={myPoints ? warehouses.filter((w) => myPoints.includes(w.id)) : warehouses}
+            pointOnly={myPoints !== null}
             onClose={() => setCreating(false)}
             onCreate={async (input) => {
               const id = await createCatalog(input);
@@ -509,7 +527,7 @@ export default function CatalogsManager() {
       <QrDialog
         open={Boolean(qrFor && store)}
         onClose={() => setQrFor(null)}
-        path={qrFor && store ? catalogPath(store.slug, qrFor) : "/"}
+        path={qrFor && store ? (SUBDOMAINS ? shareUrl(store.slug, qrFor) : catalogPath(store.slug, qrFor)) : "/"}
         title={qrFor?.name ?? "Catálogo"}
         subtitle="Imprímelo o compártelo: al escanearlo se abre este catálogo."
       />
@@ -520,11 +538,13 @@ export default function CatalogsManager() {
 function CreateCatalogDialog({
   existingSlugs,
   warehouses,
+  pointOnly,
   onClose,
   onCreate,
 }: {
   existingSlugs: string[];
   warehouses: WarehouseOption[];
+  pointOnly?: boolean;
   onClose: () => void;
   onCreate: (input: { name: string; slug: string; price_level: PriceLevel; wholesale_rules: boolean; private: boolean; point_id: string | null }) => Promise<void>;
 }) {
@@ -535,7 +555,7 @@ function CreateCatalogDialog({
   const [priceLevel, setPriceLevel] = useState<PriceLevel>(3);
   const [rules, setRules] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [pointId, setPointId] = useState("");
+  const [pointId, setPointId] = useState(pointOnly ? warehouses[0]?.id ?? "" : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -674,7 +694,7 @@ function CreateCatalogDialog({
         <label className="mt-3 block">
           <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Inventario que muestra y vende</span>
           <select className={`${inputCls} mt-1`} style={inputStyle} value={pointId} onChange={(e) => setPointId(e.target.value)}>
-            <option value="">Inventario total de la tienda</option>
+            {pointOnly ? null : <option value="">Inventario total de la tienda</option>}
             {warehouses.map((w) => <option key={w.id} value={w.id}>{w.kind === "point" ? "📍" : "🏬"} Solo {w.name}</option>)}
           </select>
         </label>

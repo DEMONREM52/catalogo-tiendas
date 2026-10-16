@@ -26,6 +26,8 @@ import { PermissionChangeWatcher } from "./PermissionChangeWatcher";
 import { setPermissionRuntime } from "@/lib/permission-runtime";
 import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, type Simulation } from "./AccessGuard";
 import { logSessionEvent } from "@/lib/audit-client";
+import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 
 type Role = "admin" | "store";
 
@@ -497,6 +499,27 @@ export default function DashboardShell({
           router.replace("/login");
           return;
         }
+
+        // Espacio de la tienda: el panel vive en lavitrina.remhub.co (cada subdominio con su propia sesión).
+        const here = currentStoreSubdomain();
+        const path = `${window.location.pathname}${window.location.search}`;
+        if (here) {
+          const mine = access.store?.slug?.toLowerCase();
+          if (access.profileRole === "admin" || mine !== here) {
+            // Este usuario no es de esta tienda (o es el admin de RemHub): sale de aquí y va a su lugar.
+            const pass = access.profileRole === "admin" ? null : await requestStorePass(path);
+            await sb.auth.signOut();
+            document.cookie = "app_session=; path=/; max-age=0";
+            window.location.replace(pass && "url" in pass ? pass.url : `${PRODUCTION_ORIGIN}/login`);
+            return;
+          }
+        } else if (access.profileRole !== "admin") {
+          const jump = await storeSpaceJump(path);
+          if (jump) {
+            window.location.replace(jump);
+            return;
+          }
+        }
       } catch (err: unknown) {
         await sb.auth.signOut();
         await Swal.fire({
@@ -653,7 +676,9 @@ export default function DashboardShell({
     await sb.auth.signOut();
     document.cookie = "app_session=; path=/; max-age=0";
     forgetStaffAccess();
-    router.replace("/login");
+    const to = logoutRedirect();
+    if (to.startsWith("http")) window.location.replace(to);
+    else router.replace(to);
   }
 
   const canAccessStorePages = Boolean(store) && role === "store";

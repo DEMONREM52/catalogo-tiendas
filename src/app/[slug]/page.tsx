@@ -1,18 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { unstable_cache } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { storeBase, storeUrl } from "@/lib/seo/store-public";
 
-type Catalog = { slug: string; name: string; kind: "retail" | "wholesale" | "catalog"; logo_url: string | null; headline: string | null };
+type Point = { id: string; name: string; city: string | null; address: string | null; whatsapp: string | null };
+type Catalog = { slug: string; name: string; kind: "retail" | "wholesale" | "catalog"; logo_url: string | null; headline: string | null; point?: Point | null };
 type Home = { name: string; slug: string; logo_url: string | null; banner_url: string | null; whatsapp: string | null; home_target: string; catalogs: Catalog[] };
 
-/** Vitrina pública de la tienda: todos sus catálogos públicos (activos y sin clave). */
-async function loadHome(slugRaw: string): Promise<Home | null | "missing"> {
+/**
+ * Vitrina pública de la tienda: todos sus catálogos públicos (activos y sin clave).
+ * Caché compartida de 2 minutos (es pública y casi no cambia); el título y la página usan la misma consulta.
+ */
+const loadHome = unstable_cache(async (slugRaw: string): Promise<Home | null | "missing"> => {
   const { data, error } = await supabaseServer().rpc("store_public_home", { p_slug: decodeURIComponent(slugRaw || "") });
   if (error) return /store_public_home|Could not find the function|schema cache/i.test(error.message) ? "missing" : null;
   return (data as Home | null) ?? null;
-}
+}, ["store-public-home-v1"], { revalidate: 120 });
 
 const isSafe = (u: string | null | undefined): u is string => Boolean(u) && /^https:\/\//i.test(String(u));
 
@@ -54,6 +59,24 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   };
   const wa = (home.whatsapp ?? "").replace(/\D/g, "");
   const KIND: Record<Catalog["kind"], string> = { retail: "🛍️", wholesale: "📦", catalog: "✨" };
+  const waLink = (n: string) => `https://wa.me/${n.length === 10 ? `57${n}` : n}`;
+  // Catálogos de cada punto («Escoge tu punto») y los de la tienda.
+  const byPoint = home.catalogs.filter((c) => c.point);
+  const general = home.catalogs.filter((c) => !c.point);
+  const card = (c: Catalog) => (
+    <Link key={c.slug} href={`/${home.slug}/${c.slug}`} className="group flex items-center gap-4 rounded-3xl border p-4 transition hover:-translate-y-0.5"
+      style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+      {isSafe(c.logo_url) ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={c.logo_url} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover" />
+      ) : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl" style={{ background: "var(--t-cta)" }}>{KIND[c.kind]}</span>}
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-black">{c.name}</span>
+        <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{c.headline || (c.kind === "wholesale" ? "Precios por mayor" : "Ver productos")}</span>
+      </span>
+      <span aria-hidden className="text-xl opacity-60 transition group-hover:translate-x-1">→</span>
+    </Link>
+  );
 
   return (
     <main className="min-h-screen" style={{ background: "var(--t-bg-base)", color: "var(--t-text)" }}>
@@ -74,26 +97,50 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-4xl gap-3 px-4 py-8 sm:grid-cols-2">
-        {home.catalogs.map((c) => (
-          <Link key={c.slug} href={`/${home.slug}/${c.slug}`} className="group flex items-center gap-4 rounded-3xl border p-4 transition hover:-translate-y-0.5"
-            style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-            {isSafe(c.logo_url) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.logo_url} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover" />
-            ) : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl" style={{ background: "var(--t-cta)" }}>{KIND[c.kind]}</span>}
-            <span className="min-w-0 flex-1">
-              <span className="block text-base font-black">{c.name}</span>
-              <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{c.headline || (c.kind === "wholesale" ? "Precios por mayor" : "Ver productos")}</span>
-            </span>
-            <span aria-hidden className="text-xl opacity-60 transition group-hover:translate-x-1">→</span>
-          </Link>
-        ))}
-      </section>
+      {byPoint.length > 0 ? (
+        <section className="mx-auto max-w-4xl px-4 pt-8">
+          <h2 className="text-lg font-black">📍 Escoge tu punto</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {byPoint.map((c) => {
+              const p = c.point as Point;
+              const pw = (p.whatsapp ?? "").replace(/\D/g, "");
+              const place = [p.address, p.city].filter(Boolean).join(" · ");
+              return (
+                <div key={c.slug} className="flex flex-col rounded-3xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                  <p className="text-base font-black">{c.name}</p>
+                  {place ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>{place}</p> : null}
+                  {c.headline ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>{c.headline}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/${home.slug}/${c.slug}`} className="rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>Ver catálogo</Link>
+                    {pw ? (
+                      <a href={waLink(pw)} target="_blank" rel="noreferrer" className="rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "#22c55e" }}>
+                        💬 Escribirle a este punto
+                      </a>
+                    ) : null}
+                    {place ? (
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([home.name, p.address, p.city].filter(Boolean).join(" "))}`}
+                        target="_blank" rel="noreferrer" className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                        Cómo llegar
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {general.length > 0 ? (
+        <section className="mx-auto max-w-4xl px-4 py-8">
+          {byPoint.length > 0 ? <h2 className="mb-3 text-lg font-black">🛍️ Catálogos</h2> : null}
+          <div className="grid gap-3 sm:grid-cols-2">{general.map(card)}</div>
+        </section>
+      ) : <div className="pb-8" />}
 
       {wa ? (
         <div className="pb-10 text-center">
-          <a href={`https://wa.me/${wa.length === 10 ? `57${wa}` : wa}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: "#22c55e" }}>
+          <a href={waLink(wa)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: "#22c55e" }}>
             💬 Escríbenos por WhatsApp
           </a>
         </div>

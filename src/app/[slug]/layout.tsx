@@ -1,20 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import { StorePixel } from "@/components/StorePixel";
 import type { StorePixelConfig } from "@/lib/tracking";
 
-// Caché corta en memoria del servidor: evita consultar Supabase en cada visita.
-const cache = new Map<string, { at: number; value: StorePixelConfig | null }>();
-const TTL_MS = 60_000;
-
-/** Configuración pública de medición de la tienda (Píxel de Meta). Nunca rompe la página. */
-async function loadStoreTracking(slug: string): Promise<StorePixelConfig | null> {
-  const hit = cache.get(slug);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
-  const value = await fetchStoreTracking(slug);
-  if (cache.size > 500) cache.clear();
-  cache.set(slug, { at: Date.now(), value });
-  return value;
-}
+/**
+ * Configuración pública de medición de la tienda (Píxel de Meta). Nunca rompe la página.
+ * Caché compartida de 5 minutos entre todos los servidores (antes era en memoria de cada uno: casi siempre vacía).
+ */
+const loadStoreTracking = unstable_cache((slug: string) => fetchStoreTracking(slug), ["store-tracking-v1"], { revalidate: 300 });
 
 async function fetchStoreTracking(slug: string): Promise<StorePixelConfig | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

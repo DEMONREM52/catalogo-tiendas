@@ -17,8 +17,10 @@ export function QrDialog({ open, onClose, path, title, subtitle }: { open: boole
 
 function Sheet({ onClose, path, title, subtitle }: { onClose: () => void; path: string; title: string; subtitle?: string }) {
   const [copied, setCopied] = useState(false);
-  const url = `${ORIGIN}${path}`;
-  const qr = `/api/qr?${new URLSearchParams({ path, format: "png", size: "640" }).toString()}`;
+  // `path` puede ser una ruta de remhub.co o la dirección completa del espacio de la tienda (https://tienda.remhub.co/z).
+  const absolute = path.startsWith("https://");
+  const url = absolute ? path : `${ORIGIN}${path}`;
+  const qr = `/api/qr?${new URLSearchParams({ ...(absolute ? { url: path } : { path }), format: "png", size: "640" }).toString()}`;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Eye, EyeOff, ImagePlus, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
 import { newLocalId } from "@/lib/catalogs";
 import type { BaseCategory, CatalogCategoryRow } from "./types";
 import { Switch, errorText, inputCls, inputStyle, softBox } from "./ui";
@@ -61,13 +62,15 @@ export function CategoriesTab({
     const id = targetRef.current;
     if (!id) return;
     if (!file.type.startsWith("image/")) return setError("Elige una imagen (PNG o JPG).");
-    if (file.size > 2 * 1024 * 1024) return setError("La imagen debe pesar máximo 2 MB.");
+    if (file.size > 15 * 1024 * 1024) return setError("La imagen debe pesar máximo 15 MB.");
     setUploadingId(id);
     setError("");
     try {
       const sb = supabaseBrowser();
-      const path = `${storeId}/catalogs/${catalogId}/categories/${id}-${Date.now()}.${file.type.includes("png") ? "png" : "jpg"}`;
-      const { error: upError } = await sb.storage.from("store-assets").upload(path, file, { upsert: true, cacheControl: "3600" });
+      // Se reduce y se pasa a WebP antes de subir; cada subida tiene nombre nuevo, así se guarda en caché 1 año.
+      const prepared = await prepareImage(file);
+      const path = `${storeId}/catalogs/${catalogId}/categories/${id}-${Date.now()}.${prepared.ext}`;
+      const { error: upError } = await sb.storage.from("store-assets").upload(path, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
       if (upError) throw upError;
       const { data } = sb.storage.from("store-assets").getPublicUrl(path);
       patch(id, { image_url: data.publicUrl });

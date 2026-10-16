@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
+import { headers } from "next/headers";
+import { unstable_cache } from "next/cache";
 import { storeBase, storeUrl } from "@/lib/seo/store-public";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +94,13 @@ async function findCatalogMeta(slugRaw: string, catalogSlug: string) {
   }
 }
 
+// Nombre, logo y portada para la vista previa y el título: datos públicos que casi no cambian.
+// Se guardan 5 minutos en la caché compartida del servidor (no es la caché del navegador): así no se consulta
+// Supabase en cada visita. Precios, existencias y productos NO pasan por aquí: se cargan siempre al día.
+const META_SECONDS = 300;
+const cachedStoreBySlug = unstable_cache(findStoreBySlug, ["catalog-store-meta-v1"], { revalidate: META_SECONDS });
+const cachedCatalogMeta = unstable_cache(findCatalogMeta, ["catalog-meta-v1"], { revalidate: META_SECONDS });
+
 export async function generateMetadata({
   params,
 }: {
@@ -99,7 +108,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, mode } = await params;
   const siteUrl = getSiteUrl();
-  const [store, catalogMeta] = await Promise.all([findStoreBySlug(slug), findCatalogMeta(slug, mode)]);
+  const [store, catalogMeta] = await Promise.all([cachedStoreBySlug(slug), cachedCatalogMeta(slug, mode)]);
 
   const storeName = catalogMeta?.store_name || store?.name || "Catálogo";
   const title = catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} - Catálogos online`;
@@ -122,8 +131,11 @@ export async function generateMetadata({
   const logo = catalogMeta?.logo_url || store?.logo_url;
   const iconUrl = logo ? absUrl(siteUrl, logo) : `${siteUrl}/favicon.ico`;
   // Icono para instalar el catálogo (generado desde su logo real; sin logo, uno neutral).
+  // Se pide en el mismo dominio de la página: en un dominio propio sale el logo de la tienda; en remhub.co, el de RemHub.
+  const storeHost = (await headers()).get("x-store-host");
+  const iconBase = storeHost && /^[a-z0-9.-]{3,253}$/.test(storeHost) ? `https://${storeHost}` : "";
   const pwaIcon = (size: number) =>
-    `/api/pwa-icon?${new URLSearchParams({ store: store?.slug || decodeURIComponent(slug), mode: decodeURIComponent(mode), size: String(size) }).toString()}`;
+    `${iconBase}/api/pwa-icon?${new URLSearchParams({ store: store?.slug || decodeURIComponent(slug), mode: decodeURIComponent(mode), size: String(size) }).toString()}`;
   const appName = catalogMeta?.point_name || catalogMeta?.store_name || store?.name || "Catálogo";
 
   return {

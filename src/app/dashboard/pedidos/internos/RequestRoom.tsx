@@ -10,7 +10,7 @@ import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
 import { RequestSignatures } from "./RequestSignatures";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
-import { SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
+import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 const QUICK = {
@@ -45,21 +45,20 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   }, [requestId]);
   useRunOnChange(load);
 
-  // Tiempo real (si está activo en Supabase) y respaldo cada 6 s mientras el pedido esté abierto.
+  // En vivo: aviso de la conexión única del panel (StockRequestWatcher) y respaldo cada 15 s mientras esté abierto.
   useEffect(() => {
     if (!requestId) return;
-    const sb = supabaseBrowser();
-    const channel = sb
-      .channel(`sr-room-${requestId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `request_id=eq.${requestId}` }, () => void load())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_requests", filter: `id=eq.${requestId}` }, () => void load())
-      .subscribe();
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 6000);
+    const onChange = (e: Event) => {
+      const id = (e as CustomEvent<string | null>).detail;
+      if (!id || id === requestId) void load();
+    };
+    window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 15000);
     (window as Window & { __remhubOpenRequest?: string | null }).__remhubOpenRequest = requestId;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      void sb.removeChannel(channel);
+      window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
       window.clearInterval(timer);
       (window as Window & { __remhubOpenRequest?: string | null }).__remhubOpenRequest = null;
       document.body.style.overflow = prev;

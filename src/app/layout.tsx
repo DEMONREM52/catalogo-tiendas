@@ -4,7 +4,7 @@ import "./globals.css";
 import Providers from "./providers";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
-import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
+import { GoogleTagManager, GoogleTagManagerNoScript, PublicOnly } from "@/components/GoogleTagManager";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 
 const geistSans = Geist({
@@ -128,9 +128,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Google Tag Manager: solo en páginas públicas */}
         <GoogleTagManager />
 
-        {/* Vercel */}
-        <SpeedInsights />
-        <Analytics />
+        {/* Vercel: solo páginas públicas (las del panel no se cuentan ni se cobran como visitas) */}
+        <PublicOnly>
+          <SpeedInsights />
+          <Analytics />
+        </PublicOnly>
       </body>
     </html>
   );

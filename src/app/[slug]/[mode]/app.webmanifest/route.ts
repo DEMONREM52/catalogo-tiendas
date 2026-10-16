@@ -1,4 +1,5 @@
 import { resolveCatalogIdentity } from "@/lib/share/identity";
+import { onStoreHost } from "@/lib/share/app-brand";
 
 /**
  * Manifest de un catálogo: se instala con el nombre y el logo de su tienda o punto y abre solo ese catálogo.
@@ -21,17 +22,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const storeSlug = identity.path.split("/")[1];
   const q = (size: number, purpose = "any") =>
     `/api/pwa-icon?${new URLSearchParams({ store: storeSlug, mode: decodeURIComponent(mode), size: String(size), purpose }).toString()}`;
+  // En el dominio de la tienda (lavitrina.remhub.co o su dominio propio) las rutas van sin el nombre: /zamora.
+  const local = onStoreHost(request.headers, storeSlug);
+  const appPath = local ? identity.path.slice(storeSlug.length + 1) || "/" : identity.path;
   const label = identity.badge === "MAYORISTAS" ? `${identity.name} · Mayoristas` : identity.name;
 
   const manifest = {
-    id: identity.path,
+    id: appPath,
     name: label,
     short_name: identity.shortName,
     description: `${identity.subtitle}. Catálogo de ${identity.name} en RemHub.`,
     lang: "es-CO",
-    start_url: `${identity.path}?${start.toString()}`,
+    start_url: `${appPath}?${start.toString()}`,
     // Incluye la página «Ver más» de los productos de la tienda.
-    scope: `/${storeSlug}/`,
+    scope: local ? "/" : `/${storeSlug}/`,
     display: "standalone",
     display_override: ["standalone", "minimal-ui"],
     orientation: "portrait",
@@ -45,6 +49,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     ],
   };
   return new Response(JSON.stringify(manifest), {
-    headers: { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "public, max-age=600" },
+    headers: { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "public, max-age=600", Vary: "Host" },
   });
 }

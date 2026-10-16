@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
 
 type Props = {
   label: string;
@@ -36,8 +37,14 @@ export function ImageUpload({
         setMsg("❌ Debe ser una imagen.");
         return;
       }
-      if (file.size > 2 * 1024 * 1024) {
-        setMsg("❌ Máximo 2MB.");
+      // Se reduce y se pasa a WebP antes de subir (fotos de celular de varios MB quedan livianas).
+      if (file.size > 15 * 1024 * 1024) {
+        setMsg("❌ Máximo 15 MB.");
+        return;
+      }
+      const prepared = await prepareImage(file);
+      if (prepared.blob.size > 2 * 1024 * 1024) {
+        setMsg("❌ La imagen sigue pesando más de 2 MB. Prueba con otra.");
         return;
       }
 
@@ -47,7 +54,7 @@ export function ImageUpload({
 
       const { error: upErr } = await sb.storage
         .from(bucketName)
-        .upload(filePath, file, { upsert: true, cacheControl: "3600" });
+        .upload(filePath, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
 
       if (upErr) throw upErr;
 

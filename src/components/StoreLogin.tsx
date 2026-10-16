@@ -8,6 +8,7 @@ import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } fro
 import { forgetStaffAccess, resumeExistingSession } from "@/lib/session-resume";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
+import { currentStoreSubdomain } from "@/lib/store-space";
 
 export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   const router = useRouter();
@@ -24,7 +25,25 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   // Ingreso del dueño: si ya hay una sesión guardada (ej. al abrir la app instalada), entra directo al panel.
+  // En el espacio de la tienda (lavitrina.remhub.co/login): se muestra a qué tienda se entra.
+  const [space, setSpace] = useState<{ name: string; logo_url: string | null } | null>(null);
   useEffect(() => {
+    const sub = currentStoreSubdomain();
+    if (!sub) return;
+    void supabaseBrowser().rpc("store_public_home", { p_slug: sub }).then(({ data }) => {
+      const home = data as { name?: string; logo_url?: string | null } | null;
+      if (home?.name) setSpace({ name: home.name, logo_url: home.logo_url ?? null });
+    });
+  }, []);
+
+  useEffect(() => {
+    // Salir desde el espacio de una tienda: también se cierra la sesión de remhub.co en este equipo.
+    if (new URLSearchParams(window.location.search).get("salir") === "1") {
+      void supabaseBrowser().auth.signOut({ scope: "local" });
+      document.cookie = "app_session=; path=/; max-age=0";
+      window.history.replaceState(null, "", "/login");
+      return;
+    }
     if (storeSlug || new URLSearchParams(window.location.search).get("tienda")) return;
     let alive = true;
     void resumeExistingSession().then((ok) => {
@@ -210,7 +229,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             <div>
               <h2 className="text-2xl font-semibold">Iniciar sesión</h2>
               <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-                Accede al panel de tu tienda
+                {space ? <>Panel de <b>{space.name}</b></> : "Accede al panel de tu tienda"}
               </p>
             </div>
 
