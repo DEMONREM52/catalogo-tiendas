@@ -51,7 +51,23 @@ const STATUS: Record<LineStatus, { dot: string; label: string; color: string }> 
 
 const FLOOR_NAME: Record<string, string> = { mother: "🏠 precio madre", margin: "📈 mínimo con ganancia", cost: "⚖️ mínimo", list: "lista", free: "" };
 
-function QtyStepper({ qty, max, onChange }: { qty: number; max?: number | null; onChange: (n: number) => void }) {
+/**
+ * Lleva el cursor a la cantidad o al precio de un producto del carrito (flujo con Enter:
+ * producto → cantidad → precio → buscar otro). Espera a que la línea aparezca en pantalla.
+ */
+export function focusPosField(productId: string, field: "qty" | "price", tries = 8) {
+  window.setTimeout(() => {
+    const el = document.querySelector<HTMLInputElement>(`[data-pos-${field}="${CSS.escape(productId)}"]`);
+    if (!el) { if (tries > 0) focusPosField(productId, field, tries - 1); return; }
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    el.focus({ preventScroll: true });
+    el.select();
+  }, 40);
+}
+
+function QtyStepper({ qty, max, onChange, productId, onEnter, onEscape }: {
+  qty: number; max?: number | null; onChange: (n: number) => void; productId: string; onEnter: () => void; onEscape?: () => void;
+}) {
   const [typed, setTyped] = useState<string | null>(null);
   const over = max !== null && max !== undefined && qty > max;
   return (
@@ -63,8 +79,14 @@ function QtyStepper({ qty, max, onChange }: { qty: number; max?: number | null; 
         type="text"
         inputMode="numeric"
         aria-label="Cantidad"
+        data-pos-qty={productId}
         value={typed ?? String(qty)}
         onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          // Enter: pasa al precio. Esc: vuelve a buscar.
+          if (e.key === "Enter") { e.preventDefault(); onEnter(); }
+          else if (e.key === "Escape") { e.preventDefault(); onEscape?.(); }
+        }}
         onChange={(e) => {
           const t = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 5);
           setTyped(t);
@@ -82,7 +104,9 @@ function QtyStepper({ qty, max, onChange }: { qty: number; max?: number | null; 
 }
 
 /** Precio que se escribe directo en la línea: «$ 138.000». */
-function InlinePrice({ value, onChange, label, tone }: { value: number; onChange: (n: number) => void; label: string; tone: string }) {
+function InlinePrice({ value, onChange, label, tone, productId, onEnter }: {
+  value: number; onChange: (n: number) => void; label: string; tone: string; productId: string; onEnter?: () => void;
+}) {
   const [typed, setTyped] = useState<string | null>(null);
   const shown = typed ?? `$ ${Math.round(value).toLocaleString("es-CO")}`;
   return (
@@ -92,6 +116,7 @@ function InlinePrice({ value, onChange, label, tone }: { value: number; onChange
         type="text"
         inputMode="numeric"
         aria-label={label}
+        data-pos-price={productId}
         value={shown}
         onFocus={(e) => { setTyped(String(Math.round(value))); window.setTimeout(() => e.target.select(), 0); }}
         onChange={(e) => {
@@ -99,7 +124,10 @@ function InlinePrice({ value, onChange, label, tone }: { value: number; onChange
           setTyped(d ? Number(d).toLocaleString("es-CO") : "");
           onChange(d ? Number(d) : 0);
         }}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        onKeyDown={(e) => {
+          // Enter: listo este producto, vuelve a buscar el siguiente.
+          if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); (e.target as HTMLInputElement).blur(); onEnter?.(); }
+        }}
         onBlur={() => setTyped(null)}
         className="w-[88px] text-[13px] font-black tabular-nums"
         style={bare}
@@ -109,9 +137,12 @@ function InlinePrice({ value, onChange, label, tone }: { value: number; onChange
   );
 }
 
-function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onRequest }: {
+function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext }: {
   line: CartLine; floors: FloorInfo | null; approval?: ApprovalState;
   onQty: (n: number) => void; onPrice: (p: number) => void; onLevel: (l: number) => void; onRemove: () => void; onRequest: (note: string) => Promise<void>;
+  /** Aviso corto sobre la línea (ej. «Ya tenías 2 · ahora 3»). */
+  flash?: string | null;
+  onNext?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -133,7 +164,11 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
       exit={{ opacity: 0, x: 40, transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className="overflow-hidden rounded-2xl border"
-      style={{ borderColor: status === "blocked" ? "rgba(239,68,68,.55)" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}
+      style={{
+        borderColor: flash ? "var(--t-accent)" : status === "blocked" ? "rgba(239,68,68,.55)" : "var(--t-card-border)",
+        background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
+        boxShadow: flash ? "0 0 0 3px color-mix(in oklab, var(--t-accent) 30%, transparent)" : undefined,
+      }}
     >
       <div className="flex gap-2.5 p-2.5">
         <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border text-xl" style={{ borderColor: "var(--t-card-border)" }}>
@@ -148,7 +183,8 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
             </button>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <InlinePrice value={line.price} onChange={onPrice} label={`Precio de ${line.name}`} tone={status === "blocked" ? "rgba(239,68,68,.7)" : status === "discount" ? "rgba(245,158,11,.6)" : "var(--t-card-border)"} />
+            <InlinePrice value={line.price} onChange={onPrice} label={`Precio de ${line.name}`} productId={line.productId} onEnter={onNext}
+              tone={status === "blocked" ? "rgba(239,68,68,.7)" : status === "discount" ? "rgba(245,158,11,.6)" : "var(--t-card-border)"} />
             <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="inline-flex items-center gap-0.5 rounded-full px-2 py-1 font-bold" style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 14%, transparent)` }}>
               {st.dot} {st.label}{pct > 0 ? ` −${pct.toLocaleString("es-CO")} %` : ""} <ChevronDown size={11} className={`transition ${open ? "rotate-180" : ""}`} />
             </button>
@@ -162,9 +198,15 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
             </p>
           ) : null}
           <div className="mt-1.5 flex items-center justify-between gap-2">
-            <QtyStepper qty={line.qty} max={line.stock} onChange={onQty} />
+            <QtyStepper qty={line.qty} max={line.stock} onChange={onQty} productId={line.productId}
+              onEnter={() => focusPosField(line.productId, "price")} onEscape={onNext} />
             <motion.b key={line.qty * line.price} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="text-base font-black tabular-nums">{money(line.qty * line.price)}</motion.b>
           </div>
+          {flash ? (
+            <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mt-1 text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>
+              {flash}
+            </motion.p>
+          ) : null}
           {line.stock !== null && line.stock !== undefined && line.qty > line.stock ? (
             <p className="mt-1 text-[11px] font-semibold text-red-400">Solo hay {line.stock} en este punto.</p>
           ) : null}
@@ -252,10 +294,14 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
   );
 }
 
-export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel, onRemove, onRequest }: {
+export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext }: {
   lines: CartLine[]; floors: FloorInfo | null; approvals: Record<string, ApprovalState>;
   onQty: (id: string, n: number) => void; onPrice: (id: string, p: number) => void; onLevel: (id: string, l: number) => void;
   onRemove: (id: string) => void; onRequest: (id: string, note: string) => Promise<void>;
+  /** Producto recién agregado y su aviso (se resalta un momento). */
+  flash?: { id: string; text: string } | null;
+  /** Terminar con este producto y volver a buscar otro. */
+  onNext?: () => void;
 }) {
   if (!lines.length) {
     return (
@@ -272,7 +318,8 @@ export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel
         {lines.map((l) => (
           <Line key={l.productId} line={l} floors={floors} approval={approvals[l.productId]}
             onQty={(n) => onQty(l.productId, n)} onPrice={(p) => onPrice(l.productId, p)} onLevel={(lv) => onLevel(l.productId, lv)}
-            onRemove={() => onRemove(l.productId)} onRequest={(note) => onRequest(l.productId, note)} />
+            onRemove={() => onRemove(l.productId)} onRequest={(note) => onRequest(l.productId, note)}
+            flash={flash?.id === l.productId ? flash.text : null} onNext={onNext} />
         ))}
       </AnimatePresence>
     </ul>

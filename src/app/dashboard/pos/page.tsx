@@ -24,9 +24,9 @@ import { Pause, Play, Search, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
 import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
-import { PosCartLines, lineStatus, type CartLine } from "./PosCart";
+import { PosCartLines, focusPosField, lineStatus, type CartLine } from "./PosCart";
 import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
-import { LIMIT_LABEL, useApprovals, usePriceFloors } from "./usePriceFloors";
+import { LIMIT_LABEL, keepApprovals, useApprovals, usePriceFloors, type ApprovalState } from "./usePriceFloors";
 import { CashStatusChip } from "../caja/CashStatusChip";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
@@ -150,6 +150,16 @@ function sellersForPoint(rows: SellerOption[], pointId: string) {
   return rows.filter((r) => r.point_id && r.point_id === pointId);
 }
 
+/** Error de la base al vender o editar, en palabras: qué producto falló y qué hacer. */
+function posErrorText(err: unknown) {
+  const message = String((err as Error)?.message ?? err);
+  const details = (err as { details?: string })?.details;
+  const hint = (err as { hint?: string })?.hint;
+  if (/PRICE_BELOW_LIMIT/.test(message)) return `«${details ?? "Un producto"}» está por debajo de tu precio mínimo. ${hint ?? "Pide autorización."}`;
+  if (/PRICE_MISMATCH/.test(message)) return `El precio de «${details ?? "un producto"}» cambió o no está autorizado. Recarga la página para traer los precios actuales.`;
+  return message;
+}
+
 export default function PosPage() {
   const [store, setStore] = useState<DashboardStore | null>(null);
   const [allProducts, setProducts] = useState<Product[]>([]);
@@ -208,6 +218,9 @@ export default function PosPage() {
   // Quién usa el POS (la venta en curso se guarda sola por usuario en este equipo).
   const [meId, setMeId] = useState("");
   const restoredSale = useRef(false);
+  // Producto recién agregado: se resalta un momento con un aviso («Ya tenías 2 · ahora 3»).
+  const [flash, setFlash] = useState<{ id: string; text: string } | null>(null);
+  const flashTimer = useRef<number | undefined>(undefined);
   const net = useNetStatus();
 
   const filteredProducts = useMemo(() => {
@@ -292,7 +305,9 @@ export default function PosPage() {
   const storeId = store?.id;
   // Hasta cuánto puede bajar el precio quien vende (la base lo revisa en cada venta).
   const floors = usePriceFloors(storeId, pointId, cart.map((i) => i.productId));
-  const { approvals, request: requestApproval, forget: forgetApproval } = useApprovals(storeId, pointId);
+  const { approvals, request: requestApproval, forget: forgetApproval, restore: restoreApprovals } = useApprovals(storeId, pointId);
+  // Autorizaciones de los productos del carrito (se guardan con la venta en curso, en espera y en borradores).
+  const cartApprovals = useMemo(() => keepApprovals(approvals, cart.map((i) => i.productId)), [approvals, cart]);
   const [payment, setPayment] = useState<PaymentState>(EMPTY_PAYMENT);
   const { held, hold, take } = useHeldSales(storeId, pointId);
 
@@ -303,6 +318,7 @@ export default function PosPage() {
     const saved = readCurrentSale(storeId, meId);
     if (!saved || cart.length || editingDoc) return;
     setCart(saved.cart.map((i) => ({ ...i, priceLevel: Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel })));
+    void restoreApprovals(saved.approvals);
     setSelectedClientId(saved.selectedClientId);
     setDocumentKind(saved.documentKind === "factura" ? "factura" : "remision");
     if (!lockedPoint && saved.pointId) setPointId(saved.pointId);
@@ -328,8 +344,9 @@ export default function PosPage() {
     saveCurrentSale(storeId, meId, cart.length ? {
       cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(),
       customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim(), documentKind, pointId, sellerId,
+      approvals: cartApprovals,
     } : null);
-  }, [storeId, meId, editingDoc, cart, total, customerName, selectedClientId, customerDocument, customerWhatsApp, customerNote, documentKind, pointId, sellerId]);
+  }, [storeId, meId, editingDoc, cart, total, customerName, selectedClientId, customerDocument, customerWhatsApp, customerNote, documentKind, pointId, sellerId, cartApprovals]);
   const searchRef = useRef<HTMLInputElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
   const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
@@ -666,7 +683,7 @@ export default function PosPage() {
   /** Deja la venta en espera (el cliente fue por la billetera) y limpia el carrito para atender a otro. */
   function holdSale() {
     if (!cart.length || editingDoc) return;
-    hold({ cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(), customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim() });
+    hold({ cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(), customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim(), approvals: cartApprovals });
     setCart([]);
     setCustomerNote("");
     setSelectedClientId("");
@@ -681,6 +698,7 @@ export default function PosPage() {
     const h = take(id);
     if (!h) return;
     setCart(h.cart.map((i) => ({ ...i, priceLevel: Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel })));
+    void restoreApprovals(h.approvals);
     setSelectedClientId(h.selectedClientId);
     window.setTimeout(() => {
       setCustomerName(h.customerName || DEFAULT_CLIENT_NAME);
@@ -690,8 +708,25 @@ export default function PosPage() {
     }, 0);
   }
 
+  /** Vuelve al buscador para el siguiente producto (el texto queda seleccionado: se escribe encima). */
+  function goSearch() {
+    const el = searchRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }
+
+  /**
+   * Agrega un producto (o suma uno si ya está). Con el lector de códigos se queda en el buscador;
+   * al tocarlo, el cursor salta a su cantidad → Enter al precio → Enter de vuelta a buscar.
+   */
   function addProduct(product: Product, scanned = false) {
     playTone(scanned ? "escaner" : "pop", scanned ? 0.6 : 0.25);
+    const had = cart.find((item) => item.productId === product.id)?.qty ?? 0;
+    window.clearTimeout(flashTimer.current);
+    setFlash({ id: product.id, text: had ? `Ya tenías ${had} · ahora ${had + 1}. Cambia la cantidad si quieres y Enter.` : "Agregado · cantidad y Enter para seguir" });
+    flashTimer.current = window.setTimeout(() => setFlash(null), 3200);
+    if (!scanned) focusPosField(product.id, "qty");
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       const price = priceOf(product, currentPriceList);
@@ -728,6 +763,16 @@ export default function PosPage() {
       })),
     );
     setEditingDoc(doc);
+    forgetApproval();
+    // Las autorizaciones que ya usó esta venta siguen valiendo al editarla (la base también las reconoce).
+    void supabaseBrowser().rpc("erp_price_approvals_for_order", { p_order: doc.order_id }).then(({ data, error }) => {
+      if (error || !Array.isArray(data) || data.length === 0) return;
+      const used: Record<string, ApprovalState> = {};
+      for (const a of data as Array<{ id: string; product_id: string; requested_price: number; decided_by_name: string | null; decision_note: string | null }>) {
+        used[a.product_id] = { id: a.id, status: "approved", price: Number(a.requested_price), by: a.decided_by_name, note: a.decision_note, fromOrder: true };
+      }
+      void restoreApprovals(used);
+    });
     setDocumentKind(doc.doc_kind === "factura" ? "factura" : "remision");
     setCustomerName(doc.customer_name || DEFAULT_CLIENT_NAME);
     setCustomerNote(doc.customer_note ?? "");
@@ -748,7 +793,7 @@ export default function PosPage() {
     saveDraft({
       storeId: store.id, cart, total, customerName: customerName.trim(), customerNote: customerNote.trim(),
       customerWhatsApp: customerWhatsApp.trim(), customerDocument: customerDocument.trim(), selectedClientId,
-      documentKind, pointId, sellerId,
+      documentKind, pointId, sellerId, approvals: cartApprovals,
     });
     if (draftId) removeDraft(store.id, draftId);
     setDraftId(null);
@@ -769,6 +814,7 @@ export default function PosPage() {
     if (cart.length && !window.confirm("Tienes productos en el carrito. ¿Reemplazarlos por el borrador?")) return;
     setEditingDoc(null);
     setCart(d.cart.map((i) => ({ ...i, priceLevel: (Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel) })));
+    void restoreApprovals(d.approvals);
     setCustomerName(d.customerName || DEFAULT_CLIENT_NAME);
     setCustomerNote(d.customerNote);
     setCustomerWhatsApp(d.customerWhatsApp);
@@ -783,6 +829,7 @@ export default function PosPage() {
 
   function cancelEdit() {
     setEditingDoc(null);
+    forgetApproval();
     setCart([]);
     setCustomerNote("");
     setCustomerDocument("");
@@ -809,6 +856,7 @@ export default function PosPage() {
       }
       const label = doc.doc_number ?? `#${doc.receipt_no}`;
       setEditingDoc(null);
+      forgetApproval();
       setCart([]);
       setCustomerNote("");
       setDocsRefresh((n) => n + 1);
@@ -830,7 +878,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "error",
         title: "No se pudo guardar el documento",
-        text: String((err as Error)?.message ?? err),
+        text: posErrorText(err),
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
@@ -1153,11 +1201,7 @@ export default function PosPage() {
       await Swal.fire({
         icon: "error",
         title: documentKind === "factura" ? "No se pudo crear la factura" : "No se pudo crear la remisión",
-        text: /PRICE_BELOW_LIMIT/.test(String((err as Error)?.message ?? err))
-          ? `«${(err as { details?: string })?.details ?? "Un producto"}» está por debajo de tu precio mínimo. ${(err as { hint?: string })?.hint ?? "Pide autorización."}`
-          : /PRICE_MISMATCH/.test(String((err as Error)?.message ?? err))
-          ? `El precio de «${(err as { details?: string })?.details ?? "un producto"}» cambió o no está autorizado. Recarga la página para traer los precios actuales.`
-          : String((err as Error)?.message ?? err),
+        text: posErrorText(err),
         background: "#0b0b0b",
         color: "#fff",
         confirmButtonColor: "#ef4444",
@@ -1649,10 +1693,25 @@ export default function PosPage() {
                   setVisibleCount(48);
                 }}
                 onKeyDown={(e) => {
+                  // ↓: baja a los resultados para escoger con las flechas y Enter.
+                  if (e.key === "ArrowDown") {
+                    const first = document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])");
+                    if (first) { e.preventDefault(); first.focus(); }
+                    return;
+                  }
                   // Enter con un código exacto agrega el producto (lector de códigos de barras).
                   if (e.key !== "Enter") return;
                   const hit = filteredProducts.find((p) => isExactCode(p, search.trim().toLowerCase()));
-                  if (!hit) return;
+                  if (!hit) {
+                    // Sin código exacto: si queda un solo producto disponible se agrega; si hay varios, se baja a escogerlo.
+                    const available = search.trim() ? filteredProducts.filter((p) => p.active && p.stock !== 0) : [];
+                    if (available.length === 1) { e.preventDefault(); addProduct(available[0]); }
+                    else if (available.length > 1) {
+                      e.preventDefault();
+                      document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])")?.focus();
+                    }
+                    return;
+                  }
                   e.preventDefault();
                   if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
                   addProduct(hit, true);
@@ -1707,7 +1766,22 @@ export default function PosPage() {
                         key={product.id}
                         type="button"
                         disabled={disabled}
+                        data-pos-result
                         onClick={() => addProduct(product)}
+                        onKeyDown={(e) => {
+                          // Flechas para moverse entre resultados; Esc vuelve a buscar (Enter agrega: es un botón).
+                          const all = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pos-result]:not([disabled])"));
+                          const i = all.indexOf(e.currentTarget);
+                          const cols = window.innerWidth >= 1280 ? 3 : window.innerWidth >= 640 ? 2 : 1;
+                          const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key as "ArrowRight"];
+                          if (e.key === "Escape") { e.preventDefault(); goSearch(); }
+                          else if (move !== undefined) {
+                            e.preventDefault();
+                            const next = i + move;
+                            if (next < 0) goSearch();
+                            else all[Math.min(next, all.length - 1)]?.focus();
+                          }
+                        }}
                         className="group flex items-center gap-2.5 rounded-xl border p-2 text-left transition hover:-translate-y-0.5 disabled:opacity-50"
                         style={{
                           borderColor: "var(--t-card-border)",
@@ -1817,6 +1891,8 @@ export default function PosPage() {
               onLevel={(id, lv) => setItemLevel(id, lv as PriceLevel)}
               onRemove={removeItem}
               onRequest={askApproval}
+              flash={flash}
+              onNext={goSearch}
             />
 
             {cart.length ? (

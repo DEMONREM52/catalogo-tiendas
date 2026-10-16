@@ -23,6 +23,8 @@ export type PosDraft = {
   sellerId: string;
   /** Si el envío automático no se pudo hacer: el cajero la revisa y la registra a mano. */
   review?: string;
+  /** Autorizaciones de precio que ya tenía la venta. */
+  approvals?: import("./held").SavedApprovals;
 };
 
 const key = (storeId: string) => `remhub:pos-drafts:${storeId}`;

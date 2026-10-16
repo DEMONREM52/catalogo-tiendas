@@ -11,7 +11,17 @@ export type FloorInfo = {
   can_approve: boolean;
   floors: Record<string, { floor: number; list: number }>;
 };
-export type ApprovalState = { id: string; status: "pending" | "approved" | "rejected" | "used" | "cancelled" | "expired"; price: number; by?: string | null; note?: string | null };
+export type ApprovalState = {
+  id: string; status: "pending" | "approved" | "rejected" | "used" | "cancelled" | "expired"; price: number; by?: string | null; note?: string | null;
+  /** Autorización que ya usó la venta que se está editando: sigue valiendo para esa venta (la base la reconoce). */
+  fromOrder?: boolean;
+};
+
+/** Solo las autorizaciones que sirven para guardar con la venta (aprobadas, pendientes o de la venta editada) de los productos del carrito. */
+export function keepApprovals(map: Record<string, ApprovalState>, productIds: string[]) {
+  const ids = new Set(productIds);
+  return Object.fromEntries(Object.entries(map).filter(([pid, a]) => ids.has(pid) && (a.fromOrder || a.status === "approved" || a.status === "pending")));
+}
 
 export const LIMIT_LABEL: Record<FloorInfo["mode"], string> = {
   list: "No puedes bajar del precio de lista",
@@ -68,6 +78,31 @@ export function useApprovals(storeId: string | undefined, pointId: string) {
     return next;
   }), []);
 
+  /**
+   * Vuelve a poner autorizaciones guardadas (venta recuperada, en espera, borrador o venta que se edita)
+   * y confirma con la base su estado real (si ya venció o se usó, deja de mostrarse como autorizada).
+   */
+  const restore = useCallback(async (saved: Record<string, ApprovalState> | null | undefined) => {
+    const entries = Object.entries(saved ?? {}).filter(([, a]) => a && a.id && (a.fromOrder || a.status === "approved" || a.status === "pending"));
+    setMap(Object.fromEntries(entries));
+    const ids = entries.filter(([, a]) => !a.fromOrder).map(([, a]) => a.id);
+    if (!ids.length) return;
+    const { data, error } = await supabaseBrowser().rpc("erp_price_approval_get", { p_ids: ids });
+    // Sin internet se queda como estaba: igual la base revisa cada precio al registrar la venta.
+    if (error) return;
+    const rows = (data ?? []) as Array<{ id: string; status: ApprovalState["status"]; decided_by_name: string | null; decision_note: string | null }>;
+    setMap((m) => {
+      const next = { ...m };
+      for (const [pid, a] of Object.entries(m)) {
+        if (a.fromOrder) continue;
+        const r = rows.find((x) => x.id === a.id);
+        if (!r) delete next[pid];
+        else next[pid] = { ...a, status: r.status, by: r.decided_by_name ?? a.by, note: r.decision_note ?? a.note };
+      }
+      return next;
+    });
+  }, []);
+
   const pending = Object.values(map).some((a) => a.status === "pending");
   useEffect(() => {
     if (!pending) return;
@@ -90,5 +125,5 @@ export function useApprovals(storeId: string | undefined, pointId: string) {
     return () => window.clearInterval(timer);
   }, [pending]);
 
-  return { approvals: map, request, forget };
+  return { approvals: map, request, forget, restore };
 }

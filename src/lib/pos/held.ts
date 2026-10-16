@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from "react";
  * Viven solo en este equipo, por tienda y punto. No son ventas: no descuentan inventario ni tienen número.
  */
 export type HeldItem = { productId: string; name: string; qty: number; price: number; priceLevel: number; note: string; manual?: boolean };
+/** Autorizaciones de precio guardadas con la venta (por producto). */
+export type SavedApprovals = Record<string, { id: string; status: "pending" | "approved" | "rejected" | "used" | "cancelled" | "expired"; price: number; by?: string | null; note?: string | null; fromOrder?: boolean }>;
 export type HeldSale = {
   id: string;
   at: string;
@@ -17,6 +19,7 @@ export type HeldSale = {
   customerDocument: string;
   customerWhatsApp: string;
   customerNote: string;
+  approvals?: SavedApprovals;
 };
 
 const MAX = 12;

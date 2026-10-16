@@ -1,6 +1,6 @@
 "use client";
 
-import type { HeldItem } from "./held";
+import type { HeldItem, SavedApprovals } from "./held";
 
 /**
  * Venta en curso del POS guardada sola en este equipo (por tienda y por usuario).
@@ -21,6 +21,8 @@ export type CurrentSale = {
   documentKind: "remision" | "factura";
   pointId: string;
   sellerId: string;
+  /** Autorizaciones de precio ya pedidas o aprobadas (al recuperar se confirma su estado con la base). */
+  approvals?: SavedApprovals;
 };
 
 const MAX_AGE_MS = 3 * 24 * 3600_000;
