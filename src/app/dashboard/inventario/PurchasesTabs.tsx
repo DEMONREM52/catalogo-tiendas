@@ -514,7 +514,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
             title={editing ? `✏️ Editando ingreso N.º ${editing.number}` : "Ingreso de factura de proveedor"}
             subtitle={editing
               ? "Corrige lo que necesites: cantidades, costos, IVA, bodega, proveedor o pago. Al guardar solo se ajusta la diferencia."
-              : "Elige a qué bodega entra cada producto. Al guardar suma al inventario, recalcula el costo promedio y, si es a crédito, crea la cuenta por pagar."}
+              : "Elige a qué bodega entra cada producto. Al guardar suma al inventario, recalcula el costo promedio, pone los precios por % con el costo de esta factura y, si es a crédito, crea la cuenta por pagar."}
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {!online ? (

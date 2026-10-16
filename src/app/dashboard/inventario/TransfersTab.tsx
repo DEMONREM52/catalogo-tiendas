@@ -458,6 +458,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                         <>
                           <Btn onClick={() => shareWhatsApp(row)}>💬 Enviar enlace por WhatsApp</Btn>
                           <Btn variant="ghost" onClick={() => void copyLink(row)}>🔗 Copiar enlace</Btn>
+                          {/* En el mismo espacio de la tienda (con la sesión): así la hoja incluye precios por mayor. */}
+                          <a href={`/traslado/${row.track_token}/imprimir`} target="_blank" rel="noopener noreferrer"
+                            className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                            🖨️ Imprimir
+                          </a>
                           <a
                             href={transferTrackUrl(row.track_token)}
                             target="_blank"

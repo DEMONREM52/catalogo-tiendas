@@ -10,7 +10,7 @@ import { GTM_ID } from "@/lib/tracking";
  * No se carga en el panel, el ingreso ni en enlaces con tokens privados (pedidos, traslados,
  * comprobantes, accesos, cambio de contraseña) para no enviar datos internos a terceros.
  */
-const PRIVATE_PREFIXES = ["/dashboard", "/admin", "/login", "/entrar", "/pedido", "/traslado", "/comprobante", "/acceso", "/reset-password",
+const PRIVATE_PREFIXES = ["/dashboard", "/admin", "/login", "/entrar", "/documento", "/pedido", "/traslado", "/comprobante", "/acceso", "/reset-password",
   "/forgot-password", "/api", "/offline"];
 
 export function isTrackedPath(pathname: string | null) {

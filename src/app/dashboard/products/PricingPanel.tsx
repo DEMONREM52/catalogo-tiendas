@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import Link from "next/link";
 import { Lock, Percent, Receipt, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -8,7 +9,11 @@ import { ChoiceChips, NumberField } from "@/components/forms/Fields";
 import { pctOf, roundCommercial, toCents, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
 
 export type Markups = [number | null, number | null, number | null, number | null, number | null];
-type Pricing = { round_step: RoundingStep; round_dir: RoundingDir; default_markup: number; can_edit: boolean };
+/** cost_basis: los precios por % salen del último costo de compra (por defecto) o del costo promedio. */
+type Pricing = { round_step: RoundingStep; round_dir: RoundingDir; default_markup: number; can_edit: boolean; cost_basis?: "last" | "average" };
+type LastCost = { last_cost: number | null; last_cost_at: string | null; avg_cost: number | null };
+type Preview = { basis: string; changes: number; up: number; down: number; sample: Array<{ name: string; old_price: number; new_price: number }> };
+const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
 type StockRow = { warehouse_id: string; name: string; kind: string; qty: number; updated_at: string | null };
 
 const LEVELS = ["Precio 1 · mínimo", "Precio 2 · mayor", "Precio 3 · detal", "Precio 4", "Precio 5"];
@@ -34,10 +39,16 @@ export async function loadDefaultMarkup(storeId: string): Promise<number> {
  * Precios por porcentaje de ganancia (y, al editar, costo y existencias SOLO de lectura).
  * El costo y las unidades solo cambian con ingreso de factura, ajustes o traslados.
  */
-export function PricingPanel({ storeId, productId, cost, costKnown, prices, markups, onChange, isNew }: {
+export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, prices, markups, onChange, isNew }: {
   storeId: string; productId: string | null; cost: number; costKnown: boolean; prices: number[]; markups: Markups; onChange: (m: Markups) => void; isNew?: boolean;
 }) {
   const [cfg, setCfg] = useState<Pricing | null>(null);
+  const [lastInfo, setLastInfo] = useState<LastCost | null>(null);
+  const [repricing, setRepricing] = useState(false);
+  // Costo con el que se calculan los precios: el último de compra (regla de la tienda) o el promedio.
+  const basis = cfg?.cost_basis ?? "last";
+  const lastCost = Number(lastInfo?.last_cost ?? 0);
+  const cost = basis === "last" && lastCost > 0 ? lastCost : avgCost;
   const [stock, setStock] = useState<StockRow[] | null>(null);
   const [showCfg, setShowCfg] = useState(false);
   const legacy = markups.every((m) => m === null);
@@ -50,6 +61,10 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
     let alive = true;
     void supabaseBrowser().rpc("erp_product_pricing_get", { p_store: storeId }).then(({ data }) => alive && data && setCfg(data as Pricing));
     if (productId) void supabaseBrowser().rpc("erp_product_stock_by_point", { p_product: productId }).then(({ data, error }) => alive && setStock(error ? [] : ((data ?? []) as StockRow[])));
+    // Último costo de compra (sin la migración 20261206 o sin permiso de costos, se usa el promedio).
+    if (productId) void supabaseBrowser().rpc("erp_product_last_costs", { p_store: storeId, p_ids: [productId] }).then(({ data, error }) => {
+      if (alive && !error && Array.isArray(data) && data[0]) setLastInfo(data[0] as LastCost);
+    });
     return () => { alive = false; };
   }, [storeId, productId]);
 
@@ -68,6 +83,47 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
   };
   const implied = (i: number) => (cost > 0 && prices[i] > 0 ? Math.round(((prices[i] - cost) / cost) * 10000) / 100 : null);
 
+  /** Cambia la regla (último costo / promedio) y muestra cuántos precios cambian antes de recalcularlos todos. */
+  async function reprice(nextBasis: "last" | "average") {
+    const sb = supabaseBrowser();
+    setRepricing(true);
+    try {
+      // Primero se guarda la regla sin tocar precios, para ver qué cambiaría.
+      const saved = await sb.rpc("erp_reprice_apply", { p_store: storeId, p_basis: nextBasis, p_apply: false });
+      if (saved.error) throw saved.error;
+      setCfg((c) => (c ? { ...c, cost_basis: nextBasis } : c));
+      const { data, error } = await sb.rpc("erp_reprice_preview", { p_store: storeId });
+      if (error) throw error;
+      const pv = data as Preview;
+      if (!pv.changes) {
+        await Swal.fire({ icon: "success", title: "Todo al día", text: "Ningún precio cambia con esta regla.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+        return;
+      }
+      const esc = (t: string) => t.replace(/[<>&"]/g, "");
+      const rows = pv.sample.slice(0, 8).map((s) => `<li>${esc(s.name)}: <s>${cop(Number(s.old_price))}</s> → <b>${cop(Number(s.new_price))}</b></li>`).join("");
+      const more = pv.changes > 8 ? `<p style="opacity:.7;font-size:12px">…y ${pv.changes - 8} más.</p>` : "";
+      const ok = await Swal.fire({
+        icon: "question",
+        title: `Cambian ${pv.changes} precio${pv.changes === 1 ? "" : "s"}`,
+        html: `<p>${pv.down} bajan y ${pv.up} suben al calcular con el <b>${nextBasis === "last" ? "último costo" : "costo promedio"}</b>.</p><ul style="text-align:left;margin-top:10px;font-size:13px">${rows}</ul>${more}`,
+        showCancelButton: true,
+        confirmButtonText: "Recalcular todos",
+        cancelButtonText: "Ahora no",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
+      if (!ok.isConfirmed) return;
+      const applied = await sb.rpc("erp_reprice_apply", { p_store: storeId, p_basis: nextBasis, p_apply: true });
+      if (applied.error) throw applied.error;
+      await Swal.fire({ icon: "success", title: "Precios recalculados", text: "Recarga la página para ver los precios nuevos de este producto.", timer: 2200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
+    } catch (e) {
+      const m = (e as Error)?.message ?? String(e);
+      await Swal.fire({ icon: "error", title: "No se pudo", text: /reprice|Could not find|schema cache/i.test(m) ? "Falta correr en Supabase la migración 20261206_precio_ultimo_costo.sql." : m, background: "var(--t-bg-base)", color: "var(--t-text)" });
+    } finally {
+      setRepricing(false);
+    }
+  }
+
   async function saveCfg(patch: Partial<Pricing>) {
     const next = { ...(cfg ?? { round_step: 100, round_dir: "nearest", default_markup: 15, can_edit: true }), ...patch } as Pricing;
     setCfg(next);
@@ -84,8 +140,15 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
-              <p className="text-[11px] font-bold" style={{ color: "var(--t-muted)" }}>💰 COSTO PROMEDIO</p>
+              <p className="text-[11px] font-bold" style={{ color: "var(--t-muted)" }}>💰 {basis === "last" && lastCost > 0 ? "ÚLTIMO COSTO" : "COSTO PROMEDIO"}</p>
               <p className="text-xl font-black tabular-nums">{costKnown ? (cost > 0 ? cop(cost) : "Sin costo") : "🔒"}</p>
+              {costKnown && lastInfo ? (
+                <p className="mt-0.5 text-[10px]" style={{ color: "var(--t-muted)" }}>
+                  {basis === "last" && lastCost > 0
+                    ? <>Factura del {fmtDate(lastInfo.last_cost_at)} · promedio del inventario {cop(Number(lastInfo.avg_cost ?? avgCost))}</>
+                    : lastCost > 0 ? <>Último costo de compra {cop(lastCost)}</> : null}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
               <p className="text-[11px] font-bold" style={{ color: "var(--t-muted)" }}>📦 UNIDADES EN TOTAL</p>
@@ -122,12 +185,22 @@ export function PricingPanel({ storeId, productId, cost, costKnown, prices, mark
           {cfg?.can_edit ? <button type="button" onClick={() => setShowCfg((v) => !v)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}><Settings2 size={12} /> Redondeo</button> : null}
         </div>
         <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
-          Precio = costo + % de ganancia, redondeado {step ? `${dir === "up" ? "hacia arriba" : dir === "down" ? "hacia abajo" : "al más cercano"} a $${step.toLocaleString("es-CO")}` : "sin redondeo"}. Si entra una factura con otro costo, los precios se ajustan solos.
+          Precio = {basis === "last" ? "último costo de compra" : "costo promedio"} + % de ganancia, redondeado {step ? `${dir === "up" ? "hacia arriba" : dir === "down" ? "hacia abajo" : "al más cercano"} a $${step.toLocaleString("es-CO")}` : "sin redondeo"}. Si entra una factura con otro costo, los precios se ajustan solos.
         </p>
         {showCfg && cfg ? (
           <div className="mt-3 space-y-2 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
             <ChoiceChips value={String(step)} onChange={(v) => void saveCfg({ round_step: Number(v) as RoundingStep })} options={[["0", "Sin redondeo"], ["50", "$50"], ["100", "$100"], ["500", "$500"], ["1000", "$1.000"]].map(([v, l]) => ({ value: v, label: l }))} />
             <ChoiceChips value={dir} onChange={(v) => void saveCfg({ round_dir: v as RoundingDir })} options={[{ value: "nearest", label: "Al más cercano" }, { value: "up", label: "Hacia arriba ⬆️" }, { value: "down", label: "Hacia abajo ⬇️" }]} />
+            <div className="space-y-1.5 border-t pt-2" style={{ borderColor: "var(--t-card-border)" }}>
+              <p className="text-xs font-bold">Calcular los precios con</p>
+              <ChoiceChips value={basis} onChange={(v) => void reprice(v as "last" | "average")}
+                options={[{ value: "last", label: "🧾 Último costo de compra" }, { value: "average", label: "⚖️ Costo promedio" }]} />
+              <button type="button" disabled={repricing} onClick={() => void reprice(basis)}
+                className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)" }}>
+                <Sparkles size={12} /> {repricing ? "Revisando…" : "Recalcular todos los precios con esta regla"}
+              </button>
+              <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>El promedio sigue valorando el inventario; esto solo cambia de qué costo salen los precios. Antes de cambiar nada te muestra cuáles cambian.</p>
+            </div>
             <div className="flex items-center gap-2 text-xs"><span className="flex-1">% por defecto para productos nuevos</span><div className="w-28"><NumberField value={cfg.default_markup} onChange={(v) => void saveCfg({ default_markup: v ?? 0 })} suffix="%" min={0} max={1000} /></div></div>
             <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Aplica a toda la tienda.</p>
           </div>

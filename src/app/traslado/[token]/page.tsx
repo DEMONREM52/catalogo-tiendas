@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, transferTrackUrl, type TransferStep } from "@/lib/transfer-tracking";
 import { SignaturePad, type SignaturePadHandle } from "./SignaturePad";
+import { cop, useListPrices } from "@/lib/print/list-prices";
 
 type Place = { name: string; address: string | null; phone: string | null; kind: "warehouse" | "point" } | null;
 type Item = { product_id: string; name: string; image_url: string | null; qty: number; received_qty: number | null };
@@ -146,6 +147,9 @@ export default function TransferTrackPage() {
                 <button type="button" onClick={() => void load()} className="rounded-full border px-3.5 py-1.5 text-sm font-semibold" style={inputStyle}>
                   ↻ Actualizar
                 </button>
+                <a href={`/traslado/${token}/imprimir`} target="_blank" rel="noreferrer" className="rounded-full border px-3.5 py-1.5 text-sm font-semibold" style={inputStyle}>
+                  🖨️ Imprimir
+                </a>
               </div>
             </header>
 
@@ -214,31 +218,7 @@ export default function TransferTrackPage() {
               </div>
             ) : null}
 
-            <section className="rounded-3xl border p-5" style={card}>
-              <h2 className="text-base font-bold">Mercancía ({track.items.reduce((s, i) => s + i.qty, 0)} unidades)</h2>
-              <ul className="mt-3 divide-y" style={{ borderColor: "var(--t-card-border)" }}>
-                {track.items.map((item) => (
-                  <li key={item.product_id} className="flex items-center gap-3 py-2.5" style={{ borderColor: "var(--t-card-border)" }}>
-                    {item.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                    ) : (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--t-card-bg-soft)" }}>📦</span>
-                    )}
-                    <span className="min-w-0 flex-1 text-sm font-semibold">{item.name}</span>
-                    <span className="text-right text-sm">
-                      <b>{item.qty}</b> und.
-                      {item.received_qty !== null ? (
-                        <span className="block text-xs" style={{ color: item.received_qty < item.qty ? "#ef4444" : "var(--t-muted)" }}>
-                          llegaron {item.received_qty}
-                        </span>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {track.received_notes ? <p className="mt-2 text-sm">📝 Recepción: {track.received_notes}</p> : null}
-            </section>
+            <MerchandiseCard track={track} />
 
             <p className="pb-6 text-center text-xs" style={{ color: "var(--t-muted)" }}>
               Enlace válido hasta {dateTime(track.expires_at)}. Compártelo solo con los responsables del traslado.
@@ -247,6 +227,70 @@ export default function TransferTrackPage() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Mercancía del traslado: unidades y, con sesión en la tienda, precio por mayor (precio 2), subtotal y valor total.
+ * Sin sesión (ej. el conductor con el enlace) solo se ven unidades.
+ */
+function MerchandiseCard({ track }: { track: Track }) {
+  const prices = useListPrices(track.items.map((i) => i.product_id));
+  const units = track.items.reduce((s, i) => s + i.qty, 0);
+  const value = prices ? track.items.reduce((s, i) => s + i.qty * (prices.get(i.product_id)?.price2 ?? 0), 0) : 0;
+  const received = track.items.some((i) => i.received_qty !== null);
+  const missingValue = prices && received
+    ? track.items.reduce((s, i) => s + Math.max(0, i.qty - (i.received_qty ?? i.qty)) * (prices.get(i.product_id)?.price2 ?? 0), 0)
+    : 0;
+  return (
+    <section className="rounded-3xl border p-5" style={card}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-bold">Mercancía ({units} unidades · {track.items.length} referencias)</h2>
+        {prices ? <span className="text-sm">Valor por mayor <b className="text-base">{cop(value)}</b></span> : null}
+      </div>
+      <ul className="mt-3 divide-y" style={{ borderColor: "var(--t-card-border)" }}>
+        {track.items.map((item) => {
+          const p = prices?.get(item.product_id);
+          return (
+            <li key={item.product_id} className="flex items-center gap-3 py-2.5" style={{ borderColor: "var(--t-card-border)" }}>
+              {item.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
+              ) : (
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--t-card-bg-soft)" }}>📦</span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{item.name}</span>
+                {p ? (
+                  <span className="block text-xs" style={{ color: "var(--t-muted)" }}>
+                    {p.sku ? `Ref. ${p.sku} · ` : ""}P. mayor {cop(p.price2)}{p.price3 ? ` · detal ${cop(p.price3)}` : ""}
+                  </span>
+                ) : null}
+              </span>
+              <span className="text-right text-sm">
+                <b>{item.qty}</b> und.
+                {p ? <span className="block text-xs font-bold tabular-nums">{cop(item.qty * p.price2)}</span> : null}
+                {item.received_qty !== null ? (
+                  <span className="block text-xs" style={{ color: item.received_qty < item.qty ? "#ef4444" : "var(--t-muted)" }}>
+                    llegaron {item.received_qty}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {prices ? (
+        <div className="mt-3 flex flex-wrap justify-end gap-x-6 gap-y-1 border-t pt-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+          <span>{units} und.</span>
+          <span>Total a precio por mayor <b>{cop(value)}</b></span>
+          {missingValue > 0 ? <span style={{ color: "#ef4444" }}>Faltó al recibir {cop(missingValue)}</span> : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs" style={{ color: "var(--t-muted)" }}>Los precios solo se ven con sesión iniciada en la tienda.</p>
+      )}
+      {track.received_notes ? <p className="mt-2 text-sm">📝 Recepción: {track.received_notes}</p> : null}
+    </section>
   );
 }
 

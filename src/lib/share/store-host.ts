@@ -25,7 +25,7 @@ export function storeSpaceOrigin(slug: string) {
  * Rutas del sistema (panel, acceso, documentos internos). En el subdominio de la tienda se atienden ahí mismo
  * (lavitrina.remhub.co/dashboard: su espacio); en un dominio propio se mandan al subdominio. /admin siempre en remhub.co.
  */
-const PLATFORM_PATHS = ["/dashboard", "/admin", "/login", "/acceso", "/entrar", "/instalar", "/forgot-password", "/reset-password", "/offline",
+const PLATFORM_PATHS = ["/dashboard", "/admin", "/login", "/acceso", "/entrar", "/documento", "/instalar", "/forgot-password", "/reset-password", "/offline",
   "/traslado", "/comprobante", "/pedido", "/tienda-pausada"];
 
 export type StoreHostOptions = {
@@ -109,7 +109,7 @@ export function shortLinkTarget(links: Record<string, string> | null | undefined
 }
 
 /** Primeras partes de ruta de remhub.co que no son tiendas. */
-const PLATFORM_ROOTS = new Set(["", "_next", "api", "acceso", "admin", "comprobante", "dashboard", "entrar", "forgot-password", "instalar", "login",
+const PLATFORM_ROOTS = new Set(["", "_next", "api", "acceso", "admin", "comprobante", "dashboard", "documento", "entrar", "forgot-password", "instalar", "login",
   "offline", "pedido", "reset-password", "tienda-pausada", "traslado", "robots.txt", "sitemap.xml", "manifest.webmanifest", "sw.js", "favicon.ico"]);
 
 /** remhub.co/lavitrina/zamora → { slug: "lavitrina", rest: "/zamora" } (null si la ruta no es de una tienda). */

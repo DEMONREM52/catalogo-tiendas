@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
+import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
@@ -34,6 +35,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const chatEnd = useRef<HTMLDivElement>(null);
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
+  // Precio por mayor (precio 2) de cada producto, para ver cuánto vale el pedido.
+  const prices = useListPrices(data ? data.items.map((i) => i.product_id) : []);
 
   const load = useCallback(async () => {
     if (!requestId) return;
@@ -210,6 +213,11 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   {" "}· En {r.from_name}: {i.dest_now}
                 </p>
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
+                {prices?.get(i.product_id) ? (
+                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                    P. mayor {cop(prices.get(i.product_id)!.price2)} · <b style={{ color: "var(--t-text)" }}>{cop(toSend * prices.get(i.product_id)!.price2)}</b>
+                  </p>
+                ) : null}
               </div>
               {canAttend ? (
                 <label className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
@@ -253,6 +261,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             </div>
           );
         })}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+        <span>
+          {data.items.reduce((s, i) => s + (approved[i.id] ?? i.qty_approved ?? i.qty_requested), 0)} und. · {data.items.length} referencias
+          {prices ? <> · Valor por mayor <b>{cop(data.items.reduce((s, i) => s + (approved[i.id] ?? i.qty_approved ?? i.qty_requested) * (prices.get(i.product_id)?.price2 ?? 0), 0))}</b></> : null}
+        </span>
+        <a href={`/documento/pedido-interno/${r.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+          🖨️ Imprimir pedido
+        </a>
       </div>
 
       <RequestSignatures

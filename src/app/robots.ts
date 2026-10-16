@@ -8,7 +8,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const storeHost = h.get("x-store-host");
   const origin = storeHost ? `https://${storeHost}` : PRODUCTION_ORIGIN;
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/dashboard", "/admin", "/api/", "/login", "/acceso/", "/pedido/", "/traslado/", "/comprobante/"] }],
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/dashboard", "/admin", "/api/", "/login", "/acceso/", "/pedido/", "/traslado/", "/comprobante/", "/documento/"] }],
     sitemap: `${origin}/sitemap.xml`,
     host: origin,
   };
