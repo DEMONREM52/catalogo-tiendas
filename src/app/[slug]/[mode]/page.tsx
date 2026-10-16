@@ -398,6 +398,8 @@ export default function StoreCatalogPage() {
 
   // Botones flotantes (buscar / volver arriba) y carrusel que solo trabaja cuando se ve.
   const searchBoxRef = useRef<HTMLDivElement>(null);
+  // Cada búsqueda nueva invalida las anteriores: una respuesta vieja nunca reemplaza a una nueva.
+  const productsReq = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const productsGridRef = useRef<HTMLDivElement>(null);
   const carouselRef = useRef<HTMLElement>(null);
@@ -873,6 +875,8 @@ export default function StoreCatalogPage() {
     if (!store?.id) return;
 
     const sb = supabaseBrowser();
+    const req = opts.reset ? ++productsReq.current : productsReq.current;
+    const stale = () => req !== productsReq.current;
 
     const pageToLoad = opts.reset ? 0 : (opts.nextPage ?? page);
     const from = pageToLoad * PAGE_SIZE;
@@ -890,6 +894,7 @@ export default function StoreCatalogPage() {
         p_offset: from,
       });
       if (error) throw error;
+      if (stale()) return;
       const result = (data ?? { total: 0, items: [] }) as { total: number; items: ProductRow[] };
       const rows: ProductRow[] = (result.items ?? []).map((p) => ({
         ...p,
@@ -940,6 +945,7 @@ export default function StoreCatalogPage() {
         if (ids.length) {
           const { data, error } = await sb.from("products").select(columns).in("id", ids);
           if (error) throw error;
+          if (stale()) return;
           const order = new Map(ids.map((id, index) => [id, index]));
           found = normalizeRows(((data ?? []) as unknown) as ProductRow[])
             .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
@@ -962,7 +968,8 @@ export default function StoreCatalogPage() {
       .from("products")
       .select(
         "id,name,description,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details",
-        { count: "exact" }
+        // El total solo se cuenta en la primera página: contar repite toda la búsqueda en la base.
+        opts.reset ? { count: "exact" } : undefined
       )
       .eq("store_id", store.id)
       .eq("active", true)
@@ -983,6 +990,7 @@ export default function StoreCatalogPage() {
       .range(from, to);
 
     if (error) throw error;
+    if (stale()) return;
 
     const normalized: ProductRow[] = normalizeRows(((data ?? []) as unknown) as ProductRow[]);
 
@@ -993,7 +1001,8 @@ export default function StoreCatalogPage() {
       setProducts((prev) => [...prev, ...normalized]);
     }
 
-    setHasMore(to + 1 < Number(count ?? 0));
+    // Primera página: con el total. Siguientes: hay más si llegó una página completa.
+    setHasMore(count != null ? to + 1 < Number(count) : (data ?? []).length === PAGE_SIZE);
   }
 
   // reset paging cuando cambian filtros
@@ -1001,7 +1010,8 @@ export default function StoreCatalogPage() {
     if (!store?.id) return;
     let cancelled = false;
 
-    (async () => {
+    // Mientras el cliente escribe se espera un momento: así no se busca en la base con cada letra.
+    const timer = window.setTimeout(async () => {
       try {
         setLoadingMore(true);
         setHasMore(false);
@@ -1012,10 +1022,11 @@ export default function StoreCatalogPage() {
       } finally {
         if (!cancelled) setLoadingMore(false);
       }
-    })();
+    }, q.trim() ? 350 : 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.id, catalog?.id, selectedCat, q]);

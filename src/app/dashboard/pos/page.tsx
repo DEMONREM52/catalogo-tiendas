@@ -23,6 +23,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Pause, Play, Search, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
+import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
 import { PosCartLines, lineStatus, type CartLine } from "./PosCart";
 import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
 import { LIMIT_LABEL, useApprovals, usePriceFloors } from "./usePriceFloors";
@@ -204,6 +205,9 @@ export default function PosPage() {
   const [docsRefresh, setDocsRefresh] = useState(0);
   // Venta guardada sin internet que está cargada en el carrito (se borra al registrarla).
   const [draftId, setDraftId] = useState<string | null>(null);
+  // Quién usa el POS (la venta en curso se guarda sola por usuario en este equipo).
+  const [meId, setMeId] = useState("");
+  const restoredSale = useRef(false);
   const net = useNetStatus();
 
   const filteredProducts = useMemo(() => {
@@ -291,6 +295,41 @@ export default function PosPage() {
   const { approvals, request: requestApproval, forget: forgetApproval } = useApprovals(storeId, pointId);
   const [payment, setPayment] = useState<PaymentState>(EMPTY_PAYMENT);
   const { held, hold, take } = useHeldSales(storeId, pointId);
+
+  // Venta en curso: al entrar se recupera la que quedó sin terminar (recarga, cierre, sin internet, actualización)…
+  useEffect(() => {
+    if (!storeId || !meId || restoredSale.current) return;
+    restoredSale.current = true;
+    const saved = readCurrentSale(storeId, meId);
+    if (!saved || cart.length || editingDoc) return;
+    setCart(saved.cart.map((i) => ({ ...i, priceLevel: Math.min(5, Math.max(1, i.priceLevel)) as PriceLevel })));
+    setSelectedClientId(saved.selectedClientId);
+    setDocumentKind(saved.documentKind === "factura" ? "factura" : "remision");
+    if (!lockedPoint && saved.pointId) setPointId(saved.pointId);
+    if (saved.sellerId) setSellerId(saved.sellerId);
+    window.setTimeout(() => {
+      setCustomerName(saved.customerName || DEFAULT_CLIENT_NAME);
+      setCustomerDocument(saved.customerDocument);
+      setCustomerWhatsApp(saved.customerWhatsApp);
+      setCustomerNote(saved.customerNote);
+    }, 0);
+    void Swal.fire({
+      toast: true, position: "top", icon: "info", timer: 4500, timerProgressBar: true, showConfirmButton: false,
+      title: "Recuperamos la venta que estabas haciendo",
+      text: `${saved.cart.length} producto${saved.cart.length === 1 ? "" : "s"} · revisa precios y existencias antes de cobrar.`,
+      background: "var(--t-bg-base)", color: "var(--t-text)",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, meId]);
+
+  // …y cada cambio del carrito o del cliente se guarda al instante (se borra solo al vender, poner en espera o vaciar).
+  useEffect(() => {
+    if (!storeId || !meId || !restoredSale.current || editingDoc) return;
+    saveCurrentSale(storeId, meId, cart.length ? {
+      cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(),
+      customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim(), documentKind, pointId, sellerId,
+    } : null);
+  }, [storeId, meId, editingDoc, cart, total, customerName, selectedClientId, customerDocument, customerWhatsApp, customerNote, documentKind, pointId, sellerId]);
   const searchRef = useRef<HTMLInputElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
   const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
@@ -433,6 +472,7 @@ export default function PosPage() {
     const me = userRes.data.user?.id;
     const ofPoint = sellersForPoint(sellerRows, initialPoint);
     setSellerId((current) => current || ofPoint.find((r) => r.user_id === me)?.user_id || ofPoint[0]?.user_id || "");
+    setMeId(me ?? "-");
   }
 
   async function load() {
