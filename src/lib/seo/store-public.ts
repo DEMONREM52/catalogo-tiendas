@@ -34,6 +34,28 @@ async function publicDomain(slug: string) {
   return value;
 }
 
+const homeCache = new Map<string, { at: number; value: string }>();
+
+/** Qué abre la raíz de la tienda (20261130): detal, mayor, un catálogo o «inicio» (vitrina). */
+export async function homeTarget(slug: string) {
+  const hit = homeCache.get(slug);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  let value = "detal";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (url && anon) {
+    try {
+      const { data, error } = await createClient(url, anon, { auth: { persistSession: false } }).rpc("store_home_target", { p_slug: slug });
+      if (!error && typeof data === "string" && data) value = data;
+    } catch {
+      return value;
+    }
+  }
+  if (homeCache.size > 2000) homeCache.clear();
+  homeCache.set(slug, { at: Date.now(), value });
+  return value;
+}
+
 export async function storeBase(slugRaw: string): Promise<StoreBase> {
   const slug = decodeURIComponent(slugRaw || "").toLowerCase();
   const h = await headers();
@@ -44,13 +66,14 @@ export async function storeBase(slugRaw: string): Promise<StoreBase> {
   const domain = await publicDomain(slug);
   if (domain) return { origin: `https://${domain.domain}`, prefix: "", target: domain.target, ownDomain: true };
   if (process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1" && /^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
-    return { origin: `https://${slug}.${PRODUCTION_HOST}`, prefix: "", target: "detal", ownDomain: true };
+    return { origin: `https://${slug}.${PRODUCTION_HOST}`, prefix: "", target: await homeTarget(slug), ownDomain: true };
   }
   return { origin: PRODUCTION_ORIGIN, prefix: `/${slug}`, target: "detal", ownDomain: false };
 }
 
-/** URL pública de una página de la tienda: path = "/detal", "/producto/123"… (sin el slug). */
+/** URL pública de una página de la tienda: path = "/detal", "/producto/123", "/inicio" (vitrina)… (sin el slug). */
 export function storeUrl(base: StoreBase, path: string) {
   if (base.ownDomain && path === `/${base.target}`) return `${base.origin}/`;
+  if (path === "/inicio") return base.ownDomain ? `${base.origin}/inicio` : `${base.origin}${base.prefix}`;
   return `${base.origin}${base.prefix}${path}`;
 }

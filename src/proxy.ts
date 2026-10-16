@@ -13,6 +13,33 @@ import { cleanHost, isPlatformHost, storeHostAction, subdomainSlug } from "@/lib
 const domainCache = new Map<string, { at: number; value: { slug: string; target: string } | null }>();
 const TTL_MS = 60_000;
 
+// Inicio de cada tienda en su subdominio (detal, un catálogo o la vitrina), también con memoria de 1 minuto.
+const homeCache = new Map<string, { at: number; value: string }>();
+async function homeTarget(slug: string) {
+  const hit = homeCache.get(slug);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  let value = "detal";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (url && key) {
+    try {
+      const res = await fetch(`${url}/rest/v1/rpc/store_home_target`, {
+        method: "POST",
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_slug: slug }),
+        signal: AbortSignal.timeout(2500),
+      });
+      const data = res.ok ? ((await res.json()) as string | null) : null;
+      if (typeof data === "string" && data) value = data;
+    } catch {
+      return value;
+    }
+  }
+  if (homeCache.size > 2000) homeCache.clear();
+  homeCache.set(slug, { at: Date.now(), value });
+  return value;
+}
+
 async function resolveDomain(host: string) {
   const hit = domainCache.get(host);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
@@ -59,7 +86,7 @@ export async function proxy(req: NextRequest) {
   if (!host || isPlatformHost(host)) return protectDashboard(req);
 
   const sub = subdomainSlug(host);
-  const store = sub ? { slug: sub, target: "detal" } : await resolveDomain(host);
+  const store = sub ? { slug: sub, target: await homeTarget(sub) } : await resolveDomain(host);
   if (!store) return NextResponse.next();
 
   const action = storeHostAction(store.slug, store.target, req.nextUrl.pathname, req.nextUrl.search);

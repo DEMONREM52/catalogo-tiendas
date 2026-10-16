@@ -22,6 +22,9 @@ test("dominios: rutas en el dominio de la tienda", () => {
   assert.deepEqual(storeHostAction("mitienda", "navidad", "/", "?q=ollas"), { type: "rewrite", path: "/mitienda/navidad?q=ollas" });
   assert.deepEqual(storeHostAction("mitienda", "detal", "/producto/abc"), { type: "rewrite", path: "/mitienda/producto/abc" });
   assert.deepEqual(storeHostAction("mitienda", "detal", "/mayor"), { type: "rewrite", path: "/mitienda/mayor" });
+  // Vitrina con todos los catálogos: en la raíz si la tienda la escogió, y siempre en /inicio.
+  assert.deepEqual(storeHostAction("mitienda", "inicio", "/"), { type: "rewrite", path: "/mitienda" });
+  assert.deepEqual(storeHostAction("mitienda", "detal", "/inicio"), { type: "rewrite", path: "/mitienda" });
   // Una sola dirección por página: los enlaces con el slug se limpian.
   assert.deepEqual(storeHostAction("MiTienda", "detal", "/mitienda/producto/abc", "?catalogo=detal"), { type: "redirect", url: "/producto/abc?catalogo=detal" });
   assert.deepEqual(storeHostAction("mitienda", "detal", "/mitienda"), { type: "redirect", url: "/" });

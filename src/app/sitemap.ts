@@ -19,7 +19,8 @@ async function storeEntries(store: StoreRow, limit: number): Promise<MetadataRou
   const client = sb();
   if (!client) return [];
   const base = await storeBase(store.slug);
-  const out: MetadataRoute.Sitemap = [{ url: storeUrl(base, "/detal"), lastModified: store.updated_at ?? undefined, changeFrequency: "daily", priority: 1 }];
+  const home = base.target === "inicio" ? "/inicio" : `/${base.target}`;
+  const out: MetadataRoute.Sitemap = [{ url: storeUrl(base, home), lastModified: store.updated_at ?? undefined, changeFrequency: "daily", priority: 1 }];
   const products = (cols: string) => client.from("products").select(cols).eq("store_id", store.id).eq("active", true).or("stock.is.null,stock.gt.0").limit(limit);
   // Si el público no puede leer la fecha de cambio, el sitemap sale igual, sin fechas.
   const first = await products("id,updated_at");

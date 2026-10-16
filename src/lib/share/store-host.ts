@@ -54,7 +54,9 @@ export function storeHostAction(slug: string, target: string, pathname: string, 
   // Enlaces internos con el slug (/mitienda/producto/1) → dirección limpia (/producto/1): una sola URL por página.
   if (p.toLowerCase() === `/${s}`) return { type: "redirect", url: `/${search}` };
   if (p.toLowerCase().startsWith(`/${s}/`)) return { type: "redirect", url: `${p.slice(s.length + 1)}${search}` };
-  if (p === "/") return { type: "rewrite", path: `/${s}/${target}${search}` };
+  // Inicio: el catálogo que escogió la tienda, o la vitrina con todos sus catálogos («inicio»).
+  if (p === "/") return { type: "rewrite", path: target === "inicio" ? `/${s}${search}` : `/${s}/${target}${search}` };
+  if (p === "/inicio") return { type: "rewrite", path: `/${s}${search}` };
   return { type: "rewrite", path: `/${s}${p}${search}` };
 }
 
