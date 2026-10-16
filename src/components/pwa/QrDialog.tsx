@@ -4,10 +4,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Download, QrCode, Share2, X } from "lucide-react";
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 
-const ORIGIN = "https://remhub.store";
+const ORIGIN = PRODUCTION_ORIGIN;
 
-/** Ventana con el código QR de una página pública de RemHub (siempre en remhub.store). */
+/** Ventana con el código QR de una página pública de RemHub (siempre en remhub.co). */
 export function QrDialog({ open, onClose, path, title, subtitle }: { open: boolean; onClose: () => void; path: string; title: string; subtitle?: string }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   if (!mounted) return null;

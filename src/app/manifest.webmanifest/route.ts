@@ -1,3 +1,5 @@
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+
 /**
  * Manifest de la app principal RemHub (panel de la tienda y del equipo). Siempre con la identidad de RemHub.
  * ?start=… (opcional) solo acepta el panel o un enlace de acceso del equipo (/acceso/<tienda>?sid=…),
@@ -13,8 +15,8 @@ const DASH = /^\/dashboard(\/[a-z0-9_-]+){0,4}$/i;
 function safeStart(raw: string | null) {
   if (!raw) return "/dashboard?source=pwa";
   try {
-    const u = new URL(raw, "https://remhub.store");
-    if (u.origin !== "https://remhub.store") return "/dashboard?source=pwa";
+    const u = new URL(raw, PRODUCTION_ORIGIN);
+    if (u.origin !== PRODUCTION_ORIGIN) return "/dashboard?source=pwa";
     if (DASH.test(u.pathname)) return `${u.pathname}?source=pwa`;
     const m = u.pathname.match(/^\/acceso\/([^/]+)$/);
     const sid = u.searchParams.get("sid") ?? "";

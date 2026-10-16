@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.AUDIT_ANCHOR_FROM ?? "RemHub Auditoría <auditoria@remhub.store>", to: to.split(",").map((x) => x.trim()).filter(Boolean), subject, text }),
+      body: JSON.stringify({ from: process.env.AUDIT_ANCHOR_FROM ?? "RemHub Auditoría <auditoria@remhub.co>", to: to.split(",").map((x) => x.trim()).filter(Boolean), subject, text }),
       signal: AbortSignal.timeout(10000),
     }).catch(() => null);
     if (r?.ok) sent.push("email");

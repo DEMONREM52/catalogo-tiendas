@@ -98,7 +98,7 @@ export default function DashboardHome() {
         // Cartera aparece aparte solo si no se ve ya el módulo de terceros.
         setAllowed(MODULES.filter((m) => can(m.permission) && !(m.key === "receivables" && can("clients"))));
         setActions(QUICK_ACTIONS.filter((a) => can(a.permission)));
-        setCanReports(can("audit"));
+        setCanReports(can("reports"));
         if (access.store) {
           const [profileRes, pointsRes] = await Promise.all([
             sb.from("store_profiles").select("quick_access").eq("store_id", access.store.id).maybeSingle(),

@@ -16,7 +16,7 @@ returns setof public.products language sql stable as $$
 `;
 const combined = path.join(os.tmpdir(), `remhub_busqueda_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"), stub,
-  ...["20261106_rentabilidad_precios_punto.sql", "20261107_proteger_costo.sql", "20261111_busqueda_productos_segura.sql"].map((f) => fs.readFileSync(path.join(here, "../../supabase/migrations", f), "utf8"))].join("\n"));
+  ...["20261106_rentabilidad_precios_punto.sql", "20261107_proteger_costo.sql", "20261111_busqueda_productos_segura.sql"].map((f) => fs.readFileSync(path.join(here, "migraciones", f), "utf8"))].join("\n"));
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message); process.exit(2); });
 const { db } = await makeDb(combined);
 fs.unlinkSync(combined);

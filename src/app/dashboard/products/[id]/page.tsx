@@ -18,6 +18,7 @@ import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode, loadProductCodes } from "../product-code";
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { PricingPanel, type Markups } from "../PricingPanel";
+import { useCan } from "@/lib/permission-runtime";
 
 type Category = { id: string; name: string };
 
@@ -146,8 +147,11 @@ export default function EditProductPage() {
   const [saving, setSaving] = useState(false);
   // Si el costo no se pudo leer (sin permiso o sin conexión) no se muestra ni se guarda: así nunca se borra.
   const [costKnown, setCostKnown] = useState(true);
-  // false si la base aún no tiene la migración 20261113 (precios por %).
+  // false si no se pudo leer el % de ganancia (sin «Ver costos» o sin la migración 20261113).
   const [markupsReady, setMarkupsReady] = useState(true);
+  // Cambiar precios exige «Cambiar precios» (la base también lo valida).
+  const canPrices = useCan("products_prices");
+  const pricesEditable = markupsReady && canPrices;
 
   const [userId, setUserId] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -220,15 +224,20 @@ export default function EditProductPage() {
       setCategories((cats as any[]) ?? []);
 
       const baseCols = "id,store_id,created_at,name,description,price_1,price_2,price_3,price_4,price_5,price_retail,price_wholesale,min_wholesale,active,image_url,category_id,stock,product_details";
-      // Con la migración 20261113 el producto trae su % de ganancia por precio.
-      let { data: p, error: pErr } = await sb.from("products").select(`${baseCols},markup_1,markup_2,markup_3,markup_4,markup_5`).eq("id", id).eq("store_id", access.store.id).maybeSingle();
-      // Sin la migración 20261113, o sin permiso de lectura de esas columnas (falta 20261114): se abre sin el %.
-      if (pErr && /markup_|permission denied/i.test(pErr.message)) {
-        setMarkupsReady(false);
-        ({ data: p, error: pErr } = await sb.from("products").select(baseCols).eq("id", id).eq("store_id", access.store.id).maybeSingle());
-      }
-
+      const { data: p, error: pErr } = await sb.from("products").select(baseCols).eq("id", id).eq("store_id", access.store.id).maybeSingle();
       if (pErr) throw pErr;
+
+      // El % de ganancia se pide aparte: con él y el precio se deduce el costo, así que solo lo ve quien tiene «Ver costos».
+      let markupRow: Record<string, unknown> | null = null;
+      const mk = await sb.rpc("erp_product_markups", { p_store: access.store.id, p_ids: [id] });
+      if (!mk.error) {
+        markupRow = ((mk.data ?? []) as Array<Record<string, unknown>>)[0] ?? {};
+      } else if (/Could not find the function|schema cache/i.test(mk.error.message)) {
+        // Aún sin la migración 20261123: lectura anterior (si la base la permite).
+        const old = await sb.from("products").select("markup_1,markup_2,markup_3,markup_4,markup_5").eq("id", id).maybeSingle();
+        if (!old.error) markupRow = (old.data ?? {}) as Record<string, unknown>;
+      }
+      setMarkupsReady(markupRow !== null);
 
       if (!p) {
         await Swal.fire({
@@ -261,7 +270,7 @@ export default function EditProductPage() {
             ? null
             : Math.max(0, Math.floor(clampNum((p as any).stock, 0))),
         product_details: normalizeProductDetails((p as any).product_details),
-        markups: [1, 2, 3, 4, 5].map((l) => { const v = (p as Record<string, unknown>)[`markup_${l}`]; return v === null || v === undefined ? null : Number(v); }) as Markups,
+        markups: [1, 2, 3, 4, 5].map((l) => { const v = markupRow?.[`markup_${l}`]; return v === null || v === undefined ? null : Number(v); }) as Markups,
       };
 
       Object.assign(normalized, await loadProductCodes(normalized.id));
@@ -301,7 +310,7 @@ export default function EditProductPage() {
         description: draft.description,
         // El costo y las unidades NO se envían: solo cambian con ingreso de factura, ajustes o traslados.
         // Los precios tampoco: los calcula la base con el % de ganancia.
-        ...(markupsReady && draft.markups ? Object.fromEntries(draft.markups.map((m, i) => [`markup_${i + 1}`, m])) : {}),
+        ...(pricesEditable && draft.markups ? Object.fromEntries(draft.markups.map((m, i) => [`markup_${i + 1}`, m])) : {}),
         min_wholesale: Math.max(1, clampNum(draft.min_wholesale, 1)),
         active: !!draft.active,
         image_url: draft.image_url,
@@ -490,7 +499,7 @@ export default function EditProductPage() {
               />
             </div>
 
-            {markupsReady ? (
+            {pricesEditable ? (
               <PricingPanel
                 storeId={storeId ?? ""}
                 productId={draft.id}
@@ -501,9 +510,22 @@ export default function EditProductPage() {
                 onChange={(m) => setDraft({ ...draft, markups: m })}
               />
             ) : (
-              <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                Falta ejecutar en Supabase la migración <b>20261113_inventario_precios_devoluciones.sql</b> para manejar los precios por porcentaje. Mientras tanto los precios no cambian al guardar.
-              </p>
+              <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                <p className="font-semibold">💲 Precios</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {[draft.price_1, draft.price_2, draft.price_3, draft.price_4, draft.price_5].map((v, i) => (
+                    <div key={i} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
+                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Precio {i + 1}</p>
+                      <p className="font-black tabular-nums">{`$ ${Math.round(clampNum(v, 0)).toLocaleString("es-CO")}`}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
+                  🔒 {canPrices
+                    ? "Para cambiar precios por % necesitas también el permiso «Ver costos y márgenes»."
+                    : "Puedes editar el producto, pero los precios y el % de ganancia solo los cambia quien tiene «Cambiar precios»."}
+                </p>
+              </div>
             )}
 
             <div>

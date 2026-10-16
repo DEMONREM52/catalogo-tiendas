@@ -9,7 +9,7 @@ import path from "node:path";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const combined = path.join(os.tmpdir(), `remhub_rentabilidad_${process.pid}.sql`);
 fs.writeFileSync(combined, fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8") + "\n" +
-  fs.readFileSync(path.join(here, "../../supabase/migrations/20261106_rentabilidad_precios_punto.sql"), "utf8"));
+  fs.readFileSync(path.join(here, "migraciones/20261106_rentabilidad_precios_punto.sql"), "utf8"));
 const report = (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); };
 process.on("uncaughtException", report);
 process.on("unhandledRejection", report);

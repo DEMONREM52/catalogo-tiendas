@@ -6,8 +6,13 @@ import os from "node:os";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 const SCRIPTS = path.join(here, "../../supabase/scripts");
+// El usuario borra los scripts de una sola vez después de correrlos: sin ellos, la prueba no aplica.
+if (!fs.existsSync(path.join(SCRIPTS, "inventario_inicial_100_aplicar.sql"))) {
+  console.log("Omitida: los scripts de inventario inicial ya se ejecutaron y se borraron.\n0 ok · 0 fallas");
+  process.exit(0);
+}
 const combined = path.join(os.tmpdir(), `remhub_ci_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"),
   ...["20261106_rentabilidad_precios_punto.sql", "20261113_inventario_precios_devoluciones.sql", "20261118_compras_desde_punto.sql", "20261119_costo_promedio_y_precio_directo.sql"]

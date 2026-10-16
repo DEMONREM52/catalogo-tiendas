@@ -9,6 +9,7 @@ import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { normalizeStoreContactChannels, STORE_CONTACT_ICONS, type StoreContactChannel } from "@/lib/store-contacts";
 import { MarketingPanel } from "./MarketingPanel";
+import { DomainPanel } from "./DomainPanel";
 import { EditableNickname, useNicknameUpdates } from "../Nickname";
 
 type StoreProfileDraft = {
@@ -1091,6 +1092,7 @@ export default function StoreSettings() {
         </Panel>
 
         <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
+        <DomainPanel storeId={store.id} storeSlug={store.slug} storeName={store.name} canEdit={canEdit} />
 
         <Panel title="Acceso rápido" description="Elige qué accesos mostrar como tarjetas en la página inicial del dashboard.">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

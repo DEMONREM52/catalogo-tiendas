@@ -7,7 +7,7 @@ import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Carpeta de migraciones (se puede cambiar si ya se movieron después de ejecutarlas).
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 const combined = path.join(os.tmpdir(), `remhub_cmp_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"),
   "alter table public.erp_order_meta add column if not exists customer_doc text; alter table public.erp_order_meta add column if not exists payment jsonb;",

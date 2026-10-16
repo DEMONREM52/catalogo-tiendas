@@ -10,7 +10,7 @@ type Digest = { store_id: string; user_id: string; n: number; overdue: number; d
 const money = (v: number) => `$ ${Math.round(Number(v) || 0).toLocaleString("es-CO")}`;
 
 /**
- * Resumen diario de cuentas por pagar al celular (cron de Vercel, 8:00 a. m. Colombia).
+ * Resumen diario al celular (cron de Vercel, 8:00 a. m. Colombia): cuentas por pagar y deudas vencidas de los puntos con la bodega.
  * Cada persona recibe solo las cuentas de sus puntos que según las reglas tocan hoy.
  * Se envía una sola vez por persona y día (erp_push_log).
  */
@@ -44,5 +44,36 @@ export async function GET(request: Request) {
 
   let sent = 0;
   for (const [storeId, payloads] of byStore) sent += (await sendToUsers(admin, storeId, payloads)).sent;
-  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent });
+
+  // Deudas vencidas de los puntos con la bodega (20261126). Si la migración aún no está, se omite.
+  const internal = await sendInternalDigest(admin, day);
+  // Permisos temporales vencidos: se quitan de la lista (la base ya los bloqueaba desde que vencieron; 20261127).
+  const { data: expired } = await admin.rpc("erp_permission_grants_cleanup");
+  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent, internal, expired_permissions: expired ?? null });
+}
+
+type InternalDigest = { store_id: string; user_id: string; points: number; overdue: number; max_days: number; first_name: string | null };
+
+async function sendInternalDigest(admin: NonNullable<ReturnType<typeof pushAdminClient>>, day: string) {
+  const { data, error } = await admin.rpc("erp_internal_push_digest");
+  if (error) return { skipped: true };
+  const byStore = new Map<string, Map<string, PushPayload>>();
+  for (const d of (data ?? []) as InternalDigest[]) {
+    const { error: dup } = await admin.from("erp_push_log").insert({ key: `internal:${d.store_id}:${d.user_id}:${day}` });
+    if (dup) continue;
+    const payload: PushPayload = {
+      title: "🤝 Deuda vencida con la bodega",
+      body: d.points === 1
+        ? `${d.first_name ?? "Un punto"} debe ${money(d.overdue)} vencido${d.max_days ? ` (hace ${d.max_days} día${d.max_days === 1 ? "" : "s"})` : ""}. Toca para ver la cuenta.`
+        : `${d.points} puntos deben ${money(d.overdue)} vencido; el más alto: ${d.first_name ?? "—"}. Toca para ver las cuentas.`,
+      url: "/dashboard/inventario?tab=internal",
+      tag: `internal-${day}`,
+      urgent: d.max_days >= 7,
+    };
+    if (!byStore.has(d.store_id)) byStore.set(d.store_id, new Map());
+    byStore.get(d.store_id)!.set(d.user_id, payload);
+  }
+  let sent = 0;
+  for (const [storeId, payloads] of byStore) sent += (await sendToUsers(admin, storeId, payloads)).sent;
+  return { people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent };
 }

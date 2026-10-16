@@ -2,7 +2,7 @@ import QRCode from "qrcode";
 import { PRODUCTION_ORIGIN } from "@/lib/share/identity";
 
 /**
- * Código QR de una página de RemHub. Siempre apunta al dominio de producción (https://remhub.store):
+ * Código QR de una página de RemHub. Siempre apunta al dominio de producción (https://remhub.co):
  * solo recibe la ruta (ej. /instalar o /mi-tienda/detal), nunca un dominio, localhost ni una IP.
  *   /api/qr?path=/instalar&format=svg|png&size=512
  */

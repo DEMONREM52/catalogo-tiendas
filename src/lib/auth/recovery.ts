@@ -1,15 +1,17 @@
 /**
  * Recuperación de contraseña.
- * El enlace del correo SIEMPRE abre la versión publicada (remhub.store), aunque se pida desde
+ * El enlace del correo SIEMPRE abre la versión publicada (remhub.co), aunque se pida desde
  * otro dominio o desde el computador del desarrollador: así nunca llega un enlace a localhost.
  */
-export const PRODUCTION_ORIGIN = "https://remhub.store";
+import { LEGACY_HOSTS, PRODUCTION_ORIGIN } from "@/lib/share/origin";
+
+export { PRODUCTION_ORIGIN };
 export const RECOVERY_URL = `${PRODUCTION_ORIGIN}/reset-password`;
 /** Segundos de espera antes de pedir otro correo (Supabase también limita los envíos). */
 export const RESEND_SECONDS = 60;
 
 export function isProductionOrigin(origin: string) {
-  return origin === PRODUCTION_ORIGIN || origin === "https://www.remhub.store";
+  return origin === PRODUCTION_ORIGIN || LEGACY_HOSTS.some((h) => origin === `https://${h}`);
 }
 
 /** Errores de Supabase Auth → mensajes claros en español. */

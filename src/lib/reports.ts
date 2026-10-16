@@ -15,7 +15,10 @@ export type ReportPayload = {
   sellers: Array<{ name: string; sales: number; orders: number }>;
   pending_orders: { count: number; total: number; oldest: string | null };
   inventory: Array<{ point_id: string; name: string; kind: string; is_default: boolean; units: number; value: number; skus: number; out: number; low: number }>;
-  purchases: { count: number; total: number; top_suppliers: Array<{ name: string; total: number; count: number }> };
+  /** null cuando el usuario no tiene «Ver costos». */
+  purchases: null | { count: number; total: number; top_suppliers: Array<{ name: string; total: number; count: number }> };
+  /** true: la base ocultó costo, ganancia y valor del inventario (falta «Ver costos»). */
+  costs_hidden?: boolean;
   payables: null | {
     open: number;
     open_count: number;

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 const FISCAL = process.env.REMHUB_FISCAL ?? path.join(MIG, "20261027_fiscal_multipunto.sql");
 const combined = path.join(os.tmpdir(), `remhub_aud_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(FISCAL, "utf8"), fs.readFileSync(path.join(MIG, "20261117_auditoria_global.sql"), "utf8")].join("\n"));

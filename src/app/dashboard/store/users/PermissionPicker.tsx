@@ -2,10 +2,10 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Save, ShieldAlert, Trash2 } from "lucide-react";
+import { Check, Copy, Save, Search, ShieldAlert, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { PERMISSION_GROUPS, PERMISSION_PRESETS } from "@/lib/permissions";
+import { PERMISSION_GROUPS, PERMISSION_LIST, PERMISSION_PRESETS } from "@/lib/permissions";
 import { useRunOnChange } from "../../inventario/shared";
 
 type RoleTemplate = { id: string; name: string; icon: string; permissions: string[] };
@@ -18,6 +18,7 @@ export function PermissionPicker({
   disabled,
   compact,
   storeId,
+  copyFrom,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
@@ -25,8 +26,13 @@ export function PermissionPicker({
   compact?: boolean;
   /** Con la tienda se muestran y guardan sus roles personalizados. */
   storeId?: string;
+  /** Otros usuarios para copiar sus permisos. */
+  copyFrom?: Array<{ label: string; permissions: string[] }>;
 }) {
   const set = new Set(value);
+  const [q, setQ] = useState("");
+  const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const match = (label: string, description: string) => !q.trim() || norm(`${label} ${description}`).includes(norm(q.trim()));
   const [roles, setRoles] = useState<RoleTemplate[]>([]);
   const loadRoles = useCallback(async () => {
     if (!storeId) return;
@@ -97,6 +103,15 @@ export function PermissionPicker({
               <Save size={12} /> Guardar como rol
             </button>
           ) : null}
+          {copyFrom?.length ? (
+            <label className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+              <Copy size={12} />
+              <select disabled={disabled} className="bg-transparent text-xs outline-none" value="" onChange={(e) => { const src = copyFrom[Number(e.target.value)]; if (src) onChange([...src.permissions]); }} aria-label="Copiar permisos de otro usuario">
+                <option value="">Copiar de…</option>
+                {copyFrom.map((c, i) => <option key={c.label + i} value={i}>{c.label}</option>)}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             disabled={disabled || value.length === 0}
@@ -109,8 +124,15 @@ export function PermissionPicker({
         </div>
       </div>
 
+      <label className="relative block">
+        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-55" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar permiso (ej. costos, anular, precios…)" className="w-full rounded-full border py-2 pl-8 pr-3 text-sm outline-none" style={{ borderColor: "var(--t-card-border)", background: "transparent", color: "var(--t-text)", paddingLeft: "2.1rem" }} />
+      </label>
+
+      <PermissionSummary value={value} />
+
       <div className={`grid gap-3 ${compact ? "" : "lg:grid-cols-2"}`}>
-        {PERMISSION_GROUPS.map((group) => {
+        {PERMISSION_GROUPS.filter((group) => group.items.some((i) => match(i.label, i.description))).map((group) => {
           const perms = group.items.map((i) => i.value);
           const count = perms.filter((p) => set.has(p)).length;
           return (
@@ -128,7 +150,7 @@ export function PermissionPicker({
                 </button>
               </div>
               <div className="space-y-1.5">
-                {group.items.map((item) => {
+                {group.items.filter((item) => match(item.label, item.description)).map((item) => {
                   const on = set.has(item.value);
                   return (
                     <motion.button
@@ -168,6 +190,29 @@ export function PermissionPicker({
       <p className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
         <ShieldAlert size={12} className="text-amber-500" /> Permiso sensible: dalo solo a personas de confianza.
       </p>
+    </div>
+  );
+}
+
+/** Lo que la persona puede y no puede hacer, en palabras. */
+export function PermissionSummary({ value }: { value: string[] }) {
+  const has = (p: string) => value.includes(p);
+  if (!value.length) return null;
+  const sensitive = PERMISSION_LIST.filter((p) => p.sensitive && has(p.value)).map((p) => p.label);
+  const notes: string[] = [];
+  if (has("products") && !has("costs_view")) notes.push("Crea y edita productos, pero no ve costos ni % de ganancia 🔒");
+  if (has("products") && !has("products_prices")) notes.push("No puede cambiar precios");
+  if ((has("inventory") || has("purchases")) && !has("costs_view")) notes.push("En inventario e informes, los costos le salen ocultos");
+  if (has("pos") && !has("sales_void")) notes.push("Vende, pero no anula ventas");
+  if (has("pos") && !has("price_approve")) notes.push("No vende por debajo del precio permitido sin autorización");
+  if (has("purchases") && !has("purchases_void")) notes.push("Ingresa facturas, pero no las anula");
+  if (has("audit") && !has("reports")) notes.push("Ve la auditoría, pero no el informe de ventas");
+  if (!has("exports") && value.length) notes.push("No descarga listados a Excel");
+  return (
+    <div className="rounded-2xl border p-3 text-xs" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+      <p className="font-bold">📝 En resumen: {value.length} permiso{value.length === 1 ? "" : "s"}</p>
+      {sensitive.length ? <p className="mt-1"><ShieldAlert size={12} className="inline text-amber-500" /> Sensibles: {sensitive.join(", ")}</p> : null}
+      {notes.length ? <ul className="mt-1 list-disc pl-4" style={{ color: "var(--t-muted)" }}>{notes.map((n) => <li key={n}>{n}</li>)}</ul> : null}
     </div>
   );
 }

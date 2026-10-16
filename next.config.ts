@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { LEGACY_HOSTS, PRODUCTION_ORIGIN } from "./src/lib/share/origin";
 
 /**
  * Encabezados de seguridad para todas las páginas y rutas.
@@ -27,12 +28,23 @@ const nextConfig: NextConfig = {
   htmlLimitedBots: /.*/,
   // No anunciar la tecnología del servidor.
   poweredByHeader: false,
+  // Un solo dominio: remhub.store, www.remhub.store y www.remhub.co llevan a https://remhub.co con la misma ruta
+  // (308 = permanente; Google pasa el posicionamiento al dominio nuevo). /api NO se redirige: las pasarelas de
+  // pago y otros servicios que llaman al dominio viejo siguen funcionando mientras se actualizan.
+  async redirects() {
+    return LEGACY_HOSTS.map((host) => ({
+      source: "/:path((?!api/).*)",
+      has: [{ type: "host" as const, value: host }],
+      destination: `${PRODUCTION_ORIGIN}/:path`,
+      permanent: true,
+    }));
+  },
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
       // Las respuestas privadas de la API nunca se guardan en cachés compartidas (datos de cada tienda).
       // (QR, íconos y vistas previas son públicos y sí se pueden guardar.)
-      ...["admin", "fiscal", "payments", "store-team", "push", "siigo"].map((p) => ({
+      ...["admin", "fiscal", "payments", "store-team", "store-domains", "push", "siigo"].map((p) => ({
         source: `/api/${p}/:path*`,
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       })),

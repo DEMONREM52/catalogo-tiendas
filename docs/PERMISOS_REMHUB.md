@@ -97,8 +97,12 @@ Con la alerta de cambio de permisos, le aparece el aviso para recargar.
 | Id | Severidad | Hallazgo | Estado |
 |---|---|---|---|
 | H-00 | Alta | Inventario ocultaba Compras/Proveedores/Cuentas por pagar/Auditoría a todo usuario de punto aunque tuviera permiso | ✅ Corregido (UI + 20261118 + 20261120) |
-| H-01 | Media | `audit` abre la auditoría **y** el informe de ventas (`erp_report`): no se puede dar uno sin el otro | 🔜 Permiso nuevo `reports` |
-| H-02 | Media | Quien tiene `inventory` o `products` recibe el **costo** en existencias (`erp_stock_page`/`erp_stock_browse`) y en la ficha de producto | 🔜 Permiso nuevo `costs_view` |
+| H-01 | Media | `audit` abre la auditoría **y** el informe de ventas (`erp_report`): no se puede dar uno sin el otro | ✅ Permiso `reports` (20261123) |
+| H-02 | Media | Quien tiene `inventory` o `products` recibe el **costo** en existencias (`erp_stock_page`/`erp_stock_browse`) y en la ficha de producto | ✅ Permiso `costs_view`: la base oculta costo, valor, ganancia, % y compras (20261123) |
+| H-06 | Media | Kardex sin alcance de punto; resumen general visible a puntos; pagar a proveedor sin revisar el punto | ✅ Cerrado (20261123) |
+| H-07 | Media | Con «Inventario» se podían crear o cambiar bodegas y puntos (incluso de otro punto) | ✅ Crear/borrar solo la madre; editar la madre o el propio punto (20261123) |
+| H-08 | Baja | Traslados y ajustes de todos los puntos visibles para cada punto | ✅ Cada punto ve los suyos (20261123) |
+| H-09 | Media | Quien creaba productos también cambiaba precios; quien ingresaba compras también las anulaba | ✅ Permisos `products_prices` y `purchases_void` (20261123) |
 | H-03 | Media | Cualquiera con acceso a un listado podía descargarlo en Excel/CSV sin control ni registro | ✅ Permiso `exports` + cada descarga queda en la auditoría |
 | H-04 | Baja | La pestaña Ajustes se ve con `inventory` aunque no pueda crear ajustes | ✅ Aceptado: modo consulta |
 | H-05 | Baja | Resumen de inventario no se muestra a usuarios de punto | ✅ Intencional: son totales de toda la tienda |
@@ -108,17 +112,20 @@ Con la alerta de cambio de permisos, le aparece el aviso para recargar.
 | Permiso | Para qué | Estado | Quién lo recibe al migrar |
 |---|---|---|---|
 | `exports` Exportar a Excel/CSV | Descargar listados; queda registrado `export.<listado>` | ✅ Hecho (20261120) | Usuarios activos que ya podían descargar algo (auditoría, cartera, cuentas por pagar, gastos, nómina, rentabilidad, inventario) |
-| `reports` Ver informes de ventas | Separar informes de la auditoría | 🔜 Falta la definición actual de `erp_report` en producción | Quien hoy tiene `audit` |
-| `costs_view` Ver costos | Ver costo, valor de inventario y márgenes | 🔜 Falta la definición actual de las funciones de existencias | Quien hoy tiene `products`, `inventory`, `purchases` o rentabilidad |
+| `reports` Informes de ventas 📊 | Separar informes de la auditoría | ✅ 20261123 | Quien hoy tiene `audit` |
+| `costs_view` Ver costos y márgenes 💰 | Costo, valor de inventario, ganancia y % de ganancia | ✅ 20261123 | Quien hoy tiene `products`, `inventory`, `inventory_adjust`, `purchases`, `profit_view` o `profit_approve` |
+| `products_prices` Cambiar precios 💲 | Crear productos sin tocar precios | ✅ 20261123 (al crear sin él se usa el % de la tienda) | Quien hoy tiene `products` |
+| `purchases_void` Anular compras | Separar anular de ingresar | ✅ 20261123 | Quien hoy tiene `purchases` |
 
 Regla para no romper nada: cada permiso nuevo se entrega primero a quien ya hacía esa acción, y
 después el dueño lo quita a quien no deba tenerlo.
 
-Para terminar `reports` y `costs_view` hay que correr `supabase/scripts/consulta_permisos.sql`
-(solo lectura) y compartir el resultado.
+Los permisos nuevos se entregan una sola vez (tabla `erp_migration_marks`): volver a correr la migración
+no le devuelve un permiso a quien el dueño se lo quitó.
 
 ## 6. Pruebas
 
 - `tests/sql/compras_punto.test.mjs` · 12/12: SARA ingresa a su punto, no a otro punto ni a la bodega.
 - `tests/sql/editar_ingreso_punto.test.mjs` · 16/16: SARA edita su ingreso (inventario y cuenta por pagar ajustan la diferencia); no edita los de otro punto o de la madre; nada se mueve si se rechaza.
+- `tests/sql/permisos_costos.test.mjs` · 42/42: sobre las funciones reales de producción (con saltos de línea de Windows).
 - `tests/sql/permisos.test.mjs` · 7/7: `exports` se conserva, no se duplica y un vendedor de POS no lo recibe; las cuentas por pagar se filtran por punto.

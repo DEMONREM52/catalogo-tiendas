@@ -7,7 +7,7 @@ import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Carpeta de migraciones (se puede cambiar si ya se movieron después de ejecutarlas).
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 const combined = path.join(os.tmpdir(), `remhub_pos_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"),
   ...["20261106_rentabilidad_precios_punto.sql", "20261107_proteger_costo.sql", "20261113_inventario_precios_devoluciones.sql", "20261114_permisos_columnas_productos.sql", "20261115_pos_limites_precio.sql"]

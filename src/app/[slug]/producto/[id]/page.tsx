@@ -15,6 +15,7 @@ import { ArrowLeft, Camera, Check, PackageCheck, PackageX, ScanSearch, Sparkles 
 import { CatalogFinderButton } from "@/components/product-finder/CatalogFinder";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
 import { TrackProductView } from "@/components/StorePixel";
+import { storeBase, storeUrl } from "@/lib/seo/store-public";
 
 type PageProps = {
   params: Promise<{ slug: string; id: string }>;
@@ -42,6 +43,9 @@ async function catalogContext(slug: string, catalogSlug: string | undefined, key
   return { ...base, available: true as const, price: Number(row.price), stock: row.stock === null ? null : Number(row.stock) };
 }
 
+// Código de producto válido (si no, «no encontrado» en vez de un error).
+const PRODUCT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function catalogHref(storeSlug: string, catalog: { slug: string; key: string | null }) {
   return `/${storeSlug}/${catalog.slug}${catalog.key ? `?key=${encodeURIComponent(catalog.key)}` : ""}`;
 }
@@ -56,6 +60,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     icons: { apple: [{ url: `/api/pwa-icon?${new URLSearchParams({ store: decodeURIComponent(slug), mode: catalogPath, size: "180" }).toString()}`, sizes: "180x180", type: "image/png" }] },
     appleWebApp: { capable: true, statusBarStyle: "default" as const },
   };
+  if (!PRODUCT_ID.test(id)) return { title: "Producto no disponible · RemHub", robots: { index: false, follow: false }, ...appMeta };
   const sb = supabaseServer();
   const { data: store, error: storeError } = await sb
     .from("stores")
@@ -90,14 +95,18 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   // Sin fotos: la tarjeta con el logo de la tienda.
   const images = photos.length ? photos : [`/api/og?store=${encodeURIComponent(decodeURIComponent(slug))}`];
 
+  const canonical = storeUrl(await storeBase(slug), `/producto/${id}`);
   return {
     ...appMeta,
     title: product.name,
     description,
+    // Una sola dirección por producto: la del catálogo clásico (los catálogos de campaña apuntan aquí).
+    alternates: { canonical },
     openGraph: {
       type: "website",
       title: product.name,
       description,
+      url: canonical,
       images,
     },
     twitter: { card: "summary_large_image", title: product.name, description, images },
@@ -111,6 +120,7 @@ function money(value: number) {
 export default async function PublicProductPage({ params, searchParams }: PageProps) {
   const { slug, id } = await params;
   const { catalogo, key } = await searchParams;
+  if (!PRODUCT_ID.test(id)) notFound();
   const sb = supabaseServer();
   const context = await catalogContext(slug, catalogo, key, id);
   if (context && !context.available) {
@@ -130,7 +140,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   const inCatalog = context?.available ? context : null;
   let storeQuery = sb
     .from("stores")
-    .select("id,slug,active,catalog_retail,whatsapp")
+    .select("id,slug,name,active,catalog_retail,whatsapp")
     .eq("slug", decodeURIComponent(slug))
     .eq("active", true);
   if (!inCatalog) storeQuery = storeQuery.eq("catalog_retail", true);
@@ -189,8 +199,31 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     details,
   });
 
+  // Ficha para Google (schema.org/Product): nombre, fotos, precio en pesos y disponibilidad.
+  const canonical = storeUrl(await storeBase(store.slug), `/producto/${product.id}`);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: description.replace(/\s+/g, " ").slice(0, 500) || undefined,
+    image: gallery.length ? gallery : undefined,
+    sku: code ?? undefined,
+    category: categoryName ?? undefined,
+    url: canonical,
+    offers: Number(price) > 0 ? {
+      "@type": "Offer",
+      priceCurrency: "COP",
+      price: Number(price),
+      availability: stock === null || Number(stock) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      url: canonical,
+      seller: { "@type": "Organization", name: (store as { name?: string }).name ?? store.slug },
+    } : undefined,
+  };
+
   return (
     <main className="product-landing-page min-h-screen px-2 py-4 sm:px-4 sm:py-8 lg:px-6">
+      {/* JSON seguro dentro de <script>: se escapa «<» para que ningún texto cierre la etiqueta. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <TrackProductView item={{ id: product.id, name: product.name, price: Number(price) || 0, category: categoryName }} store={store.slug} />
       <ManifestLink base={`/${store.slug}/${inCatalog?.slug ?? "detal"}/app.webmanifest`} param="key" />
       <div className="mx-auto w-full max-w-[1440px]">

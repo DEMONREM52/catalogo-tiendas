@@ -15,6 +15,7 @@ import { CategoryPicker, saveProductCategoryIds } from "../CategoryPicker";
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode } from "../product-code";
 import { PricingPanel, loadDefaultMarkup, type Markups } from "../PricingPanel";
+import { useCan } from "@/lib/permission-runtime";
 
 type Category = { id: string; name: string };
 
@@ -88,6 +89,8 @@ export default function CreateProductPage() {
 
   // Sin costo ni unidades: llegan con el ingreso de factura, y ahí se calculan los precios con el %.
   const [markups, setMarkups] = useState<Markups>([15, 15, 15, 15, 15]);
+  // Sin «Cambiar precios» el producto se crea con el % predeterminado de la tienda (la base lo asegura).
+  const canPrices = useCan("products_prices");
   const [minWholesale, setMinWholesale] = useState(1);
 
   const [active, setActive] = useState(true);
@@ -311,7 +314,12 @@ export default function CreateProductPage() {
               />
             </div>
 
-            {storeId ? <PricingPanel isNew storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}
+            {storeId && canPrices ? <PricingPanel isNew storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}
+            {storeId && !canPrices ? (
+              <p className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                💲 Los precios se calculan solos con el % de ganancia predeterminado de la tienda ({markups[0]}%) cuando se haga el ingreso de factura. Solo quien tiene «Cambiar precios» puede ajustarlos.
+              </p>
+            ) : null}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">

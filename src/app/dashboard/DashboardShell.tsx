@@ -19,10 +19,12 @@ import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
 import { ImageIndexer } from "./ImageIndexer";
 import { InventoryAlertWatcher } from "./inventario/InventoryAlertWatcher";
 import { PayablesAlertWatcher } from "./inventario/PayablesAlertWatcher";
+import { InternalCreditAlertWatcher } from "./inventario/InternalCreditAlertWatcher";
 import { PriceApprovalWatcher } from "./pos/PriceApprovalWatcher";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PermissionChangeWatcher } from "./PermissionChangeWatcher";
 import { setPermissionRuntime } from "@/lib/permission-runtime";
+import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, type Simulation } from "./AccessGuard";
 import { logSessionEvent } from "@/lib/audit-client";
 
 type Role = "admin" | "store";
@@ -195,6 +197,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   ],
   billing: [
     { href: "/dashboard/pos", icon: "💳", label: "POS / Vender", short: "POS", permissions: ["pos"] },
+    { href: "/dashboard/caja", icon: "💵", label: "Caja", permissions: ["cash", "cash_manage"] },
     { href: "/dashboard/fiscal", icon: "🏛️", label: "Factura electrónica", short: "Electrónica", permissions: FISCAL_PERMISSIONS },
     { href: "/dashboard/store/billing", icon: "🧾", label: "Datos de facturación", short: "Datos", permissions: ["billing"], adminOnly: true },
   ],
@@ -531,13 +534,23 @@ export default function DashboardShell({
   }, []);
 
   const isStoreAdmin = storeMemberRole === "store_admin";
+  // Horario de acceso y permisos temporales vencidos (la base ya los bloquea; aquí se oculta lo que no sirve).
+  const myAccess = useMyAccess(store?.id, role === "store" && !storeIsOwner);
+  // «Ver como este usuario»: solo para quien administra usuarios; cambia lo que se ve, no los datos.
+  const [simulation, setSimulation] = useState<Simulation | null>(null);
+  useEffect(() => {
+    const sim = readSimulation(store?.id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSimulation(sim && (storeIsOwner || isStoreAdmin || storePermissions.includes("users")) ? sim : null);
+  }, [store?.id, storeIsOwner, isStoreAdmin, storePermissions]);
   const canOpen = useMemo(
     () => (permission: string) =>
-      role === "admin" ||
-      storeIsOwner ||
-      isStoreAdmin ||
-      storePermissions.includes(permission),
-    [isStoreAdmin, role, storeIsOwner, storePermissions],
+      simulation
+        ? simulation.permissions.includes(permission)
+        : role === "admin" ||
+          storeIsOwner ||
+          ((isStoreAdmin || storePermissions.includes(permission)) && !myAccess?.outside_schedule && !myAccess?.expired.includes(permission)),
+    [isStoreAdmin, role, storeIsOwner, storePermissions, simulation, myAccess],
   );
   // Las pantallas del panel consultan los permisos aquí (botones de exportar, etc.).
   useEffect(() => { setPermissionRuntime(store?.id ?? null, canOpen); }, [store?.id, canOpen]);
@@ -549,6 +562,7 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/store/billing") ? "billing" :
       pathname.startsWith("/dashboard/store") ? "store" :
       pathname.startsWith("/dashboard/pos") ? "pos" :
+      pathname.startsWith("/dashboard/caja") ? "cash" :
       pathname.startsWith("/dashboard/clientes") ? "clients" :
       pathname.startsWith("/dashboard/products") ? "products" :
       pathname.startsWith("/dashboard/lista-productos") ? "products_view" :
@@ -566,6 +580,7 @@ export default function DashboardShell({
     const allowed =
       permission === "inventory" ? ERP_PERMISSIONS.some((p) => canOpen(p)) :
       permission === "products_view" ? PRODUCT_LIST_PERMISSIONS.some((p) => canOpen(p)) :
+      permission === "cash" ? ["cash", "cash_manage"].some((p) => canOpen(p)) :
       permission === "clients" ? ["clients", "receivables", "credit"].some((p) => canOpen(p)) :
       permission === "orders" ? ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) :
       permission === "fiscal" ? ["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"].some((p) => canOpen(p)) :
@@ -746,6 +761,10 @@ export default function DashboardShell({
 
   return (
     <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
+      {simulation ? <SimulationBanner sim={simulation} /> : null}
+      {myAccess?.outside_schedule && !simulation ? (
+        <OutsideScheduleScreen access={myAccess} onSignOut={() => void supabaseBrowser().auth.signOut().then(() => router.replace("/login"))} />
+      ) : null}
       {/* ✅ Fondo premium: ahora usa tus tokens (auto claro/oscuro) */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div
@@ -989,9 +1008,10 @@ export default function DashboardShell({
             {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
             {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}
             {/* Avisos flotantes abajo a la izquierda, apilados para que no se tapen. */}
-            {role === "store" && store?.id && (canOpen("inventory_alerts") || canOpen("payables")) ? (
+            {role === "store" && store?.id && (canOpen("inventory_alerts") || canOpen("payables") || canOpen("internal_credit") || canOpen("internal_credit_manage")) ? (
               <div className="pointer-events-none fixed bottom-3 left-3 z-120 flex w-[min(390px,calc(100vw-1.5rem))] flex-col gap-2 sm:bottom-5 sm:left-5">
                 {canOpen("payables") ? <PayablesAlertWatcher storeId={store.id} /> : null}
+                {canOpen("internal_credit") || canOpen("internal_credit_manage") ? <InternalCreditAlertWatcher storeId={store.id} /> : null}
                 {canOpen("inventory_alerts") ? <InventoryAlertWatcher storeId={store.id} /> : null}
               </div>
             ) : null}

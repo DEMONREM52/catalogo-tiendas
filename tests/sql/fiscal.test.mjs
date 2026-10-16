@@ -9,7 +9,7 @@ const report = (e) => {
 process.on("uncaughtException", report);
 process.on("unhandledRejection", report);
 
-const MIGRATION = process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/20261027_fiscal_multipunto.sql");
+const MIGRATION = process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "migraciones/20261027_fiscal_multipunto.sql");
 const { db } = await makeDb(MIGRATION);
 const U = (n) => `a0000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const ADMIN = U(1), OWNER_A = U(2), OWNER_B = U(3), ROBIN = U(4), MARIA = U(5), JAVIER = U(6), CONTADOR = U(7), CAJERO = U(8), SARA = U(9);

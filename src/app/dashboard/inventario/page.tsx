@@ -8,11 +8,12 @@ import { TransfersTab } from "./TransfersTab";
 import { ManifestsTab } from "./ManifestsUI";
 import { PurchasesTab, SuppliersTab } from "./PurchasesTabs";
 import { PayablesTab } from "./Payables";
+import { InternalCreditTab } from "./InternalCredit";
 import { OverviewTab, WarehousesTab } from "./StockTabs";
 import { StockBrowser } from "./StockBrowser";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
 
-type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "manifests" | "audit";
+type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit";
 
 const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: string[] }> = [
   { key: "overview", icon: "📊", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
@@ -24,6 +25,7 @@ const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: strin
   { key: "purchases", icon: "🛒", label: "Ingreso de factura", permissions: ["purchases"] },
   { key: "suppliers", icon: "🏭", label: "Proveedores", permissions: ["suppliers", "purchases"] },
   { key: "payables", icon: "💸", label: "Cuentas por pagar", permissions: ["payables"] },
+  { key: "internal", icon: "🤝", label: "Cuenta con puntos", permissions: ["internal_credit", "internal_credit_manage"] },
   { key: "manifests", icon: "📄", label: "Manifiestos", permissions: ["inventory", "purchases"] },
   { key: "audit", icon: "🛡️", label: "Auditoría", permissions: ["audit"] },
 ];
@@ -126,6 +128,7 @@ export default function InventarioPage() {
       {current.key === "purchases" ? <PurchasesTab ctx={ctx} warehouses={ctx.pointId ? warehouses.filter((w) => w.id === ctx.pointId) : warehouses} /> : null}
       {current.key === "suppliers" ? <SuppliersTab ctx={ctx} /> : null}
       {current.key === "payables" ? <PayablesTab ctx={ctx} /> : null}
+      {current.key === "internal" ? <InternalCreditTab ctx={ctx} /> : null}
       {current.key === "manifests" ? <ManifestsTab ctx={ctx} /> : null}
       {current.key === "audit" ? <AuditTab ctx={ctx} /> : null}
     </main>

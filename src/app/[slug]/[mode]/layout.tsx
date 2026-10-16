@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
+import { storeBase, storeUrl } from "@/lib/seo/store-public";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,7 +15,7 @@ type StoreMeta = {
 
 function getSiteUrl() {
   // ✅ pon tu dominio real aquí si quieres dejarlo fijo
-  // return "https://remhub.store";
+  // return "https://remhub.co";
 
   // ✅ o usa env si lo tienes:
   const env =
@@ -107,8 +108,9 @@ export async function generateMetadata({
       ? `Catálogo online de ${storeName}. Mira productos, precios y realiza pedidos por WhatsApp.`
       : "Catálogo online. Mira productos, precios y realiza pedidos por WhatsApp.");
 
-  // URL canonical
-  const canonical = `${siteUrl}/${slug}/${mode}`;
+  // Dirección única para Google: el dominio de la tienda si tiene uno (o remhub.co/tienda).
+  const base = await storeBase(slug);
+  const canonical = storeUrl(base, `/${decodeURIComponent(mode)}`);
 
   // Tarjeta de vista previa con el logo: del punto (catálogo de un punto), del catálogo o de la tienda.
   const ogParams = new URLSearchParams({ store: store?.slug || decodeURIComponent(slug) });

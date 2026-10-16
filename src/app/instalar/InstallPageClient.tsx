@@ -14,19 +14,19 @@ type Tab = "android" | "ios" | "desktop";
 
 const STEPS: Record<Tab, Array<{ text: React.ReactNode; icon?: React.ReactNode }>> = {
   android: [
-    { text: <>Abre <b>remhub.store/instalar</b> en <b>Chrome</b> (o Edge / Samsung Internet).</> },
+    { text: <>Abre <b>remhub.co/instalar</b> en <b>Chrome</b> (o Edge / Samsung Internet).</> },
     { text: <>Toca <b>«Instalar RemHub»</b> y confirma en la ventana del teléfono.</> },
     { text: <>Si no aparece, abre el menú <b>⋮</b> y elige <b>«Instalar aplicación»</b> o «Agregar a la pantalla principal».</>, icon: <MoreVertical size={13} /> },
     { text: <>Abre RemHub desde el icono e ingresa con tu usuario de siempre.</> },
   ],
   ios: [
-    { text: <>Abre <b>remhub.store/instalar</b> en <b>Safari</b>.</> },
+    { text: <>Abre <b>remhub.co/instalar</b> en <b>Safari</b>.</> },
     { text: <>Toca el botón <b>Compartir</b> (abajo en iPhone, arriba en iPad).</>, icon: <Share size={13} /> },
     { text: <>Elige <b>«Agregar a pantalla de inicio»</b> y toca <b>«Agregar»</b>.</>, icon: <PlusSquare size={13} /> },
     { text: <>Abre RemHub desde el icono e ingresa con tu usuario de siempre.</> },
   ],
   desktop: [
-    { text: <>Abre <b>remhub.store/instalar</b> en <b>Chrome</b> o <b>Edge</b>.</> },
+    { text: <>Abre <b>remhub.co/instalar</b> en <b>Chrome</b> o <b>Edge</b>.</> },
     { text: <>Haz clic en <b>«Instalar RemHub»</b> o en el icono de instalar de la barra de direcciones.</> },
     { text: <>En Safari para Mac: menú <b>Archivo → «Agregar al Dock»</b>.</> },
     { text: <>RemHub queda como una app en tu escritorio o Dock.</> },
@@ -130,7 +130,7 @@ export function InstallPageClient({ features }: { features: Feature[] }) {
           <p className="mt-1 text-xs text-white/60">Escanea con tu celular para abrir esta página.</p>
           <div className="mt-4 rounded-3xl bg-white p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/api/qr?path=%2Finstalar&format=png&size=480" alt="QR de remhub.store/instalar" width={180} height={180} className="h-44 w-44" />
+            <img src="/api/qr?path=%2Finstalar&format=png&size=480" alt="QR de remhub.co/instalar" width={180} height={180} className="h-44 w-44" />
           </div>
           <button type="button" onClick={() => setQr(true)} className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 px-4 py-2 text-xs font-bold transition hover:bg-white/10">
             <QrCode size={14} /> Descargar o compartir QR
@@ -139,7 +139,7 @@ export function InstallPageClient({ features }: { features: Feature[] }) {
       </section>
 
       <InstallSheet open={sheet} onClose={() => setSheet(false)} identity={REMHUB_INSTALL} />
-      <QrDialog open={qr} onClose={() => setQr(false)} path="/instalar" title="Instala RemHub" subtitle="remhub.store/instalar" />
+      <QrDialog open={qr} onClose={() => setQr(false)} path="/instalar" title="Instala RemHub" subtitle="remhub.co/instalar" />
     </>
   );
 }

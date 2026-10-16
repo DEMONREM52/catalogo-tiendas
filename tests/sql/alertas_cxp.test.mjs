@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 const combined = path.join(os.tmpdir(), `remhub_cxp_${process.pid}.sql`);
 fs.writeFileSync(combined, [fs.readFileSync(path.join(here, "fixtures/prod_ventas.sql"), "utf8"),
   ...["20261118_compras_desde_punto.sql", "20261122_alertas_cuentas_por_pagar.sql"].map((f) => fs.readFileSync(path.join(MIG, f), "utf8"))].join("\n"));

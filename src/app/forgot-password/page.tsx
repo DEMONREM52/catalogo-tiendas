@@ -6,7 +6,7 @@ import { ArrowLeft, MailCheck, MailQuestion, RefreshCw } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { RECOVERY_URL, RESEND_SECONDS, authErrorText, isEmail, isProductionOrigin } from "@/lib/auth/recovery";
 
-/** Pide el correo de recuperación. El enlace siempre abre https://remhub.store/reset-password. */
+/** Pide el correo de recuperación. El enlace siempre abre https://remhub.co/reset-password. */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function ForgotPasswordPage() {
             </form>
             {notProd ? (
               <p className="mt-4 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-xs">
-                ℹ️ Estás en una versión de prueba. El enlace del correo abrirá la versión publicada (<b>remhub.store</b>).
+                ℹ️ Estás en una versión de prueba. El enlace del correo abrirá la versión publicada (<b>remhub.co</b>).
               </p>
             ) : null}
           </>

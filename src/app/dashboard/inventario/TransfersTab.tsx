@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, transferTrackUrl, transferWhatsAppText, type TransferStep } from "@/lib/transfer-tracking";
 import { ProductPicker } from "./LineEditor";
+import { InternalCreditPreview } from "./InternalCredit";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
@@ -370,6 +371,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <input className={inputClass} style={inputStyle} placeholder="Notas (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>El usuario que envía queda registrado automáticamente.</p>
+                <InternalCreditPreview
+                  storeId={ctx.storeId}
+                  from={from}
+                  legs={targets.map((dest) => ({ to: dest, items: lines.map((l) => ({ product_id: l.product_id, qty: matrix[l.product_id]?.[dest] ?? 0 })).filter((i) => i.qty > 0) }))}
+                />
                 <Btn onClick={() => void send()} disabled={busy || overdrawn}>{busy ? "Enviando…" : "🚚 Enviar mercancía"}</Btn>
               </div>
             ) : null}

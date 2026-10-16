@@ -143,19 +143,22 @@ function toCsv(report: ReportPayload) {
   add();
   add("Resumen", "Este periodo", "Periodo anterior");
   add("Ventas", report.kpis.sales, report.previous.sales);
-  add("Costo", report.kpis.cost, report.previous.cost);
-  add("Ganancia estimada", report.kpis.sales - report.kpis.cost, report.previous.sales - report.previous.cost);
+  if (!report.costs_hidden) {
+    add("Costo", report.kpis.cost, report.previous.cost);
+    add("Ganancia estimada", report.kpis.sales - report.kpis.cost, report.previous.sales - report.previous.cost);
+  }
   add("Pedidos", report.kpis.orders, report.previous.orders);
   add("Unidades", report.kpis.units, report.previous.units);
   add();
   add("Fecha", "Ventas", "Periodo anterior", "Pedidos");
   for (const p of report.series) add(bucketLabel(p.t, report.meta.bucket), p.sales, p.prev, p.orders);
   add();
-  add("Punto", "Ventas", "Pedidos", "Unidades", "Ganancia");
-  for (const p of report.by_point) add(p.name, p.sales, p.orders, p.units, p.profit);
+  const hide = Boolean(report.costs_hidden);
+  add("Punto", "Ventas", "Pedidos", "Unidades", ...(hide ? [] : ["Ganancia"]));
+  for (const p of report.by_point) add(p.name, p.sales, p.orders, p.units, ...(hide ? [] : [p.profit]));
   add();
-  add("Producto", "Unidades", "Ventas", "Ganancia");
-  for (const p of report.top_products) add(p.name, p.units, p.sales, p.profit);
+  add("Producto", "Unidades", "Ventas", ...(hide ? [] : ["Ganancia"]));
+  for (const p of report.top_products) add(p.name, p.units, p.sales, ...(hide ? [] : [p.profit]));
   add();
   add("Cliente", "Pedidos", "Compras");
   for (const c of report.top_customers) add(c.name, c.orders, c.sales);
@@ -220,6 +223,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
     URL.revokeObjectURL(url);
   }
 
+  const costsHidden = Boolean(report?.costs_hidden);
   const k = report?.kpis;
   const prev = report?.previous;
   const profit = k ? k.sales - k.cost : 0;
@@ -233,14 +237,16 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
   const inventoryValue = report?.inventory.reduce((s, w) => s + Number(w.value), 0) ?? 0;
   const maxInventoryValue = Math.max(1, ...(report?.inventory.map((w) => Number(w.value)) ?? [1]));
 
-  const tiles = k && prev ? [
+  const allTiles = k && prev ? [
     { key: "orders", label: "Pedidos", value: formatNumber(k.orders), delta: delta(k.orders, prev.orders), icon: <ShoppingCart size={16} />, spark: ordersSpark },
     { key: "ticket", label: "Ticket promedio", value: formatMoneyCompact(ticket), delta: delta(ticket, prevTicket), icon: <ReceiptText size={16} />, spark: null },
     { key: "profit", label: "Ganancia estimada", value: formatMoneyCompact(profit), delta: delta(profit, prevProfit), icon: <BadgePercent size={16} />, spark: profitSpark, sub: `Margen ${margin.toLocaleString("es-CO", { maximumFractionDigits: 1 })}%` },
     { key: "units", label: "Unidades vendidas", value: formatNumber(k.units), delta: delta(k.units, prev.units), icon: <Package size={16} />, spark: null },
     { key: "customers", label: "Clientes atendidos", value: formatNumber(k.customers), delta: null, icon: <Users size={16} />, spark: null, sub: report ? `${formatNumber(report.customers.new)} nuevos registrados` : undefined },
-    { key: "purchases", label: "Compras a proveedores", value: formatMoneyCompact(report?.purchases.total ?? 0), delta: null, icon: <Truck size={16} />, spark: null, sub: `${formatNumber(report?.purchases.count ?? 0)} ingresos de factura` },
+    { key: "purchases", label: "Compras a proveedores", value: formatMoneyCompact(report?.purchases?.total ?? 0), delta: null, icon: <Truck size={16} />, spark: null, sub: `${formatNumber(report?.purchases?.count ?? 0)} ingresos de factura` },
   ] : [];
+  // Sin «Ver costos»: la base no manda costo ni ganancia; esas tarjetas no se muestran.
+  const tiles = costsHidden ? allTiles.filter((t) => t.key !== "profit" && t.key !== "purchases") : allTiles;
 
   return (
     <div className="space-y-4">
@@ -377,7 +383,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
 
             <Card title="Ventas por punto" icon={<Store size={16} />}>
               <BarList
-                rows={report.by_point.map((p) => ({ key: p.point_id ?? "online", label: p.name, value: Number(p.sales), sub: `${formatNumber(p.orders)} pedidos · ganancia ${formatMoneyCompact(p.profit)}` }))}
+                rows={report.by_point.map((p) => ({ key: p.point_id ?? "online", label: p.name, value: Number(p.sales), sub: `${formatNumber(p.orders)} pedidos${costsHidden ? "" : ` · ganancia ${formatMoneyCompact(p.profit)}`}` }))}
               />
             </Card>
 
@@ -392,7 +398,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
             </Card>
 
             <Card title="Productos más vendidos" icon={<Package size={16} />}>
-              <BarList rows={report.top_products.map((p) => ({ key: p.product_id, label: p.name, value: Number(p.sales), image: p.image_url, sub: `${formatNumber(p.units)} und. · ganancia ${formatMoneyCompact(p.profit)}` }))} />
+              <BarList rows={report.top_products.map((p) => ({ key: p.product_id, label: p.name, value: Number(p.sales), image: p.image_url, sub: `${formatNumber(p.units)} und.${costsHidden ? "" : ` · ganancia ${formatMoneyCompact(p.profit)}`}` }))} />
             </Card>
 
             <Card title="Mejores clientes" icon={<UserRound size={16} />}>
@@ -409,14 +415,18 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
               id="inventory"
               title="Inventario por punto y bodega"
               icon={<Boxes size={18} />}
-              summary={`Valor a costo ${formatMoneyCompact(inventoryValue)} · ${formatNumber(report.inventory.reduce((s, w) => s + w.out, 0))} agotados · ${formatNumber(report.inventory.reduce((s, w) => s + w.low, 0))} con pocas unidades`}
+              summary={`${costsHidden ? `${formatNumber(report.inventory.reduce((s, w) => s + w.units, 0))} unidades` : `Valor a costo ${formatMoneyCompact(inventoryValue)}`} · ${formatNumber(report.inventory.reduce((s, w) => s + w.out, 0))} agotados · ${formatNumber(report.inventory.reduce((s, w) => s + w.low, 0))} con pocas unidades`}
             >
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {report.inventory.map((w) => (
                   <div key={w.point_id} className="rounded-2xl border p-3.5" style={card}>
                     <p className="flex items-center gap-1.5 text-sm font-bold">{w.kind === "point" ? "📍" : "🏬"} {w.name}{w.is_default ? <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }}>Principal</span> : null}</p>
-                    <p className="mt-1 text-xl font-black">{formatMoneyCompact(w.value)}</p>
-                    <Meter value={Number(w.value)} max={maxInventoryValue} />
+                    {costsHidden ? null : (
+                      <>
+                        <p className="mt-1 text-xl font-black">{formatMoneyCompact(w.value)}</p>
+                        <Meter value={Number(w.value)} max={maxInventoryValue} />
+                      </>
+                    )}
                     <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
                       <span><b className="block text-sm">{formatNumber(w.units)}</b>unidades</span>
                       <span><b className="block text-sm" style={{ color: w.out ? "#d03b3b" : undefined }}>{w.out ? `⛔ ${formatNumber(w.out)}` : "0"}</b>agotados</span>
@@ -462,7 +472,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
                     })}
                   </ul>
                 ) : null}
-                {report.purchases.top_suppliers.length ? (
+                {report.purchases?.top_suppliers.length ? (
                   <div className="mt-4">
                     <p className="mb-2 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Compras del periodo por proveedor</p>
                     <BarList rows={report.purchases.top_suppliers.map((s) => ({ key: s.name, label: s.name, value: Number(s.total), sub: `${s.count} factura${s.count === 1 ? "" : "s"}` }))} />

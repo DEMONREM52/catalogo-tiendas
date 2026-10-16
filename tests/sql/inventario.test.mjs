@@ -7,7 +7,7 @@ import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Carpeta de migraciones (se puede cambiar si ya se movieron después de ejecutarlas).
-const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "../../supabase/migrations");
+const MIG = process.env.REMHUB_MIGRATIONS ?? path.join(here, "migraciones");
 // Piezas de producción que no están en los fixtures (reglas de pedidos y anulaciones).
 const prod = `
 alter table public.orders add column if not exists cancelled_at timestamptz;

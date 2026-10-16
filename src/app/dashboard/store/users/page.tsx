@@ -11,6 +11,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import { PERMISSION_LIST } from "@/lib/permissions";
 import { PermissionPicker } from "./PermissionPicker";
+import { AccessLimits, type AccessOverview } from "./AccessLimits";
+import { scheduleText, startSimulation } from "../../AccessGuard";
 
 type MemberRow = {
   store_id: string;
@@ -61,6 +63,12 @@ export default function StoreUsersPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  // Permisos temporales y horarios de todos (20261127).
+  const [access, setAccess] = useState<AccessOverview | null>(null);
+  async function loadAccess(storeId: string) {
+    const { data, error } = await supabaseBrowser().rpc("erp_access_overview", { p_store: storeId });
+    setAccess(error ? null : (data as AccessOverview));
+  }
 
   useEffect(() => {
     load();
@@ -80,6 +88,7 @@ export default function StoreUsersPage() {
       }
       setStore(access.store);
       await loadMembers(access.store.id);
+      void loadAccess(access.store.id);
       const { data: pointData } = await supabaseBrowser()
         .from("erp_warehouses")
         .select("id,name,kind")
@@ -664,6 +673,17 @@ export default function StoreUsersPage() {
                             <span className="inline-flex items-center gap-1"><MapPin size={12} />{pointName ?? "Todos los puntos"}</span>
                             <span className="hidden sm:inline">Desde {new Date(member.created_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })}</span>
                           </div>
+                          {(() => {
+                            const temps = (access?.grants ?? []).filter((g) => g.user_id === member.user_id);
+                            const sch = (access?.schedules ?? []).find((x) => x.user_id === member.user_id && x.active);
+                            if (!temps.length && !sch) return null;
+                            return (
+                              <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+                                {temps.length ? <span className="rounded-full px-2 py-0.5 font-bold" style={{ background: "color-mix(in oklab, #f59e0b 16%, transparent)" }}>⏳ {temps.length} temporal{temps.length === 1 ? "" : "es"}{temps.some((t) => t.expired) ? " (vencido)" : ""}</span> : null}
+                                {sch ? <span className="rounded-full px-2 py-0.5 font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)" }}>🕒 {scheduleText(sch)}</span> : null}
+                              </div>
+                            );
+                          })()}
                           {member.point_id && member.point_ids?.length ? (
                             <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>También consulta: <b>{member.point_ids.map((id) => points.find((pt) => pt.id === id)?.name ?? "Punto").join(", ")}</b></p>
                           ) : null}
@@ -693,6 +713,11 @@ export default function StoreUsersPage() {
                             setEditingPointId(member.point_id ?? "");
                             setEditingExtraPoints(member.point_ids ?? []);
                           }}
+                        />
+                        <ActionButton
+                          icon={<Eye size={14} />}
+                          label="Ver como"
+                          onClick={() => store && startSimulation({ storeId: store.id, userId: member.user_id, name: member.display_name || member.username || "usuario", permissions: member.role === "store_admin" ? PERMISSION_LIST.map((p) => p.value) : member.permissions })}
                         />
                         <ActionButton icon={<KeyRound size={14} />} label="Clave" onClick={() => { setEditFocusPassword(true); setEditMember(member); }} disabled={saving} />
                         <ActionButton icon={<Link2 size={14} />} label="Enlace" onClick={() => void copyLoginLink(member)} />
@@ -732,8 +757,16 @@ export default function StoreUsersPage() {
                               ) : null}
                               <div>
                                 <p className="mb-2 text-xs font-bold">Permisos del usuario</p>
-                                <PermissionPicker value={editingPermissions} onChange={setEditingPermissions} disabled={saving} storeId={store?.id} />
+                                <PermissionPicker value={editingPermissions} onChange={setEditingPermissions} disabled={saving} storeId={store?.id}
+                                  copyFrom={members.filter((m) => m.user_id !== member.user_id && m.permissions.length).map((m) => ({ label: m.display_name || m.username || "Usuario", permissions: m.permissions }))} />
                               </div>
+                              {store ? (
+                                <div>
+                                  <p className="mb-2 text-xs font-bold">Límites (se guardan al instante)</p>
+                                  <AccessLimits storeId={store.id} userId={member.user_id} name={member.display_name || member.username || "el usuario"} permissions={member.permissions}
+                                    overview={access} onChanged={() => { void loadAccess(store.id); void loadMembers(store.id).then(() => undefined); }} />
+                                </div>
+                              ) : null}
                               <div className="flex flex-col gap-2 sm:flex-row">
                                 <button type="button" onClick={() => setEditingUserId(null)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                                   Cancelar

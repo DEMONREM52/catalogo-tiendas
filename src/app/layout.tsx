@@ -5,6 +5,7 @@ import Providers from "./providers";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,7 +19,7 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const SITE_URL = "https://remhub.store";
+const SITE_URL = PRODUCTION_ORIGIN;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

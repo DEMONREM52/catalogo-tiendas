@@ -9,12 +9,12 @@ import {
 } from "./shared";
 
 type Overview = {
-  inventory_value: number;
+  inventory_value: number | null;
   units: number;
   out_of_stock: number;
   low_stock: number;
   transfers_in_transit: number;
-  purchases_month: number;
+  purchases_month: number | null;
   payables_total: number;
   payables_overdue: number;
   receivables_total: number;
@@ -46,12 +46,12 @@ export function OverviewTab({ ctx }: { ctx: ErpCtx }) {
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon="💰" label="Inventario valorizado" value={money(data.inventory_value)} />
+        <Kpi icon="💰" label="Inventario valorizado" value={data.inventory_value === null ? "🔒 Sin permiso" : money(data.inventory_value)} />
         <Kpi icon="📦" label="Unidades en existencia" value={String(data.units)} />
         <Kpi icon="⚠️" label="Stock bajo (1-5)" value={String(data.low_stock)} tone={data.low_stock ? "warn" : "good"} />
         <Kpi icon="⛔" label="Agotados" value={String(data.out_of_stock)} tone={data.out_of_stock ? "bad" : "good"} />
         <Kpi icon="🚚" label="Traslados en tránsito" value={String(data.transfers_in_transit)} tone={data.transfers_in_transit ? "warn" : undefined} />
-        <Kpi icon="🛒" label="Compras del mes" value={money(data.purchases_month)} />
+        <Kpi icon="🛒" label="Compras del mes" value={data.purchases_month === null ? "🔒 Sin permiso" : money(data.purchases_month)} />
         <Kpi icon="📤" label="Cuentas por pagar" value={money(data.payables_total)} tone={data.payables_overdue ? "warn" : undefined} />
         <Kpi icon="⏰" label="Por pagar vencido" value={money(data.payables_overdue)} tone={data.payables_overdue ? "bad" : "good"} />
         <Kpi icon="📥" label="Cartera por cobrar" value={money(data.receivables_total)} />

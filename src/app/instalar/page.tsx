@@ -5,11 +5,11 @@ import { InstallPageClient } from "./InstallPageClient";
 export const metadata: Metadata = {
   title: "Instala RemHub en tu celular",
   description: "Instala RemHub en Android, iPhone o tu computador y ábrelo con un toque, a pantalla completa, con tu mismo usuario.",
-  alternates: { canonical: "https://remhub.store/instalar" },
+  alternates: { canonical: "https://remhub.co/instalar" },
   openGraph: {
     title: "Instala RemHub en tu celular",
     description: "Ventas, pedidos, inventario y catálogos de tu tienda a un toque.",
-    url: "https://remhub.store/instalar",
+    url: "https://remhub.co/instalar",
     images: [{ url: "/og-image.png", width: 1200, height: 1200, type: "image/png", alt: "RemHub" }],
   },
 };

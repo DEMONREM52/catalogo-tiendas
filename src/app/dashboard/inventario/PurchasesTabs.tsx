@@ -168,6 +168,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const editorRef = useRef<LineEditorHandle>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
   const canBuy = ctx.can("purchases");
+  const canVoid = ctx.can("purchases_void");
   const supplierNames = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const defaultWh = form.warehouse || active.find((w) => w.is_default)?.id || active[0]?.id || "";
 
@@ -637,7 +638,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                         ) : null}
                         <Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn>
                         <PurchaseFilesButton purchaseId={r.id} />
-                        {canBuy && r.status === "received" ? <Btn variant="danger" onClick={() => void cancel(r)}>Anular</Btn> : null}
+                        {canVoid && r.status === "received" ? <Btn variant="danger" onClick={() => void cancel(r)}>Anular</Btn> : null}
                       </div>
                     </td>
                   </tr>

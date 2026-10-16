@@ -14,6 +14,8 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
       { value: "sales_return", label: "Devolución de venta", description: "Anular facturas y remisiones ya confirmadas: devuelve el inventario al punto y anula la cartera", sensitive: true },
       { value: "price_approve", label: "Autorizar precios 🔓", description: "Vender a cualquier precio y aprobar (con aviso y sonido) las solicitudes de vender por debajo del límite. Los límites de cada punto y usuario se configuran en Rentabilidad → Límites de precio", sensitive: true },
       { value: "orders", label: "Pedidos", description: "Ver pedidos de catálogos y cambiar su estado" },
+      { value: "cash", label: "Caja de su punto 💵", description: "Abrir la caja con la base, registrar entradas y salidas y cerrarla contando el efectivo" },
+      { value: "cash_manage", label: "Revisar cajas", description: "Ver las cajas de todos los puntos, aprobar faltantes o sobrantes y fijar la tolerancia (solo tienda madre)", sensitive: true },
     ],
   },
   {
@@ -33,7 +35,9 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
     icon: "📦",
     items: [
       { value: "products_view", label: "Ver lista general de productos", description: "Solo lectura: ver y filtrar todos los productos con las existencias de cada punto (no puede crear, editar ni desactivar)" },
-      { value: "products", label: "Crear y editar productos y catálogos", description: "Crear, editar, activar/desactivar productos; catálogos, campañas y precios por catálogo", sensitive: true },
+      { value: "products", label: "Crear y editar productos y catálogos", description: "Crear y editar productos (nombre, fotos, categoría, códigos), activarlos o desactivarlos; catálogos y campañas. Los precios van aparte", sensitive: true },
+      { value: "products_prices", label: "Cambiar precios y % de ganancia 💲", description: "Cambiar los precios 1 a 5 y el % de ganancia de los productos. Sin esto, puede crear productos pero no tocar precios", sensitive: true },
+      { value: "costs_view", label: "Ver costos y márgenes 💰", description: "Ver el costo de los productos, el valor del inventario, la ganancia y el % de ganancia en productos, existencias, kardex e informes. Sin esto salen ocultos 🔒 (la base no los entrega)", sensitive: true },
       { value: "categories", label: "Categorías", description: "Organizar las categorías de la tienda" },
     ],
   },
@@ -49,9 +53,12 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
       { value: "stock_requests", label: "Pedidos internos", description: "Pedir mercancía agotada a otro punto o bodega, chatear y confirmar el recibido" },
       { value: "stock_requests_manage", label: "Gestión de pedidos internos", description: "Ver todos los pedidos internos y atenderlos (preparar, despachar, rechazar)" },
       { value: "notifications_config", label: "Sonidos y avisos de pedidos internos", description: "Elegir los tonos y notificaciones que suenan en cada punto cuando llega un pedido, un mensaje o cambia un estado" },
-      { value: "purchases", label: "Compras", description: "Ingresar, editar y anular facturas de proveedor" },
+      { value: "purchases", label: "Compras", description: "Ingresar y editar facturas de proveedor (un usuario de punto, solo las de su punto)" },
+      { value: "purchases_void", label: "Anular compras", description: "Anular una factura de proveedor completa (devuelve el inventario y anula la cuenta por pagar)", sensitive: true },
       { value: "suppliers", label: "Proveedores", description: "Administrar proveedores" },
       { value: "payables", label: "Cuentas por pagar", description: "Registrar pagos a proveedores", sensitive: true },
+      { value: "internal_credit", label: "Cuenta con la bodega 🤝", description: "Ver lo que su punto le debe a la bodega por los traslados recibidos, sus vencimientos y abonos, y reportar novedades (daños, pérdidas)" },
+      { value: "internal_credit_manage", label: "Administrar cuenta con puntos", description: "Activar el crédito de cada punto, % de la bodega, plazos y cupos; registrar abonos, deudas iniciales y aprobar novedades (solo tienda madre)", sensitive: true },
     ],
   },
   {
@@ -59,7 +66,8 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
     title: "Administración",
     icon: "⚙️",
     items: [
-      { value: "audit", label: "Informes y auditoría", description: "Informe de ventas e historial de operaciones (quién hizo qué, cuándo y qué cambió). Un usuario de punto ve solo lo de su punto" },
+      { value: "reports", label: "Informes de ventas 📊", description: "Ventas, productos más vendidos, vendedores, clientes y existencias por punto. Los costos y ganancias solo con «Ver costos». Un usuario de punto ve solo su punto" },
+      { value: "audit", label: "Auditoría", description: "Historial de operaciones: quién hizo qué, cuándo y qué cambió. Un usuario de punto ve solo lo de su punto" },
       { value: "exports", label: "Exportar a Excel/CSV 📤", description: "Descargar listados: existencias, cartera, gastos, nómina, liquidaciones, rentabilidad e informes. Cada descarga queda en la auditoría", sensitive: true },
       { value: "store", label: "Mi tienda", description: "Datos, apariencia y medición de la tienda" },
       { value: "billing", label: "Datos de facturación", description: "Configuración de comprobantes y pagos" },
@@ -116,12 +124,13 @@ export const permissionLabel = (value: string) => PERMISSION_LIST.find((p) => p.
 
 /** Plantillas para asignar permisos con un clic (luego se pueden ajustar). */
 export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: string; permissions: StoreMenuPermission[] }> = [
-  { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "clients", "orders", "stock_requests", "products_view"] },
-  { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal_send", "products_view"] },
-  { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "audit", "exports"] },
-  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "inventory_alerts", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view"] },
-  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "suppliers", "audit", "exports", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
-  { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "exports", "fiscal", "fiscal_audit", "fiscal_download"] },
-  { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "audit", "fiscal", "fiscal_send", "fiscal_download"] },
-  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "categories", "inventory", "transfers", "purchases", "suppliers", "audit", "stock_requests", "stock_requests_manage", "notifications_config"] },
+  { key: "seller", label: "Vendedor", icon: "🛒", permissions: ["pos", "cash", "clients", "orders", "stock_requests", "products_view"] },
+  { key: "cashier", label: "Cajero", icon: "💵", permissions: ["pos", "cash", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal_send", "products_view"] },
+  { key: "collector", label: "Cartera", icon: "📒", permissions: ["clients", "receivables", "credit", "reports", "exports"] },
+  { key: "warehouse", label: "Bodega", icon: "📦", permissions: ["inventory", "inventory_adjust", "inventory_alerts", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view", "costs_view"] },
+  { key: "product_creator", label: "Creador de productos", icon: "🆕", permissions: ["products", "categories", "products_view"] },
+  { key: "accounting", label: "Contabilidad", icon: "🧮", permissions: ["clients", "receivables", "payables", "purchases", "purchases_void", "suppliers", "costs_view", "reports", "audit", "exports", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit"] },
+  { key: "auditor", label: "Auditor", icon: "🔎", permissions: ["audit", "reports", "costs_view", "exports", "fiscal", "fiscal_audit", "fiscal_download"] },
+  { key: "point_admin", label: "Administrador de punto", icon: "📍", permissions: ["pos", "cash", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "internal_credit", "reports", "audit", "fiscal", "fiscal_send", "fiscal_download"] },
+  { key: "manager", label: "Supervisor", icon: "🧭", permissions: ["pos", "cash", "cash_manage", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "products_prices", "costs_view", "categories", "inventory", "transfers", "purchases", "purchases_void", "suppliers", "reports", "audit", "stock_requests", "stock_requests_manage", "notifications_config"] },
 ];

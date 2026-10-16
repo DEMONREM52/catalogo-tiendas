@@ -7,7 +7,7 @@ import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const combined = path.join(os.tmpdir(), `remhub_liq_${process.pid}.sql`);
-fs.writeFileSync(combined, ["fixtures/prod_ventas.sql", "../../supabase/migrations/20261106_rentabilidad_precios_punto.sql", "../../supabase/migrations/20261109_repartos_liquidaciones.sql"]
+fs.writeFileSync(combined, ["fixtures/prod_ventas.sql", "migraciones/20261106_rentabilidad_precios_punto.sql", "migraciones/20261109_repartos_liquidaciones.sql"]
   .map((f) => fs.readFileSync(path.join(here, f), "utf8")).join("\n"));
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); });
 const { db } = await makeDb(combined);

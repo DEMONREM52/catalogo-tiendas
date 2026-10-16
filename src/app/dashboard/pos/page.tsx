@@ -26,6 +26,7 @@ import { useHeldSales } from "@/lib/pos/held";
 import { PosCartLines, lineStatus, type CartLine } from "./PosCart";
 import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
 import { LIMIT_LABEL, useApprovals, usePriceFloors } from "./usePriceFloors";
+import { CashStatusChip } from "../caja/CashStatusChip";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -1192,6 +1193,7 @@ export default function PosPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
+            <CashStatusChip storeId={store?.id} pointId={pointId} />
             <PosDocuments
               storeId={store?.id}
               pointId={pointId}

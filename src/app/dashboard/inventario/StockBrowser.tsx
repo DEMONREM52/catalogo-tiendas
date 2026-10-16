@@ -6,13 +6,13 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, type ErpCtx, type Warehouse } from "./shared";
 import { ExportGate } from "@/components/ExportGate";
-import { logExport } from "@/lib/permission-runtime";
+import { logExport, useCan } from "@/lib/permission-runtime";
 
 type Row = {
   id: string; name: string; sku: string | null; barcode: string | null; image_url: string | null; active: boolean;
-  category: string | null; cost_price: number; total: number; qty: number; levels: Record<string, number>;
+  category: string | null; cost_price: number | null; total: number; qty: number; levels: Record<string, number>;
 };
-type Result = { total: number; units: number; value: number; negative: number; out: number; rows: Row[] };
+type Result = { total: number; units: number; value: number | null; negative: number; out: number; rows: Row[] };
 
 type Filters = {
   q: string; category: string; warehouse: string; status: string; low: number; cost: string; active: string; sort: string; pageSize: number;
@@ -50,6 +50,8 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [showMore, setShowMore] = useState(false);
   const seq = useRef(0);
   const warehouse = ctx.pointId ?? f.warehouse;
+  // «Ver costos»: si no lo tiene, la base ya manda el costo vacío; aquí solo se ocultan las columnas.
+  const canCosts = useCan("costs_view");
   const whName = active.find((w) => w.id === warehouse)?.name;
 
   function patch(change: Partial<Filters>) {
@@ -77,9 +79,9 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       setLegacy(true);
       const old = await supabaseBrowser().rpc("erp_stock_page", { p_store: ctx.storeId, p_q: f.q, p_only_low: f.status === "low", p_limit: Math.min(limit, 100), p_offset: offset });
       if (old.error) throw old.error;
-      const rows = (old.data ?? []) as Array<{ id: string; name: string; sku: string | null; cost_price: number; total: number; levels: Record<string, number>; total_count: number }>;
+      const rows = (old.data ?? []) as Array<{ id: string; name: string; sku: string | null; cost_price: number | null; total: number; levels: Record<string, number>; total_count: number }>;
       return {
-        total: rows[0]?.total_count ?? 0, units: rows.reduce((s, r) => s + r.total, 0), value: rows.reduce((s, r) => s + Math.max(r.total, 0) * Number(r.cost_price), 0),
+        total: rows[0]?.total_count ?? 0, units: rows.reduce((s, r) => s + r.total, 0), value: rows.some((r) => r.cost_price === null) ? null : rows.reduce((s, r) => s + Math.max(r.total, 0) * Number(r.cost_price), 0),
         negative: 0, out: 0,
         rows: rows.map((r) => ({ ...r, barcode: null, image_url: null, active: true, category: null, qty: r.total })),
       };
@@ -110,10 +112,11 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       const all = await fetchPage(5000, 0);
       if (!all) return;
       logExport("existencias", all.rows.length);
-      const header = ["Producto", "SKU", "Código de barras", "Categoría", ...active.map((w) => w.name), "Total", "Costo", "Valor"];
+      const withCost = all.value !== null;
+      const header = ["Producto", "SKU", "Código de barras", "Categoría", ...active.map((w) => w.name), "Total", ...(withCost ? ["Costo", "Valor"] : [])];
       const lines = all.rows.map((r) => [
         r.name, r.sku ?? "", r.barcode ?? "", r.category ?? "", ...active.map((w) => String(r.levels?.[w.id] ?? 0)),
-        String(r.total), String(r.cost_price), String(Math.max(r.qty, 0) * Number(r.cost_price)),
+        String(r.total), ...(withCost ? [String(r.cost_price ?? 0), String(Math.max(r.qty, 0) * Number(r.cost_price ?? 0))] : []),
       ]);
       const csv = "﻿" + [header, ...lines].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -137,6 +140,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const totalCount = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(totalCount / f.pageSize));
   const rows = data?.rows ?? [];
+  const showCost = canCosts && data?.value !== null;
 
   return (
     <Panel
@@ -210,8 +214,8 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
               <option value="name">Nombre (A–Z)</option>
               <option value="qty_desc">Más existencias</option>
               <option value="qty_asc">Menos existencias</option>
-              <option value="value_desc">Mayor valor</option>
-              <option value="cost_desc">Mayor costo</option>
+              {canCosts ? <option value="value_desc">Mayor valor</option> : null}
+              {canCosts ? <option value="cost_desc">Mayor costo</option> : null}
               <option value="recent">Más recientes</option>
             </select>
           </label>
@@ -237,11 +241,11 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         </div>
       ) : null}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className={`mt-3 grid grid-cols-2 gap-2 ${showCost ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         {[
           ["Productos", String(totalCount), "var(--t-text)"],
           ["Unidades", String(data?.units ?? 0), (data?.units ?? 0) < 0 ? "#ef4444" : "var(--t-text)"],
-          ["Valor a costo", money(data?.value ?? 0), "var(--t-text)"],
+          ...(showCost ? [["Valor a costo", money(data?.value ?? 0), "var(--t-text)"]] : []),
           ["Agotados / negativos", `${data?.out ?? 0} / ${data?.negative ?? 0}`, (data?.negative ?? 0) > 0 ? "#ef4444" : "var(--t-text)"],
         ].map(([label, value, color]) => (
           <div key={label} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
@@ -266,8 +270,8 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     <th key={w.id} className={`${th} text-right`} style={w.id === warehouse ? { color: "var(--t-accent)" } : undefined}>{w.name}</th>
                   ))}
                   <th className={`${th} text-right`}>Total</th>
-                  <th className={`${th} text-right`}>Costo</th>
-                  <th className={`${th} text-right`}>Valor</th>
+                  {showCost ? <th className={`${th} text-right`}>Costo</th> : null}
+                  {showCost ? <th className={`${th} text-right`}>Valor</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -291,8 +295,8 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                       );
                     })}
                     <td className={`${td} text-right tabular-nums`} style={{ fontWeight: 800, color: p.total < 0 ? "#ef4444" : p.total === 0 ? "#ef4444" : p.total <= f.low ? "#f59e0b" : undefined }}>{p.total}</td>
-                    <td className={`${td} text-right tabular-nums`}>{money(p.cost_price)}</td>
-                    <td className={`${td} text-right tabular-nums`}>{money(Math.max(p.qty, 0) * Number(p.cost_price ?? 0))}</td>
+                    {showCost ? <td className={`${td} text-right tabular-nums`}>{money(p.cost_price)}</td> : null}
+                    {showCost ? <td className={`${td} text-right tabular-nums`}>{money(Math.max(p.qty, 0) * Number(p.cost_price ?? 0))}</td> : null}
                   </tr>
                 ))}
               </tbody>

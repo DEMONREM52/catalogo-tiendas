@@ -25,7 +25,7 @@ test("comparar anclas: detecta borrados al final y cadenas reescritas", () => {
 });
 
 test("la tarea solo la ejecuta el programador (CRON_SECRET)", () => {
-  const req = (h?: string) => new Request("https://remhub.store/api/audit/anchor", { headers: h ? { authorization: h } : {} });
+  const req = (h?: string) => new Request("https://remhub.co/api/audit/anchor", { headers: h ? { authorization: h } : {} });
   assert.equal(cronAuthorized(req(), "s3cret-s3cret"), false);
   assert.equal(cronAuthorized(req("Bearer otro"), "s3cret-s3cret"), false);
   assert.equal(cronAuthorized(req("Bearer s3cret-s3cret"), "s3cret-s3cret"), true);
