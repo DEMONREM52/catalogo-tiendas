@@ -11,6 +11,7 @@ import { DateField, Field, NumberField } from "@/components/forms/Fields";
 import { PaymentSheet, Sheet as FormSheet } from "@/components/forms/Sheet";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
+import { BreakdownSheet } from "./Breakdown";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -19,14 +20,20 @@ type Overview = {
   beneficiaries: Beneficiary[];
   split: { id: string; version: number; shares: Share[]; total_pct: number; reason: string; created_by_name: string | null; created_at: string } | null;
   split_history: Array<{ version: number; total_pct: number; reason: string; created_by_name: string | null; created_at: string }>;
-  pending: { pool_total: number; carried_total: number; assigned_total: number; orders: number; lines: PreviewLine[] };
+  pending: {
+    pool_total: number; carried_total: number; assigned_total: number; orders: number; lines: PreviewLine[];
+    gross_total?: number; expenses_total?: number; expenses?: number; no_cost?: Array<{ order_id: string; product_id: string; name: string; qty: number; revenue: number }>;
+  };
+  /** Cómo se liquida el pozo (20261208): ganancia total o sobre el precio de la madre, y si se restan gastos. */
+  settings?: { mode: "total" | "margin" | "mother"; mode_from: string | null; deduct_expenses: boolean; deduct_from: string | null; updated_by_name: string | null; updated_at: string | null; can_edit: boolean };
   open_settlement: { id: string; number: number; status: string } | null;
   can: { beneficiaries: boolean; settle: boolean; approve: boolean; pay: boolean };
 };
 type Row = { id: string; number: number; cutoff: string; status: Status; pool_total: number; carried_total: number; assigned_total: number; unassigned_total: number; sources_count: number; created_at: string; created_by_name: string | null; decided_by_name: string | null; to_pay: number; paid: number };
 type Status = "calculated" | "review" | "approved" | "partially_paid" | "paid" | "rejected" | "reverted";
 type Detail = {
-  settlement: Row & { point_id: string | null; point_name: string | null; split_version: number | null; notes: string | null; decision_note: string | null; revert_reason: string | null; submitted_by_name: string | null; reverted_by_name: string | null };
+  settlement: Row & { point_id: string | null; point_name: string | null; split_version: number | null; notes: string | null; decision_note: string | null; revert_reason: string | null; submitted_by_name: string | null; reverted_by_name: string | null;
+    gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean };
   lines: Array<{ id: string; beneficiary_id: string; name: string; kind: string; document: string | null; pct: number; share_amount: number; carried_amount: number; amount: number; paid: number; carried_into: string | null }>;
   payments: Array<{ id: string; line_id: string; amount: number; method: string; reference: string | null; note: string | null; paid_at: string; created_by_name: string | null; voided: boolean; void_reason: string | null }>;
   sources: Array<{ order_id: string; eligible: number; delta: number; receipt_no: number | null; status: string; sold_at: string; doc_number: string | null; point_name: string | null; credit: boolean }>;
@@ -81,6 +88,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
   }, [load]);
 
   const [preparing, setPreparing] = useState(false);
+  const [breakdown, setBreakdown] = useState<{ id: string | null; title: string } | null>(null);
   async function prepare(cut: string, note: string) {
     const { data, error: e } = await supabaseBrowser().rpc("erp_settlement_calculate", { p_store: storeId, p_point: point, p_cutoff: cut ? new Date(cut).toISOString() : null, p_notes: note || null });
     if (e) { fail(e); return false; }
@@ -102,7 +110,11 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
             <button key={p.id || "madre"} type="button" onClick={() => { setPool(p.id); setOv(null); }} className="shrink-0 rounded-full px-3 py-1.5" style={pool === p.id ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>{p.name}</button>
           ))}
         </div>
-        <span className="order-last basis-full text-xs sm:order-none sm:basis-auto sm:flex-1" style={{ color: "var(--t-muted)" }}>{point ? "Pozo del punto: lo que el punto agrega sobre el precio de la madre." : "Pozo de la madre: precio de la madre − costo, de todas las ventas."}</span>
+        <span className="order-last basis-full text-xs sm:order-none sm:basis-auto sm:flex-1" style={{ color: "var(--t-muted)" }}>
+          {!point ? "Pozo de la madre: precio de la madre − costo, de las ventas de los puntos que no liquidan su ganancia total."
+            : ov?.settings?.mode === "total" ? "Pozo del punto: ganancia total de sus ventas (venta − costo al vender)."
+            : "Pozo del punto: lo que el punto agrega sobre el precio de la madre."}
+        </span>
         <button type="button" onClick={() => void load()} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>
       </div>
 
@@ -110,6 +122,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
 
       {ov && pending ? (
         <>
+          {ov.settings ? <PoolSettings storeId={storeId} point={point} settings={ov.settings} hasOpen={Boolean(open)} onSaved={() => void load()} /> : null}
           <section className="rounded-2xl border p-4" style={cardStyle}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1">
@@ -118,15 +131,33 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>
                   {pending.orders} venta{pending.orders === 1 ? "" : "s"} con movimiento · contado + crédito cobrado{n(pending.carried_total) ? ` · saldo en contra traído ${cop(pending.carried_total)}` : ""}
                 </p>
+                {ov.settings?.deduct_expenses || n(pending.expenses_total) ? (
+                  <p className="mt-1 text-sm tabular-nums">
+                    Ganancia bruta <b>{cop(pending.gross_total)}</b> − gastos y nómina <b style={{ color: "#e66767" }}>{cop(pending.expenses_total)}</b>
+                    {" "}= <b>{cop(pending.pool_total)}</b> a repartir
+                  </p>
+                ) : null}
               </div>
-              {open ? (
-                <button type="button" onClick={() => setOpenId(open.id)} className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: STATUS[open.status as Status]?.color ?? "#3987e5" }}>Ver liquidación #{open.number} abierta</button>
-              ) : ov.can.settle ? (
-                <button type="button" disabled={!ov.split} onClick={() => setPreparing(true)} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }} title={ov.split ? "" : "Define primero el reparto"}>
-                  <FileCheck2 size={16} /> Preparar liquidación
-                </button>
-              ) : null}
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                {open ? (
+                  <button type="button" onClick={() => setOpenId(open.id)} className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: STATUS[open.status as Status]?.color ?? "#3987e5" }}>Ver liquidación #{open.number} abierta</button>
+                ) : ov.can.settle ? (
+                  <button type="button" disabled={!ov.split || Boolean(pending.no_cost?.length)} onClick={() => setPreparing(true)} className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}
+                    title={!ov.split ? "Define primero el reparto" : pending.no_cost?.length ? "Hay productos vendidos sin costo" : ""}>
+                    <FileCheck2 size={16} /> Preparar liquidación
+                  </button>
+                ) : null}
+                {pending.gross_total !== undefined && (pending.orders > 0 || n(pending.expenses)) ? (
+                  <button type="button" onClick={() => setBreakdown({ id: null, title: `Pendiente por liquidar · ${pools.find((p) => p.id === pool)?.name ?? ""}` })}
+                    className="rounded-full border px-4 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                    🔎 Ver detalle por producto
+                  </button>
+                ) : null}
+              </div>
             </div>
+            {pending.no_cost?.length ? (
+              <NoCostWarning storeId={storeId} point={point} items={pending.no_cost} canFix={ov.can.settle} onFixed={() => void load()} />
+            ) : null}
             {pending.lines.length ? (
               <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
                 {pending.lines.map((l) => (
@@ -171,7 +202,9 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
       ) : null}
 
       <AnimatePresence>{preparing ? <PrepareSheet key="prep" poolName={pools.find((p) => p.id === pool)?.name ?? ""} onClose={() => setPreparing(false)} onConfirm={prepare} /> : null}</AnimatePresence>
-      <AnimatePresence>{openId && ov ? <SettlementSheet key={openId} id={openId} can={ov.can} onClose={() => setOpenId(null)} onChanged={() => void load()} /> : null}</AnimatePresence>
+      <AnimatePresence>{openId && ov ? <SettlementSheet key={openId} id={openId} can={ov.can} onClose={() => setOpenId(null)} onChanged={() => void load()}
+        onBreakdown={(sid, t) => setBreakdown({ id: sid, title: t })} /> : null}</AnimatePresence>
+      <AnimatePresence>{breakdown ? <BreakdownSheet key={breakdown.id ?? "pend"} storeId={storeId} point={point} settlementId={breakdown.id} title={breakdown.title} onClose={() => setBreakdown(null)} /> : null}</AnimatePresence>
     </div>
   );
 }
@@ -280,7 +313,9 @@ function SplitEditor({ storeId, point, ov, onSaved }: { storeId: string; point: 
   );
 }
 
-function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Overview["can"]; onClose: () => void; onChanged: () => void }) {
+function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
+  id: string; can: Overview["can"]; onClose: () => void; onChanged: () => void; onBreakdown: (id: string, title: string) => void;
+}) {
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
@@ -360,6 +395,22 @@ function SettlementSheet({ id, can, onClose, onChanged }: { id: string; can: Ove
           {error ? <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}
           {d && s ? (
             <>
+              {s.gross_total !== null && s.gross_total !== undefined ? (
+                <div className="rounded-xl border p-3 text-sm tabular-nums" style={cardStyle}>
+                  <p className="text-[11px] font-bold uppercase" style={{ color: "var(--t-muted)" }}>
+                    {s.mode === "total" ? "Ganancia total del punto (venta − costo)" : s.mode === "mother" ? "Parte de la madre" : "Lo que el punto agrega sobre la madre"}
+                  </p>
+                  <p className="mt-1">
+                    Ganancia <b>{cop(s.gross_total)}</b>
+                    {s.deducted || n(s.expenses_total) ? <> − gastos y nómina <b style={{ color: "#e66767" }}>{cop(s.expenses_total)}</b></> : null}
+                    {" "}= <b>{cop(s.pool_total)}</b> a repartir
+                  </p>
+                </div>
+              ) : null}
+              <button type="button" onClick={() => onBreakdown(s.id, `Liquidación #${s.number} · ${s.point_name ? `Punto ${s.point_name}` : "Madre"} · corte ${when(s.cutoff)}`)}
+                className="w-full rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                🔎 Ver detalle por producto (venta, costo y ganancia de cada factura) · Excel · PDF
+              </button>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[["Del periodo", s.pool_total], ["Saldo traído", s.carried_total], ["Asignado", s.assigned_total], ["Sin asignar", s.unassigned_total]].map(([l, v]) => (
                   <div key={l as string} className="rounded-xl border p-2.5" style={cardStyle}>
@@ -472,5 +523,128 @@ function PrepareSheet({ poolName, onClose, onConfirm }: { poolName: string; onCl
       <Field label="Fecha y hora de corte" hint="Normalmente: ahora mismo o el último día del mes."><DateField withTime value={cut} max={now} onChange={setCut} /></Field>
       <Field label="Nota (opcional)"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: cierre de octubre" className="w-full rounded-xl border px-3 py-2 text-sm outline-none" style={inputStyle} /></Field>
     </FormSheet>
+  );
+}
+
+const todayIso = () => new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
+const dayText = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
+const startOfDay = (d: string) => `${d}T00:00:00-05:00`;
+
+/**
+ * Cómo se liquida el pozo: el punto reparte su GANANCIA TOTAL (venta − costo) o solo lo que agrega sobre la madre;
+ * y si se restan sus gastos y nómina antes de repartir. Lo decide la tienda madre; aplica desde una fecha y nunca
+ * cambia lo ya liquidado.
+ */
+function PoolSettings({ storeId, point, settings, hasOpen, onSaved }: {
+  storeId: string; point: string | null; settings: NonNullable<Overview["settings"]>; hasOpen: boolean; onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<"total" | "margin">(settings.mode === "total" ? "total" : "margin");
+  const [modeFrom, setModeFrom] = useState(todayIso());
+  const [deduct, setDeduct] = useState(settings.deduct_expenses);
+  const [deductFrom, setDeductFrom] = useState(todayIso());
+  const [saving, setSaving] = useState(false);
+  const isMother = !point;
+  const modeChanged = !isMother && mode !== (settings.mode === "total" ? "total" : "margin");
+  const deductChanged = deduct !== settings.deduct_expenses;
+
+  async function save() {
+    const parts = [
+      modeChanged ? `• Este punto reparte ${mode === "total" ? "<b>su ganancia total (venta − costo)</b>" : "<b>solo lo que agrega sobre la madre</b>"} desde el <b>${esc(dayText(startOfDay(modeFrom)))}</b>.` : "",
+      deductChanged ? (deduct ? `• Se restan <b>gastos y nómina</b> desde el <b>${esc(dayText(startOfDay(deductFrom)))}</b>.` : "• Ya <b>no se restan</b> gastos (solo ganancias).") : "",
+    ].filter(Boolean);
+    if (!parts.length) return setEditing(false);
+    const ok = await Swal.fire({
+      ...swalTheme, icon: "question", title: "¿Guardar cómo se liquida?",
+      html: `${parts.join("<br/>")}<p style="margin-top:10px;opacity:.75;font-size:13px">Las ventas y gastos anteriores a esa fecha se quedan como estaban. Lo ya liquidado no cambia.</p>`,
+      showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    setSaving(true);
+    const { error } = await supabaseBrowser().rpc("erp_pool_settings_save", {
+      p_store: storeId, p_point: point, p_mode: isMother ? "margin" : mode,
+      p_mode_from: modeChanged ? startOfDay(modeFrom) : null, p_deduct: deduct, p_deduct_from: deductChanged && deduct ? startOfDay(deductFrom) : null,
+    });
+    setSaving(false);
+    if (error) return fail(error);
+    setEditing(false);
+    onSaved();
+  }
+
+  return (
+    <section className="rounded-2xl border p-4" style={cardStyle}>
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className={label} style={{ color: "var(--t-muted)" }}>Cómo se liquida este pozo</p>
+          <p className="mt-1 text-sm">
+            {isMother ? <>Parte de la madre (precio de la madre − costo). Las ventas de puntos que reparten su ganancia total <b>no</b> entran aquí.</>
+              : settings.mode === "total" ? <>📈 <b>Ganancia total</b> de las ventas del punto (venta − costo){settings.mode_from ? ` desde el ${dayText(settings.mode_from)}` : ""}. La madre solo recibe si la agregas como beneficiaria.</>
+              : <>➕ Solo lo que el punto <b>agrega sobre el precio de la madre</b>.</>}
+          </p>
+          <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+            {settings.deduct_expenses ? `💸 Resta gastos y nómina del ${isMother ? "pozo" : "punto"}${settings.deduct_from ? ` desde el ${dayText(settings.deduct_from)}` : ""}.` : "💸 No resta gastos: se reparte solo la ganancia."}
+            {settings.updated_by_name ? ` · Configuró ${settings.updated_by_name}, ${dayText(settings.updated_at)}` : ""}
+          </p>
+        </div>
+        {settings.can_edit && !editing ? (
+          <button type="button" disabled={hasOpen} title={hasOpen ? "Termina o descarta la liquidación abierta" : ""} onClick={() => setEditing(true)}
+            className="rounded-full border px-3 py-1.5 text-xs font-bold disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }}>Cambiar</button>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-3 space-y-3 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
+          {!isMother ? (
+            <div className="space-y-2">
+              <p className="text-xs font-bold">¿Qué reparte este punto?</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([["total", "📈 Su ganancia total", "Venta − costo de cada producto. Ej.: vendido en $100.000 con costo $75.650 → $24.350 para repartir."],
+                   ["margin", "➕ Solo lo que agrega sobre la madre", "Venta − precio de la madre. La madre se queda con precio de la madre − costo."]] as const).map(([v, t, d]) => (
+                  <button key={v} type="button" onClick={() => setMode(v)} className="rounded-xl border p-3 text-left text-sm"
+                    style={{ borderColor: mode === v ? "var(--t-accent)" : "var(--t-card-border)", background: mode === v ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : undefined }}>
+                    <b className="block">{t}</b><span className="text-xs" style={{ color: "var(--t-muted)" }}>{d}</span>
+                  </button>
+                ))}
+              </div>
+              {modeChanged ? <Field label="Aplicar desde" hint="Las ventas de antes de esta fecha se quedan como estaban."><DateField value={modeFrom} max={todayIso()} onChange={setModeFrom} /></Field> : null}
+            </div>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-500" />
+            <span><b>Restar gastos y nómina antes de repartir</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>Arriendo, servicios, nómina… registrados en Gastos para {isMother ? "la madre" : "este punto"}. Apagado: se reparte solo la ganancia.</span></span>
+          </label>
+          {deduct && deductChanged ? <Field label="Restar gastos desde"><DateField value={deductFrom} max={todayIso()} onChange={setDeductFrom} /></Field> : null}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setEditing(false)} className="rounded-full border px-4 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
+            <button type="button" disabled={saving} onClick={() => void save()} className="rounded-full px-4 py-1.5 text-xs font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}>{saving ? "Guardando…" : "Guardar"}</button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/** Productos vendidos sin costo: bloquean la liquidación (la ganancia saldría inflada) hasta ponerles costo. */
+function NoCostWarning({ storeId, point, items, canFix, onFixed }: {
+  storeId: string; point: string | null; items: NonNullable<Overview["pending"]["no_cost"]>; canFix: boolean; onFixed: () => void;
+}) {
+  const names = [...new Set(items.map((i) => i.name))];
+  async function fix() {
+    const { data, error } = await supabaseBrowser().rpc("erp_sale_finance_fix_costs", { p_store: storeId, p_point: point });
+    if (error) return fail(error);
+    const r = data as { fixed: number; left: number };
+    await Swal.fire({
+      ...swalTheme, icon: r.left ? "warning" : "success",
+      title: r.fixed ? `Se corrigieron ${r.fixed} venta(s)` : "No se corrigió ninguna",
+      text: r.left ? `Aún quedan ${r.left} sin costo: esos productos todavía no tienen costo. Haz su ingreso de factura y vuelve a intentarlo.` : "Ya puedes preparar la liquidación.",
+    });
+    onFixed();
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-sm">
+      <p className="font-bold">⛔ {items.length} producto(s) vendido(s) sin costo: no se puede liquidar todavía</p>
+      <p className="mt-1 text-xs">Con costo $0 la ganancia sale inflada. {names.slice(0, 8).join(", ")}{names.length > 8 ? ` y ${names.length - 8} más` : ""}.</p>
+      <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>1. Ponles costo con un ingreso de factura. 2. Pulsa «Tomar el costo actual» para corregir esas ventas.</p>
+      {canFix ? <button type="button" onClick={() => void fix()} className="mt-2 rounded-full px-4 py-1.5 text-xs font-bold text-white" style={{ background: "#ef4444" }}>Tomar el costo actual</button> : null}
+    </div>
   );
 }
