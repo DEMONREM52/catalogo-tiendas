@@ -1,6 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import { cop } from "@/lib/print/list-prices";
 
 /**
@@ -196,9 +197,11 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
 }
 
 /** Barra de opciones de impresión (no sale en la hoja). */
-export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, pricesAvailable, showRetail, onShowRetail, backHref }: {
+export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, pricesAvailable, pricesReason, showRetail, onShowRetail, backHref }: {
   format: "carta" | "tirilla"; onFormat: (f: "carta" | "tirilla") => void;
   showPrices: boolean; onShowPrices: (v: boolean) => void; pricesAvailable: boolean;
+  /** Por qué no hay precios (para decirlo claro en la barra). */
+  pricesReason?: "loading" | "ok" | "no_session" | "denied";
   showRetail: boolean; onShowRetail: (v: boolean) => void; backHref?: string;
 }) {
   const btn = (active: boolean) => ({
@@ -215,7 +218,13 @@ export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, price
           <button type="button" style={btn(showPrices)} onClick={() => onShowPrices(!showPrices)}>{showPrices ? "💲 Con precios" : "🚫 Sin precios"}</button>
           {showPrices ? <button type="button" style={btn(showRetail)} onClick={() => onShowRetail(!showRetail)}>{showRetail ? "✓ " : ""}Ver también precio detal</button> : null}
         </>
-      ) : <span style={{ fontSize: 12, color: "#666" }}>Inicia sesión en la tienda para incluir precios</span>}
+      ) : (
+        <span style={{ fontSize: 12.5, color: "#b45309", fontWeight: 700, maxWidth: 520 }}>
+          {pricesReason === "loading" ? "Cargando precios…"
+            : pricesReason === "denied" ? "⚠️ Tu usuario no puede ver los precios de estos productos."
+            : <>⚠️ Sin precios: aquí no hay sesión iniciada ({typeof window !== "undefined" ? window.location.host : ""}). <Link href="/login" style={{ color: "#7c3aed" }}>Inicia sesión</Link> y vuelve a abrir esta hoja.</>}
+        </span>
+      )}
       <button type="button" style={{ ...btn(true), background: "#7c3aed", borderColor: "#7c3aed" }} onClick={() => window.print()}>🖨️ Imprimir</button>
     </div>
   );

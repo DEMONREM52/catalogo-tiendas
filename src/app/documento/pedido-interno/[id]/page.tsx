@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
-import { useListPrices } from "@/lib/print/list-prices";
+import { useListPricesState } from "@/lib/print/list-prices";
 import { MovementDocument, PrintToolbar, type DocSignature } from "@/components/print/MovementDocument";
 import { SR_STATUS, type SrDetail } from "@/app/dashboard/pedidos/internos/types";
 import { SIGN_STEPS } from "@/app/dashboard/pedidos/internos/RequestSignatures";
@@ -40,7 +40,7 @@ function RequestPrint() {
     })();
   }, [id]);
 
-  const prices = useListPrices(data?.items.map((i) => i.product_id) ?? []);
+  const { prices, reason: pricesReason } = useListPricesState(data?.items.map((i) => i.product_id) ?? []);
 
   useEffect(() => {
     if (!data || search.get("auto") !== "1") return;
@@ -63,7 +63,7 @@ function RequestPrint() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb" }}>
-      <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)}
+      <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)} pricesReason={pricesReason}
         showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/dashboard/pedidos/internos?pedido=${r.id}`} />
       <div style={{ padding: "16px 0" }}>
         <MovementDocument

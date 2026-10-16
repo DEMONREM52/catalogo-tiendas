@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, type TransferStep } from "@/lib/transfer-tracking";
-import { useListPrices } from "@/lib/print/list-prices";
+import { useListPricesState } from "@/lib/print/list-prices";
 import { MovementDocument, PrintToolbar, type DocSignature } from "@/components/print/MovementDocument";
 
 type Place = { name: string; address: string | null; phone: string | null } | null;
@@ -46,7 +46,7 @@ function TransferPrint() {
     });
   }, [token]);
 
-  const prices = useListPrices(track?.items.map((i) => i.product_id) ?? []);
+  const { prices, reason: pricesReason } = useListPricesState(track?.items.map((i) => i.product_id) ?? []);
   const received = Boolean(track?.items.some((i) => i.received_qty !== null));
   const requested = useMemo(() => new Map((linked?.items ?? []).map((i) => [i.product_id, i.requested])), [linked]);
 
@@ -69,7 +69,7 @@ function TransferPrint() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb" }}>
-      <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)}
+      <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)} pricesReason={pricesReason}
         showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/traslado/${token}`} />
       <div style={{ padding: "16px 0" }}>
         <MovementDocument
