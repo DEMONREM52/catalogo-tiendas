@@ -61,6 +61,8 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
       revenue: lines.reduce((s, l) => s + n(l.revenue), 0),
       cost: lines.reduce((s, l) => s + n(l.cost), 0),
       profit: lines.reduce((s, l) => s + n(l.profit), 0),
+      mother: lines.reduce((s, l) => s + n(l.mother), 0),
+      point: lines.reduce((s, l) => s + n(l.point), 0),
       entering: all.reduce((s, o) => s + n(o.delta), 0),
       expenses: (data?.expenses ?? []).reduce((s, e) => s + n(e.delta), 0),
       units: lines.reduce((s, l) => s + n(l.qty), 0),
@@ -126,6 +128,19 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
               </div>
             ))}
           </div>
+          {mode !== "total" ? (
+            <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm">
+              <p>
+                Ganancia total <b>{cop(totals.profit)}</b> = parte de la madre <b>{cop(totals.mother)}</b> + parte del punto <b>{cop(totals.point)}</b>.
+                {mode === "margin" ? <> Este punto reparte solo <b>su parte</b>; la de la madre va al pozo de la madre.</> : <> Aquí se reparte la parte de la madre.</>}
+              </p>
+              {mode === "margin" ? (
+                <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                  Para repartir la ganancia completa entre los beneficiarios del punto: en «Cómo se liquida este pozo» pulsa <b>Cambiar → 📈 Su ganancia total</b> y escoge desde qué fecha.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {totals.noCost || totals.loss ? (
             <p className="flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 p-2.5 text-xs">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -162,7 +177,8 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
                       <thead style={{ color: "var(--t-muted)" }}>
                         <tr className="text-left text-[10px] uppercase">
                           <th className="px-3 py-1.5">Producto</th><th className="px-2 text-right">Cant.</th><th className="px-2 text-right">Venta</th>
-                          <th className="px-2 text-right">Costo</th><th className="px-2 text-right">Ganancia</th><th className="px-3 text-right">Margen</th>
+                          <th className="px-2 text-right">Costo</th><th className="px-2 text-right">Ganancia</th><th className="px-2 text-right">Margen</th>
+                          {mode !== "total" ? <th className="px-3 text-right">{mode === "margin" ? "Al punto" : "A la madre"}</th> : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -180,7 +196,8 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
                               <td className="px-2 text-right tabular-nums">{cop(l.revenue)}</td>
                               <td className="px-2 text-right tabular-nums">{cop(l.cost)}</td>
                               <td className="px-2 text-right font-bold tabular-nums" style={n(l.profit) < 0 ? { color: "#e66767" } : undefined}>{cop(l.profit)}</td>
-                              <td className="px-3 text-right tabular-nums" style={{ color: "var(--t-muted)" }}>{m.toFixed(1)} %</td>
+                              <td className="px-2 text-right tabular-nums" style={{ color: "var(--t-muted)" }}>{m.toFixed(1)} %</td>
+                              {mode !== "total" ? <td className="px-3 text-right font-bold tabular-nums">{cop(poolPart(l, mode))}</td> : null}
                             </tr>
                           );
                         })}
