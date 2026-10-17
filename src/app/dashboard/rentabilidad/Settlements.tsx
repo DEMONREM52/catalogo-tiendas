@@ -12,6 +12,7 @@ import { PaymentSheet, Sheet as FormSheet } from "@/components/forms/Sheet";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
 import { BreakdownSheet } from "./Breakdown";
+import { openSettlementReport } from "./report";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -363,6 +364,14 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
     onChanged();
   }
 
+  /** Informe completo para guardar como PDF: resumen, reparto, pagos, ventas con sus productos, gastos y firmas. */
+  async function pdf() {
+    if (!d) return;
+    logExport("liquidacion_pdf", d.lines.length, { settlement: d.settlement.number });
+    const err = await openSettlementReport(d);
+    if (err) fail(err);
+  }
+
   function exportCsv() {
     if (!d) return;
     const s = d.settlement;
@@ -388,7 +397,8 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
             <h2 className="text-lg font-black">Liquidación {s ? `#${s.number}` : ""} {s ? <span className="text-sm font-semibold" style={{ color: "var(--t-muted)" }}>· {s.point_name ? `Punto ${s.point_name}` : "Madre"}</span> : null}</h2>
             {s && st ? <p className="text-xs"><span className="font-bold" style={{ color: st.color }}>{st.label}</span> · corte {when(s.cutoff)} · preparó {s.created_by_name ?? "—"}{s.decided_by_name ? ` · decidió ${s.decided_by_name}` : ""}</p> : null}
           </div>
-          <ExportGate><button type="button" onClick={exportCsv} disabled={!d} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Exportar"><Download size={15} /></button></ExportGate>
+          <ExportGate><button type="button" onClick={() => void pdf()} disabled={!d} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }} aria-label="Informe PDF">📄 Informe PDF</button></ExportGate>
+          <ExportGate><button type="button" onClick={exportCsv} disabled={!d} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Exportar a Excel" title="Excel"><Download size={15} /></button></ExportGate>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -411,6 +421,11 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                 className="w-full rounded-xl border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                 🔎 Ver detalle por producto (venta, costo y ganancia de cada factura) · Excel · PDF
               </button>
+              <ExportGate>
+                <button type="button" onClick={() => void pdf()} className="w-full rounded-xl px-4 py-2.5 text-sm font-bold text-white" style={{ background: "linear-gradient(135deg,#3987e5,#d95926)" }}>
+                  📄 Descargar informe completo en PDF
+                </button>
+              </ExportGate>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[["Del periodo", s.pool_total], ["Saldo traído", s.carried_total], ["Asignado", s.assigned_total], ["Sin asignar", s.unassigned_total]].map(([l, v]) => (
                   <div key={l as string} className="rounded-xl border p-2.5" style={cardStyle}>
