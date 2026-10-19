@@ -26,7 +26,7 @@ export type PurchaseFilters = {
 };
 
 /** Línea de un ingreso que coincide con el producto buscado. */
-export type MatchLine = { name: string; sku: string | null; qty: number; unit_cost: number };
+export type MatchLine = { product_id: string; name: string; sku: string | null; qty: number; unit_cost: number };
 
 export const emptyFilters = (): PurchaseFilters => ({ q: "", supplier: "", status: "all", pay: "all", from: "", to: "" });
 export const filtersActive = (f: PurchaseFilters) =>
@@ -121,7 +121,7 @@ export function usePurchaseSearch(storeId: string, suppliers: Supplier[]) {
               ((items ?? []) as Array<{ purchase_id: string; product_id: string; qty: number; unit_cost: number }>).forEach((it) => {
                 const p = byId.get(it.product_id);
                 if (!p) return;
-                (found[it.purchase_id] ||= []).push({ name: p.name, sku: p.sku, qty: Number(it.qty), unit_cost: Number(it.unit_cost) });
+                (found[it.purchase_id] ||= []).push({ product_id: it.product_id, name: p.name, sku: p.sku, qty: Number(it.qty), unit_cost: Number(it.unit_cost) });
               });
               const ids = Object.keys(found).slice(0, 300);
               if (ids.length) parts.push(`id.in.(${ids.join(",")})`);
@@ -145,11 +145,18 @@ export function usePurchaseSearch(storeId: string, suppliers: Supplier[]) {
         setCount(listRes.count ?? page.length);
         // Suma de lo encontrado (sin las anuladas), solo cuando hay filtros.
         if (filtersActive(f)) {
-          let totals = applyBase(sb.from("erp_purchases").select("total,status"), f);
-          if (or) totals = totals.or(or);
-          const { data: tot } = await totals.limit(5000);
-          if (stale()) return;
-          setSum(((tot ?? []) as Array<{ total: number; status: string }>).filter((t) => t.status !== "cancelled").reduce((a, t) => a + Number(t.total || 0), 0));
+          // Por tandas de 1.000 (lo máximo que entrega Supabase por consulta).
+          let acc = 0;
+          for (let at = 0; at < 50_000; at += 1000) {
+            let totals = applyBase(sb.from("erp_purchases").select("id,total,status"), f);
+            if (or) totals = totals.or(or);
+            const { data: tot } = await totals.order("id").range(at, at + 999);
+            if (stale()) return;
+            const chunk = (tot ?? []) as Array<{ total: number; status: string }>;
+            acc += chunk.filter((t) => t.status !== "cancelled").reduce((a, t) => a + Number(t.total || 0), 0);
+            if (chunk.length < 1000) break;
+          }
+          setSum(acc);
         } else setSum(null);
       }
       // Marca de «editado» (columna nueva; si aún no existe simplemente no se muestra).

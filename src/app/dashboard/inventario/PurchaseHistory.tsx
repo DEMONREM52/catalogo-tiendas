@@ -8,7 +8,7 @@ import { Btn, Empty, Panel, StatusPill, dateTime, inputClass, inputStyle, money,
 import { emptyFilters, filtersActive, quickRange, type PurchaseFilters, type PurchaseRow, type usePurchaseSearch } from "./purchase-search";
 
 type Search = ReturnType<typeof usePurchaseSearch>;
-type Item = { qty: number; unit_cost: number; line_total: number | null; products: { name: string; sku: string | null } | null };
+type Item = { product_id: string; qty: number; unit_cost: number; line_total: number | null; products: { name: string; sku: string | null } | null };
 
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -40,7 +40,7 @@ export function PurchaseHistory({
       });
     }
     setOpen((cur) => ({ ...cur, [id]: "loading" }));
-    const { data } = await supabaseBrowser().from("erp_purchase_items").select("qty,unit_cost,line_total,products(name,sku)").eq("purchase_id", id);
+    const { data } = await supabaseBrowser().from("erp_purchase_items").select("product_id,qty,unit_cost,line_total,products(name,sku)").eq("purchase_id", id);
     setOpen((cur) => ({ ...cur, [id]: (data ?? []) as unknown as Item[] }));
   }
 
@@ -191,23 +191,7 @@ export function PurchaseHistory({
                           {items === "loading" ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cargando productos…</p> : items.length === 0 ? (
                             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Sin productos.</p>
                           ) : (
-                            <div className="rounded-xl border" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}>
-                              <table className="w-full text-xs">
-                                <thead style={{ color: "var(--t-muted)" }}>
-                                  <tr><th className="px-3 py-1.5 text-left">Producto</th><th className="px-3 py-1.5 text-right">Cant.</th><th className="px-3 py-1.5 text-right">Costo unit.</th><th className="px-3 py-1.5 text-right">Subtotal</th></tr>
-                                </thead>
-                                <tbody>
-                                  {items.map((it, i) => (
-                                    <tr key={i} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
-                                      <td className="px-3 py-1.5">{it.products?.name ?? "—"}{it.products?.sku ? <span style={{ color: "var(--t-muted)" }}> · {it.products.sku}</span> : null}</td>
-                                      <td className="px-3 py-1.5 text-right">{it.qty}</td>
-                                      <td className="px-3 py-1.5 text-right">{money(it.unit_cost)}</td>
-                                      <td className="px-3 py-1.5 text-right font-semibold">{money(it.line_total ?? Number(it.qty) * Number(it.unit_cost))}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                            <ItemsTable key={f.q} items={items} term={f.q} hitIds={new Set((hit ?? []).map((m) => m.product_id))} />
                           )}
                         </td>
                       </tr>
@@ -226,5 +210,106 @@ export function PurchaseHistory({
         </div>
       ) : null}
     </Panel>
+  );
+}
+
+const foldText = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** Resalta en el texto las palabras buscadas (sin importar tildes ni mayúsculas). */
+function Marked({ text, words }: { text: string; words: string[] }) {
+  if (!words.length) return <>{text}</>;
+  const folded = foldText(text);
+  // Marcas por posición sobre el texto sin tildes (mismo largo que el original letra a letra).
+  const on = new Array(text.length).fill(false);
+  for (const w of words) {
+    let at = folded.indexOf(w);
+    while (at >= 0) {
+      for (let k = at; k < at + w.length && k < on.length; k++) on[k] = true;
+      at = folded.indexOf(w, at + w.length);
+    }
+  }
+  const parts: Array<{ t: string; m: boolean }> = [];
+  for (let k = 0; k < text.length; k++) {
+    const last = parts[parts.length - 1];
+    if (last && last.m === on[k]) last.t += text[k];
+    else parts.push({ t: text[k], m: on[k] });
+  }
+  return (
+    <>
+      {parts.map((p, k) => (p.m ? (
+        <mark key={k} className="rounded px-0.5" style={{ background: "color-mix(in oklab, #facc15 70%, transparent)", color: "#111827" }}>{p.t}</mark>
+      ) : <span key={k}>{p.t}</span>))}
+    </>
+  );
+}
+
+/** Productos de un ingreso: lo buscado queda resaltado y arriba; se puede buscar dentro de la factura o ver solo lo que coincide. */
+function ItemsTable({ items, term, hitIds }: { items: Item[]; term: string; hitIds: Set<string> }) {
+  const [local, setLocal] = useState(term);
+  const [onlyHits, setOnlyHits] = useState(false);
+  const words = foldText(local).split(/\s+/).filter((w) => w.length >= 2);
+  const matches = (it: Item) => {
+    // Coincide si es el producto que trajo la búsqueda, o si su nombre/código tiene todas las palabras escritas aquí.
+    if (local === term && hitIds.has(it.product_id)) return true;
+    if (!words.length) return false;
+    const hay = foldText(`${it.products?.name ?? ""} ${it.products?.sku ?? ""}`);
+    return words.every((w) => hay.includes(w));
+  };
+  const rows = items.map((it, i) => ({ it, i, hit: matches(it) }));
+  const hits = rows.filter((r) => r.hit).length;
+  // Lo que coincide va primero (conserva el orden de la factura dentro de cada grupo).
+  const ordered = [...rows].sort((a, b) => Number(b.hit) - Number(a.hit) || a.i - b.i).filter((r) => !onlyHits || r.hit);
+
+  return (
+    <div className="rounded-xl border" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}>
+      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
+        <input
+          className="min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-xs outline-none"
+          style={{ borderColor: "var(--t-card-border)", background: "transparent", color: "var(--t-text)" }}
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          placeholder={`🔍 Buscar en esta factura (${items.length} productos)`}
+          aria-label="Buscar en esta factura"
+        />
+        {words.length || (local === term && hitIds.size) ? (
+          <span className="text-xs font-semibold" style={{ color: hits ? "#facc15" : "var(--t-muted)" }}>
+            {hits ? `★ ${hits} de ${items.length} coincide${hits === 1 ? "" : "n"}` : "Ninguno coincide"}
+          </span>
+        ) : null}
+        {hits ? (
+          <button type="button" className="rounded-full border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)", color: onlyHits ? "var(--t-accent)" : "var(--t-text)" }} onClick={() => setOnlyHits((v) => !v)}>
+            {onlyHits ? "Ver todos" : "Ver solo coincidencias"}
+          </button>
+        ) : null}
+      </div>
+      <table className="w-full text-xs">
+        <thead style={{ color: "var(--t-muted)" }}>
+          <tr><th className="px-3 py-1.5 text-left">Producto</th><th className="px-3 py-1.5 text-right">Cant.</th><th className="px-3 py-1.5 text-right">Costo unit.</th><th className="px-3 py-1.5 text-right">Subtotal</th></tr>
+        </thead>
+        <tbody>
+          {ordered.map(({ it, i, hit }) => (
+            <tr
+              key={i}
+              className="border-t"
+              style={{
+                borderColor: "var(--t-card-border)",
+                background: hit ? "color-mix(in oklab, #facc15 16%, transparent)" : undefined,
+                boxShadow: hit ? "inset 3px 0 0 #facc15" : undefined,
+                fontWeight: hit ? 700 : undefined,
+              }}
+            >
+              <td className="px-3 py-1.5">
+                {hit ? <span className="mr-1" style={{ color: "#facc15" }}>★</span> : null}
+                <Marked text={it.products?.name ?? "—"} words={words} />
+                {it.products?.sku ? <span style={{ color: "var(--t-muted)" }}> · <Marked text={it.products.sku} words={words} /></span> : null}
+              </td>
+              <td className="px-3 py-1.5 text-right">{it.qty}</td>
+              <td className="px-3 py-1.5 text-right">{money(it.unit_cost)}</td>
+              <td className="px-3 py-1.5 text-right font-semibold">{money(it.line_total ?? Number(it.qty) * Number(it.unit_cost))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

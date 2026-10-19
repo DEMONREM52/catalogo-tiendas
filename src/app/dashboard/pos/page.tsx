@@ -357,16 +357,27 @@ export default function PosPage() {
   useEffect(() => {
     let alive = true;
     if (!storeId || !pointId) return;
-    void supabaseBrowser()
-      .rpc("erp_point_prices", { p_store: storeId, p_point: pointId })
-      .then(({ data, error }) => {
+    // Supabase entrega máximo 1.000 filas por consulta: se piden por tandas hasta tenerlos todos
+    // (antes, con más de 1.000 productos, los demás quedaban con el precio de la madre).
+    void (async () => {
+      const sb = supabaseBrowser();
+      const PAGE = 1000;
+      const map = new Map<string, number[]>();
+      let failed: string | null = null;
+      for (let from = 0; from < 100_000; from += PAGE) {
+        const { data, error } = await sb
+          .rpc("erp_point_prices", { p_store: storeId, p_point: pointId })
+          .order("product_id")
+          .range(from, from + PAGE - 1);
         if (!alive) return;
-        const map = new Map<string, number[]>();
-        setPointPricesError(error ? error.message || "Error desconocido" : null);
-        if (!error) for (const r of (data ?? []) as Array<{ product_id: string; price_1: number; price_2: number; price_3: number; price_4: number; price_5: number }>)
-          map.set(r.product_id, [r.price_1, r.price_2, r.price_3, r.price_4, r.price_5].map(Number));
-        setPointPrices(map);
-      });
+        if (error) { failed = error.message || "Error desconocido"; break; }
+        const rows = (data ?? []) as Array<{ product_id: string; price_1: number; price_2: number; price_3: number; price_4: number; price_5: number }>;
+        for (const r of rows) map.set(r.product_id, [r.price_1, r.price_2, r.price_3, r.price_4, r.price_5].map(Number));
+        if (rows.length < PAGE) break;
+      }
+      setPointPricesError(failed);
+      setPointPrices(map);
+    })();
     return () => {
       alive = false;
     };

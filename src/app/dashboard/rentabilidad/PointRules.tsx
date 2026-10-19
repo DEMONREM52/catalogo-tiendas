@@ -206,11 +206,22 @@ function RuleDialog({ storeId, points, settings, onClose, onSaved }: { storeId: 
 
   useEffect(() => {
     const sb = supabaseBrowser();
+    // Supabase entrega máximo 1.000 filas por consulta: los productos se piden por tandas (si no, los últimos no se encuentran).
+    const allProducts = async () => {
+      const out: Prod[] = [];
+      for (let from = 0; from < 100_000; from += 1000) {
+        const { data, error } = await sb.from("products").select("id,name,sku,price_1,price_2,price_3,price_4,price_5")
+          .eq("store_id", storeId).eq("active", true).order("name").order("id").range(from, from + 999);
+        if (error) break;
+        out.push(...((data ?? []) as Prod[]));
+        if ((data ?? []).length < 1000) break;
+      }
+      return out;
+    };
     void Promise.all([
-      sb.from("products").select("id,name,sku,price_1,price_2,price_3,price_4,price_5").eq("store_id", storeId).eq("active", true).order("name").limit(5000),
+      allProducts(),
       sb.from("product_categories").select("id,name").eq("store_id", storeId).order("name"),
-    ]).then(async ([p, c]) => {
-      const list = (p.data ?? []) as Prod[];
+    ]).then(async ([list, c]) => {
       const costs = await fetchProductCosts(storeId, list.map((x) => x.id)).catch(() => null);
       setProducts(list.map((x) => ({ ...x, cost_price: costs?.get(x.id) ?? null })));
       setCats((c.data ?? []) as Cat[]);
