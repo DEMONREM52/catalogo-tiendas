@@ -3,11 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
+import { requestImageIndex } from "@/lib/image-search/indexer";
 import { EMPTY_PRODUCT_DETAILS } from "@/lib/product-details";
 import { MoneyInput } from "../MoneyInput";
 import { checkProductCode, cleanProductCode } from "../products/product-code";
+import Swal from "sweetalert2";
 import { errorMessage, inputClass, inputStyle, money, toast, type ProductHit } from "./shared";
 import type { Line } from "./LineEditor";
+import { PctInput } from "./PctInput";
+import { QuickCategories } from "./QuickCategories";
+import { saveProductCategoryIds } from "../products/CategoryPicker";
 
 /**
  * Crear un producto sin salir del ingreso de factura: nombre, códigos, categoría, y de una vez la cantidad, el costo,
@@ -29,7 +35,8 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
   const [name, setName] = useState(initialName.toUpperCase());
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
-  const [category, setCategory] = useState("");
+  // Categorías en orden: la primera es la principal.
+  const [cats, setCats] = useState<string[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [qty, setQty] = useState("1");
   const [cost, setCost] = useState<number | null>(null);
@@ -37,6 +44,45 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
   const [markup, setMarkup] = useState("");
   const [cfg, setCfg] = useState<{ step: number; dir: string; def: number }>({ step: 100, dir: "nearest", def: 15 });
   const [busy, setBusy] = useState(false);
+  // Foto (opcional): se sube apenas se elige, así al crear ya está lista.
+  const [image, setImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function uploadImage(file: File | null | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return void toast("Eso no es una imagen", "warning");
+    if (file.size > 15 * 1024 * 1024) return void toast("La imagen pesa más de 15 MB", "warning");
+    setUploading(true);
+    try {
+      const sb = supabaseBrowser();
+      const { data: auth } = await sb.auth.getUser();
+      if (!auth.user) throw new Error("Tu sesión se cerró. Vuelve a entrar.");
+      const prepared = await prepareImage(file);
+      if (prepared.blob.size > 2 * 1024 * 1024) throw new Error("La imagen sigue pesando más de 2 MB. Prueba con otra.");
+      const ext = prepared.ext;
+      const path = `${auth.user.id}/products/new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+      const { error } = await sb.storage.from("product-images").upload(path, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
+      if (error) throw error;
+      setImage(sb.storage.from("product-images").getPublicUrl(path).data.publicUrl);
+    } catch (e) {
+      void toast("No se pudo subir la foto", "error", errorMessage(e));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  // Pegar una foto copiada (Ctrl + V) en cualquier parte de la ventana.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+      if (file) { e.preventDefault(); void uploadImage(file); }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
   const [created, setCreated] = useState<string[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -51,11 +97,32 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
     window.setTimeout(() => nameRef.current?.focus(), 30);
   }, [storeId, withMarkup]);
 
+  // Si ya escribió algo, pregunta antes de cerrar (un clic por error afuera no borra lo escrito).
+  const closing = useRef(false);
+  // Solo cuenta como «clic afuera» si empezó afuera (arrastrar para seleccionar texto y soltar afuera no cierra).
+  const downOutside = useRef(false);
+  async function requestClose() {
+    if (closing.current) return;
+    const dirty = Boolean(name.trim() && name.trim() !== initialName.trim().toUpperCase()) || Boolean(sku.trim() || barcode.trim() || image || cats.length) || Number(cost ?? 0) > 0 || (qty !== "1" && qty !== "");
+    if (!dirty) return onClose();
+    closing.current = true;
+    const res = await Swal.fire({
+      icon: "question", title: "¿Salir sin crear el producto?", text: "Lo que escribiste en esta ventana se pierde. La factura sigue igual.",
+      showCancelButton: true, confirmButtonText: "Sí, salir", cancelButtonText: "Seguir escribiendo", reverseButtons: true, focusCancel: true,
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#ef4444",
+    });
+    const leave = res.isConfirmed;
+    closing.current = false;
+    if (leave) onClose();
+    else window.setTimeout(() => nameRef.current?.focus(), 50);
+  }
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) { e.preventDefault(); void requestClose(); } };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, name, sku, barcode, cost, image, qty, cats]);
 
   const num = (s: string) => Number(s.replace(",", "."));
   const pct = markup.trim() ? num(markup) : null;
@@ -70,6 +137,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
   async function create(mode: Mode) {
     const n = name.trim().toUpperCase();
     if (!n) { nameRef.current?.focus(); return void toast("Escribe el nombre del producto", "warning"); }
+    if (uploading) return void toast("Espera a que termine de subir la foto", "warning");
     const q = Math.max(0, Math.floor(num(qty) || 0));
     // La pestaña del producto se abre ya (los navegadores bloquean ventanas que se abren después de esperar).
     const win = mode === "edit" ? window.open("", "_blank") : null;
@@ -82,7 +150,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
       const base = {
         store_id: storeId, name: n, ...(code ? { sku: code } : {}), ...(barcode.trim() ? { barcode: barcode.trim() } : {}),
         description: "", cost_price: 0, price_1: 0, price_2: 0, price_3: 0, price_4: 0, price_5: 0, price_retail: 0, price_wholesale: 0,
-        min_wholesale: 1, stock: 0, active: true, image_url: null, category_id: category || null, product_details: EMPTY_PRODUCT_DETAILS,
+        min_wholesale: 1, stock: 0, active: true, image_url: image, category_id: cats[0] ?? null, product_details: EMPTY_PRODUCT_DETAILS,
       };
       const marks = m !== null ? { markup_1: m, markup_2: m, markup_3: m, markup_4: m, markup_5: m } : {};
       let { data, error } = await sb.from("products").insert({ ...base, ...marks }).select("id,name,sku,barcode").single();
@@ -93,7 +161,13 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
         ({ data, error } = await sb.from("products").insert({ ...noBarcode, ...marks }).select("id,name,sku,barcode").single());
       }
       if (error || !data) throw error ?? new Error("No se pudo crear.");
+      // Búsqueda por foto: se indexa la imagen nueva (igual que al crear desde Productos).
+      if (image) requestImageIndex();
       const row = data as { id: string; name: string; sku: string | null; barcode: string | null };
+      if (cats.length > 1) {
+        const warn = await saveProductCategoryIds(row.id, cats);
+        if (warn) void toast("Producto creado, pero no todas sus categorías", "warning", warn);
+      }
       onCreated(
         { id: row.id, name: row.name, sku: row.sku, barcode: row.barcode, cost_price: Number(cost ?? 0), tax_rate: num(tax) || 0, stock: 0, wh_qty: 0 },
         { qty: q, unit_cost: Number(cost ?? 0), tax_rate: Math.min(100, Math.max(0, num(tax) || 0)), markup: m },
@@ -105,7 +179,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
         onClose();
       } else if (mode === "another") {
         void toast(`«${row.name}» creado y agregado`, "success", "Escribe el siguiente.");
-        setName(""); setSku(""); setBarcode(""); setQty("1"); setCost(null);
+        setName(""); setSku(""); setBarcode(""); setQty("1"); setCost(null); setImage(null);
         window.setTimeout(() => nameRef.current?.focus(), 30);
       } else {
         void toast(`«${row.name}» creado y agregado a la factura`);
@@ -126,7 +200,8 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[160] grid place-items-center bg-black/55 p-3 backdrop-blur-sm" onClick={() => !busy && onClose()}>
+    <div className="fixed inset-0 z-[160] grid place-items-center bg-black/55 p-3 backdrop-blur-sm" onMouseDown={(e) => { downOutside.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (e.target === e.currentTarget && downOutside.current && !busy) void requestClose(); downOutside.current = false; }}>
       <div role="dialog" aria-modal="true" aria-label="Crear producto" className="flex max-h-[92vh] w-[min(640px,100%)] flex-col overflow-hidden rounded-3xl border text-sm shadow-2xl"
         style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }} onClick={(e) => e.stopPropagation()}>
         <header className="flex items-start justify-between gap-3 border-b px-5 py-4" style={{ borderColor: "var(--t-card-border)" }}>
@@ -134,7 +209,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
             <h3 className="text-base font-black">✨ Crear producto</h3>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Queda agregado a esta factura. Fotos y descripción las puedes poner después.</p>
           </div>
-          <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} onClick={onClose} aria-label="Cerrar">✕</button>
+          <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} onClick={() => void requestClose()} aria-label="Cerrar">✕</button>
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4" onKeyDown={onEnter}>
@@ -143,11 +218,39 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
               ✅ Creados y agregados: {created.join(" · ")}
             </p>
           ) : null}
-          <div>
-            <span className={label} style={{ color: "var(--t-muted)" }}>Nombre *</span>
-            <input ref={nameRef} className={`${inputClass} font-bold uppercase`} style={inputStyle} value={name} onChange={(e) => setName(e.target.value.toUpperCase())} placeholder="EJ: RADIO 3 BANDAS SPARTAN ICF P10BT" />
+          <div className="flex gap-3">
+            {/* Foto: tocar, arrastrar o pegar (Ctrl + V) */}
+            <div className="shrink-0">
+              <span className={label} style={{ color: "var(--t-muted)" }}>Foto</span>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadImage(e.dataTransfer.files?.[0]); }}
+                className="relative grid h-[104px] w-[104px] place-items-center overflow-hidden rounded-2xl border-2 border-dashed text-center text-[11px] font-semibold transition"
+                style={{ borderColor: dragging ? "var(--t-accent)" : "var(--t-card-border)", background: dragging ? "color-mix(in oklab, var(--t-accent) 10%, transparent)" : "color-mix(in oklab, var(--t-card-bg) 70%, transparent)", color: "var(--t-muted)" }}
+                title="Toca para elegir, arrastra una foto o pégala con Ctrl + V"
+                aria-label="Foto del producto"
+              >
+                {image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={image} alt="" className="h-full w-full object-cover" />
+                ) : uploading ? "Subiendo…" : <span>📷<br />Foto<br /><span className="font-normal">tocar, arrastrar o Ctrl+V</span></span>}
+                {image && uploading ? <span className="absolute inset-0 grid place-items-center bg-black/50 text-white">Subiendo…</span> : null}
+              </button>
+              {image ? (
+                <button type="button" className="mt-1 block w-full text-center text-[11px] font-bold" style={{ color: "#ef4444" }} onClick={() => setImage(null)}>Quitar</button>
+              ) : null}
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void uploadImage(e.target.files?.[0])} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className={label} style={{ color: "var(--t-muted)" }}>Nombre *</span>
+              <input ref={nameRef} className={`${inputClass} font-bold uppercase`} style={inputStyle} value={name} onChange={(e) => { const el = e.target; const at = el.selectionStart; setName(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} placeholder="EJ: RADIO 3 BANDAS SPARTAN ICF P10BT" />
+              <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>La foto es opcional: se reduce sola para que cargue rápido en los catálogos.</p>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className={label} style={{ color: "var(--t-muted)" }}>Código (SKU)</span>
               <input className={`${inputClass} uppercase`} style={inputStyle} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Vacío = número interno" />
@@ -156,13 +259,10 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
               <span className={label} style={{ color: "var(--t-muted)" }}>Código de barras</span>
               <input className={inputClass} style={inputStyle} value={barcode} onChange={(e) => setBarcode(e.target.value.replace(/\s+/g, ""))} placeholder="Escanéalo aquí" inputMode="numeric" />
             </div>
-            <div>
-              <span className={label} style={{ color: "var(--t-muted)" }}>Categoría</span>
-              <select className={inputClass} style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="">Sin categoría</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
+          </div>
+          <div>
+            <span className={label} style={{ color: "var(--t-muted)" }}>Categorías <span className="font-normal normal-case">(puedes poner varias · ⭐ = principal)</span></span>
+            <QuickCategories storeId={storeId} categories={categories} onCategories={setCategories} value={cats} onChange={setCats} />
           </div>
 
           <div className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
@@ -183,11 +283,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
               {withMarkup ? (
                 <div>
                   <span className={label} style={{ color: "var(--t-muted)" }}>% venta</span>
-                  <div className="relative">
-                    <input className={`${inputClass} pr-9 text-right font-bold tabular-nums`} style={inputStyle} inputMode="decimal" value={markup} placeholder={String(cfg.def)}
-                      onChange={(e) => setMarkup(e.target.value.replace(/[^\d,.]/g, ""))} onFocus={(e) => e.currentTarget.select()} />
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: "var(--t-muted)" }}>%</span>
-                  </div>
+                  <PctInput value={markup} placeholder={String(cfg.def)} ariaLabel="% de ganancia" onChange={setMarkup} />
                   <span className="mt-1 block text-right text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>{sale > 0 ? `Venta ${money(sale)}` : " "}</span>
                 </div>
               ) : null}

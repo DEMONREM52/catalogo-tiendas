@@ -474,7 +474,7 @@ function SignForm({
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-          <input className={`${input} font-bold uppercase tracking-wide`} style={inputStyle} placeholder="NOMBRE COMPLETO *" autoComplete="name" value={name} onChange={(e) => setName(e.target.value.toUpperCase())} maxLength={80} />
+          <input className={`${input} font-bold uppercase tracking-wide`} style={inputStyle} placeholder="NOMBRE COMPLETO *" autoComplete="name" value={name} onChange={(e) => { const el = e.target; const at = el.selectionStart; setName(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} maxLength={80} />
           <input className={input} style={inputStyle} placeholder="Cédula (opcional)" inputMode="numeric" value={doc} onChange={(e) => setDoc(e.target.value)} maxLength={30} />
         </div>
         <textarea

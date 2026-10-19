@@ -464,7 +464,7 @@ export default function EditProductPage() {
                   value={draft.sku ?? ""}
                   maxLength={40}
                   placeholder={draft.product_no ? String(draft.product_no) : "Ej: OLL-01"}
-                  onChange={(e) => setDraft({ ...draft, sku: e.target.value.toUpperCase() })}
+                  onChange={(e) => { const el = e.target; const at = el.selectionStart; setDraft({ ...draft, sku: el.value.toUpperCase() }); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }}
                 />
                 <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
                   {draft.product_no ? <>N.º interno <b>#{draft.product_no}</b> (no cambia). </> : null}

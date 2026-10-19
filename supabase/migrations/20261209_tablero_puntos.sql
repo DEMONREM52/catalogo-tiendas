@@ -21,7 +21,7 @@ do $$
 begin
   if to_regclass('public.erp_internal_points') is null then raise exception 'Primero ejecuta 20261124_credito_traslados.sql.'; end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'erp_internal_docs' and column_name = 'creditor_id') then
-    raise exception 'Primero ejecuta 20261126_varias_bodegas.sql.';
+    raise exception 'Primero ejecuta 20261126_varias_bodegas.sql.'; 
   end if;
   if to_regclass('public.erp_expenses') is null then raise exception 'Primero ejecuta 20261110_gastos_presupuestos_nomina.sql.'; end if;
 end $$;

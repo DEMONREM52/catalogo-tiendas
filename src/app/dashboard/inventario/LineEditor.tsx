@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
 import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Warehouse } from "./shared";
 import { priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
+import { PctInput } from "./PctInput";
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -518,7 +519,8 @@ function CellNumber({
         autoComplete="off"
         aria-label={ariaLabel}
         className={`${inputClass} text-right font-semibold tabular-nums ${suffix ? "pr-7" : ""} ${className ?? ""}`}
-        style={inputStyle}
+        // El espacio del sufijo va en el estilo (la clase de padding base le ganaba y el «%» quedaba encima del número).
+        style={suffix ? { ...inputStyle, paddingRight: 30 } : inputStyle}
         value={shown}
         onFocus={(e) => {
           setDraft(String(value));
@@ -574,30 +576,22 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
   const changed = line.markup !== null && line.markup !== undefined;
   return (
     <div>
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          inputMode="decimal"
-          className={`${inputClass} pr-9 text-right font-bold tabular-nums`}
-          style={{ ...inputStyle, borderColor: changed ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : inputStyle.borderColor }}
-          value={shown}
-          placeholder={current !== null ? String(current).replace(".", ",") : "—"}
-          aria-label={`% de ganancia de ${line.name}`}
-          title="% de ganancia para los 5 precios. Se guarda en el producto al registrar la factura. Vacío = no cambia."
-          onFocus={(e) => e.currentTarget.select()}
-          onChange={(e) => {
-            const raw = e.target.value.replace(/[^\d,.]/g, "");
-            setDraft(raw);
-            if (!raw.trim()) return onValue(null);
-            const v = Number(raw.replace(",", "."));
-            if (Number.isFinite(v)) onValue(Math.min(1000, Math.max(0, Math.round(v * 100) / 100)));
-          }}
-          onBlur={() => setDraft(null)}
-          onKeyDown={onKeyDown}
-        />
-        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: "var(--t-muted)" }}>%</span>
-      </div>
+      <PctInput
+        inputRef={inputRef}
+        value={shown}
+        highlight={changed}
+        placeholder={current !== null ? String(current).replace(".", ",") : "—"}
+        ariaLabel={`% de ganancia de ${line.name}`}
+        title="% de ganancia para los 5 precios. Se guarda en el producto al registrar la factura. Vacío = no cambia."
+        onChange={(raw) => {
+          setDraft(raw);
+          if (!raw.trim()) return onValue(null);
+          const v = Number(raw.replace(",", "."));
+          if (Number.isFinite(v)) onValue(Math.min(1000, Math.max(0, Math.round(v * 100) / 100)));
+        }}
+        onBlur={() => setDraft(null)}
+        onKeyDown={onKeyDown}
+      />
       <div className="mt-1 text-right text-[11px] leading-tight tabular-nums">
         {sale > 0 ? (
           <>

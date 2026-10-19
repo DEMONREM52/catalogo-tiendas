@@ -159,7 +159,7 @@ function SignModal({ data, step, onClose, onDone }: { data: SrDetail; step: (typ
                 autoComplete="name"
                 value={name}
                 maxLength={80}
-                onChange={(e) => setName(e.target.value.toUpperCase())}
+                onChange={(e) => { const el = e.target; const at = el.selectionStart; setName(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }}
               />
               <input className={field} style={fieldStyle} placeholder="Cédula (opcional)" inputMode="numeric" value={doc} maxLength={30} onChange={(e) => setDoc(e.target.value)} />
             </div>

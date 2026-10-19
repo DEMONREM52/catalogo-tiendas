@@ -293,7 +293,7 @@ export default function CreateProductPage() {
                 {...inputProps("uppercase")}
                 value={code}
                 maxLength={40}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => { const el = e.target; const at = el.selectionStart; setCode(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }}
                 placeholder="Vacío = se usa el número interno (1, 2, 3…)"
                 style={{ ...inputProps().style }}
               />

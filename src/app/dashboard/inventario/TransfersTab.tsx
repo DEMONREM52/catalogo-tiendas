@@ -475,8 +475,8 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
 
                 <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>4 · Responsables</p>
                 <div className="grid gap-2 sm:grid-cols-3">
-                  <input className={`${inputClass} font-semibold uppercase`} style={inputStyle} placeholder="¿QUIÉN REVISÓ LA MERCANCÍA? *" value={checkedBy} onChange={(e) => setCheckedBy(e.target.value.toUpperCase())} />
-                  <input className={`${inputClass} font-semibold uppercase`} style={inputStyle} placeholder="¿QUIÉN LA TRASLADA? *" value={carrier} onChange={(e) => setCarrier(e.target.value.toUpperCase())} />
+                  <input className={`${inputClass} font-semibold uppercase`} style={inputStyle} placeholder="¿QUIÉN REVISÓ LA MERCANCÍA? *" value={checkedBy} onChange={(e) => { const el = e.target; const at = el.selectionStart; setCheckedBy(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
+                  <input className={`${inputClass} font-semibold uppercase`} style={inputStyle} placeholder="¿QUIÉN LA TRASLADA? *" value={carrier} onChange={(e) => { const el = e.target; const at = el.selectionStart; setCarrier(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
                   <input className={inputClass} style={inputStyle} placeholder="Notas (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>El usuario que envía queda registrado automáticamente.</p>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Line } from "./LineEditor";
 import { money } from "./shared";
+import { PctInput } from "./PctInput";
 import { uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 
 const QUICK = [10, 15, 20, 25, 30, 40, 50];
@@ -27,19 +28,15 @@ export function MarkupToolbar({ lines, pricing, onChange }: { lines: Line[]; pri
     <div className="mb-3 rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-bold">💹 % de ganancia (los 5 precios)</span>
-        <div className="relative">
-          <input
-            className="w-24 rounded-lg border py-1.5 pl-2 pr-8 text-right text-sm font-bold tabular-nums outline-none"
-            style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}
-            inputMode="decimal"
-            value={value}
-            placeholder="20"
-            aria-label="% de ganancia para todos"
-            onChange={(e) => setValue(e.target.value.replace(/[^\d,.]/g, ""))}
-            onKeyDown={(e) => { if (e.key === "Enter" && valid) { e.preventDefault(); apply(pct, false); } }}
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: "var(--t-muted)" }}>%</span>
-        </div>
+        <PctInput
+          size="sm"
+          className="w-24"
+          value={value}
+          placeholder="20"
+          ariaLabel="% de ganancia para todos"
+          onChange={setValue}
+          onKeyDown={(e) => { if (e.key === "Enter" && valid) { e.preventDefault(); apply(pct, false); } }}
+        />
         <button type="button" disabled={!valid} className="rounded-lg px-3 py-1.5 font-bold text-white disabled:opacity-40" style={{ background: "var(--t-accent)" }} onClick={() => apply(pct, false)}>
           Aplicar a todos
         </button>
