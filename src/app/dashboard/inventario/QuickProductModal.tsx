@@ -148,7 +148,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
       await checkProductCode(storeId, code);
       const m = withMarkup && pct !== null && Number.isFinite(pct) ? Math.min(1000, Math.max(0, pct)) : null;
       const base = {
-        store_id: storeId, name: n, ...(code ? { sku: code } : {}), ...(barcode.trim() ? { barcode: barcode.trim() } : {}),
+        store_id: storeId, name: n, ...(code ? { sku: code } : {}), ...(barcode.trim() ? { barcode: barcode.trim().replace(/\s+/g, " ").toUpperCase() } : {}),
         description: "", cost_price: 0, price_1: 0, price_2: 0, price_3: 0, price_4: 0, price_5: 0, price_retail: 0, price_wholesale: 0,
         min_wholesale: 1, stock: 0, active: true, image_url: image, category_id: cats[0] ?? null, product_details: EMPTY_PRODUCT_DETAILS,
       };
@@ -257,7 +257,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
             </div>
             <div>
               <span className={label} style={{ color: "var(--t-muted)" }}>Código de barras</span>
-              <input className={inputClass} style={inputStyle} value={barcode} onChange={(e) => setBarcode(e.target.value.replace(/\s+/g, ""))} placeholder="Escanéalo aquí" inputMode="numeric" />
+              <input className={`${inputClass} uppercase`} style={inputStyle} value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Escanéalo o escríbelo" autoComplete="off" />
             </div>
           </div>
           <div>
