@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, transferTrackUrl, transferWhatsAppText, type TransferStep } from "@/lib/transfer-tracking";
 import { ProductPicker } from "./LineEditor";
 import { InternalCreditPreview } from "./InternalCredit";
+import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
@@ -14,7 +15,8 @@ import {
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
 type Matrix = Record<string, Record<string, number>>;
 
-type TransferItem = { product_id: string; qty: number; received_qty: number | null; products: { name: string } | { name: string }[] | null };
+type ItemProduct = { name: string; sku?: string | null; image_url?: string | null };
+type TransferItem = { product_id: string; qty: number; received_qty: number | null; products: ItemProduct | ItemProduct[] | null };
 type TransferRow = {
   id: string; number: number; status: string; notes: string | null; created_at: string; received_at: string | null;
   from_warehouse_id: string; to_warehouse_id: string; created_by_name: string | null; carrier_name: string | null;
@@ -26,7 +28,7 @@ type TransferRow = {
 };
 
 const BASE_COLUMNS =
-  "id,number,status,notes,created_at,received_at,from_warehouse_id,to_warehouse_id,created_by_name,carrier_name,checked_by_name,received_by_name,received_notes,erp_transfer_items(product_id,qty,received_qty,products(name))";
+  "id,number,status,notes,created_at,received_at,from_warehouse_id,to_warehouse_id,created_by_name,carrier_name,checked_by_name,received_by_name,received_notes,erp_transfer_items(product_id,qty,received_qty,products(name,sku,image_url))";
 const TRACK_COLUMNS = `${BASE_COLUMNS},track_token,track_expires_at,erp_transfer_signatures(step,signer_name,signed_at)`;
 
 function TrackProgress({ row }: { row: TransferRow }) {
@@ -76,6 +78,55 @@ function WarehouseChip({ w, selected, onClick }: { w: Warehouse; selected: boole
   );
 }
 
+/** Traslado a medio armar: se guarda en este equipo hasta que se envíe o se descarte. */
+type TransferDraft = { v: 1; savedAt: string; from: string; targets: string[]; lines: PlanLine[]; matrix: Matrix; notes: string; carrier: string; checkedBy: string };
+
+/** Productos de un traslado: resumen corto y, al tocarlo, la lista con fotos. */
+function TransferItemsList({ items }: { items: TransferItem[] }) {
+  const [open, setOpen] = useState(false);
+  const units = items.reduce((a, i) => a + Number(i.qty || 0), 0);
+  const missing = items.filter((i) => i.received_qty !== null && i.received_qty !== i.qty).length;
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition hover:brightness-110"
+        style={{ borderColor: "var(--t-card-border)" }}
+        aria-expanded={open}
+      >
+        📦 {items.length} producto{items.length === 1 ? "" : "s"} · {units.toLocaleString("es-CO")} unidades
+        {missing ? <span style={{ color: "#f59e0b" }}>· {missing} con diferencia</span> : null}
+        <span aria-hidden>{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((i) => {
+            const p = Array.isArray(i.products) ? i.products[0] : i.products;
+            const diff = i.received_qty !== null && i.received_qty !== i.qty;
+            return (
+              <li key={i.product_id} className="flex items-center gap-2.5 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}>
+                {p?.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.image_url} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border object-cover" style={{ borderColor: "var(--t-card-border)" }} />
+                ) : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border text-lg" style={{ borderColor: "var(--t-card-border)" }}>📦</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-2 text-xs font-semibold">{p?.name ?? "Producto"}</span>
+                  {p?.sku ? <span className="block text-[10px]" style={{ color: "var(--t-muted)" }}>{p.sku}</span> : null}
+                </span>
+                <span className="shrink-0 text-right">
+                  <b className="block text-sm tabular-nums">× {i.qty}</b>
+                  {diff ? <span className="block text-[10px] font-bold" style={{ color: "#f59e0b" }}>llegaron {i.received_qty}</span> : null}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   const active = warehouses.filter((w) => w.active);
   const names = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
@@ -90,6 +141,56 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [carrier, setCarrier] = useState("");
   const [checkedBy, setCheckedBy] = useState("");
   const [busy, setBusy] = useState(false);
+  // Borrador: se recupera al entrar y se guarda con cada cambio (se borra al enviar o al descartarlo).
+  const draftKey = `remhub:transfer-draft:v1:${ctx.storeId}`;
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftAt, setDraftAt] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const d = readDraft<TransferDraft>(draftKey);
+    if (d?.v === 1 && (d.lines?.length || d.notes || d.carrier || d.checkedBy)) {
+      // Un usuario de punto solo puede salir de su punto.
+      if (!ctx.pointId || d.from === ctx.pointId) {
+        setFrom(d.from ?? "");
+        setTargets(d.targets ?? []);
+        setLines(d.lines ?? []);
+        setMatrix(d.matrix ?? {});
+        setNotes(d.notes ?? "");
+        setCarrier(d.carrier ?? "");
+        setCheckedBy(d.checkedBy ?? "");
+        setDraftAt(d.savedAt);
+        void toast("Recuperamos tu traslado sin enviar", "success", `Borrador guardado ${timeAgo(d.savedAt)}.`);
+      }
+    }
+    setDraftReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftReady) return;
+    const hasWork = lines.length > 0 || notes.trim() || carrier.trim() || checkedBy.trim();
+    if (!hasWork) {
+      clearDraft(draftKey);
+      setDraftAt(null);
+      return;
+    }
+    const savedAt = new Date().toISOString();
+    if (writeDraft(draftKey, { v: 1, savedAt, from, targets, lines, matrix, notes, carrier, checkedBy } satisfies TransferDraft)) setDraftAt(savedAt);
+  }, [draftReady, draftKey, from, targets, lines, matrix, notes, carrier, checkedBy]);
+  // Refresca el «guardado hace…».
+  useEffect(() => {
+    if (!draftAt) return;
+    const t = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(t);
+  }, [draftAt]);
+  async function discardDraft() {
+    if (!(await confirmAction("Descartar traslado", "Se borran los productos, cantidades y responsables que llevabas.", "Descartar"))) return;
+    resetPlan();
+    setCarrier("");
+    setCheckedBy("");
+    setTargets([]);
+    clearDraft(draftKey);
+    setDraftAt(null);
+  }
 
   const [filter, setFilter] = useState<"all" | "in_transit" | "received">("all");
   const [rows, setRows] = useState<TransferRow[]>([]);
@@ -190,6 +291,8 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       return void toast("No se pudo enviar", "error", errorMessage(error));
     }
     resetPlan();
+    clearDraft(draftKey);
+    setDraftAt(null);
     void load();
     const { data: created } = await sb
       .from("erp_transfers")
@@ -277,6 +380,12 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
           subtitle="Elige el origen, los productos y cuántas unidades van a cada punto o bodega. Cada destino recibe y confirma por separado."
         >
           <div className="space-y-4">
+            {draftAt ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #10b981 40%, transparent)", background: "color-mix(in oklab, #10b981 8%, transparent)" }}>
+                <span>💾 Borrador guardado {timeAgo(draftAt)} en este equipo. Si sales, aquí sigue hasta que lo envíes.</span>
+                <button type="button" className="ml-auto font-bold" style={{ color: "#ef4444" }} onClick={() => void discardDraft()}>Descartar</button>
+              </div>
+            ) : null}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>1 · Sale de</p>
               <div className="flex flex-wrap gap-2">
@@ -372,6 +481,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 </div>
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>El usuario que envía queda registrado automáticamente.</p>
                 <InternalCreditPreview
+                  compact
                   storeId={ctx.storeId}
                   from={from}
                   legs={targets.map((dest) => ({ to: dest, items: lines.map((l) => ({ product_id: l.product_id, qty: matrix[l.product_id]?.[dest] ?? 0 })).filter((i) => i.qty > 0) }))}
@@ -444,9 +554,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm">
-                    {row.erp_transfer_items.map((i) => `${i.qty}${i.received_qty !== null && i.received_qty !== i.qty ? ` (llegaron ${i.received_qty})` : ""} × ${itemName(i)}`).join(" · ")}
-                  </p>
+                  <TransferItemsList items={row.erp_transfer_items} />
                 )}
 
                 {receiving?.id !== row.id && (row.track_token || (canTransfer && row.status === "in_transit")) ? (

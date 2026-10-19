@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Calculator, HandCoins, ShieldCheck, Tags, TrendingUp } from "lucide-react";
+import { BarChart3, Calculator, HandCoins, ShieldCheck, Store, Tags, TrendingUp } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { Simulator } from "./Simulator";
@@ -9,9 +9,10 @@ import { Summary } from "./Summary";
 import { PointRules, type ProfitSettings } from "./PointRules";
 import { Settlements } from "./Settlements";
 import { PriceLimits } from "./PriceLimits";
+import { PointsBoard } from "./PointsBoard";
 import { cardStyle, rpcError, type Point } from "./shared";
 
-type Tab = "summary" | "rules" | "limits" | "settle" | "sim";
+type Tab = "summary" | "points" | "rules" | "limits" | "settle" | "sim";
 
 /** Centro de rentabilidad: informe, precios por punto y simulador. */
 export default function RentabilidadPage() {
@@ -57,6 +58,7 @@ export default function RentabilidadPage() {
 
   const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode; show: boolean }> = [
     { key: "summary", label: "Resumen", icon: <BarChart3 size={15} />, show: perm.view },
+    { key: "points", label: "Puntos", icon: <Store size={15} />, show: perm.view },
     { key: "rules", label: "Precios por punto", icon: <Tags size={15} />, show: perm.view || perm.rules || perm.approve },
     { key: "limits", label: "Límites de precio", icon: <ShieldCheck size={15} />, show: perm.view || perm.rules || perm.price },
     { key: "settle", label: "Repartos y liquidaciones", icon: <HandCoins size={15} />, show: perm.settle || perm.view },
@@ -85,6 +87,7 @@ export default function RentabilidadPage() {
       </nav>
 
       {current === "summary" && perm.view ? <Summary storeId={storeId} points={points} myPoints={settings?.my_points ?? null} /> : null}
+      {current === "points" && perm.view ? <PointsBoard storeId={storeId} /> : null}
       {current === "rules" ? (
         settings ? (
           <PointRules storeId={storeId} points={points} settings={settings} onSettings={() => void loadSettings(storeId)} />

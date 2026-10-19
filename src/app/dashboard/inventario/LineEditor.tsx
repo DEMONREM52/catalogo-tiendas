@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
 import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Warehouse } from "./shared";
+import { priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -538,7 +539,62 @@ export type Line = {
   warehouse_id: string;
   /** Comentario corto del producto (sale en el comprobante entre paréntesis). */
   note?: string;
+  /** % de ganancia para los 5 precios que se guarda en el producto al registrar la factura (vacío = no cambia). */
+  markup?: number | null;
 };
+
+/** Celda «% venta»: el % para los 5 precios y, en vivo, a cómo queda el precio de venta frente al de hoy. */
+function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
+  line: Line; pricing: PurchasePricing; inputRef: (el: HTMLInputElement | null) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void; onValue: (v: number | null) => void;
+}) {
+  const info = pricing.info[line.product_id];
+  const current = uniformMarkup(info);
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (line.markup === null || line.markup === undefined ? "" : String(line.markup).replace(".", ","));
+  const pct = line.markup ?? current;
+  const sale = pct !== null && pct !== undefined ? priceFromMarkup(line.unit_cost, pct, pricing.step, pricing.dir) : 0;
+  const today = info?.prices?.[2] ?? 0;
+  const changed = line.markup !== null && line.markup !== undefined;
+  return (
+    <div>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          className={`${inputClass} pr-7 text-right font-bold`}
+          style={{ ...inputStyle, borderColor: changed ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : inputStyle.borderColor }}
+          value={shown}
+          placeholder={current !== null ? String(current).replace(".", ",") : "—"}
+          aria-label={`% de ganancia de ${line.name}`}
+          title="% de ganancia para los 5 precios. Se guarda en el producto al registrar la factura. Vacío = no cambia."
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^\d,.]/g, "");
+            setDraft(raw);
+            if (!raw.trim()) return onValue(null);
+            const v = Number(raw.replace(",", "."));
+            if (Number.isFinite(v)) onValue(Math.min(1000, Math.max(0, Math.round(v * 100) / 100)));
+          }}
+          onBlur={() => setDraft(null)}
+          onKeyDown={onKeyDown}
+        />
+        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--t-muted)" }}>%</span>
+      </div>
+      <div className="mt-1 text-right text-[11px] leading-tight tabular-nums">
+        {sale > 0 ? (
+          <>
+            <span className="font-bold" style={{ color: changed ? "var(--t-accent)" : "var(--t-text)" }}>Venta {money(sale)}</span>
+            {today > 0 && today !== sale ? (
+              <span className="block" style={{ color: sale > today ? "#10b981" : "#ef4444" }}>{sale > today ? "▲" : "▼"} hoy {money(today)}</span>
+            ) : today > 0 ? <span className="block" style={{ color: "var(--t-muted)" }}>= hoy</span> : null}
+          </>
+        ) : <span style={{ color: "var(--t-muted)" }}>{line.unit_cost > 0 ? "sin % todavía" : "falta el costo"}</span>}
+      </div>
+    </div>
+  );
+}
 
 /** Comentario sutil del producto: «(“…”)»; un clic para escribirlo o editarlo. */
 function LineNote({ value, onChange, name }: { value: string; onChange: (v: string) => void; name: string }) {
@@ -595,7 +651,7 @@ export function lineFromHit(hit: ProductHit, mode: "purchase" | "adjust", wareho
 
 export type LineEditorHandle = { openPicker: () => void };
 
-type Col = "qty" | "cost" | "tax";
+type Col = "qty" | "cost" | "tax" | "markup";
 
 export function LineEditor({
   storeId,
@@ -606,8 +662,11 @@ export function LineEditor({
   warehouses,
   lineExtra,
   editorRef,
+  pricing,
 }: {
   storeId: string;
+  /** Si viene, cada producto tiene su «% venta» (solo en ingresos y con permiso de precios). */
+  pricing?: PurchasePricing | null;
   lineExtra?: (line: Line) => ReactNode;
   lines: Line[];
   onChange: (lines: Line[]) => void;
@@ -626,7 +685,8 @@ export function LineEditor({
   const [modalOpen, setModalOpen] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
   const addedQty = Object.fromEntries(lines.map((l) => [l.product_id, l.qty]));
-  const cols: Col[] = isPurchase ? ["qty", "cost", "tax"] : ["qty"];
+  const withPrice = isPurchase && Boolean(pricing);
+  const cols: Col[] = isPurchase ? (withPrice ? ["qty", "cost", "tax", "markup"] : ["qty", "cost", "tax"]) : ["qty"];
 
   useImperativeHandle(editorRef, () => ({ openPicker: () => setModalOpen(true) }), []);
 
@@ -710,7 +770,9 @@ export function LineEditor({
 
   const total = lines.reduce((sum, l) => sum + l.qty * l.unit_cost * (1 + l.tax_rate / 100), 0);
   const activeWarehouses = (warehouses ?? []).filter((w) => w.active);
-  const grid = isPurchase
+  const grid = withPrice
+    ? "md:grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_88px_140px_76px_118px_120px_40px]"
+    : isPurchase
     ? "md:grid-cols-[minmax(0,2.4fr)_minmax(130px,1.1fr)_96px_150px_84px_120px_40px]"
     : "md:grid-cols-[minmax(0,2.4fr)_96px_120px_96px_40px]";
   const label = "mb-1 block text-[11px] font-semibold uppercase tracking-wide md:hidden";
@@ -742,6 +804,7 @@ export function LineEditor({
             <span className="text-right">{isPurchase ? "Cantidad" : "Contado"}</span>
             {isPurchase ? <span className="text-right">Costo unit.</span> : <span className="text-right">En bodega</span>}
             {isPurchase ? <span className="text-right">IVA</span> : null}
+            {withPrice ? <span className="text-right" title="% de ganancia para los 5 precios">% venta</span> : null}
             <span className="text-right">{isPurchase ? "Total" : "Diferencia"}</span>
             <span />
           </div>
@@ -841,6 +904,18 @@ export function LineEditor({
                         inputRef={cellRef(line.product_id, "tax")}
                         onKeyDown={onCellKey(index, "tax")}
                         onValue={(v) => patch(index, { tax_rate: v })}
+                      />
+                    </div>
+                  ) : null}
+                  {withPrice && pricing ? (
+                    <div>
+                      <span className={label} style={{ color: "var(--t-muted)" }}>% venta</span>
+                      <MarkupCell
+                        line={line}
+                        pricing={pricing}
+                        inputRef={cellRef(line.product_id, "markup")}
+                        onKeyDown={onCellKey(index, "markup")}
+                        onValue={(v) => patch(index, { markup: v })}
                       />
                     </div>
                   ) : null}

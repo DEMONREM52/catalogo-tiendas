@@ -15,6 +15,8 @@ import {
 import { DateField } from "@/components/forms/Fields";
 import { PurchaseHistory } from "./PurchaseHistory";
 import { usePurchaseSearch, type PurchaseRow } from "./purchase-search";
+import { MarkupToolbar } from "./MarkupToolbar";
+import { usePurchasePricing } from "./purchase-pricing";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
@@ -164,6 +166,9 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const formTopRef = useRef<HTMLDivElement>(null);
   const canBuy = ctx.can("purchases");
   const canVoid = ctx.can("purchases_void");
+  // % de ganancia desde la factura: solo con permiso de precios.
+  const canPrices = ctx.can("products_prices");
+  const pricing = usePurchasePricing(ctx.storeId, form.lines.map((l) => l.product_id), canBuy && canPrices);
   const search = usePurchaseSearch(ctx.storeId, suppliers);
   const reloadHistory = search.reload;
   const defaultWh = form.warehouse || active.find((w) => w.is_default)?.id || active[0]?.id || "";
@@ -372,6 +377,21 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     const items = valid.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, tax_rate: l.tax_rate, warehouse_id: l.warehouse_id }));
     // Orden y comentario de cada producto (se guardan aparte para no tocar el registro del ingreso).
     const notes = valid.map((l) => ({ product_id: l.product_id, warehouse_id: l.warehouse_id, note: (l.note ?? "").trim().toUpperCase() }));
+    // Los % de ganancia escritos se guardan en cada producto (los 5 precios); la base recalcula los precios con el nuevo costo.
+    const marked = canPrices ? valid.filter((l) => l.markup !== null && l.markup !== undefined) : [];
+    const saveMarkups = async () => {
+      if (!marked.length) return;
+      const sb = supabaseBrowser();
+      let failed = 0;
+      const uniq = [...new Map(marked.map((l) => [l.product_id, Number(l.markup)])).entries()];
+      for (let i = 0; i < uniq.length; i += 8) {
+        const res = await Promise.all(uniq.slice(i, i + 8).map(([id, m]) =>
+          sb.from("products").update({ markup_1: m, markup_2: m, markup_3: m, markup_4: m, markup_5: m }).eq("id", id).eq("store_id", ctx.storeId)));
+        failed += res.filter((r) => r.error).length;
+      }
+      if (failed) void toast("Algunos % de ganancia no se guardaron", "warning", `${failed} de ${uniq.length} producto(s). Revisa tu permiso «Precios de productos».`);
+      else void toast(`Precios actualizados en ${uniq.length} producto(s)`, "success", "Con el % que escribiste para los 5 precios.");
+    };
     const saveNotes = async (purchaseId: string) => {
       const { error: noteError } = await supabaseBrowser().rpc("erp_purchase_set_notes", { p_purchase: purchaseId, p_notes: notes });
       if (noteError) void toast("Los comentarios de los productos no se guardaron", "warning", /erp_purchase_set_notes|Could not find/i.test(noteError.message) ? "Ejecuta en Supabase la migración 20261029_orden_productos_ingreso.sql." : errorMessage(noteError));
@@ -404,6 +424,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         return void toast("No se pudieron guardar los cambios", "error", missing ? "Ejecuta en Supabase la migración 20261016_smart_search_purchase_edit_tracking.sql." : errorMessage(error));
       }
       await saveNotes(editing.id);
+      await saveMarkups();
       const filesFailed = staged.length ? await uploadStaged(ctx.storeId, editing.id, staged) : 0;
       const done = editing;
       clearDraft(draftKey(done));
@@ -439,6 +460,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       return void toast("No se pudo registrar la factura", "error", `${errorMessage(error)} · Tu borrador sigue guardado.`);
     }
     if (purchaseId) await saveNotes(purchaseId as string);
+    if (purchaseId) await saveMarkups();
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
       : { data: null };
@@ -545,6 +567,9 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 </select>
                 <span className="text-xs" style={{ color: "var(--t-muted)" }}>(puedes cambiarla producto por producto)</span>
               </div>
+              {pricing && form.lines.length ? (
+                <MarkupToolbar lines={form.lines} pricing={pricing} onChange={(lines) => patchForm({ lines })} />
+              ) : null}
               <LineEditor
                 editorRef={editorRef}
                 storeId={ctx.storeId}
@@ -556,6 +581,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 mode="purchase"
                 warehouseId={defaultWh}
                 warehouses={warehouses}
+                pricing={pricing}
               />
             </div>
             <div className="mt-3"><AttachmentPicker staged={staged} onChange={setStaged} /></div>

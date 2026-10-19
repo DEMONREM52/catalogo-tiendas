@@ -7,6 +7,7 @@ import { DateField, NumberField, ddmmyyyy } from "@/components/forms/Fields";
 import { MoneyInput } from "../MoneyInput";
 import { ProductPicker } from "./LineEditor";
 import { Chip, Field, Modal, Toggle } from "./dialog";
+import { PointValuationModal } from "./PointValuation";
 import { Btn, Empty, Kpi, Panel, confirmAction, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange, type ErpCtx, type ProductHit } from "./shared";
 
 /* ----------------------------- tipos ----------------------------- */
@@ -59,7 +60,7 @@ type Preview = {
 };
 
 /** Al armar un traslado: cuánto quedará debiendo cada punto con crédito y si pasa su cupo. */
-export function InternalCreditPreview({ storeId, from, legs }: { storeId: string; from: string; legs: Array<{ to: string; items: Array<{ product_id: string; qty: number }> }> }) {
+export function InternalCreditPreview({ storeId, from, legs, compact }: { storeId: string; from: string; legs: Array<{ to: string; items: Array<{ product_id: string; qty: number }> }>; compact?: boolean }) {
   const [rows, setRows] = useState<Preview[]>([]);
   const key = JSON.stringify([from, legs]);
 
@@ -80,6 +81,20 @@ export function InternalCreditPreview({ storeId, from, legs }: { storeId: string
   }, [key, storeId]);
 
   if (!rows.length) return null;
+  if (compact) {
+    // Solo una línea; los valores, la deuda y la liquidación se ven en Inventario → «Cuenta con puntos».
+    return (
+      <div className="space-y-1.5">
+        {rows.map((p, i) => (
+          <p key={i} className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: p.over_limit ? "color-mix(in oklab, #ef4444 45%, transparent)" : "var(--t-card-border)", color: p.over_limit ? "#ef4444" : "var(--t-muted)" }}>
+            🤝 {p.kind === "return" ? `Devolución: le baja la deuda a ${p.from_name}` : p.kind === "move" ? `La deuda pasa de ${p.from_name} a ${p.to_name}` : `Se carga a la cuenta de ${p.to_name} con la bodega`}
+            {p.over_limit ? " · ⛔ Supera su cupo: solo la tienda madre puede autorizarlo." : " · el detalle está en «Cuenta con puntos»."}
+            {p.missing ? ` ⚠️ ${p.missing} producto(s) sin costo.` : null}
+          </p>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="space-y-2">
       {rows.map((p, i) => {
@@ -114,6 +129,7 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
   const [docFor, setDocFor] = useState<PointRow | null>(null);
   const [configFor, setConfigFor] = useState<PointRow | null>(null);
   const [claimFor, setClaimFor] = useState<PointRow | null>(null);
+  const [valuationOf, setValuationOf] = useState<PointRow | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -169,7 +185,7 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
             {active.map((p) => (
               <PointCard key={p.point_id} p={p} settings={board.settings} manage={manage}
                 onStatement={() => setStatementOf(p.point_id)} onPay={() => setPayFor(p)} onDoc={() => setDocFor(p)}
-                onConfig={() => setConfigFor(p)} onClaim={() => setClaimFor(p)} />
+                onConfig={() => setConfigFor(p)} onClaim={() => setClaimFor(p)} onValuation={() => setValuationOf(p)} />
             ))}
           </div>
         )}
@@ -196,6 +212,7 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
         {payFor ? <PaymentDialog key="pay" storeId={ctx.storeId} p={payFor} creditors={board.creditors ?? []} onClose={() => setPayFor(null)} onSaved={() => { setPayFor(null); done(); }} /> : null}
         {docFor ? <DocDialog key="doc" storeId={ctx.storeId} p={docFor} creditors={board.creditors ?? []} settings={board.settings} onClose={() => setDocFor(null)} onSaved={() => { setDocFor(null); done(); }} /> : null}
         {configFor ? <PointConfigDialog key="cfg" storeId={ctx.storeId} p={configFor} settings={board.settings} onClose={() => setConfigFor(null)} onSaved={() => { setConfigFor(null); done(); }} /> : null}
+        {valuationOf ? <PointValuationModal key="val" storeId={ctx.storeId} pointId={valuationOf.point_id} pointName={valuationOf.name} onClose={() => setValuationOf(null)} /> : null}
         {claimFor ? <ClaimDialog key="claim" storeId={ctx.storeId} p={claimFor} onClose={() => setClaimFor(null)} onSaved={() => { setClaimFor(null); done(); }} /> : null}
         {settingsOpen ? <SettingsDialog key="set" storeId={ctx.storeId} board={board} onClose={() => setSettingsOpen(false)} onSaved={() => { setSettingsOpen(false); done(); }} onChanged={done} /> : null}
       </AnimatePresence>
@@ -205,9 +222,9 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
 
 /* ----------------------------- tarjeta de un punto ----------------------------- */
 
-function PointCard({ p, settings, manage, onStatement, onPay, onDoc, onConfig, onClaim }: {
+function PointCard({ p, settings, manage, onStatement, onPay, onDoc, onConfig, onClaim, onValuation }: {
   p: PointRow; settings: Settings; manage: boolean;
-  onStatement: () => void; onPay: () => void; onDoc: () => void; onConfig: () => void; onClaim: () => void;
+  onStatement: () => void; onPay: () => void; onDoc: () => void; onConfig: () => void; onClaim: () => void; onValuation: () => void;
 }) {
   const balance = Number(p.balance ?? 0);
   const overdue = Number(p.overdue ?? 0);
@@ -251,6 +268,7 @@ function PointCard({ p, settings, manage, onStatement, onPay, onDoc, onConfig, o
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
         <Btn onClick={onStatement}>📄 Estado de cuenta</Btn>
+        <Btn variant="ghost" onClick={onValuation}>📊 Liquidación</Btn>
         {manage ? <Btn variant="ghost" onClick={onPay}>💵 Abono</Btn> : null}
         {manage ? <Btn variant="ghost" onClick={onDoc}>🧾 Cargo / deuda inicial</Btn> : null}
         {manage ? <Btn variant="ghost" onClick={onConfig}>⚙️</Btn> : null}
