@@ -352,6 +352,8 @@ export default function PosPage() {
   const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
   // Precios propios del punto (reglas de la madre). Sin reglas o sin la migración: precios 1-5 de la madre.
   const [pointPrices, setPointPrices] = useState<Map<string, number[]>>(() => new Map());
+  // Si los precios del punto no cargan se avisa (antes se usaban los de la madre sin decir nada).
+  const [pointPricesError, setPointPricesError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     if (!storeId || !pointId) return;
@@ -360,6 +362,7 @@ export default function PosPage() {
       .then(({ data, error }) => {
         if (!alive) return;
         const map = new Map<string, number[]>();
+        setPointPricesError(error ? error.message || "Error desconocido" : null);
         if (!error) for (const r of (data ?? []) as Array<{ product_id: string; price_1: number; price_2: number; price_3: number; price_4: number; price_5: number }>)
           map.set(r.product_id, [r.price_1, r.price_2, r.price_3, r.price_4, r.price_5].map(Number));
         setPointPrices(map);
@@ -1275,6 +1278,11 @@ export default function PosPage() {
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>
               {store?.name ? `${store.name} · ` : ""}{products.length} producto{products.length === 1 ? "" : "s"} · {clients.length} cliente{clients.length === 1 ? "" : "s"}
             </p>
+            {pointPricesError ? (
+              <p className="mt-1 text-xs font-semibold" style={{ color: "#f59e0b" }}>
+                ⚠️ No cargaron los precios de este punto (sus reglas): se están mostrando los de la madre. Detalle: {pointPricesError}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <CashStatusChip storeId={store?.id} pointId={pointId} />

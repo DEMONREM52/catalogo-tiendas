@@ -74,12 +74,17 @@ function luminanceOf(color: string | undefined): number | null {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** Aplica el tema a un elemento (variables --t-*). */
 export function applyThemeToElement(
   cfg: ThemeConfig | undefined,
   element: HTMLElement,
   scheme?: "light" | "dark",
 ) {
-  const r = element;
+  for (const [name, value] of Object.entries(themeVars(cfg, scheme))) element.style.setProperty(name, value);
+}
+
+/** Variables del tema (--t-*) sin tocar la página: también sirven en el servidor para pintar el catálogo ya con sus colores. */
+export function themeVars(cfg: ThemeConfig | undefined, scheme?: "light" | "dark"): Record<string, string> {
 
   // ---------- BG ----------
   // Prioridad:
@@ -199,23 +204,25 @@ export function applyThemeToElement(
   const ctaText = ctaLum !== null && ctaLum > 0.45 ? "#111827" : "#ffffff";
 
   // Store theme tokens stay scoped to the catalog element.
-  r.style.setProperty("--t-bg", finalBg);
-  r.style.setProperty("--t-bg-base", finalBgBase);
-  r.style.setProperty("--t-cta", finalCta);
-  r.style.setProperty("--t-cta-text", ctaText);
+  return {
+    "--t-bg": finalBg,
+    "--t-bg-base": finalBgBase,
+    "--t-cta": finalCta,
+    "--t-cta-text": ctaText,
 
-  r.style.setProperty("--t-text", finalText);
-  r.style.setProperty("--t-muted", finalMuted);
-  r.style.setProperty("--t-border", finalBorder);
+    "--t-text": finalText,
+    "--t-muted": finalMuted,
+    "--t-border": finalBorder,
 
-  r.style.setProperty("--t-card-bg", finalCard);
-  // por si en algún lugar lo usas (no molesta)
-  r.style.setProperty("--t-card-border", adapt ? finalBorder : cardBorder);
+    "--t-card-bg": finalCard,
+    // por si en algún lugar lo usas (no molesta)
+    "--t-card-border": adapt ? finalBorder : cardBorder,
 
-  r.style.setProperty("--t-accent", finalAccent);
-  r.style.setProperty("--t-accent2", finalAccent2);
+    "--t-accent": finalAccent,
+    "--t-accent2": finalAccent2,
 
-  r.style.setProperty("--t-radius", radius);
-  r.style.setProperty("--t-glow", glow);
-  r.style.setProperty("--t-store-bg-opacity", String(Math.min(0.3, Math.max(0.08, Number(glow) / 300))));
+    "--t-radius": radius,
+    "--t-glow": glow,
+    "--t-store-bg-opacity": String(Math.min(0.3, Math.max(0.08, Number(glow) / 300))),
+  };
 }

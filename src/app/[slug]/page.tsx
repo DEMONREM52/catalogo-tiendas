@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -48,8 +49,10 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   if (home.catalogs.length === 1) redirect(`/${home.slug}/${home.catalogs[0].slug}`);
 
   const base = await storeBase(home.slug);
-  // En el espacio de la tienda los enlaces van sin el nombre (sin redirección por clic).
-  const pfx = base.ownDomain ? "" : `/${home.slug}`;
+  // En el espacio de la tienda (su subdominio o dominio propio) los enlaces van sin el nombre (sin redirección por clic).
+  const h = await headers();
+  const onStoreHost = Boolean(h.get("x-store-host")) && (h.get("x-store-slug") ?? "").toLowerCase() === home.slug.toLowerCase();
+  const pfx = onStoreHost ? "" : `/${home.slug}`;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Store",

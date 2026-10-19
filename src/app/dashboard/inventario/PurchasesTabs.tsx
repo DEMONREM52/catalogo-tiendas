@@ -5,14 +5,16 @@ import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { AttachmentPicker, PurchaseFilesButton, uploadStaged, type Staged } from "./AttachmentsUI";
+import { AttachmentPicker, uploadStaged, type Staged } from "./AttachmentsUI";
 import { LineEditor, type Line, type LineEditorHandle } from "./LineEditor";
 import { clearDraft, loadDraftFiles, readDraft, saveDraftFiles, timeAgo, writeDraft } from "./draft";
 import {
-  Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, useRunOnChange,
+  Btn, Empty, Panel, askReason, confirmAction, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, useRunOnChange,
   type ErpCtx, type Warehouse,
 } from "./shared";
-import { DateField, ddmmyyyy } from "@/components/forms/Fields";
+import { DateField } from "@/components/forms/Fields";
+import { PurchaseHistory } from "./PurchaseHistory";
+import { usePurchaseSearch, type PurchaseRow } from "./purchase-search";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
@@ -121,11 +123,6 @@ export function SuppliersTab({ ctx }: { ctx: ErpCtx }) {
   );
 }
 
-type PurchaseRow = {
-  id: string; number: number; status: string; invoice_ref: string | null; payment_type: string; due_date: string | null;
-  total: number; created_at: string; supplier_id: string; invoice_date: string | null;
-  created_by_name: string | null; checked_by_name: string | null; received_by_name: string | null;
-};
 
 type PurchaseForm = {
   supplier: string;
@@ -152,8 +149,6 @@ const formHasWork = (f: PurchaseForm) => Boolean(f.lines.length || f.invoiceRef.
 export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   const active = warehouses.filter((w) => w.active);
   const { suppliers } = useSuppliers(ctx.storeId);
-  const [rows, setRows] = useState<PurchaseRow[]>([]);
-  const [edited, setEdited] = useState<Record<string, { at: string; count: number }>>({});
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [form, setForm] = useState<PurchaseForm>(emptyForm);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -169,7 +164,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const formTopRef = useRef<HTMLDivElement>(null);
   const canBuy = ctx.can("purchases");
   const canVoid = ctx.can("purchases_void");
-  const supplierNames = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
+  const search = usePurchaseSearch(ctx.storeId, suppliers);
+  const reloadHistory = search.reload;
   const defaultWh = form.warehouse || active.find((w) => w.is_default)?.id || active[0]?.id || "";
 
   const draftBase = `remhub:purchase-draft:v1:${ctx.storeId}`;
@@ -179,30 +175,13 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const patchForm = (change: Partial<PurchaseForm>) => setForm((cur) => ({ ...cur, ...change }));
 
   const load = useCallback(async () => {
-    const sb = supabaseBrowser();
-    const [{ data, error }, { data: last }] = await Promise.all([
-      sb.from("erp_purchases")
-        .select("id,number,status,invoice_ref,payment_type,due_date,total,created_at,supplier_id,invoice_date,created_by_name,checked_by_name,received_by_name")
-        .eq("store_id", ctx.storeId)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      // El consecutivo real lo asigna erp_receive_invoice (erp_counters); aquí solo se muestra el siguiente.
-      sb.from("erp_purchases").select("number").eq("store_id", ctx.storeId).order("number", { ascending: false }).limit(1).maybeSingle(),
+    // El consecutivo real lo asigna erp_receive_invoice (erp_counters); aquí solo se muestra el siguiente.
+    const [{ data: last }] = await Promise.all([
+      supabaseBrowser().from("erp_purchases").select("number").eq("store_id", ctx.storeId).order("number", { ascending: false }).limit(1).maybeSingle(),
+      reloadHistory(),
     ]);
-    if (error) return void toast("No se pudieron cargar las compras", "error", errorMessage(error));
-    const list = (data ?? []) as PurchaseRow[];
-    setRows(list);
     setNextNumber(Number(last?.number ?? 0) + 1);
-    // Marca de "editado" (columna nueva; si aún no existe simplemente no se muestra).
-    if (list.length) {
-      const { data: marks } = await sb.from("erp_purchases").select("id,edited_at,edit_count").in("id", list.map((r) => r.id));
-      const next: Record<string, { at: string; count: number }> = {};
-      ((marks ?? []) as Array<{ id: string; edited_at: string | null; edit_count: number | null }>).forEach((m) => {
-        if (m.edited_at) next[m.id] = { at: m.edited_at, count: Number(m.edit_count ?? 1) };
-      });
-      setEdited(next);
-    }
-  }, [ctx.storeId]);
+  }, [ctx.storeId, reloadHistory]);
 
   useRunOnChange(load);
 
@@ -604,50 +583,16 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         </div>
       ) : null}
 
-      <Panel title="Historial de ingresos" subtitle={canBuy ? "Toca ✏️ Editar para corregir cantidades, costos o datos de un ingreso ya registrado." : undefined}>
-        {rows.length === 0 ? <Empty text="Todavía no hay ingresos de factura." /> : (
-          <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-            <table className="w-full min-w-[760px]">
-              <thead style={{ color: "var(--t-muted)" }}>
-                <tr><th className={th}>N.º</th><th className={th}>Fecha</th><th className={th}>Proveedor</th><th className={th}>Revisó / Recibió</th><th className={th}>Pago</th><th className={th}>Total</th><th className={th}>Estado</th><th className={th} /></tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="border-t transition-colors"
-                    style={{ borderColor: "var(--t-card-border)", background: editing?.id === r.id ? "color-mix(in oklab, var(--t-accent) 10%, transparent)" : undefined }}
-                  >
-                    <td className={td} style={{ fontWeight: 600 }}>
-                      #{r.number}
-                      {r.invoice_ref ? <span className="block text-xs font-normal" style={{ color: "var(--t-muted)" }}>{r.invoice_ref}</span> : null}
-                      {edited[r.id] ? <span className="mt-0.5 block text-[11px] font-normal" style={{ color: "var(--t-accent)" }} title={dateTime(edited[r.id].at)}>✏️ Editado{edited[r.id].count > 1 ? ` ${edited[r.id].count} veces` : ""}</span> : null}
-                    </td>
-                    <td className={td}>{r.invoice_date ?? dateTime(r.created_at)}</td>
-                    <td className={td}>{supplierNames.get(r.supplier_id) ?? "—"}</td>
-                    <td className={td}>{r.checked_by_name ?? "—"} / {r.received_by_name ?? r.created_by_name ?? "—"}</td>
-                    <td className={td}>{r.payment_type === "credit" ? `Crédito${r.due_date ? ` · vence ${ddmmyyyy(r.due_date)}` : ""}` : "Contado"}</td>
-                    <td className={td}>{money(r.total)}</td>
-                    <td className={td}><StatusPill status={r.status} /></td>
-                    <td className={td}>
-                      <div className="flex flex-wrap gap-1">
-                        {canBuy && r.status === "received" ? (
-                          <Btn variant={editing?.id === r.id ? "primary" : "ghost"} onClick={() => void startEdit(r)} disabled={loadingEdit === r.id}>
-                            {loadingEdit === r.id ? "Abriendo…" : editing?.id === r.id ? "✏️ Editando" : "✏️ Editar"}
-                          </Btn>
-                        ) : null}
-                        <Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn>
-                        <PurchaseFilesButton purchaseId={r.id} />
-                        {canVoid && r.status === "received" ? <Btn variant="danger" onClick={() => void cancel(r)}>Anular</Btn> : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <PurchaseHistory
+        search={search}
+        suppliers={suppliers}
+        editingId={editing?.id ?? null}
+        loadingEdit={loadingEdit}
+        canBuy={canBuy}
+        canVoid={canVoid}
+        onEdit={(r) => void startEdit(r)}
+        onCancel={(r) => void cancel(r)}
+      />
     </div>
   );
 }

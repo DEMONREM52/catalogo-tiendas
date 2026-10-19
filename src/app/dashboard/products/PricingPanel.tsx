@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import Link from "next/link";
 import { Lock, Percent, Receipt, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { LastPurchases } from "./LastPurchases";
 import { ChoiceChips, NumberField } from "@/components/forms/Fields";
 import { pctOf, roundCommercial, toCents, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
 
@@ -155,6 +156,8 @@ export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, pri
               <p className="text-xl font-black tabular-nums">{stock === null ? "…" : total.toLocaleString("es-CO")}</p>
             </div>
           </div>
+          {/* Factura de donde salió el último costo (y las compras anteriores). */}
+          {costKnown && productId ? <LastPurchases storeId={storeId} productId={productId} /> : null}
           {stock && stock.length ? (
             <ul className="mt-3 space-y-1">
               {stock.map((s) => (

@@ -112,6 +112,11 @@ export const viewport: Viewport = {
 };
 
 // Guarda el aviso de «se puede instalar» aunque llegue antes de que cargue la app.
+// Conexión abierta de antemano con Supabase (datos y fotos): ahorra el saludo inicial en cada página.
+const SUPABASE_ORIGIN = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin; } catch { return null; }
+})();
+
 const EARLY_INSTALL_SCRIPT = "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__remhubBIP=e;});";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -119,6 +124,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: EARLY_INSTALL_SCRIPT }} />
+        {SUPABASE_ORIGIN ? (
+          <>
+            <link rel="preconnect" href={SUPABASE_ORIGIN} crossOrigin="anonymous" />
+            <link rel="preconnect" href={SUPABASE_ORIGIN} />
+          </>
+        ) : null}
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Google Tag Manager (noscript) */}
