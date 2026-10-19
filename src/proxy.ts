@@ -143,5 +143,7 @@ export async function proxy(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // No corre en archivos estáticos (imágenes, íconos, fuentes, JS/CSS): cada vez que corre es una invocación que se paga.
+  // robots.txt, sitemap.xml y los manifiestos SÍ pasan: necesitan saber en qué dominio están.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icons/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?|ttf|css|js|map)$).*)"],
 };

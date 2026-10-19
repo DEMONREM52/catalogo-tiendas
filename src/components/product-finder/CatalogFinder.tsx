@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_MODEL } from "@/lib/image-search/embed";
 import { ProductFinder, type FinderHit, type FinderMode, type FinderSource } from "./ProductFinder";
+import { storeHref } from "@/lib/share/store-path";
 
 /** Dónde se busca: el catálogo clásico de la tienda o un catálogo de RemHub Social. */
 export type CatalogFinderContext = {
@@ -88,8 +89,8 @@ export function useCatalogFinderSource(ctx: CatalogFinderContext): FinderSource 
 }
 
 export function productPageHref(ctx: CatalogFinderContext, productId: string) {
-  if (!ctx.catalogSlug) return `/${ctx.storeSlug}/producto/${productId}`;
-  return `/${ctx.storeSlug}/producto/${productId}?catalogo=${encodeURIComponent(ctx.catalogSlug)}${ctx.accessKey ? `&key=${encodeURIComponent(ctx.accessKey)}` : ""}`;
+  if (!ctx.catalogSlug) return storeHref(ctx.storeSlug, `/producto/${productId}`);
+  return storeHref(ctx.storeSlug, `/producto/${productId}?catalogo=${encodeURIComponent(ctx.catalogSlug)}${ctx.accessKey ? `&key=${encodeURIComponent(ctx.accessKey)}` : ""}`);
 }
 
 /** Botón que abre el buscador y lleva a la ficha completa («Ver más») del producto elegido. */

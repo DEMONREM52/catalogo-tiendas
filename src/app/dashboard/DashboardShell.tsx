@@ -257,7 +257,7 @@ export function ModuleNav({ canOpen, isAdmin, at }: { canOpen: (permission: stri
         {tabs.map((t) => {
           const on = current?.href === t.href;
           return (
-            <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined}
+            <Link key={t.href} href={t.href} prefetch={false} aria-current={on ? "page" : undefined}
               className="relative flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition sm:flex-none sm:px-4"
               style={{ color: on ? "#fff" : "color-mix(in oklab, var(--t-text) 72%, transparent)" }}>
               {on ? (
@@ -327,6 +327,7 @@ export function NavItem({
 
   return (
     <Link
+      prefetch={false}
       href={href}
       onClick={onClick}
       className={cx(

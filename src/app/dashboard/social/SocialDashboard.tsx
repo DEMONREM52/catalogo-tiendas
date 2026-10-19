@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { storeHref } from "@/lib/share/store-path";
 import {
   AlertTriangle,
   Copy,
@@ -1027,7 +1028,7 @@ export default function SocialDashboard() {
                     description: chosenProduct.description,
                     imageUrl: chosenProduct.image_url,
                   }) ? (
-                    <Link className="text-xs font-semibold text-violet-600 hover:underline" href={`/${store?.slug}/producto/${chosenProduct.id}`} target="_blank">
+                    <Link className="text-xs font-semibold text-violet-600 hover:underline" href={storeHref(store?.slug ?? "", `/producto/${chosenProduct.id}`)} prefetch={false} target="_blank">
                       Abrir página pública →
                     </Link>
                   ) : (
@@ -1188,7 +1189,7 @@ export default function SocialDashboard() {
                     description: post.product_snapshot.description,
                     imageUrl: post.product_snapshot.image_url,
                   }) ? (
-                    <Link href={`/${store?.slug}/producto/${post.product_id}`} target="_blank" className="rounded-xl border border-current/10 px-3 py-2 text-xs font-semibold">
+                    <Link href={storeHref(store?.slug ?? "", `/producto/${post.product_id}`)} prefetch={false} target="_blank" className="rounded-xl border border-current/10 px-3 py-2 text-xs font-semibold">
                       Ver producto
                     </Link>
                   ) : null}

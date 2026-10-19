@@ -4,6 +4,7 @@ import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { isPermissionOrMissing, searchProductsDirect } from "@/lib/products/safe-search";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { storeHref } from "@/lib/share/store-path";
 import { Eye, Megaphone, Pencil, Power } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -994,7 +995,8 @@ export default function ProductsListPage() {
                       {storeSlug && catalogRetail && p.active && (p.stock === null || p.stock > 0) && hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url }) ? (
                         <>
                           <Link
-                            href={`/${storeSlug}/producto/${p.id}`}
+                            href={storeHref(storeSlug, `/producto/${p.id}`)}
+                            prefetch={false}
                             target="_blank"
                             className={`${clsBtnSoft()} product-row-action`}
                             aria-label={`Ver página de ${p.name}`}

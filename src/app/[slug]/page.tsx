@@ -48,6 +48,8 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   if (home.catalogs.length === 1) redirect(`/${home.slug}/${home.catalogs[0].slug}`);
 
   const base = await storeBase(home.slug);
+  // En el espacio de la tienda los enlaces van sin el nombre (sin redirección por clic).
+  const pfx = base.ownDomain ? "" : `/${home.slug}`;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Store",
@@ -64,7 +66,7 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   const byPoint = home.catalogs.filter((c) => c.point);
   const general = home.catalogs.filter((c) => !c.point);
   const card = (c: Catalog) => (
-    <Link key={c.slug} href={`/${home.slug}/${c.slug}`} className="group flex items-center gap-4 rounded-3xl border p-4 transition hover:-translate-y-0.5"
+    <Link key={c.slug} href={`${pfx}/${c.slug}`} prefetch={false} className="group flex items-center gap-4 rounded-3xl border p-4 transition hover:-translate-y-0.5"
       style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
       {isSafe(c.logo_url) ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -111,7 +113,7 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
                   {place ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>{place}</p> : null}
                   {c.headline ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>{c.headline}</p> : null}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link href={`/${home.slug}/${c.slug}`} className="rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>Ver catálogo</Link>
+                    <Link href={`${pfx}/${c.slug}`} prefetch={false} className="rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>Ver catálogo</Link>
                     {pw ? (
                       <a href={waLink(pw)} target="_blank" rel="noreferrer" className="rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "#22c55e" }}>
                         💬 Escribirle a este punto

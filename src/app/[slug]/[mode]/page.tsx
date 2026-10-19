@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { storeHref } from "@/lib/share/store-path";
 import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
 import { InstallButton } from "@/components/pwa/InstallButton";
@@ -1843,7 +1844,8 @@ export default function StoreCatalogPage() {
                   >
                     {product.image_url ? (
                       <Link
-                        href={`/${store.slug}/producto/${product.id}`}
+                        href={storeHref(store.slug, `/producto/${product.id}`)}
+                        prefetch={false}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={`Ver ficha de ${product.name}`}
@@ -1999,9 +2001,10 @@ export default function StoreCatalogPage() {
                 const isUnlimited = p.stock === null;
                 const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
                 const isOut = !isUnlimited && stockNum <= 0;
+                // Sin el nombre de la tienda cuando ya estamos en su espacio (evita una redirección por clic).
                 const productPageUrl = catalog
-                  ? `/${store.slug}/producto/${p.id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`
-                  : `/${store.slug}/producto/${p.id}`;
+                  ? storeHref(store.slug, `/producto/${p.id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
+                  : storeHref(store.slug, `/producto/${p.id}`);
                 const canViewProductLanding =
                   (safeMode === "detal" || store.catalog_retail) &&
                   hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url });
@@ -2037,6 +2040,7 @@ export default function StoreCatalogPage() {
                     {p.image_url ? canViewProductLanding ? (
                       <Link
                         href={productPageUrl}
+                        prefetch={false}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mb-3 block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500"
@@ -2104,6 +2108,7 @@ export default function StoreCatalogPage() {
                       {canViewProductLanding ? (
                         <Link
                           href={productPageUrl}
+                          prefetch={false}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="t-btn rounded-2xl border px-4 py-2 text-sm font-bold"
