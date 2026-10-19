@@ -311,7 +311,10 @@ export function ProductSearchModal({
   title = "Agregar producto",
   onPick,
   stockLabel,
+  onCreate,
 }: {
+  /** Si viene, se ofrece crear un producto nuevo (con lo que se escribió como nombre). */
+  onCreate?: (name: string) => void;
   open: boolean;
   onClose: () => void;
   storeId: string;
@@ -424,9 +427,22 @@ export function ProductSearchModal({
                   ))
                 : null}
               {!error && !loading && visible.length === 0 ? (
-                <p className="p-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>
-                  No encontramos nada parecido. Prueba con otra palabra o solo un pedazo del nombre.
-                </p>
+                <div className="p-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>
+                  <p>No encontramos nada parecido. Prueba con otra palabra o solo un pedazo del nombre.</p>
+                  {onCreate ? (
+                    <button type="button" className="mt-3 rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))" }}
+                      onClick={() => { onClose(); onCreate(query.trim()); }}>
+                      ＋ Crear {query.trim() ? `«${query.trim().toUpperCase()}»` : "un producto nuevo"}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {onCreate && visible.length > 0 ? (
+                <button type="button" className="mx-1 mb-1 flex w-[calc(100%-0.5rem)] items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2 text-sm font-bold"
+                  style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))", color: "var(--t-accent)" }}
+                  onClick={() => { onClose(); onCreate(query.trim()); }}>
+                  ＋ ¿No está? Crear producto nuevo{query.trim() ? ` «${query.trim().toUpperCase()}»` : ""}
+                </button>
               ) : null}
               {visible.map((hit, i) => (
                 <HitRow
@@ -563,7 +579,7 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
           ref={inputRef}
           type="text"
           inputMode="decimal"
-          className={`${inputClass} pr-7 text-right font-bold`}
+          className={`${inputClass} pr-9 text-right font-bold tabular-nums`}
           style={{ ...inputStyle, borderColor: changed ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : inputStyle.borderColor }}
           value={shown}
           placeholder={current !== null ? String(current).replace(".", ",") : "—"}
@@ -580,7 +596,7 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
           onBlur={() => setDraft(null)}
           onKeyDown={onKeyDown}
         />
-        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--t-muted)" }}>%</span>
+        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: "var(--t-muted)" }}>%</span>
       </div>
       <div className="mt-1 text-right text-[11px] leading-tight tabular-nums">
         {sale > 0 ? (
@@ -663,7 +679,10 @@ export function LineEditor({
   lineExtra,
   editorRef,
   pricing,
+  onCreateProduct,
 }: {
+  /** Crear un producto nuevo desde la búsqueda (solo en ingresos). */
+  onCreateProduct?: (name: string) => void;
   storeId: string;
   /** Si viene, cada producto tiene su «% venta» (solo en ingresos y con permiso de precios). */
   pricing?: PurchasePricing | null;
@@ -975,6 +994,7 @@ export function LineEditor({
         addedQty={isPurchase ? addedQty : undefined}
         title={isPurchase ? "Agregar producto a la factura" : "Agregar producto al conteo"}
         onPick={addHit}
+        onCreate={isPurchase ? onCreateProduct : undefined}
       />
     </div>
   );

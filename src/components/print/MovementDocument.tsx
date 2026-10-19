@@ -2,7 +2,24 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { useEffect } from "react";
 import { cop } from "@/lib/print/list-prices";
+
+/**
+ * Nombre de la pestaña = nombre del PDF al guardar: «TRASLADO #6 · Bodega principal → SEDE PIONEROS · 19-10-2026».
+ * Sin «/» ni otros caracteres que Windows no acepta en un nombre de archivo.
+ */
+function useDocumentTitle(kind: string, number: number | string, from: DocPlace, to: DocPlace) {
+  useEffect(() => {
+    const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+    const d = new Date();
+    const date = `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+    const route = [from?.name, to?.name].filter(Boolean).map((n) => clean(String(n))).join(" → ");
+    const previous = document.title;
+    document.title = [`${clean(kind).toUpperCase()} #${number}`, route, date].filter(Boolean).join(" · ");
+    return () => { document.title = previous; };
+  }, [kind, number, from?.name, to?.name]);
+}
 
 /**
  * Hoja imprimible de un movimiento de mercancía (traslado o pedido interno), en carta o tirilla de 80 mm.
@@ -55,6 +72,7 @@ function qrSrc(abs: string | null | undefined) {
 const dt = (v: string | null | undefined) => (v ? new Date(v).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }) : "");
 
 export function MovementDocument(p: MovementDocProps) {
+  useDocumentTitle(p.kind, p.number, p.from, p.to);
   const units = p.items.reduce((s, i) => s + i.qty, 0);
   const value = p.items.reduce((s, i) => s + i.qty * Number(i.price2 ?? 0), 0);
   const retail = p.items.reduce((s, i) => s + i.qty * Number(i.price3 ?? 0), 0);

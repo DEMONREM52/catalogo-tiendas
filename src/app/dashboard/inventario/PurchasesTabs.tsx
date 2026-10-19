@@ -16,6 +16,8 @@ import { DateField } from "@/components/forms/Fields";
 import { PurchaseHistory } from "./PurchaseHistory";
 import { usePurchaseSearch, type PurchaseRow } from "./purchase-search";
 import { MarkupToolbar } from "./MarkupToolbar";
+import { QuickProductModal } from "./QuickProductModal";
+import { lineFromHit } from "./LineEditor";
 import { usePurchasePricing } from "./purchase-pricing";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
@@ -168,6 +170,9 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const canVoid = ctx.can("purchases_void");
   // % de ganancia desde la factura: solo con permiso de precios.
   const canPrices = ctx.can("products_prices");
+  // Crear producto rápido sin salir de la factura (null = cerrado; texto = nombre sugerido).
+  const [quickName, setQuickName] = useState<string | null>(null);
+  const canCreateProducts = ctx.can("products");
   const pricing = usePurchasePricing(ctx.storeId, form.lines.map((l) => l.product_id), canBuy && canPrices);
   const search = usePurchaseSearch(ctx.storeId, suppliers);
   const reloadHistory = search.reload;
@@ -255,6 +260,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   useEffect(() => {
     if (!canBuy) return;
     function onKey(e: globalThis.KeyboardEvent) {
+      // Con «Crear producto» abierto, sus atajos (Enter / Ctrl + Enter) son de esa ventana, no de la factura.
+      if (quickName !== null) return;
       if (e.key === "F2") {
         e.preventDefault();
         editorRef.current?.openPicker();
@@ -582,7 +589,20 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 warehouseId={defaultWh}
                 warehouses={warehouses}
                 pricing={pricing}
+                onCreateProduct={canCreateProducts ? (name) => setQuickName(name) : undefined}
               />
+              {quickName !== null ? (
+                <QuickProductModal
+                  storeId={ctx.storeId}
+                  initialName={quickName}
+                  withMarkup={Boolean(pricing)}
+                  onClose={() => setQuickName(null)}
+                  onCreated={(hit, extra) => setForm((cur) => ({
+                    ...cur,
+                    lines: [...cur.lines, { ...lineFromHit(hit, "purchase", defaultWh), ...extra }],
+                  }))}
+                />
+              ) : null}
             </div>
             <div className="mt-3"><AttachmentPicker staged={staged} onChange={setStaged} /></div>
 
@@ -597,6 +617,11 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 <span className="ml-2 text-xs">{form.lines.length} prod. · {form.lines.reduce((s, l) => s + l.qty, 0)} und.</span>
               </p>
               <div className="flex flex-1 flex-wrap justify-end gap-2 sm:flex-none">
+                {canCreateProducts ? (
+                  <Btn variant="ghost" onClick={() => setQuickName("")}>
+                    <span title="Crea el producto sin salir de la factura">✨ Crear producto</span>
+                  </Btn>
+                ) : null}
                 <Btn variant="ghost" onClick={() => editorRef.current?.openPicker()}>
                   <span title="Atajo: F2">➕ Agregar producto</span>
                 </Btn>
