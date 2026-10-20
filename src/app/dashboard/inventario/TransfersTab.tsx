@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, transferTrackUrl, transferWhatsAppText, type TransferStep } from "@/lib/transfer-tracking";
-import { ProductPicker } from "./LineEditor";
+import { ProductPicker, ProductSearchModal, Thumb, useThumbs } from "./LineEditor";
 import { InternalCreditPreview } from "./InternalCredit";
 import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import { TransferEditor } from "./TransferEditor";
+import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
@@ -142,6 +143,13 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [carrier, setCarrier] = useState("");
   const [checkedBy, setCheckedBy] = useState("");
   const [busy, setBusy] = useState(false);
+  // Teclado como en el ingreso de facturas: al elegir un producto va a su cantidad, Enter sigue y F2 agrega otro.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const qtyRefs = useRef(new Map<string, HTMLInputElement>());
+  const [focusNext, setFocusNext] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const lineThumbs = useThumbs(lines.map((l) => l.product_id));
   // Borrador: se recupera al entrar y se guarda con cada cambio (se borra al enviar o al descartarlo).
   const draftKey = `remhub:transfer-draft:v1:${ctx.storeId}`;
   const [draftReady, setDraftReady] = useState(false);
@@ -193,30 +201,105 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setDraftAt(null);
   }
 
-  const [filter, setFilter] = useState<"all" | "in_transit" | "received">("all");
+  const [filter, setFilter] = useState<"all" | "in_transit" | "received" | "cancelled" | "diff">("all");
   const [rows, setRows] = useState<TransferRow[]>([]);
+  // Filtros de la lista: texto (número, producto, código o persona), fechas, origen y destino; se cargan de a 30.
+  const [tf, setTf] = useState({ q: "", from: "", to: "", origin: "", dest: "" });
+  const [qLive, setQLive] = useState("");
+  const [limit, setLimit] = useState(30);
+  const [total, setTotal] = useState<number | null>(null);
+  const [loadingList, setLoadingList] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => { setTf((cur) => (cur.q === qLive ? cur : { ...cur, q: qLive })); setLimit(30); }, qLive ? 350 : 0);
+    return () => window.clearTimeout(t);
+  }, [qLive]);
+  const setTfField = (k: keyof typeof tf, v: string) => { setTf((cur) => ({ ...cur, [k]: v })); setLimit(30); };
+  const filtersOn = Boolean(tf.q || tf.from || tf.to || tf.origin || tf.dest || filter !== "all");
   const [receiving, setReceiving] = useState<{ id: string; qty: Record<string, number>; notes: string } | null>(null);
   // Corrección de productos (solo en tránsito y antes de «Revisado»; 20261217).
   const [editingId, setEditingId] = useState<string | null>(null);
   const editable = (row: TransferRow) => row.status === "in_transit" && !(row.erp_transfer_signatures ?? []).some((s) => s.step === "sent" || s.step === "delivered" || s.step === "received");
 
   const load = useCallback(async () => {
+    const sb = supabaseBrowser();
+    setLoadingList(true);
+    // Texto: número (#12), persona (envió, revisó, trasladó, recibió) o producto (nombre, código, código de barras).
+    const term = tf.q.replace(/[,()*%\\"]/g, " ").trim();
+    let or: string | null = null;
+    if (term) {
+      const parts = [`created_by_name.ilike.*${term}*`, `carrier_name.ilike.*${term}*`, `checked_by_name.ilike.*${term}*`, `received_by_name.ilike.*${term}*`, `notes.ilike.*${term}*`];
+      const num = term.replace(/^#/, "");
+      if (/^\d{1,9}$/.test(num)) parts.push(`number.eq.${num}`);
+      if (term.length >= 2) {
+        const { data: prods } = await sb.from("products").select("id").eq("store_id", ctx.storeId)
+          .or(`name.ilike.*${term}*,sku.ilike.*${term}*,barcode.ilike.*${term}*`).limit(200);
+        const ids = ((prods ?? []) as Array<{ id: string }>).map((p) => p.id);
+        if (ids.length) {
+          const { data: its } = await sb.from("erp_transfer_items").select("transfer_id").in("product_id", ids).limit(1000);
+          const tids = [...new Set(((its ?? []) as Array<{ transfer_id: string }>).map((i) => i.transfer_id))].slice(0, 300);
+          if (tids.length) parts.push(`id.in.(${tids.join(",")})`);
+        }
+      }
+      or = parts.join(",");
+    }
+    const nextDay = (iso: string) => { const d = new Date(`${iso}T00:00:00-05:00`); d.setDate(d.getDate() + 1); return d.toISOString(); };
     const run = (columns: string) => {
-      let query = supabaseBrowser()
+      let query = sb
         .from("erp_transfers")
-        .select(columns)
+        .select(columns, { count: "exact" })
         .eq("store_id", ctx.storeId)
         .order("created_at", { ascending: false })
-        .limit(30);
-      if (filter !== "all") query = query.eq("status", filter);
+        .limit(limit);
+      if (filter === "in_transit" || filter === "received" || filter === "cancelled") query = query.eq("status", filter);
+      if (filter === "diff") query = query.eq("status", "received");
+      if (tf.from) query = query.gte("created_at", new Date(`${tf.from}T00:00:00-05:00`).toISOString());
+      if (tf.to) query = query.lt("created_at", nextDay(tf.to));
+      if (tf.origin) query = query.eq("from_warehouse_id", tf.origin);
+      if (tf.dest) query = query.eq("to_warehouse_id", tf.dest);
+      if (or) query = query.or(or);
       return query;
     };
-    let { data, error } = await run(TRACK_COLUMNS);
+    let { data, error, count } = await run(TRACK_COLUMNS);
     // Sin la migración de seguimiento se muestran los traslados sin enlace ni firmas.
-    if (error) ({ data, error } = await run(BASE_COLUMNS));
-    if (error) void toast("No se pudieron cargar los traslados", "error", errorMessage(error));
-    else setRows((data ?? []) as unknown as TransferRow[]);
-  }, [ctx.storeId, filter]);
+    if (error) ({ data, error, count } = await run(BASE_COLUMNS));
+    setLoadingList(false);
+    if (error) return void toast("No se pudieron cargar los traslados", "error", errorMessage(error));
+    let list = (data ?? []) as unknown as TransferRow[];
+    // «Llegó con diferencias»: recibidos donde algún producto no llegó completo.
+    if (filter === "diff") list = list.filter((r) => r.erp_transfer_items.some((i) => i.received_qty !== null && i.received_qty !== i.qty));
+    setRows(list);
+    setTotal(filter === "diff" ? null : count ?? list.length);
+  }, [ctx.storeId, filter, tf, limit]);
+
+  const listSummary = useMemo(() => {
+    const units = rows.reduce((a, r) => a + r.erp_transfer_items.reduce((b, i) => b + Number(i.qty || 0), 0), 0);
+    const missing = rows.reduce((a, r) => a + r.erp_transfer_items.reduce((b, i) => b + (i.received_qty !== null ? Math.max(0, i.qty - i.received_qty) : 0), 0), 0);
+    return { units, missing, inTransit: rows.filter((r) => r.status === "in_transit").length };
+  }, [rows]);
+
+  function exportList() {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["N.º", "Fecha", "Sale de", "Llega a", "Estado", "Productos", "Unidades", "No llegaron", "Envió", "Revisó", "Trasladó", "Recibió", "Fecha recibido"];
+    const lines = rows.map((r) => [r.number, ddmmyyyy(r.created_at.slice(0, 10)), names.get(r.from_warehouse_id), names.get(r.to_warehouse_id),
+      r.status === "received" ? "Recibido" : r.status === "cancelled" ? "Anulado" : "En tránsito", r.erp_transfer_items.length,
+      r.erp_transfer_items.reduce((a, i) => a + i.qty, 0), r.erp_transfer_items.reduce((a, i) => a + (i.received_qty !== null ? Math.max(0, i.qty - i.received_qty) : 0), 0),
+      r.created_by_name, r.checked_by_name, r.carrier_name, r.received_by_name, r.received_at ? ddmmyyyy(r.received_at.slice(0, 10)) : ""].map(esc).join(";"));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([`\uFEFF${[head.map(esc).join(";"), ...lines].join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
+    a.download = `traslados-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  const quickRange = (k: "today" | "7" | "month" | "last") => {
+    const t = new Date();
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const r = k === "today" ? { from: iso(t), to: iso(t) }
+      : k === "7" ? { from: iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 6)), to: iso(t) }
+      : k === "month" ? { from: iso(new Date(t.getFullYear(), t.getMonth(), 1)), to: iso(t) }
+      : { from: iso(new Date(t.getFullYear(), t.getMonth() - 1, 1)), to: iso(new Date(t.getFullYear(), t.getMonth(), 0)) };
+    setTf((cur) => ({ ...cur, ...r }));
+    setLimit(30);
+  };
 
   async function copyLink(row: TransferRow) {
     if (!row.track_token) return;
@@ -248,8 +331,51 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const overdrawn = lines.some((l) => used(l.product_id) > l.available);
 
   function addProduct(hit: ProductHit) {
-    setLines((prev) => [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]);
+    setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? prev : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
+    setFocusNext(hit.id);
+    setFlashId(hit.id);
+    window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
   }
+
+  // Cuando el producto aparece en la tabla, el cursor va a su primera cantidad (seleccionada para escribir encima).
+  useEffect(() => {
+    if (!focusNext || !targets.length) return;
+    const el = qtyRefs.current.get(`${focusNext}:${targets[0]}`);
+    if (!el) return;
+    el.focus();
+    el.select();
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setFocusNext(null);
+  }, [focusNext, lines, targets]);
+
+  // Enter: siguiente destino del mismo producto; después del último, vuelve a buscar otro producto. ↑ / ↓ cambian de producto.
+  function onQtyKey(productId: string, target: string) {
+    return (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const li = lines.findIndex((l) => l.product_id === productId);
+      const ti = targets.indexOf(target);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const other = lines[li + (e.key === "ArrowDown" ? 1 : -1)];
+        if (other) { e.preventDefault(); const el = qtyRefs.current.get(`${other.product_id}:${target}`); el?.focus(); el?.select(); }
+        return;
+      }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const nextTarget = targets[ti + 1];
+      if (nextTarget) { const el = qtyRefs.current.get(`${productId}:${nextTarget}`); el?.focus(); el?.select(); return; }
+      searchRef.current?.focus();
+    };
+  }
+
+  // F2: abre la ventana para agregar otro producto (como en el ingreso de facturas).
+  useEffect(() => {
+    if (!from || !targets.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Si se está corrigiendo un traslado, F2 es de esa corrección.
+      if (e.key === "F2" && !editingId) { e.preventDefault(); setPickerOpen(true); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [from, targets.length, editingId]);
 
   function setQty(productId: string, dest: string, qty: number) {
     setMatrix((prev) => ({ ...prev, [productId]: { ...(prev[productId] ?? {}), [dest]: Math.max(0, Math.floor(qty || 0)) } }));
@@ -427,9 +553,20 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   storeId={ctx.storeId}
                   warehouseId={from}
                   inStockOnly
+                  inputRef={searchRef}
                   excludeIds={lines.map((l) => l.product_id)}
-                  placeholder={`Buscar en ${names.get(from) ?? "origen"} (solo con existencias)…`}
+                  placeholder={`🔎 Buscar en ${names.get(from) ?? "origen"} (solo con existencias)…  ·  F2 para abrir la búsqueda`}
                   onPick={addProduct}
+                />
+                <ProductSearchModal
+                  open={pickerOpen}
+                  onClose={() => setPickerOpen(false)}
+                  storeId={ctx.storeId}
+                  warehouseId={from}
+                  inStockOnly
+                  excludeIds={lines.map((l) => l.product_id)}
+                  title={`Agregar producto al traslado (sale de ${names.get(from) ?? "origen"})`}
+                  onPick={(hit) => { setPickerOpen(false); addProduct(hit); }}
                 />
                 {lines.length > 0 ? (
                   <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
@@ -447,10 +584,15 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                         {lines.map((line) => {
                           const left = line.available - used(line.product_id);
                           return (
-                            <tr key={line.product_id} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
+                            <tr key={line.product_id} className="border-t transition-colors duration-500" style={{ borderColor: "var(--t-card-border)", background: flashId === line.product_id ? "color-mix(in oklab, #22c55e 12%, transparent)" : undefined }}>
                               <td className={td}>
-                                <div className="font-semibold">{line.name}</div>
-                                {line.sku ? <div className="text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
+                                <div className="flex items-center gap-3">
+                                  <Thumb src={lineThumbs[line.product_id]} size={44} />
+                                  <div className="min-w-0">
+                                    <div className="font-semibold">{line.name}</div>
+                                    {line.sku ? <div className="text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
+                                  </div>
+                                </div>
                               </td>
                               <td className={td}>{line.available}</td>
                               {targets.map((t) => (
@@ -458,6 +600,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                                   <input
                                     type="number"
                                     min={0}
+                                    ref={(el) => { const k = `${line.product_id}:${t}`; if (el) qtyRefs.current.set(k, el); else qtyRefs.current.delete(k); }}
+                                    onKeyDown={onQtyKey(line.product_id, t)}
+                                    onFocus={(e) => e.currentTarget.select()}
                                     className={`${inputClass} w-24`}
                                     style={inputStyle}
                                     value={matrix[line.product_id]?.[t] ?? 0}
@@ -490,7 +635,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   from={from}
                   legs={targets.map((dest) => ({ to: dest, items: lines.map((l) => ({ product_id: l.product_id, qty: matrix[l.product_id]?.[dest] ?? 0 })).filter((i) => i.qty > 0) }))}
                 />
-                <Btn onClick={() => void send()} disabled={busy || overdrawn}>{busy ? "Enviando…" : "🚚 Enviar mercancía"}</Btn>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Btn variant="ghost" onClick={() => setPickerOpen(true)}><span title="Atajo: F2">➕ Agregar producto (F2)</span></Btn>
+                  <Btn onClick={() => void send()} disabled={busy || overdrawn}>{busy ? "Enviando…" : "🚚 Enviar mercancía"}</Btn>
+                </div>
+                <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Elige un producto y escribe la cantidad · <b>Enter</b> pasa al siguiente destino y luego al buscador · <b>↑ ↓</b> cambian de producto · <b>F2</b> agrega otro.</p>
               </div>
             ) : null}
           </div>
@@ -501,11 +650,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         title="Traslados"
         actions={
           <div className="flex gap-1.5">
-            {([["all", "Todos"], ["in_transit", "En tránsito"], ["received", "Recibidos"]] as const).map(([key, label]) => (
+            {([["all", "Todos"], ["in_transit", "En tránsito"], ["received", "Recibidos"], ["diff", "Con diferencias"], ["cancelled", "Anulados"]] as const).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => setFilter(key)}
+                onClick={() => { setFilter(key); setLimit(30); }}
                 className="rounded-full border px-3 py-1 text-xs font-semibold"
                 style={filter === key ? { background: "var(--t-accent)", color: "var(--t-cta-text, #fff)", borderColor: "transparent" } : { borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
               >
@@ -515,7 +664,44 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
           </div>
         }
       >
-        {rows.length === 0 ? <Empty text="No hay traslados para este filtro." /> : (
+        {/* Buscador y filtros */}
+        <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="relative">
+            <input className={inputClass} style={inputStyle} value={qLive} onChange={(e) => setQLive(e.target.value)} placeholder="🔍 #12, producto, código o persona (envió, revisó, trasladó, recibió)" aria-label="Buscar traslados" />
+            {qLive ? <button type="button" onClick={() => setQLive("")} className="absolute right-2 top-1/2 -translate-y-1/2 px-2 text-sm" style={{ color: "var(--t-muted)" }} aria-label="Borrar búsqueda">✕</button> : null}
+          </div>
+          <select className={inputClass} style={inputStyle} value={tf.origin} onChange={(e) => setTfField("origin", e.target.value)} aria-label="Sale de">
+            <option value="">Sale de: todas</option>
+            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.kind === "point" ? "📍 " : "🏬 "}{w.name}</option>)}
+          </select>
+          <select className={inputClass} style={inputStyle} value={tf.dest} onChange={(e) => setTfField("dest", e.target.value)} aria-label="Llega a">
+            <option value="">Llega a: todos</option>
+            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.kind === "point" ? "📍 " : "🏬 "}{w.name}</option>)}
+          </select>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold" style={{ color: "var(--t-muted)" }}>Fecha:</span>
+          <DateField compact value={tf.from} onChange={(v) => setTfField("from", v)} max={tf.to || undefined} ariaLabel="Desde" placeholder="Desde" className="w-36" />
+          <span style={{ color: "var(--t-muted)" }}>a</span>
+          <DateField compact value={tf.to} onChange={(v) => setTfField("to", v)} min={tf.from || undefined} ariaLabel="Hasta" placeholder="Hasta" className="w-36" />
+          {([["today", "Hoy"], ["7", "Últimos 7 días"], ["month", "Este mes"], ["last", "Mes pasado"]] as const).map(([k, l]) => (
+            <button key={k} type="button" onClick={() => quickRange(k)} className="rounded-full border px-3 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>{l}</button>
+          ))}
+          {filtersOn ? (
+            <button type="button" onClick={() => { setQLive(""); setTf({ q: "", from: "", to: "", origin: "", dest: "" }); setFilter("all"); setLimit(30); }} className="rounded-full border px-3 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-accent)" }}>✕ Limpiar filtros</button>
+          ) : null}
+          {rows.length ? <button type="button" onClick={exportList} className="ml-auto rounded-full border px-3 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>⬇️ Exportar</button> : null}
+        </div>
+        {rows.length ? (
+          <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl border px-4 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+            <span><b>{total ?? rows.length}</b> traslado{(total ?? rows.length) === 1 ? "" : "s"}{total !== null && total > rows.length ? ` (viendo ${rows.length})` : ""}</span>
+            <span><b>{listSummary.units.toLocaleString("es-CO")}</b> unidades</span>
+            {listSummary.inTransit ? <span style={{ color: "#f59e0b" }}><b>{listSummary.inTransit}</b> en tránsito</span> : null}
+            {listSummary.missing ? <span style={{ color: "#ef4444" }}><b>{listSummary.missing}</b> unidades no llegaron</span> : null}
+            {loadingList ? <span style={{ color: "var(--t-muted)" }}>Buscando…</span> : null}
+          </div>
+        ) : null}
+        {rows.length === 0 ? <Empty text={loadingList ? "Buscando…" : filtersOn ? "Ningún traslado coincide con los filtros." : "No hay traslados todavía."} /> : (
           <div className="space-y-3">
             {rows.map((row) => (
               <div key={row.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
@@ -559,8 +745,8 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   </div>
                 ) : editingId === row.id ? (
                   <TransferEditor
-                    transferId={row.id} storeId={ctx.storeId} fromId={row.from_warehouse_id} number={row.number}
-                    items={row.erp_transfer_items.map((i) => ({ product_id: i.product_id, name: itemName(i), qty: i.qty }))}
+                    transferId={row.id} storeId={ctx.storeId} fromId={row.from_warehouse_id} fromName={names.get(row.from_warehouse_id)} number={row.number}
+                    items={row.erp_transfer_items.map((i) => ({ product_id: i.product_id, name: itemName(i), sku: (Array.isArray(i.products) ? i.products[0] : i.products)?.sku ?? null, qty: i.qty }))}
                     packedSigned={(row.erp_transfer_signatures ?? []).some((s) => s.step === "packed")}
                     onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void load(); }}
                   />
@@ -607,6 +793,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
             ))}
           </div>
         )}
+        {total !== null && total > rows.length ? (
+          <div className="mt-3 text-center">
+            <Btn variant="ghost" onClick={() => setLimit((n) => n + 30)} disabled={loadingList}>{loadingList ? "Cargando…" : `Cargar más (${total - rows.length} restantes)`}</Btn>
+          </div>
+        ) : null}
       </Panel>
     </div>
   );
