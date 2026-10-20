@@ -49,7 +49,28 @@ export async function GET(request: Request) {
   const internal = await sendInternalDigest(admin, day);
   // Permisos temporales vencidos: se quitan de la lista (la base ya los bloqueaba desde que vencieron; 20261127).
   const { data: expired } = await admin.rpc("erp_permission_grants_cleanup");
-  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent, internal, expired_permissions: expired ?? null });
+  // Plan de RemHub: prueba por terminar, plan por vencer o en días de gracia (20261213). Sin la migración se omite.
+  const plan = await sendPlanDigest(admin, day);
+  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent, internal, plan, expired_permissions: expired ?? null });
+}
+
+type PlanDigest = { store_id: string; user_id: string; kind: "trial_ending" | "plan_due" | "grace"; days: number; plan_name: string | null };
+
+async function sendPlanDigest(admin: NonNullable<ReturnType<typeof pushAdminClient>>, day: string) {
+  const { data, error } = await admin.rpc("saas_push_digest");
+  if (error) return { skipped: true };
+  let sent = 0;
+  for (const d of (data ?? []) as PlanDigest[]) {
+    const { error: dup } = await admin.from("erp_push_log").insert({ key: `saas:${d.store_id}:${day}` });
+    if (dup) continue;
+    const payload: PushPayload = d.kind === "trial_ending"
+      ? { title: "✨ Tu prueba de RemHub termina pronto", body: `${d.days ? `Te queda${d.days === 1 ? "" : "n"} ${d.days} día${d.days === 1 ? "" : "s"}` : "Termina hoy"} de ${d.plan_name ?? "tu prueba"}. Elige tu plan para no perder funciones; tus datos siguen guardados.`, url: "/dashboard/plan", tag: `saas-${day}` }
+      : d.kind === "grace"
+        ? { title: "⚠️ Tu plan de RemHub venció", body: "Estás en días de gracia. Renueva para seguir con todas tus funciones.", url: "/dashboard/plan", tag: `saas-${day}`, urgent: true }
+        : { title: "💎 Tu plan de RemHub vence pronto", body: `${d.plan_name ?? "Tu plan"} vence en ${d.days} día${d.days === 1 ? "" : "s"}. Renuévalo en un toque.`, url: "/dashboard/plan", tag: `saas-${day}` };
+    sent += (await sendToUsers(admin, d.store_id, new Map([[d.user_id, payload]]))).sent;
+  }
+  return { people: (data ?? []).length, sent };
 }
 
 type InternalDigest = { store_id: string; user_id: string; points: number; overdue: number; max_days: number; first_name: string | null };

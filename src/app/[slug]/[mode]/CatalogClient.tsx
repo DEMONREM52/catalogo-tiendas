@@ -18,6 +18,7 @@ import { CartDrawer } from "@/lib/cart/CartDrawer";
 import { normalizeStoreContactChannels, whatsappUrl } from "@/lib/store-contacts";
 import { ilikeTokenFilters } from "@/lib/search";
 import { track } from "@/lib/tracking";
+import { MadeWithRemhub } from "@/components/MadeWithRemhub";
 
 import { applyThemeToElement, themeVars, type ThemeConfig } from "@/lib/themes/applyTheme";
 import {
@@ -2021,6 +2022,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           </div>
         </div>
       </section>
+      <MadeWithRemhub slug={store.slug} source="catalogo" />
 
       {dailyCampaign ? (
         <div

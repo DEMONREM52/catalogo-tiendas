@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
+import { OnboardingCard } from "./OnboardingCard";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
@@ -78,6 +79,8 @@ export default function DashboardHome() {
   const [canReports, setCanReports] = useState(false);
   const [points, setPoints] = useState<Array<{ id: string; name: string; kind: string }>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [myId, setMyId] = useState<string | null>(null);
+  const [isStoreAdmin, setIsStoreAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const alerts = useStoreAlerts(store?.id);
@@ -94,6 +97,8 @@ export default function DashboardHome() {
         setFallbackName(String(meta.internal_username || userRes.data.user?.email?.split("@")[0] || ""));
         setStore(access.store);
         setIsAdmin(access.profileRole === "admin");
+        setMyId(userRes.data.user?.id ?? null);
+        setIsStoreAdmin(Boolean(access.isOwner) || access.membership?.role === "store_admin");
         const can = (permission: string) => hasStorePermission(access, permission);
         // Cartera aparece aparte solo si no se ve ya el módulo de terceros.
         setAllowed(MODULES.filter((m) => can(m.permission) && !(m.key === "receivables" && can("clients"))));
@@ -164,6 +169,8 @@ export default function DashboardHome() {
           ) : null}
         </div>
       </section>
+
+      {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
 
       {loadError ? (
         <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>

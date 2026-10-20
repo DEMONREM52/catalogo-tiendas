@@ -138,6 +138,7 @@ function AdminMenu({ onNav, showHeader = true }: { onNav?: () => void; showHeade
       <div className="space-y-2">
         <NavItem href="/admin" emoji="🏠" label="Resumen" onClick={onNav} />
         <NavItem href="/admin/tiendas" emoji="🏪" label="Tiendas" onClick={onNav} />
+        <NavItem href="/admin/suscripciones" emoji="💎" label="Suscripciones" onClick={onNav} />
         <NavItem href="/admin/espacios" emoji="🌐" label="Espacios y dominios" onClick={onNav} />
         <NavItem href="/admin/pedidos" emoji="🧾" label="Pedidos" onClick={onNav} />
         <NavItem href="/admin/productos" emoji="📦" label="Productos" onClick={onNav} />

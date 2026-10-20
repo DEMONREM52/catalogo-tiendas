@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { PlanNotice } from "./PlanNotice";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
 import { InstallButton } from "@/components/pwa/InstallButton";
@@ -209,6 +210,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   ],
   settings: [
     { href: "/dashboard/store", icon: "🏪", label: "Mi tienda", permissions: ["store"] },
+    { href: "/dashboard/plan", icon: "💎", label: "Mi plan", permissions: ["store"], adminOnly: true },
     { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
     { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
   ],
@@ -567,7 +569,18 @@ export default function DashboardShell({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSimulation(sim && (storeIsOwner || isStoreAdmin || storePermissions.includes("users")) ? sim : null);
   }, [store?.id, storeIsOwner, isStoreAdmin, storePermissions]);
-  const canOpen = useMemo(
+  // Permisos que el plan de la tienda no incluye (solo con «Bloquear módulos del plan» encendido; 20261213).
+  const [planBlocked, setPlanBlocked] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!store?.id || role === "admin") return;
+    let alive = true;
+    void supabaseBrowser().rpc("saas_plan_blocked_permissions", { p_store: store.id }).then(({ data, error }) => {
+      if (!alive || error) return;
+      setPlanBlocked(new Set(((data ?? []) as Array<{ permission: string }>).map((x) => x.permission)));
+    });
+    return () => { alive = false; };
+  }, [store?.id, role]);
+  const canOpenByRole = useMemo(
     () => (permission: string) =>
       simulation
         ? simulation.permissions.includes(permission)
@@ -575,6 +588,11 @@ export default function DashboardShell({
           storeIsOwner ||
           ((isStoreAdmin || storePermissions.includes(permission)) && !myAccess?.outside_schedule && !myAccess?.expired.includes(permission)),
     [isStoreAdmin, role, storeIsOwner, storePermissions, simulation, myAccess],
+  );
+  // Lo que el plan no incluye no se abre (la base también lo frena).
+  const canOpen = useMemo(
+    () => (permission: string) => canOpenByRole(permission) && (role === "admin" || !planBlocked.has(permission)),
+    [canOpenByRole, planBlocked, role],
   );
   // Las pantallas del panel consultan los permisos aquí (botones de exportar, etc.).
   useEffect(() => { setPermissionRuntime(store?.id ?? null, canOpen); }, [store?.id, canOpen]);
@@ -613,6 +631,21 @@ export default function DashboardShell({
       permission === "points" ? ["points", "inventory", "users", "audit", ...["fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_provider", "fiscal_audit"]].some((p) => canOpen(p)) :
       canOpen(permission);
     if (allowed) return;
+    // Tiene el permiso pero su plan no incluye esta sección: se ofrece mejorar el plan.
+    if (planBlocked.size && canOpenByRole(permission === "inventory" ? "inventory" : permission)) {
+      void Swal.fire({
+        icon: "info",
+        title: "Esta sección es de un plan superior",
+        text: "Tu plan actual no la incluye. Mira los planes para activarla; tus datos siguen guardados.",
+        showCancelButton: true,
+        confirmButtonText: "💎 Ver planes",
+        cancelButtonText: "Volver",
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#8b5cf6",
+      }).then((r) => router.replace(r.isConfirmed ? "/dashboard/plan" : "/dashboard"));
+      return;
+    }
     void Swal.fire({
       icon: "warning",
       title: "Acceso no habilitado",
@@ -621,7 +654,7 @@ export default function DashboardShell({
       color: "#fff",
       confirmButtonColor: "#8b5cf6",
     }).then(() => router.replace("/dashboard"));
-  }, [pathname, ready, role, router, canOpen]);
+  }, [pathname, ready, role, router, canOpen, canOpenByRole, planBlocked]);
 
   // Cierra al cambiar ruta
   useEffect(() => {
@@ -1172,6 +1205,7 @@ export default function DashboardShell({
             {role === "store" && store ? (
               <StoreExpiryNotice store={store} />
             ) : null}
+            {store && (storeIsOwner || isStoreAdmin) ? <PlanNotice storeId={store.id} /> : null}
 
             <div
               className="mt-4 hidden text-[11px] sm:block"

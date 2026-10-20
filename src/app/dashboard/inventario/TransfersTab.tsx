@@ -7,6 +7,7 @@ import { TRANSFER_STEPS, transferTrackUrl, transferWhatsAppText, type TransferSt
 import { ProductPicker } from "./LineEditor";
 import { InternalCreditPreview } from "./InternalCredit";
 import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
+import { TransferEditor } from "./TransferEditor";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
@@ -195,6 +196,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [filter, setFilter] = useState<"all" | "in_transit" | "received">("all");
   const [rows, setRows] = useState<TransferRow[]>([]);
   const [receiving, setReceiving] = useState<{ id: string; qty: Record<string, number>; notes: string } | null>(null);
+  // Corrección de productos (solo en tránsito y antes de «Revisado»; 20261217).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editable = (row: TransferRow) => row.status === "in_transit" && !(row.erp_transfer_signatures ?? []).some((s) => s.step === "sent" || s.step === "delivered" || s.step === "received");
 
   const load = useCallback(async () => {
     const run = (columns: string) => {
@@ -553,6 +557,13 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                       <Btn variant="ghost" onClick={() => setReceiving(null)}>Cancelar</Btn>
                     </div>
                   </div>
+                ) : editingId === row.id ? (
+                  <TransferEditor
+                    transferId={row.id} storeId={ctx.storeId} fromId={row.from_warehouse_id} number={row.number}
+                    items={row.erp_transfer_items.map((i) => ({ product_id: i.product_id, name: itemName(i), qty: i.qty }))}
+                    packedSigned={(row.erp_transfer_signatures ?? []).some((s) => s.step === "packed")}
+                    onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void load(); }}
+                  />
                 ) : (
                   <TransferItemsList items={row.erp_transfer_items} />
                 )}
@@ -585,6 +596,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     ) : null}
                     {canTransfer && row.status === "in_transit" ? (
                       <>
+                        {editable(row) && editingId !== row.id ? <Btn variant="ghost" onClick={() => { setReceiving(null); setEditingId(row.id); }}>✏️ Corregir productos</Btn> : null}
                         <Btn variant="ghost" onClick={() => startReceive(row)}>Recibir desde el panel</Btn>
                         <Btn variant="danger" onClick={() => void cancel(row)}>Anular</Btn>
                       </>

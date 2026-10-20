@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { storeBase, storeUrl } from "@/lib/seo/store-public";
+import { MadeWithRemhub } from "@/components/MadeWithRemhub";
 
 type Point = { id: string; name: string; city: string | null; address: string | null; whatsapp: string | null };
 type Catalog = { slug: string; name: string; kind: "retail" | "wholesale" | "catalog"; logo_url: string | null; headline: string | null; point?: Point | null };
@@ -150,7 +151,7 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
           </a>
         </div>
       ) : null}
-      <p className="pb-6 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>Hecho con RemHub</p>
+      <MadeWithRemhub slug={home.slug} source="vitrina" />
     </main>
   );
 }

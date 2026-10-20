@@ -2,6 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { PricingSection } from "@/components/landing/PricingSection";
+import { Showcase } from "@/components/landing/Showcase";
+import { captureReferral } from "@/lib/saas/referral";
+
+// Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
+const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -249,6 +255,9 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
 
+  // Llegó desde el sello «Hecho con RemHub» de una tienda: se recuerda para «Invita y gana».
+  useEffect(() => { captureReferral(); }, []);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
@@ -304,7 +313,15 @@ export default function HomePage() {
           </Reveal>
           <Reveal delay={0.15}>
             <div className="mt-7 flex flex-wrap gap-3">
-              <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
+              <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
+                <Sparkles size={17} /> Crear mi tienda gratis
+              </Link>
+              {DEMO_URL ? (
+                <a href={DEMO_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                  <Store size={16} /> Ver una tienda de ejemplo
+                </a>
+              ) : null}
+              <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 <MessageCircle size={17} /> Quiero una demo
               </a>
               <a href="#producto" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
@@ -418,15 +435,18 @@ export default function HomePage() {
         </div>
       </section>
 
+      <Showcase />
+
       <section id="planes" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-20">
         <Reveal className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
           <div>
             <Kicker>Planes</Kicker>
-            <h2 className="mt-4 text-3xl font-black sm:text-4xl">Elige tu plan y te lo activamos</h2>
-            <p className="mt-2" style={{ color: "var(--t-muted)" }}>Todas las funciones incluidas. Activación y acompañamiento por WhatsApp.</p>
+            <h2 className="mt-4 text-3xl font-black sm:text-4xl">Empieza gratis y crece cuando quieras</h2>
+            <p className="mt-2" style={{ color: "var(--t-muted)" }}>Un plan para cada etapa de tu negocio. Sin permanencia: cambias o cancelas cuando quieras.</p>
           </div>
-          <a href={msgSell} target="_blank" rel="noreferrer" className="rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg" style={{ background: "var(--t-cta)" }}>Hablar para contratar</a>
+          <Link href="/registro" className="rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg" style={{ background: "var(--t-cta)" }}>Crear mi tienda gratis</Link>
         </Reveal>
+        <PricingSection waLink={waLink} fallback={
         <div className="grid gap-4 md:grid-cols-3">
           {plans.map((p, i) => (
             <Reveal key={p.id} delay={i * 0.08}>
@@ -453,6 +473,7 @@ export default function HomePage() {
             </Reveal>
           ))}
         </div>
+        } />
       </section>
 
       <section id="preguntas" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-20">

@@ -335,9 +335,15 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
                 </Link>
               )}
 
-              <Link className="text-xs underline" style={{ color: "var(--t-muted)" }} href="/">
-                Volver al inicio
-              </Link>
+              {!storeLogin ? (
+                <Link className="text-xs font-bold underline" style={{ color: "var(--t-accent)" }} href="/registro">
+                  Crear cuenta gratis
+                </Link>
+              ) : (
+                <Link className="text-xs underline" style={{ color: "var(--t-muted)" }} href="/">
+                  Volver al inicio
+                </Link>
+              )}
             </div>
           </form>
 
