@@ -20,7 +20,7 @@ type Linked = { number: number; requested_by_name: string | null; items: Array<{
 const STATUS: Record<Track["status"], string> = { in_transit: "En tránsito", received: "Recibido", cancelled: "Anulado" };
 const dt = (v: string | null | undefined) => (v ? new Date(v).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }) : "");
 
-/** Hoja imprimible del traslado: carta o tirilla, con o sin precios por mayor (solo con sesión). */
+/** Hoja imprimible del traslado: carta o tirilla, con o sin precios por mayor del punto que recibe (basta el enlace). */
 export default function TransferPrintPage() {
   return <Suspense fallback={null}><TransferPrint /></Suspense>;
 }
@@ -46,7 +46,7 @@ function TransferPrint() {
     });
   }, [token]);
 
-  const { prices, reason: pricesReason } = useListPricesState(track?.items.map((i) => i.product_id) ?? []);
+  const { prices, reason: pricesReason } = useListPricesState(track?.items.map((i) => i.product_id) ?? [], token);
   const received = Boolean(track?.items.some((i) => i.received_qty !== null));
   const requested = useMemo(() => new Map((linked?.items ?? []).map((i) => [i.product_id, i.requested])), [linked]);
 

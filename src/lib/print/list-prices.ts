@@ -12,7 +12,7 @@ export type PricesReason = "loading" | "ok" | "no_session" | "denied";
  * Solo con sesión en la tienda (la base lo revisa). Si aún no está la migración 20261207, se leen directo
  * de los productos (los precios ya son visibles para el equipo de la tienda; el costo nunca).
  */
-export function useListPricesState(productIds: string[]) {
+export function useListPricesState(productIds: string[], transferToken?: string | null) {
   const [state, setState] = useState<{ prices: Map<string, ListPrice> | null; reason: PricesReason }>({ prices: null, reason: "loading" });
   const key = [...new Set(productIds)].sort().join(",");
   useEffect(() => {
@@ -20,6 +20,17 @@ export function useListPricesState(productIds: string[]) {
     let alive = true;
     void (async () => {
       const sb = supabaseBrowser();
+      // Traslado (20261219): con el enlace basta, sin sesión, y con el precio del punto que recibe.
+      if (transferToken) {
+        const t = await sb.rpc("erp_transfer_track_prices", { p_token: transferToken });
+        if (!t.error && Array.isArray(t.data)) {
+          const map = new Map<string, ListPrice>();
+          for (const r of t.data as Array<{ product_id: string; sku: string | null; price_2: number; price_3: number }>) {
+            map.set(r.product_id, { sku: r.sku, price2: Number(r.price_2 ?? 0), price3: Number(r.price_3 ?? 0) });
+          }
+          if (map.size) return alive && setState({ prices: map, reason: "ok" });
+        }
+      }
       const { data: session } = await sb.auth.getSession();
       if (!session.session) return alive && setState({ prices: null, reason: "no_session" });
       const ids = key.split(",");
@@ -43,13 +54,13 @@ export function useListPricesState(productIds: string[]) {
       setState(out.size ? { prices: out, reason: "ok" } : { prices: null, reason: "denied" });
     })();
     return () => { alive = false; };
-  }, [key]);
+  }, [key, transferToken]);
   return state;
 }
 
 /** Solo los precios (null si no se pueden ver). */
-export function useListPrices(productIds: string[]) {
-  return useListPricesState(productIds).prices;
+export function useListPrices(productIds: string[], transferToken?: string | null) {
+  return useListPricesState(productIds, transferToken).prices;
 }
 
 export const cop = (n: number) => "$ " + Math.round(n).toLocaleString("es-CO");

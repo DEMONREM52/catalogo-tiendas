@@ -218,7 +218,7 @@ export default function TransferTrackPage() {
               </div>
             ) : null}
 
-            <MerchandiseCard track={track} />
+            <MerchandiseCard track={track} token={token} />
 
             <p className="pb-6 text-center text-xs" style={{ color: "var(--t-muted)" }}>
               Enlace válido hasta {dateTime(track.expires_at)}. Compártelo solo con los responsables del traslado.
@@ -231,11 +231,11 @@ export default function TransferTrackPage() {
 }
 
 /**
- * Mercancía del traslado: unidades y, con sesión en la tienda, precio por mayor (precio 2), subtotal y valor total.
- * Sin sesión (ej. el conductor con el enlace) solo se ven unidades.
+ * Mercancía del traslado: unidades, precio por mayor (precio 2) del punto que recibe, subtotal y valor total.
+ * Basta el enlace (20261219); sin esa migración, los precios solo se ven con sesión.
  */
-function MerchandiseCard({ track }: { track: Track }) {
-  const prices = useListPrices(track.items.map((i) => i.product_id));
+function MerchandiseCard({ track, token }: { track: Track; token: string }) {
+  const prices = useListPrices(track.items.map((i) => i.product_id), token);
   const units = track.items.reduce((s, i) => s + i.qty, 0);
   const value = prices ? track.items.reduce((s, i) => s + i.qty * (prices.get(i.product_id)?.price2 ?? 0), 0) : 0;
   const received = track.items.some((i) => i.received_qty !== null);
