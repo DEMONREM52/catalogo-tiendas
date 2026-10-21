@@ -183,7 +183,7 @@ export function DomainPanel({ storeId, storeSlug, storeName, canEdit }: { storeI
         <p className="flex items-center gap-1.5 text-sm font-bold"><Search size={15} /> Así te puede ver Google</p>
         <div className="mt-2 rounded-xl border bg-white p-3 text-left" style={{ borderColor: "#e5e7eb" }}>
           <p className="truncate text-xs" style={{ color: "#202124" }}>{publicUrl.replace(/^https:\/\//, "")}</p>
-          <p className="truncate text-base" style={{ color: "#1a0dab" }}>{storeName} - Catálogos online</p>
+          <p className="truncate text-base" style={{ color: "#1a0dab" }}>{storeName} · Catálogo y pedidos</p>
           <p className="line-clamp-2 text-xs" style={{ color: "#4d5156" }}>Catálogo online de {storeName}. Mira productos, precios y realiza pedidos por WhatsApp.</p>
         </div>
         <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs" style={{ color: "var(--t-muted)" }}>

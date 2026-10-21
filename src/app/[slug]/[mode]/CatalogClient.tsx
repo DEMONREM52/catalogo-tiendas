@@ -661,7 +661,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
   useEffect(() => {
     if (!store?.name) return;
 
-    document.title = catalog ? `${catalog.name} · ${store.name}` : `${store.name} - Catálogos online`;
+    document.title = catalog ? `${catalog.name} · ${store.name}` : `${store.name} · Catálogo y pedidos`;
 
     const favicon =
       (document.querySelector("link[rel~='icon']") as HTMLLinkElement | null) ||

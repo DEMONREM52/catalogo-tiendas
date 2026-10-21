@@ -266,8 +266,6 @@ export default function HomePage() {
   }, []);
 
   const msgDemo = waLink(`Hola! Vengo por ${BRAND}. Quiero ver una demo: catálogos con varios precios, ventas por punto, inventario con traslados e informes. ¿Me muestras cómo funciona?`);
-  const msgSell = waLink(`Hola! Quiero contratar ${BRAND} para mi negocio.\nMi negocio es: ____\nTengo ____ puntos de venta / bodegas.\nVendo: ____`);
-  const msgPlan = (name: string, price: number) => waLink(`Hola! Quiero el plan ${name} de ${BRAND} ($${COP(price)}). ¿Cómo lo activamos?`);
   const current = TOUR[tour];
 
   return (
@@ -292,7 +290,9 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2">
             <Link href="/login" className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>Iniciar sesión</Link>
-            <a href={msgDemo} target="_blank" rel="noreferrer" className="hidden rounded-xl px-4 py-2 text-sm font-bold text-white shadow-lg sm:inline-block" style={{ background: "var(--t-cta)" }}>Pedir demo</a>
+            <Link href="/registro" className="rounded-xl px-4 py-2 text-sm font-bold text-white shadow-lg" style={{ background: "var(--t-cta)" }}>
+              <span className="sm:hidden">Crear cuenta</span><span className="hidden sm:inline">Crear cuenta gratis</span>
+            </Link>
           </div>
         </nav>
       </header>
@@ -321,9 +321,6 @@ export default function HomePage() {
                   <Store size={16} /> Ver una tienda de ejemplo
                 </a>
               ) : null}
-              <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                <MessageCircle size={17} /> Quiero una demo
-              </a>
               <a href="#producto" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 Ver cómo funciona <ArrowRight size={16} />
               </a>
@@ -465,9 +462,9 @@ export default function HomePage() {
                       <li key={b} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /> {b}</li>
                     ))}
                   </ul>
-                  <a href={msgPlan(p.name, p.price)} target="_blank" rel="noreferrer" className="mt-6 inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5" style={p.highlight ? { background: "var(--t-cta)", color: "#fff" } : { border: "1px solid var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                    Contratar {p.name}
-                  </a>
+                  <Link href="/registro" className="mt-6 inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5" style={p.highlight ? { background: "var(--t-cta)", color: "#fff" } : { border: "1px solid var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                    Empezar gratis
+                  </Link>
                 </div>
               </div>
             </Reveal>
@@ -505,10 +502,13 @@ export default function HomePage() {
           <div className="relative overflow-hidden rounded-[2.5rem] p-8 text-center text-white shadow-2xl sm:p-12" style={{ background: "var(--t-cta)" }}>
             <div className="pointer-events-none absolute -left-10 -top-10 h-48 w-48 rounded-full bg-white/20 blur-3xl" />
             <h2 className="relative text-3xl font-black sm:text-4xl">¿Listo para ordenar y vender más?</h2>
-            <p className="relative mx-auto mt-3 max-w-xl opacity-90">Te mostramos RemHub con tus propios productos y lo dejamos funcionando contigo.</p>
+            <p className="relative mx-auto mt-3 max-w-xl opacity-90">Crea tu cuenta gratis en un minuto, sin tarjeta. Si necesitas ayuda, te acompañamos por WhatsApp.</p>
             <div className="relative mt-6 flex flex-wrap justify-center gap-3">
-              <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-lg transition hover:-translate-y-0.5">
-                <MessageCircle size={17} /> Hablar por WhatsApp
+              <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-lg transition hover:-translate-y-0.5">
+                <Sparkles size={17} /> Crear mi cuenta gratis
+              </Link>
+              <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-white/50 px-6 py-3.5 text-sm font-bold transition hover:bg-white/10">
+                <MessageCircle size={17} /> ¿Dudas? WhatsApp
               </a>
               <Link href="/login" className="inline-flex items-center gap-2 rounded-2xl border border-white/50 px-6 py-3.5 text-sm font-bold transition hover:bg-white/10">
                 Ya tengo cuenta <ArrowRight size={16} />
@@ -527,7 +527,7 @@ export default function HomePage() {
             <a href="#producto">Cómo se ve</a>
             <a href="#planes">Planes</a>
             <Link href="/login">Iniciar sesión</Link>
-            <a href={msgSell} target="_blank" rel="noreferrer">Contratar</a>
+            <Link href="/registro">Crear cuenta gratis</Link>
           </div>
         </div>
         <p className="mx-auto mt-3 max-w-6xl px-5 text-xs" style={{ color: "var(--t-muted)" }}>Activación y soporte: +57 321 884 6041</p>

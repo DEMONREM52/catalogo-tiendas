@@ -28,7 +28,7 @@ export const REMHUB_IDENTITY: PublicIdentity = {
   kind: "remhub",
   name: "RemHub",
   shortName: "RemHub",
-  subtitle: "Catálogos online, pedidos por WhatsApp y facturación",
+  subtitle: "Ventas, inventario y catálogos para tu negocio",
   badge: null,
   logoUrl: null,
   path: null,

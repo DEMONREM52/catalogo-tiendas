@@ -26,11 +26,11 @@ export const metadata: Metadata = {
 
   applicationName: "RemHub",
   title: {
-    default: "RemHub — Catálogos online",
+    default: "RemHub — Software para vender y administrar tu negocio",
     template: "%s — RemHub",
   },
   description:
-    "Crea y comparte catálogos online de tu tienda. Pedidos por WhatsApp, catálogo detal y mayoristas, y factura PDF.",
+    "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
 
   alternates: {
     canonical: SITE_URL,
@@ -63,9 +63,9 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "RemHub — Catálogos online",
+    title: "RemHub — Software para vender y administrar tu negocio",
     description:
-      "Tu catálogo listo para compartir: el cliente arma el pedido y tú lo recibes por WhatsApp. Detal + Mayoristas + factura PDF.",
+      "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
     url: SITE_URL,
     siteName: "RemHub",
     type: "website",
@@ -84,9 +84,9 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "RemHub — Catálogos online",
+    title: "RemHub — Software para vender y administrar tu negocio",
     description:
-      "Catálogos premium para vender por WhatsApp. Detal + Mayoristas + pedidos + factura PDF.",
+      "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
     images: ["/og-image.png"],
   },
 

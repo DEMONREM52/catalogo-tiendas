@@ -111,7 +111,7 @@ export async function generateMetadata({
   const [store, catalogMeta] = await Promise.all([cachedStoreBySlug(slug), cachedCatalogMeta(slug, mode)]);
 
   const storeName = catalogMeta?.store_name || store?.name || "Catálogo";
-  const title = catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} - Catálogos online`;
+  const title = catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} · Catálogo y pedidos`;
   const description = catalogMeta?.headline
     || (storeName !== "Catálogo"
       ? `Catálogo online de ${storeName}. Mira productos, precios y realiza pedidos por WhatsApp.`

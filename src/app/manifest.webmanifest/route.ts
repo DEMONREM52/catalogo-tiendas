@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     id: "/",
     name: "RemHub",
     short_name: "RemHub",
-    description: "Catálogos online, ventas, inventario, pedidos y facturación para tu tienda y tus puntos de venta.",
+    description: "Ventas, POS, inventario, traslados, catálogos con pedidos por WhatsApp y rentabilidad para tu negocio y tus puntos de venta.",
     lang: "es-CO",
     dir: "ltr",
     start_url: start,
