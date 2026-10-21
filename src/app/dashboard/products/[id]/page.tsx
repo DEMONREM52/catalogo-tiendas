@@ -415,6 +415,10 @@ export default function EditProductPage() {
               {draft?.active ? "Activo ✅" : "Inactivo ⛔"}
             </button>
 
+            <button className={softBtn.className} style={softBtn.style} type="button" onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">
+              🏷️ Etiqueta
+            </button>
+
             <button className={softBtn.className} style={softBtn.style} type="button" onClick={() => void goBack()}>
               Volver
             </button>

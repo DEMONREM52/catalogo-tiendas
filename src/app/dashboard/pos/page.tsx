@@ -28,6 +28,8 @@ import { PosCartLines, focusPosField, lineStatus, type CartLine } from "./PosCar
 import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
 import { LIMIT_LABEL, keepApprovals, useApprovals, usePriceFloors, type ApprovalState } from "./usePriceFloors";
 import { CashStatusChip } from "../caja/CashStatusChip";
+import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
+import { reinsert, undoToast } from "@/lib/ui/undo";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -157,7 +159,7 @@ function posErrorText(err: unknown) {
   const hint = (err as { hint?: string })?.hint;
   if (/PRICE_BELOW_LIMIT/.test(message)) return `«${details ?? "Un producto"}» está por debajo de tu precio mínimo. ${hint ?? "Pide autorización."}`;
   if (/PRICE_MISMATCH/.test(message)) return `El precio de «${details ?? "un producto"}» cambió o no está autorizado. Recarga la página para traer los precios actuales.`;
-  return message;
+  return friendlyStockError(message) ?? message;
 }
 
 export default function PosPage() {
@@ -169,7 +171,9 @@ export default function PosPage() {
   const [newClient, setNewClient] = useState<{ key: number; prefill: { name?: string; document_number?: string } } | null>(null);
   const [canCredit, setCanCredit] = useState(false);
   const [listOverride, setListOverride] = useState<number | null>(null);
-  const [pointStock, setPointStock] = useState<Map<string, number> | null>(null);
+  const [pointId, setPointId] = useState("");
+  // Existencias del punto en vivo: si otra persona vende, el número baja aquí sin recargar (20261220).
+  const { stock: pointStock, setStock: setPointStock, live: stockLive } = useLiveStock(store?.id, pointId);
   // Los productos inactivos no se muestran nunca; los agotados (activos) sí, al buscarlos.
   const activeProducts = useMemo(() => allProducts.filter((p) => p.active !== false), [allProducts]);
   // Solo se ofrecen los productos con existencias en el punto elegido.
@@ -207,7 +211,6 @@ export default function PosPage() {
   const [customerNote, setCustomerNote] = useState("");
   const [points, setPoints] = useState<PointOption[]>([]);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
-  const [pointId, setPointId] = useState("");
   const [lockedPoint, setLockedPoint] = useState(false);
   const [sellerId, setSellerId] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -386,36 +389,6 @@ export default function PosPage() {
     (product: Product, level: PriceLevel) => pointPrices.get(product.id)?.[level - 1] ?? getProductPrice(product, level),
     [pointPrices],
   );
-
-  useEffect(() => {
-    if (!storeId || !pointId) return;
-    let alive = true;
-    (async () => {
-      const sb = supabaseBrowser();
-      const map = new Map<string, number>();
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await sb
-          .from("erp_stock_levels")
-          .select("product_id,qty")
-          .eq("store_id", storeId)
-          .eq("warehouse_id", pointId)
-          .gt("qty", 0)
-          .order("product_id")
-          .range(from, from + 999);
-        if (error || !data) {
-          // Sin acceso a existencias no se ofrece nada para no vender lo que el punto no tiene.
-          if (alive) setPointStock(new Map());
-          return;
-        }
-        for (const row of data as { product_id: string; qty: number }[]) map.set(row.product_id, row.qty);
-        if (data.length < 1000) break;
-      }
-      if (alive) setPointStock(map);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [storeId, pointId]);
 
   useEffect(() => {
     if (!selectedClient || (paymentType !== "credito" && !selectedClient.credit_enabled)) return;
@@ -667,8 +640,11 @@ export default function PosPage() {
   }
 
   function removeItem(productId: string) {
+    const index = cart.findIndex((item) => item.productId === productId);
+    const gone = cart[index];
     setCart((prev) => prev.filter((item) => item.productId !== productId));
     forgetApproval(productId);
+    if (gone) undoToast(`Quitaste «${gone.name}» (${gone.qty})`, () => setCart((prev) => (prev.some((i) => i.productId === productId) ? prev : reinsert(prev, gone, index))));
   }
 
   const finderSource = useErpFinderSource(storeId, { activeOnly: true });
@@ -999,6 +975,34 @@ export default function PosPage() {
         registerCredit = true;
       } else {
         registerCredit = true;
+      }
+    }
+
+    // Antes de guardar se revisa contra la base: otra persona pudo vender esas unidades hace un momento.
+    if (pointId && !editingDoc) {
+      const short = await checkStockNow(store.id, pointId, cart.map((i) => ({ product_id: i.productId, qty: i.qty, name: i.name })));
+      if (short.length) {
+        const fix = await Swal.fire({
+          icon: "warning",
+          title: "Las existencias cambiaron",
+          html: `${shortListHtml(short)}<br><small>Otra persona acaba de vender o trasladar. ¿Ajusto el carrito a lo que queda?</small>`,
+          showCancelButton: true, confirmButtonText: "Ajustar y revisar", cancelButtonText: "Volver al carrito",
+          background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b",
+        });
+        if (fix.isConfirmed) {
+          const left = new Map(short.map((x) => [x.product_id, x.available]));
+          setCart((prev) => prev.flatMap((item) => {
+            const max = left.get(item.productId);
+            if (max === undefined) return [item];
+            return max > 0 ? [{ ...item, qty: Math.min(item.qty, max) }] : [];
+          }));
+          setPointStock((cur) => {
+            const next = new Map(cur ?? []);
+            for (const x of short) { if (x.available > 0) next.set(x.product_id, x.available); else next.delete(x.product_id); }
+            return next;
+          });
+        }
+        return;
       }
     }
 
@@ -1424,7 +1428,7 @@ export default function PosPage() {
             ) : null}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="text-sm font-semibold">Punto de venta / bodega</label>
+                <label className="flex items-center justify-between gap-2 text-sm font-semibold">Punto de venta / bodega{pointId && stockLive ? <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-500" title="Las existencias se actualizan solas cuando otra persona vende o traslada"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Existencias en vivo</span> : null}</label>
                 <select
                   {...inputProps()}
                   value={pointId}

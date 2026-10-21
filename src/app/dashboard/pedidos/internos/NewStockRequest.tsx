@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
 import { srError } from "./types";
+import { reinsert, undoToast } from "@/lib/ui/undo";
 import { DateField } from "@/components/forms/Fields";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
@@ -110,6 +111,33 @@ export function NewStockRequest({
     if (!from || !to) return void Swal.fire({ icon: "warning", title: "Elige los puntos", background: "var(--t-bg-base)", color: "var(--t-text)" });
     if (!lines.length) return void Swal.fire({ icon: "warning", title: "Agrega productos", background: "var(--t-bg-base)", color: "var(--t-text)" });
     setSaving(true);
+    // Antes de enviar (20261220): ¿ya está pedido en otro pedido abierto? ¿le alcanza a quien surte con lo que ya le pidieron?
+    const pre = await supabaseBrowser().rpc("erp_stock_request_precheck", {
+      p_store: storeId, p_from: from, p_to: to, p_items: lines.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+    });
+    type Pre = { product_id: string; name: string; wanted: number; source_stock: number; already_requested: number; free_stock: number; mine_open: number[] };
+    const rows = (!pre.error && (pre.data as { items?: Pre[] } | null)?.items) || [];
+    const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const dup = rows.filter((r) => r.mine_open?.length);
+    const tight = rows.filter((r) => r.wanted > r.free_stock);
+    if (dup.length || tight.length) {
+      const html = [
+        dup.length ? `<p style="margin:0 0 6px"><b>Ya lo pidió tu punto</b> (pedido abierto, aún sin despachar):</p>${dup.map((r) => `• ${esc(r.name)} — pedido ${r.mine_open.map((n) => `#${n}`).join(", ")}`).join("<br>")}` : "",
+        tight.length ? `<p style="margin:10px 0 6px"><b>No alcanza en ${esc(toName)}</b>:</p>${tight.map((r) => `• ${esc(r.name)} — pides ${r.wanted}; hay ${r.source_stock}${r.already_requested ? `, ya pedidas ${r.already_requested} por otros pedidos` : ""} → libres <b>${r.free_stock}</b>`).join("<br>")}` : "",
+      ].join("");
+      const go = await Swal.fire({
+        icon: "warning", title: "Revisa antes de enviar", html: `<div style="text-align:left;font-size:13px;line-height:1.6">${html}</div>`,
+        showCancelButton: true, confirmButtonText: "Enviar de todos modos", cancelButtonText: "Corregir", reverseButtons: true,
+        background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#f59e0b",
+      });
+      if (!go.isConfirmed) {
+        // Las existencias de quien surte se actualizan con lo libre de verdad.
+        const free = new Map(rows.map((r) => [r.product_id, r.free_stock]));
+        setLines((cur) => cur.map((l) => (free.has(l.product_id) ? { ...l, there: free.get(l.product_id)! } : l)));
+        setSaving(false);
+        return;
+      }
+    }
     const { data, error } = await supabaseBrowser().rpc("erp_stock_request_create", {
       p_store: storeId, p_from: from, p_to: to,
       p_items: lines.map((l) => ({ product_id: l.product_id, qty: l.qty })),
@@ -273,7 +301,11 @@ export function NewStockRequest({
                           />
                           <button type="button" onClick={() => setLines((cur) => cur.map((x) => (x.product_id === l.product_id ? { ...x, qty: x.qty + 1 } : x)))} className="grid h-8 w-8 place-items-center rounded-lg border text-lg leading-none" style={{ borderColor: "var(--t-card-border)" }} aria-label="Más">+</button>
                         </div>
-                        <button type="button" onClick={() => setLines((cur) => cur.filter((x) => x.product_id !== l.product_id))} className="grid h-8 w-8 place-items-center rounded-full border text-xs text-red-400" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }} aria-label={`Quitar ${l.name}`}>
+                        <button type="button" onClick={() => {
+                          const index = lines.findIndex((x) => x.product_id === l.product_id);
+                          setLines((cur) => cur.filter((x) => x.product_id !== l.product_id));
+                          undoToast(`Quitaste «${l.name}»`, () => setLines((cur) => (cur.some((x) => x.product_id === l.product_id) ? cur : reinsert(cur, l, index))));
+                        }} className="grid h-8 w-8 place-items-center rounded-full border text-xs text-red-400" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }} aria-label={`Quitar ${l.name}`}>
                           ✕
                         </button>
                       </motion.div>

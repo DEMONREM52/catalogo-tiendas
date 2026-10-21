@@ -29,6 +29,8 @@ import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, t
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
+import { HelpButton } from "@/components/HelpButton";
 
 type Role = "admin" | "store";
 
@@ -755,6 +757,27 @@ export default function DashboardShell({
     return groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length);
   }, [canAccessStorePages, role, canOpen]);
 
+  // Buscador Ctrl+K: páginas, secciones y acciones que este usuario puede abrir.
+  const paletteLinks = useMemo<PaletteLink[]>(() => {
+    if (!canAccessStorePages) return [];
+    const out: PaletteLink[] = [];
+    const add = (l: PaletteLink, ok: boolean) => { if (ok && !out.some((x) => x.href === l.href)) out.push(l); };
+    add({ href: "/dashboard/pos", emoji: "💳", label: "Nueva venta (POS)", keywords: "vender facturar remision caja" }, canOpen("pos"));
+    add({ href: "/dashboard/inventario?tab=transfers", emoji: "🚚", label: "Nuevo traslado", keywords: "enviar mercancia bodega punto" }, canOpen("transfers") || canOpen("inventory"));
+    add({ href: "/dashboard/inventario?tab=purchases", emoji: "🛒", label: "Ingresar factura de compra", keywords: "proveedor compra ingreso" }, canOpen("purchases"));
+    add({ href: "/dashboard/products/crear", emoji: "✨", label: "Nuevo producto", keywords: "crear articulo" }, canOpen("products"));
+    add({ href: "/dashboard/pedidos?tab=internos", emoji: "📨", label: "Nuevo pedido interno", keywords: "pedir mercancia punto bodega" }, ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)));
+    for (const g of menu) for (const i of g.items) add({ href: i.href, emoji: i.emoji, label: i.label, hint: i.hint ?? g.title }, true);
+    for (const tabs of Object.values(MODULE_TABS)) for (const t of tabs) add({ href: t.href, emoji: t.icon, label: t.label }, t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || storeIsOwner || isStoreAdmin));
+    const inv: Array<[string, string, string, string[]]> = [
+      ["stock", "📦", "Existencias", ["inventory"]], ["transfers", "🚚", "Traslados", ["transfers", "inventory"]], ["adjustments", "🛠️", "Ajustes de inventario", ["inventory_adjust", "inventory"]],
+      ["kardex", "📒", "Kardex", ["inventory"]], ["purchases", "🛒", "Facturas de compra", ["purchases"]], ["suppliers", "🏭", "Proveedores", ["suppliers", "purchases"]],
+      ["payables", "💸", "Cuentas por pagar", ["payables"]], ["internal", "🤝", "Cuenta con puntos", ["internal_credit", "internal_credit_manage"]],
+    ];
+    for (const [key, emoji, label, perms] of inv) add({ href: `/dashboard/inventario?tab=${key}`, emoji, label, hint: "Inventario" }, perms.some((p) => canOpen(p)));
+    return out;
+  }, [canAccessStorePages, menu, canOpen, storeIsOwner, isStoreAdmin]);
+
   const detalUrl = useMemo(() => {
     if (!store?.slug) return "#";
     return `/${store.slug}/detal`;
@@ -1061,6 +1084,15 @@ export default function DashboardShell({
             {role === "store" && store?.id && !pathname.startsWith("/dashboard/auditoria") ? (
               <AuditSpyButton storeId={store.id} title={auditModuleOf(pathname).title} filters={auditModuleOf(pathname).module ? { module: auditModuleOf(pathname).module } : {}} />
             ) : null}
+            {role === "store" && store?.id ? (
+              <button type="button" onClick={openCommandPalette} title="Buscar (Ctrl + K)" aria-label="Buscar"
+                className="inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
+                style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
+                🔍 <span className="hidden md:inline">Buscar</span><kbd className="hidden rounded border px-1 text-[10px] md:inline" style={{ borderColor: "var(--t-card-border)" }}>Ctrl K</kbd>
+              </button>
+            ) : null}
+            {role === "store" && store?.id ? <CommandPalette storeId={store.id} links={paletteLinks} can={canOpen} /> : null}
+            {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
             {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}

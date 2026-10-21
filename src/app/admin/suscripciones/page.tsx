@@ -11,7 +11,7 @@ import { DateField } from "@/components/forms/Fields";
  * Necesita 20261211_saas_planes_suscripciones.sql.
  */
 
-type Tab = "resumen" | "clientes" | "planes" | "pagos" | "ajustes";
+type Tab = "resumen" | "salud" | "clientes" | "planes" | "pagos" | "ajustes";
 type Dash = {
   ok: boolean; error?: string;
   settings: { enforce_limits: boolean; enforce_modules?: boolean; default_trial_plan: string; default_trial_days: number; grace_days: number };
@@ -111,7 +111,7 @@ export default function AdminSubscriptionsPage() {
           <p className="text-sm" style={muted}>Planes, clientes, cobros y conversión. Solo ingresos de RemHub: las ventas de las tiendas no se mezclan aquí.</p>
         </div>
         <nav className="flex flex-wrap gap-1 rounded-2xl border p-1 text-sm font-bold" style={box}>
-          {([["resumen", "Resumen"], ["clientes", "Clientes"], ["planes", "Planes"], ["pagos", "Pagos"], ["ajustes", "Ajustes"]] as const).map(([k, l]) => (
+          {([["resumen", "Resumen"], ["salud", "❤️ Salud"], ["clientes", "Clientes"], ["planes", "Planes"], ["pagos", "Pagos"], ["ajustes", "Ajustes"]] as const).map(([k, l]) => (
             <button key={k} type="button" onClick={() => setTab(k)} className="rounded-xl px-3 py-1.5 transition" style={tab === k ? { background: "#8b5cf6", color: "#fff" } : undefined}>{l}</button>
           ))}
         </nav>
@@ -173,6 +173,7 @@ export default function AdminSubscriptionsPage() {
       ) : null}
 
       {tab === "resumen" && dash ? <Referrals /> : null}
+      {tab === "salud" ? <Health /> : null}
       {tab === "clientes" ? <Customers plans={plans} onChanged={() => void loadDash()} /> : null}
       {tab === "planes" ? <Plans plans={plans} onSaved={() => { void loadPlans(); void loadDash(); }} /> : null}
       {tab === "pagos" ? <Payments /> : null}
@@ -632,6 +633,76 @@ function Settings({ dash, plans, onSaved }: { dash: Dash; plans: Plan[]; onSaved
       <div className="border-t pt-3 text-xs" style={{ borderColor: "rgba(148,163,184,.2)", ...muted }}>
         <p className="font-bold">Cobros con Wompi de RemHub</p>
         <p>Se configuran en Vercel (nunca aquí): WOMPI_REMHUB_ENV, WOMPI_REMHUB_PUBLIC_KEY, WOMPI_REMHUB_PRIVATE_KEY, WOMPI_REMHUB_INTEGRITY_SECRET, WOMPI_REMHUB_EVENTS_SECRET. URL de eventos en Wompi: https://remhub.co/api/saas/wompi/webhook</p>
+      </div>
+    </section>
+  );
+}
+
+/* ----------------------------- salud de las tiendas (20261224) ----------------------------- */
+
+type HealthRow = {
+  store_id: string; name: string; slug: string; whatsapp: string | null; created_at: string; plan_id: string | null; status: string | null;
+  trial_ends_at: string | null; owner_email: string | null; owner_seen: string | null; last_sale: string | null; sales_7: number; total_30: number;
+  products: number; users: number; health: "risk" | "start" | "ok"; reason: string;
+};
+const HEALTH = { risk: ["🔴", "En riesgo", "#ef4444"], start: ["🟡", "Sin arrancar", "#f59e0b"], ok: ["🟢", "Saludable", "#10b981"] } as const;
+
+function Health() {
+  const [rows, setRows] = useState<HealthRow[] | null>(null);
+  const [err, setErr] = useState("");
+  const [only, setOnly] = useState<"all" | HealthRow["health"]>("all");
+  useEffect(() => {
+    void supabaseBrowser().rpc("saas_admin_store_health").then(({ data, error }) => {
+      const r = data as { ok: boolean; error?: string; stores?: HealthRow[] } | null;
+      if (error || !r?.ok) { setErr(error && /saas_admin_store_health|Could not find/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261224_salud_y_ejemplos.sql." : r?.error ?? error?.message ?? "No se pudo cargar."); setRows([]); }
+      else setRows(r.stores ?? []);
+    });
+  }, []);
+  const ago = (v: string | null) => {
+    if (!v) return "nunca";
+    const d = Math.floor((Date.parse(new Date().toISOString()) - Date.parse(v)) / 86400000);
+    return d <= 0 ? "hoy" : d === 1 ? "ayer" : `hace ${d} d`;
+  };
+  const wa = (r: HealthRow) => {
+    const d = (r.whatsapp ?? "").replace(/D/g, "");
+    const n = d.length === 10 ? `57${d}` : d;
+    if (n.length < 11) return null;
+    const text = r.health === "start"
+      ? `Hola! Soy de RemHub 👋 Vi que estás empezando con ${r.name}. ¿Te ayudo a subir tus productos y dejar tu catálogo listo para vender? Te tomo 10 minutos.`
+      : `Hola! Soy de RemHub 👋 ¿Cómo te ha ido con ${r.name}? Si algo no te funciona o necesitas ayuda con el inventario, el POS o los traslados, cuéntame y lo resolvemos.`;
+    return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
+  };
+  const list = (rows ?? []).filter((r) => only === "all" || r.health === only);
+  const count = (h: HealthRow["health"]) => (rows ?? []).filter((r) => r.health === h).length;
+  return (
+    <section className="space-y-3">
+      <p className="text-sm opacity-80">Las tiendas que conviene llamar primero: las que no entran, no venden o se les acaba la prueba. Escríbeles antes de que se vayan.</p>
+      <div className="flex flex-wrap gap-2 text-sm font-semibold">
+        {([["all", `Todas (${rows?.length ?? 0})`], ["risk", `🔴 En riesgo (${count("risk")})`], ["start", `🟡 Sin arrancar (${count("start")})`], ["ok", `🟢 Saludables (${count("ok")})`]] as const).map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setOnly(k)} className="rounded-xl border px-3 py-1.5" style={only === k ? { background: "#8b5cf6", color: "#fff", borderColor: "transparent" } : { borderColor: "rgba(148,163,184,.35)" }}>{l}</button>
+        ))}
+      </div>
+      {err ? <p className="rounded-xl border border-amber-400/40 p-3 text-sm">⚠️ {err}</p> : null}
+      {rows === null ? <p className="text-sm opacity-70">Cargando…</p> : null}
+      <div className="grid gap-2 md:grid-cols-2">
+        {list.map((r) => {
+          const [icon, label, color] = HEALTH[r.health];
+          const link = wa(r);
+          return (
+            <div key={r.store_id} className="rounded-2xl border p-3" style={{ borderColor: `color-mix(in oklab, ${color} 40%, rgba(148,163,184,.3))` }}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-bold">{r.name} <span className="text-xs font-normal opacity-70">/{r.slug}</span></p>
+                  <p className="text-xs opacity-75">{r.owner_email ?? "—"} · {r.plan_id ?? "sin plan"} ({r.status ?? "—"})</p>
+                </div>
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: `color-mix(in oklab, ${color} 16%, transparent)`, color }}>{icon} {label}</span>
+              </div>
+              <p className="mt-1 text-xs font-semibold" style={{ color }}>{r.reason}</p>
+              <p className="mt-1 text-xs opacity-80">Entró {ago(r.owner_seen)} · última venta {ago(r.last_sale)} · {r.sales_7} ventas en 7 días · {cop(r.total_30)} en 30 días · {r.products} productos · {r.users} usuarios</p>
+              {link ? <a href={link} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-xl px-3 py-1.5 text-xs font-bold text-white" style={{ background: "#16a34a" }}>💬 Escribirle</a> : <p className="mt-2 text-[11px] opacity-60">Sin WhatsApp en la tienda.</p>}
+            </div>
+          );
+        })}
       </div>
     </section>
   );

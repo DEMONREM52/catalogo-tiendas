@@ -176,10 +176,18 @@ export function Btn({
   );
 }
 
-export function Empty({ text }: { text: string }) {
+/** Pantalla vacía: además de decir que no hay nada, explica para qué sirve y cómo empezar (opcional). */
+export function Empty({ text, icon, title, action }: { text: string; icon?: string; title?: string; action?: { label: string; onClick?: () => void; href?: string } }) {
   return (
     <div className="rounded-2xl border border-dashed p-6 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-      {text}
+      {icon ? <div className="mb-2 text-3xl" aria-hidden>{icon}</div> : null}
+      {title ? <p className="mb-1 text-base font-bold" style={{ color: "var(--t-text)" }}>{title}</p> : null}
+      <p className="mx-auto max-w-md">{text}</p>
+      {action ? (
+        action.href
+          ? <a href={action.href} className="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>{action.label}</a>
+          : <button type="button" onClick={action.onClick} className="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>{action.label}</button>
+      ) : null}
     </div>
   );
 }

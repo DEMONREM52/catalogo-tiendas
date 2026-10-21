@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Trash2, Users, Wallet } from "lucide-react";
+import { Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
@@ -10,11 +10,12 @@ import { smartFilter } from "@/lib/search";
 import { docWithDv } from "../nit";
 import { CreditMeter, KindBadge } from "./CreditMeter";
 import { ReceivablesTab } from "./ReceivablesTab";
+import { FrequentCustomers } from "./FrequentCustomers";
 import { StatementDrawer } from "./StatementDrawer";
 import { ThirdPartyForm } from "./ThirdPartyForm";
 import { KINDS, errorText, initials, kindInfo, loadBalances, loadThirdParties, money, waLink, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 
-type Tab = "terceros" | "cartera";
+type Tab = "terceros" | "cartera" | "frecuentes";
 type CreditFilter = "all" | "with" | "overdue" | "over" | "blocked";
 const PAGE = 60;
 
@@ -41,7 +42,10 @@ export default function TercerosPage() {
     void (async () => {
       try {
         const access = await getDashboardStore();
-        if (new URLSearchParams(window.location.search).get("tab") === "cartera") setTab("cartera");
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("tab") === "cartera") setTab("cartera");
+        if (params.get("tab") === "frecuentes") setTab("frecuentes");
+        if (params.get("q")) setQ(params.get("q") ?? "");
         if (!access.store) throw new Error("No tienes acceso a ninguna tienda.");
         const can = (p: string) => hasStorePermission(access, p);
         setStore(access.store);
@@ -195,14 +199,14 @@ export default function TercerosPage() {
       ) : null}
 
       <div className="flex gap-1 rounded-full border p-1 text-sm font-bold sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"]] : [])] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
+        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
           <button
             key={k}
             type="button"
             onClick={() => {
               setTab(k);
               const url = new URL(window.location.href);
-              if (k === "cartera") url.searchParams.set("tab", "cartera");
+              if (k !== "terceros") url.searchParams.set("tab", k);
               else url.searchParams.delete("tab");
               window.history.replaceState(null, "", url.toString());
             }}
@@ -214,7 +218,9 @@ export default function TercerosPage() {
         ))}
       </div>
 
-      {tab === "cartera" && store ? (
+      {tab === "frecuentes" && store ? (
+        <FrequentCustomers storeId={store.id} storeName={store.name} />
+      ) : tab === "cartera" && store ? (
         <ReceivablesTab storeId={store.id} storeName={store.name} canPay={perm.receivables} parties={parties} onOpenStatement={setStatementFor} refreshKey={refreshKey} />
       ) : (
         <section className="space-y-4">

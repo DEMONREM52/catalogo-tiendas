@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { LayoutGrid, Megaphone } from "lucide-react";
 import CatalogsManager from "./catalogs/CatalogsManager";
 import SocialDashboard from "./SocialDashboard";
+import { ShareCard } from "./ShareCard";
 
 type Tab = "catalogs" | "campaigns";
 
@@ -31,6 +32,7 @@ export default function SocialHub() {
 
   return (
     <div className="space-y-4">
+      <ShareCard />
       <nav className="grid gap-2 sm:grid-cols-2 lg:max-w-2xl" aria-label="RemHub Social">
         {TABS.map((t) => {
           const active = tab === t.key;

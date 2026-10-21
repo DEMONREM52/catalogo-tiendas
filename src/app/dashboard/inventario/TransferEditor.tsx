@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductPicker, ProductSearchModal, Thumb, useThumbs } from "./LineEditor";
 import { Btn, errorMessage, toast, type ProductHit } from "./shared";
+import { friendlyStockError } from "@/lib/stock/live-stock";
 
 /**
  * Corregir un traslado en tránsito antes de que lo revisen (20261217): cantidades, quitar y agregar productos.
@@ -72,7 +73,7 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
     setBusy(false);
     const r = data as { ok: boolean; error?: string } | null;
     if (error || !r?.ok) {
-      const msg = error && /erp_transfer_update_items|Could not find/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261217_editar_traslado.sql." : r?.error ?? errorMessage(error);
+      const msg = error && /erp_transfer_update_items|Could not find/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261217_editar_traslado.sql." : friendlyStockError(r?.error ?? errorMessage(error)) ?? r?.error ?? errorMessage(error);
       return void toast("No se pudo corregir", "error", msg);
     }
     void toast(`Traslado #${number} corregido`, "success", packedSigned ? "Vuelve a firmar «Preparado»." : undefined);

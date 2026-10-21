@@ -47,7 +47,11 @@ const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
 type Supplier = { id: string; name: string; nit: string | null };
 
 export function usePurchaseSearch(storeId: string, suppliers: Supplier[]) {
-  const [filters, setFilters] = useState<PurchaseFilters>(emptyFilters);
+  // ?tab=purchases&q=… (desde el buscador Ctrl+K) abre el historial ya buscado.
+  const [filters, setFilters] = useState<PurchaseFilters>(() => {
+    const p = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
+    return { ...emptyFilters(), q: p?.get("tab") === "purchases" ? p.get("q") ?? "" : "" };
+  });
   const [rows, setRows] = useState<PurchaseRow[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const [sum, setSum] = useState<number | null>(null);

@@ -37,7 +37,9 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const active = warehouses.filter((w) => w.active && (!ctx.pointId || w.id === ctx.pointId));
   const [f, setF] = useState<Filters>(() => {
     try {
-      return { ...DEFAULTS, ...(JSON.parse(window.localStorage.getItem(STORAGE) ?? "{}") as Partial<Filters>), q: "" };
+      const saved = { ...DEFAULTS, ...(JSON.parse(window.localStorage.getItem(STORAGE) ?? "{}") as Partial<Filters>), q: "" };
+      // ?tab=stock&sin_costo=1 (desde «Pendientes» en el inicio): solo lo que tiene unidades y no tiene costo.
+      return new URLSearchParams(window.location.search).get("sin_costo") === "1" ? { ...saved, cost: "without", status: "all", warehouse: "" } : saved;
     } catch {
       return DEFAULTS;
     }

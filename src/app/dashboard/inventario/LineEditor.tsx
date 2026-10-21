@@ -8,6 +8,7 @@ import { MoneyInput } from "../MoneyInput";
 import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Warehouse } from "./shared";
 import { priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 import { PctInput } from "./PctInput";
+import { reinsert, undoToast } from "@/lib/ui/undo";
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -752,9 +753,16 @@ export function LineEditor({
     onChange(lines.map((line, i) => (i === index ? { ...line, ...change } : line)));
   }
 
+  // Quitar no pregunta: se puede deshacer unos segundos (vuelve a su lugar con lo que tenía).
+  const latest = useRef(lines);
+  useEffect(() => { latest.current = lines; }, [lines]);
   function remove(index: number) {
-    const next = lines.filter((_, i) => i !== index);
-    onChange(next);
+    const gone = lines[index];
+    onChange(lines.filter((_, i) => i !== index));
+    if (gone) undoToast(`Quitaste «${gone.name}»`, () => {
+      if (latest.current.some((l) => l.product_id === gone.product_id)) return;
+      onChange(reinsert(latest.current, gone, index));
+    });
   }
 
   function onCellKey(index: number, col: Col) {

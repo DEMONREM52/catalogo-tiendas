@@ -6,6 +6,29 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyField, NumberField } from "@/components/forms/Fields";
 import { Chip, Field, Modal } from "../inventario/dialog";
 import { Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange } from "../inventario/shared";
+import Swal from "sweetalert2";
+
+const METHOD: Record<string, string> = { efectivo: "Efectivo", cash: "Efectivo", transferencia: "Transferencia", nequi: "Nequi", daviplata: "Daviplata", tarjeta: "Tarjeta", card: "Tarjeta", mixto: "Mixto", credito: "Crédito" };
+
+/** Resumen del cierre para enviarlo por WhatsApp a quien corresponda (el dueño, el administrador…). */
+function cashWhatsAppText(o: { point: string; number?: number; by?: string | null; at: string; expected: number; counted: number; difference: number; note?: string | null; b?: Breakdown | null }) {
+  const L = [`🔒 *Cierre de caja · ${o.point}*${o.number ? ` (#${o.number})` : ""}`, `📅 ${new Date(o.at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}${o.by ? ` · cerró ${o.by}` : ""}`, ""];
+  if (o.b) {
+    L.push(`🧾 Ventas del turno: *${money(o.b.pos_sales)}*`);
+    const methods = Object.entries(o.b.pos_by_method ?? {}).filter(([, v]) => Number(v) > 0);
+    for (const [k, v] of methods) L.push(`   • ${METHOD[k] ?? k}: ${money(Number(v))}`);
+    if (o.b.receivables_cash) L.push(`💳 Abonos de cartera en efectivo: ${money(o.b.receivables_cash)}`);
+    if (o.b.expenses_cash) L.push(`💸 Gastos pagados de la caja: −${money(o.b.expenses_cash)}`);
+    if (o.b.to_bodega) L.push(`🏬 Enviado a la bodega: −${money(o.b.to_bodega)}`);
+    if (o.b.moves_in || o.b.moves_out) L.push(`↕️ Entradas ${money(o.b.moves_in)} · salidas ${money(o.b.moves_out)}`);
+    L.push(`💵 Base inicial: ${money(o.b.opening)}`, "");
+  }
+  L.push(`Debía haber: *${money(o.expected)}*`, `Contó: *${money(o.counted)}*`);
+  L.push(o.difference === 0 ? "✅ Cuadra exacto" : o.difference < 0 ? `🔴 Faltante: *${money(Math.abs(o.difference))}*` : `🟡 Sobrante: *${money(o.difference)}*`);
+  if (o.note) L.push(`📝 ${o.note}`);
+  return L.join("\n");
+}
+const shareCash = (text: string) => window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
 
 /* ----------------------------- tipos ----------------------------- */
 
@@ -91,7 +114,7 @@ export function CashRegister({ storeId }: { storeId: string }) {
           <Chip on={filter === "review"} onClick={() => setFilter("review")}>⚠️ Por revisar ({review.length})</Chip>
         </div>
       }>
-        {shown.length === 0 ? <Empty text={filter === "review" ? "Nada por revisar ✅" : "Aún no hay cierres."} /> : (
+        {shown.length === 0 ? <Empty text={filter === "review" ? "Nada por revisar ✅" : "Abre la caja al empezar el turno con la base y ciérrala al final contando el efectivo: el sistema te dice si cuadra, sobra o falta."} icon={filter === "review" ? undefined : "💵"} title={filter === "review" ? undefined : "Aún no hay cierres de caja"} /> : (
           <div className="space-y-2">
             {shown.map((h) => <HistoryRow key={h.id} h={h} canManage={board.can_manage} onDone={done} />)}
           </div>
@@ -188,6 +211,8 @@ function HistoryRow({ h, canManage, onDone }: { h: History; canManage: boolean; 
         </span>
       </span>
       <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: `color-mix(in oklab, ${diffColor(d)} 16%, transparent)`, color: diffColor(d) }}>{diffText(d)}</span>
+      <button type="button" title="Enviar resumen por WhatsApp" aria-label="Enviar resumen por WhatsApp" className="rounded-full border px-2.5 py-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}
+        onClick={() => shareCash(cashWhatsAppText({ point: h.point, number: h.number, by: h.closed_by, at: h.closed_at, expected: Number(h.expected), counted: Number(h.counted), difference: d, note: h.closing_note }))}>💬</button>
       {h.status === "review" ? (canManage ? <Btn onClick={() => void approve()}>Revisar</Btn> : <span className="text-xs" style={{ color: "#f59e0b" }}>⚠️ Por revisar</span>) : null}
     </div>
   );
@@ -270,8 +295,16 @@ function CloseDialog({ p, tolerance, onClose, onSaved }: { p: PointCash; toleran
     setBusy(false);
     if (error) return void toast("No se pudo cerrar", "error", errorMessage(error));
     const r = data as { status: string; difference: number };
-    void toast(r.status === "review" ? "Caja cerrada · por revisar" : "Caja cerrada ✅", r.status === "review" ? "warning" : "success", diffText(Number(r.difference)));
     onSaved();
+    const text = cashWhatsAppText({ point: p.name, number: p.open?.number, at: new Date().toISOString(), expected, counted, difference: Number(r.difference), note: note || null, b: p.open?.breakdown ?? null });
+    const go = await Swal.fire({
+      icon: r.status === "review" ? "warning" : "success",
+      title: r.status === "review" ? "Caja cerrada · por revisar" : "Caja cerrada ✅",
+      text: diffText(Number(r.difference)),
+      showCancelButton: true, confirmButtonText: "💬 Enviar resumen por WhatsApp", cancelButtonText: "Listo",
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#16a34a",
+    });
+    if (go.isConfirmed) shareCash(text);
   }
 
   const row = (d: number, kind: string) => (

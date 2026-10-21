@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import { OnboardingCard } from "./OnboardingCard";
+import { MyTasks, PointToday } from "./HomePanels";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
@@ -77,6 +78,7 @@ export default function DashboardHome() {
   const [actions, setActions] = useState<typeof QUICK_ACTIONS>([]);
   const [quickAccess, setQuickAccess] = useState<string[] | null>(null);
   const [canReports, setCanReports] = useState(false);
+  const [canPos, setCanPos] = useState(false);
   const [points, setPoints] = useState<Array<{ id: string; name: string; kind: string }>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export default function DashboardHome() {
         setAllowed(MODULES.filter((m) => can(m.permission) && !(m.key === "receivables" && can("clients"))));
         setActions(QUICK_ACTIONS.filter((a) => can(a.permission)));
         setCanReports(can("reports"));
+        setCanPos(can("pos"));
         if (access.store) {
           const [profileRes, pointsRes] = await Promise.all([
             sb.from("store_profiles").select("quick_access").eq("store_id", access.store.id).maybeSingle(),
@@ -171,6 +174,9 @@ export default function DashboardHome() {
       </section>
 
       {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
+
+      {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
+      {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
 
       {loadError ? (
         <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>

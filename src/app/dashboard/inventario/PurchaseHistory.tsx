@@ -126,7 +126,7 @@ export function PurchaseHistory({
       {error ? <p className="mb-3 text-sm" style={{ color: "#ef4444" }}>No se pudo buscar: {error}</p> : null}
 
       {rows.length === 0 ? (
-        <Empty text={loading ? "Buscando…" : active ? "Ningún ingreso coincide con la búsqueda." : "Todavía no hay ingresos de factura."} />
+        <Empty text={loading ? "Buscando…" : active ? "Ningún ingreso coincide con la búsqueda." : "Registra la factura de tu proveedor arriba: suma las unidades al inventario, actualiza el costo y, si es a crédito, crea la cuenta por pagar."} icon={!loading && !active ? "🛒" : undefined} title={!loading && !active ? "Aún no hay facturas de compra" : undefined} />
       ) : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
           <table className="w-full min-w-[820px]">
@@ -167,6 +167,7 @@ export function PurchaseHistory({
                             </Btn>
                           ) : null}
                           <Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn>
+                          <Btn variant="ghost" onClick={() => window.open(`/documento/etiquetas?ingreso=${r.id}`, "_blank")}><span title="Etiquetas con código de barras y precio">🏷️ Etiquetas</span></Btn>
                           <PurchaseFilesButton purchaseId={r.id} />
                           {canVoid && r.status === "received" ? <Btn variant="danger" onClick={() => onCancel(r)}>Anular</Btn> : null}
                         </div>

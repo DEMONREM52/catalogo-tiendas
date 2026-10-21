@@ -8,6 +8,8 @@ import { ProductPicker, ProductSearchModal, Thumb, useThumbs } from "./LineEdito
 import { InternalCreditPreview } from "./InternalCredit";
 import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import { TransferEditor } from "./TransferEditor";
+import { reinsert, undoToast } from "@/lib/ui/undo";
+import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
@@ -138,6 +140,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const from = ctx.pointId ?? pickedFrom;
   const [targets, setTargets] = useState<string[]>([]);
   const [lines, setLines] = useState<PlanLine[]>([]);
+  // Existencias del origen en vivo: si otro usuario vende o traslada, «Disponible» baja aquí (también en un borrador viejo).
+  const { stock: liveStock, setStock: setLiveStock, live: stockLive } = useLiveStock(ctx.storeId, from || null);
+  const availOf = (l: PlanLine) => (liveStock ? liveStock.get(l.product_id) ?? 0 : l.available);
   const [matrix, setMatrix] = useState<Matrix>({});
   const [notes, setNotes] = useState("");
   const [carrier, setCarrier] = useState("");
@@ -204,8 +209,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [filter, setFilter] = useState<"all" | "in_transit" | "received" | "cancelled" | "diff">("all");
   const [rows, setRows] = useState<TransferRow[]>([]);
   // Filtros de la lista: texto (número, producto, código o persona), fechas, origen y destino; se cargan de a 30.
-  const [tf, setTf] = useState({ q: "", from: "", to: "", origin: "", dest: "" });
-  const [qLive, setQLive] = useState("");
+  // ?q=#12 abre la lista ya filtrada (desde el buscador Ctrl+K).
+  const urlQ = () => { if (typeof window === "undefined") return ""; const p = new URLSearchParams(window.location.search); return p.get("tab") === "transfers" ? p.get("q") ?? "" : ""; };
+  const [tf, setTf] = useState(() => ({ q: urlQ(), from: "", to: "", origin: "", dest: "" }));
+  const [qLive, setQLive] = useState(urlQ);
   const [limit, setLimit] = useState(30);
   const [total, setTotal] = useState<number | null>(null);
   const [loadingList, setLoadingList] = useState(false);
@@ -328,7 +335,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   useRunOnChange(load);
 
   const used = (productId: string) => Object.values(matrix[productId] ?? {}).reduce((a, b) => a + b, 0);
-  const overdrawn = lines.some((l) => used(l.product_id) > l.available);
+  const overdrawn = lines.some((l) => used(l.product_id) > availOf(l));
 
   function addProduct(hit: ProductHit) {
     setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? prev : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
@@ -381,6 +388,51 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setMatrix((prev) => ({ ...prev, [productId]: { ...(prev[productId] ?? {}), [dest]: Math.max(0, Math.floor(qty || 0)) } }));
   }
 
+  // Sugerencia según ventas (20261222): llena cantidades para cubrir N días en cada destino, sin pasar de lo que hay en el origen.
+  async function suggest() {
+    if (!from || !targets.length) return void toast("Elige el origen y al menos un destino", "warning");
+    const ask = await Swal.fire({
+      title: "💡 Sugerir según ventas",
+      html: "<p style='font-size:13px;margin:0 0 8px'>Mira lo que vendió cada destino en los últimos 30 días y propone enviar lo necesario para que le alcance:</p>",
+      input: "select", inputOptions: { 7: "7 días", 15: "15 días", 30: "30 días" }, inputValue: "15",
+      showCancelButton: true, confirmButtonText: "Sugerir", cancelButtonText: "Cancelar",
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+    });
+    if (!ask.isConfirmed) return;
+    const { data, error } = await supabaseBrowser().rpc("erp_restock_suggestions", { p_store: ctx.storeId, p_from: from, p_targets: targets, p_days: Number(ask.value) || 15 });
+    const r = data as { ok: boolean; error?: string; items?: Array<{ point_id: string; product_id: string; name: string; sku: string | null; qty: number; origin_qty: number; days_left: number | null; per_day: number }> } | null;
+    if (error || !r?.ok) {
+      const msg = error && /erp_restock_suggestions|Could not find/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261222_sugerencia_traslados.sql." : r?.error ?? errorMessage(error);
+      return void toast("No se pudo sugerir", "error", msg);
+    }
+    const items = r.items ?? [];
+    if (!items.length) return void toast("Nada que sugerir", "warning", "Los destinos tienen suficiente para esos días, o el origen no tiene lo que venden.");
+    setLines((prev) => {
+      const next = [...prev];
+      for (const it of items) if (!next.some((l) => l.product_id === it.product_id)) next.push({ product_id: it.product_id, name: it.name, sku: it.sku, available: Number(it.origin_qty) });
+      return next;
+    });
+    setMatrix((prev) => {
+      const next = { ...prev };
+      for (const it of items) next[it.product_id] = { ...(next[it.product_id] ?? {}), [it.point_id]: Number(it.qty) };
+      return next;
+    });
+    const units = items.reduce((a, it) => a + Number(it.qty), 0);
+    void toast(`Sugerencia lista: ${new Set(items.map((i) => i.product_id)).size} productos · ${units} unidades`, "success", "Revisa y cambia lo que quieras antes de enviar.");
+  }
+
+  function removeLine(productId: string) {
+    const index = lines.findIndex((l) => l.product_id === productId);
+    const gone = lines[index];
+    const qty = matrix[productId];
+    if (!gone) return;
+    setLines((prev) => prev.filter((l) => l.product_id !== productId));
+    undoToast(`Quitaste «${gone.name}»`, () => {
+      setLines((prev) => (prev.some((l) => l.product_id === productId) ? prev : reinsert(prev, gone, index)));
+      if (qty) setMatrix((prev) => ({ ...prev, [productId]: qty }));
+    });
+  }
+
   function toggleTarget(id: string) {
     setTargets((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   }
@@ -408,6 +460,19 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       .filter((leg) => leg.items.length > 0);
     if (!plan.length) return void toast("Asigna cantidades a al menos un destino", "warning");
 
+    // Justo antes de enviar se revisa contra la base: otro usuario pudo sacar esas unidades hace un momento.
+    const short = await checkStockNow(ctx.storeId, from, lines.map((l) => ({ product_id: l.product_id, qty: used(l.product_id), name: l.name })));
+    if (short.length) {
+      setLiveStock((cur) => {
+        const next = new Map(cur ?? []);
+        for (const x of short) { if (x.available > 0) next.set(x.product_id, x.available); else next.delete(x.product_id); }
+        return next;
+      });
+      await Swal.fire({ icon: "warning", title: "Las existencias cambiaron", html: `${shortListHtml(short)}<br><small>Otra persona acaba de vender o trasladar. Ajusta las cantidades marcadas y vuelve a enviar.</small>`,
+        background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" });
+      return;
+    }
+
     const units = plan.reduce((sum, leg) => sum + leg.items.reduce((s, i) => s + i.qty, 0), 0);
     if (!(await confirmAction("Enviar mercancía", `Se crearán ${plan.length} traslado(s) con ${units} unidades. Quedarán en tránsito hasta que cada destino las reciba.`, "Enviar"))) return;
 
@@ -418,7 +483,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     });
     if (error) {
       setBusy(false);
-      return void toast("No se pudo enviar", "error", errorMessage(error));
+      return void toast("No se pudo enviar", "error", friendlyStockError(errorMessage(error)) ?? errorMessage(error));
     }
     resetPlan();
     clearDraft(draftKey);
@@ -548,7 +613,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
 
             {from && targets.length ? (
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>3 · Productos y cantidades</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>3 · Productos y cantidades</p>
+                  <Btn variant="ghost" onClick={() => void suggest()}><span title="Propone cantidades según lo que vendió cada destino en 30 días">💡 Sugerir según ventas</span></Btn>
+                </div>
                 <ProductPicker
                   storeId={ctx.storeId}
                   warehouseId={from}
@@ -574,7 +642,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                       <thead style={{ color: "var(--t-muted)" }}>
                         <tr>
                           <th className={th}>Producto</th>
-                          <th className={th}>Disponible</th>
+                          <th className={th}>Disponible{stockLive ? <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 align-middle" title="En vivo: baja sola si otra persona vende o traslada" /> : null}</th>
                           {targets.map((t) => <th key={t} className={th}>→ {names.get(t)}</th>)}
                           <th className={th}>Queda</th>
                           <th className={th} />
@@ -582,7 +650,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                       </thead>
                       <tbody>
                         {lines.map((line) => {
-                          const left = line.available - used(line.product_id);
+                          const left = availOf(line) - used(line.product_id);
                           return (
                             <tr key={line.product_id} className="border-t transition-colors duration-500" style={{ borderColor: "var(--t-card-border)", background: flashId === line.product_id ? "color-mix(in oklab, #22c55e 12%, transparent)" : undefined }}>
                               <td className={td}>
@@ -594,7 +662,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                                   </div>
                                 </div>
                               </td>
-                              <td className={td}>{line.available}</td>
+                              <td className={td}>
+                                <span className="font-semibold tabular-nums">{availOf(line)}</span>
+                                {liveStock && availOf(line) < line.available ? <span className="block text-[10px] font-semibold text-amber-500" title="Otra persona usó unidades mientras armabas el traslado">antes {line.available}</span> : null}
+                              </td>
                               {targets.map((t) => (
                                 <td key={t} className={td}>
                                   <input
@@ -612,7 +683,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                               ))}
                               <td className={td} style={{ fontWeight: 700, color: left < 0 ? "#ef4444" : undefined }}>{left}</td>
                               <td className={td}>
-                                <Btn variant="ghost" onClick={() => setLines((prev) => prev.filter((l) => l.product_id !== line.product_id))}>Quitar</Btn>
+                                <Btn variant="ghost" onClick={() => removeLine(line.product_id)}>Quitar</Btn>
                               </td>
                             </tr>
                           );
@@ -701,7 +772,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
             {loadingList ? <span style={{ color: "var(--t-muted)" }}>Buscando…</span> : null}
           </div>
         ) : null}
-        {rows.length === 0 ? <Empty text={loadingList ? "Buscando…" : filtersOn ? "Ningún traslado coincide con los filtros." : "No hay traslados todavía."} /> : (
+        {rows.length === 0 ? <Empty text={loadingList ? "Buscando…" : filtersOn ? "Ningún traslado coincide con los filtros." : "Con un traslado mueves mercancía de la bodega a un punto (o entre puntos): sale del origen, queda «en tránsito» y entra cuando el destino la recibe y firma."} icon={!loadingList && !filtersOn ? "🚚" : undefined} title={!loadingList && !filtersOn ? "Aún no hay traslados" : undefined} /> : (
           <div className="space-y-3">
             {rows.map((row) => (
               <div key={row.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
@@ -767,6 +838,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                           <a href={`/traslado/${row.track_token}/imprimir`} target="_blank" rel="noopener noreferrer"
                             className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                             🖨️ Imprimir
+                          </a>
+                          <a href={`/documento/etiquetas?traslado=${row.id}`} target="_blank" rel="noopener noreferrer" title="Etiquetas con código de barras y el precio del punto que recibe"
+                            className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                            🏷️ Etiquetas
                           </a>
                           <a
                             href={transferTrackUrl(row.track_token)}

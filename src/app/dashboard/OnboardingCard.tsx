@@ -26,6 +26,10 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
   const [steps, setSteps] = useState<Step[] | null>(null);
   const [hidden, setHidden] = useState(() => { try { return window.localStorage.getItem(key) === "1"; } catch { return false; } });
   const [copied, setCopied] = useState(false);
+  // Productos de ejemplo (20261224): para ver la tienda funcionando antes de subir los propios.
+  const [examples, setExamples] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (hidden) return;
@@ -35,7 +39,22 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
       if (alive && !error && v?.ok) setSteps(v.steps ?? []);
     });
     return () => { alive = false; };
-  }, [storeId, hidden]);
+  }, [storeId, hidden, reload]);
+
+  useEffect(() => {
+    if (hidden) return;
+    void supabaseBrowser().from("products").select("id", { count: "exact", head: true }).eq("store_id", storeId).like("sku", "EJEMPLO-%")
+      .then(({ count, error }) => setExamples(error ? null : count ?? 0));
+  }, [storeId, hidden, reload]);
+
+  async function toggleExamples(load: boolean) {
+    setBusy(true);
+    const { data, error } = await supabaseBrowser().rpc(load ? "store_seed_examples" : "store_clear_examples", { p_store: storeId });
+    setBusy(false);
+    const r = data as { ok?: boolean; error?: string } | null;
+    if (error || !r?.ok) return void window.alert(error && /store_seed_examples|store_clear_examples|Could not find/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261224_salud_y_ejemplos.sql." : r?.error ?? error?.message ?? "No se pudo.");
+    setReload((n) => n + 1);
+  }
 
   if (hidden || !steps || steps.every((s) => s.done)) return null;
   const done = steps.filter((s) => s.done).length;
@@ -96,6 +115,21 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
           );
         })}
       </ul>
+      {examples !== null ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed p-3 text-xs" style={{ borderColor: "var(--t-card-border)" }}>
+          {examples > 0 ? (
+            <>
+              <span>🧪 Tienes <b>{examples} productos de ejemplo</b> en tu catálogo. Quítalos cuando subas los tuyos.</span>
+              <button type="button" disabled={busy} onClick={() => void toggleExamples(false)} className="rounded-xl border px-3 py-1.5 font-bold" style={{ borderColor: "var(--t-card-border)" }}>{busy ? "Quitando…" : "🧹 Quitar ejemplos"}</button>
+            </>
+          ) : (
+            <>
+              <span>🧪 ¿Quieres ver cómo queda tu catálogo? Carga 8 productos de ejemplo y quítalos cuando quieras.</span>
+              <button type="button" disabled={busy} onClick={() => void toggleExamples(true)} className="rounded-xl px-3 py-1.5 font-bold text-white" style={{ background: "var(--t-cta)" }}>{busy ? "Cargando…" : "Cargar ejemplos"}</button>
+            </>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
