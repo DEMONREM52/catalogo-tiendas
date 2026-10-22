@@ -122,8 +122,11 @@ function Labels() {
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb", fontFamily: "system-ui, sans-serif", color: "#111827" }}>
       <style>{`
+        /* El botón flotante de tema no va en las etiquetas (ni en pantalla ni impreso). */
+        .theme-control { display: none !important; }
         @media print {
           .no-print { display: none !important; }
+          .theme-control, .theme-control * { display: none !important; visibility: hidden !important; }
           body, html { background: #fff !important; }
           @page { size: ${size === "rollo" ? "50mm 25mm" : "letter"}; margin: ${size === "rollo" ? "0" : "8mm"}; }
           .sheet { padding: 0 !important; background: #fff !important; box-shadow: none !important; display: block !important; }
