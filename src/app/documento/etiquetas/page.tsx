@@ -126,13 +126,19 @@ function Labels() {
           .no-print { display: none !important; }
           body, html { background: #fff !important; }
           @page { size: ${size === "rollo" ? "50mm 25mm" : "letter"}; margin: ${size === "rollo" ? "0" : "8mm"}; }
-          .sheet { padding: 0 !important; background: #fff !important; box-shadow: none !important; }
+          .sheet { padding: 0 !important; background: #fff !important; box-shadow: none !important; display: block !important; }
+          .rollo { display: block !important; gap: 0 !important; }
+          .rollo .lbl { box-shadow: none !important; margin: 0 !important; }
+          .carta { width: auto !important; padding: 0 !important; }
         }
         .lbl { break-inside: avoid; page-break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #fff; }
-        .rollo .lbl { width: 50mm; height: 25mm; padding: 1.2mm 1.5mm; page-break-after: always; break-after: page; }
+        .rollo .lbl { width: 50mm; height: 25mm; box-sizing: border-box; padding: 1.2mm 1.5mm; gap: 0.4mm; }
+        .rollo .lbl:not(:last-child) { page-break-after: always; break-after: page; }
+        .lbl .nm { font-size: 7.5pt; font-weight: 700; line-height: 1.1; max-height: 2.2em; overflow: hidden; width: 100%; }
+        .lbl .pr { font-size: 12pt; font-weight: 900; line-height: 1; }
         .carta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; }
         .carta .lbl { height: 25mm; border: 1px dashed #d1d5db; padding: 1.5mm; }
-        .lbl svg { max-width: 100%; height: 9mm; }
+        .lbl svg { display: block; max-width: 100%; height: 11mm; flex-shrink: 0; }
       `}</style>
       <div className="no-print" style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "center", padding: 12, background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
         <label style={{ fontSize: 13, fontWeight: 600 }}>Precios de{" "}
@@ -158,9 +164,9 @@ function Labels() {
         <div className={size} style={size === "carta" ? { width: "200mm", background: "#fff", padding: "6mm" } : { display: "flex", flexDirection: "column", gap: 8 }}>
           {labels.map((l) => (
             <div key={l.key} className="lbl" style={size === "rollo" ? { boxShadow: "0 1px 3px rgba(0,0,0,.15)" } : undefined}>
-              {showName ? <div style={{ fontSize: 7.5, fontWeight: 700, lineHeight: 1.1, maxHeight: "6mm", overflow: "hidden", width: "100%" }}>{l.name}</div> : null}
+              {showName ? <div className="nm">{l.name}</div> : null}
               {l.code ? <Barcode value={l.code} /> : null}
-              <div style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.1 }}>{money(l.price)}</div>
+              <div className="pr">{money(l.price)}</div>
             </div>
           ))}
         </div>

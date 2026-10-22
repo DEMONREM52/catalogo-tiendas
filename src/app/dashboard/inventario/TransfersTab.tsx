@@ -338,7 +338,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const overdrawn = lines.some((l) => used(l.product_id) > availOf(l));
 
   function addProduct(hit: ProductHit) {
-    setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? prev : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
+    // Si ya está, no se duplica: se ilumina y el cursor va a su cantidad para cambiarla.
+    if (lines.some((l) => l.product_id === hit.id)) void toast(`«${hit.name}» ya está en el traslado`, "success", "Te llevamos a su cantidad para que la cambies.");
+    setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? [...prev] : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
     setFocusNext(hit.id);
     setFlashId(hit.id);
     window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
@@ -622,7 +624,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   warehouseId={from}
                   inStockOnly
                   inputRef={searchRef}
-                  excludeIds={lines.map((l) => l.product_id)}
+                  addedQty={Object.fromEntries(lines.map((l) => [l.product_id, used(l.product_id)]))}
                   placeholder={`🔎 Buscar en ${names.get(from) ?? "origen"} (solo con existencias)…  ·  F2 para abrir la búsqueda`}
                   onPick={addProduct}
                 />
@@ -632,7 +634,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   storeId={ctx.storeId}
                   warehouseId={from}
                   inStockOnly
-                  excludeIds={lines.map((l) => l.product_id)}
+                  addedQty={Object.fromEntries(lines.map((l) => [l.product_id, used(l.product_id)]))}
                   title={`Agregar producto al traslado (sale de ${names.get(from) ?? "origen"})`}
                   onPick={(hit) => { setPickerOpen(false); addProduct(hit); }}
                 />

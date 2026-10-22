@@ -1077,6 +1077,10 @@ select {
   body::after {
     display: none !important;
   }
+  /* El botón de apariencia (Sistema / Claro / Oscuro) nunca sale en lo impreso. */
+  .theme-control {
+    display: none !important;
+  }
 }
 
 /* ✅ Reduce motion */

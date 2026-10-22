@@ -124,11 +124,12 @@ function HitRow({
   onHover: () => void;
   big?: boolean;
 }) {
+  // Lo que ya está en la lista se ve (en verde) en vez de esconderse: al elegirlo se va a su cantidad.
   const bg = flash
     ? "color-mix(in oklab, #22c55e 18%, transparent)"
     : active
-      ? "color-mix(in oklab, var(--t-accent) 16%, transparent)"
-      : "transparent";
+      ? added ? "color-mix(in oklab, #22c55e 20%, transparent)" : "color-mix(in oklab, var(--t-accent) 16%, transparent)"
+      : added ? "color-mix(in oklab, #22c55e 8%, transparent)" : "transparent";
   return (
     <button
       type="button"
@@ -150,7 +151,8 @@ function HitRow({
         {stockLabel ? stockLabel(hit) : showWarehouse ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
         {added ? (
           <span className="mt-0.5 block font-bold" style={{ color: "#22c55e" }}>
-            {flash ? "✓ " : ""}En la lista: {added}
+            ✓ Ya está en la lista: {added}
+            <span className="block text-[10px] font-semibold opacity-80">{flash ? "Listo" : "Elegir para cambiar"}</span>
           </span>
         ) : (
           <span className="mt-0.5 block font-bold" style={{ color: "var(--t-accent)" }}>+ Agregar</span>

@@ -25,6 +25,8 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [q, setQ] = useState("");
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
   const focusId = useRef<string | null>(null);
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -33,15 +35,26 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
   const setQty = (id: string, qty: number) => setLines((cur) => cur.map((l) => (l.product_id === id ? { ...l, qty: Math.max(0, Math.floor(qty || 0)) } : l)));
   function add(hit: ProductHit) {
     setExtra((cur) => ({ ...cur, [hit.id]: hit.wh_qty }));
-    setLines((cur) => (cur.some((l) => l.product_id === hit.id) ? cur : [{ product_id: hit.id, name: hit.name, sku: hit.sku, qty: 1, original: 0 }, ...cur]));
+    const existing = lines.find((l) => l.product_id === hit.id);
+    if (existing) {
+      // Ya está: no se duplica. Si estaba quitado se vuelve a poner; el cursor va a su cantidad para escribir el total.
+      if (existing.qty === 0) setQty(hit.id, existing.original || 1);
+      void toast(`«${hit.name}» ya está en el traslado`, "success", existing.qty ? `Tiene ${existing.qty}. Escribe la cantidad total que debe ir.` : "Lo volvimos a poner; escribe la cantidad.");
+      setQ("");
+    } else {
+      setLines((cur) => [{ product_id: hit.id, name: hit.name, sku: hit.sku, qty: 1, original: 0 }, ...cur]);
+    }
     focusId.current = hit.id;
+    setFlashId(hit.id);
+    setFocusTick((n) => n + 1);
+    window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1800);
   }
-  // El producto agregado queda arriba y con el cursor en su cantidad.
+  // El producto (nuevo o el que ya estaba) queda con el cursor en su cantidad, a la vista.
   useEffect(() => {
     if (!focusId.current) return;
     const el = qtyRefs.current.get(focusId.current);
-    if (el) { el.focus(); el.select(); el.scrollIntoView({ block: "nearest", behavior: "smooth" }); focusId.current = null; }
-  }, [lines]);
+    if (el) { el.focus(); el.select(); el.scrollIntoView({ block: "center", behavior: "smooth" }); focusId.current = null; }
+  }, [lines, focusTick]);
   // F2: agregar otro producto.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "F2") { e.preventDefault(); setModal(true); } };
@@ -50,6 +63,7 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
   }, []);
 
   const changed = lines.some((l) => l.qty !== l.original);
+  const addedQty = Object.fromEntries(lines.map((l) => [l.product_id, l.qty]));
   const units = lines.reduce((s, l) => s + l.qty, 0);
   const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   const shown = q.trim() ? lines.filter((l) => fold(`${l.name} ${l.sku ?? ""}`).includes(fold(q.trim()))) : lines;
@@ -94,13 +108,13 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
       {/* Agregar: buscador directo o ventana con fotos (F2). */}
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="min-w-0 flex-1">
-          <ProductPicker storeId={storeId} warehouseId={fromId} inStockOnly inputRef={searchRef} excludeIds={lines.map((l) => l.product_id)}
+          <ProductPicker storeId={storeId} warehouseId={fromId} inStockOnly inputRef={searchRef} addedQty={addedQty}
             placeholder={`➕ Escribe para agregar un producto de ${fromName ?? "la bodega de origen"}…`} onPick={add} />
         </div>
         <Btn onClick={() => setModal(true)}><span title="Atajo: F2">➕ Agregar producto (F2)</span></Btn>
       </div>
       <ProductSearchModal open={modal} onClose={() => setModal(false)} storeId={storeId} warehouseId={fromId} inStockOnly
-        excludeIds={lines.map((l) => l.product_id)} title={`Agregar al traslado #${number}`} onPick={(hit) => { setModal(false); add(hit); }} />
+        addedQty={addedQty} title={`Agregar al traslado #${number}`} onPick={(hit) => { setModal(false); add(hit); }} />
 
       {lines.length > 8 ? (
         <input className="w-full rounded-xl border bg-transparent px-3 py-2 text-xs outline-none" style={{ ...box, color: "var(--t-text)" }}
@@ -113,7 +127,9 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
           const edited = l.qty !== l.original;
           return (
             <li key={l.product_id} className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 sm:flex-nowrap"
-              style={{ ...box, opacity: l.qty === 0 ? 0.5 : 1, background: edited ? "color-mix(in oklab, var(--t-accent) 8%, transparent)" : undefined }}>
+              style={{ ...box, opacity: l.qty === 0 ? 0.5 : 1, transition: "background .4s, box-shadow .4s",
+                background: flashId === l.product_id ? "color-mix(in oklab, #22c55e 18%, transparent)" : edited ? "color-mix(in oklab, var(--t-accent) 8%, transparent)" : undefined,
+                boxShadow: flashId === l.product_id ? "0 0 0 2px #22c55e" : undefined }}>
               <Thumb src={thumbs[l.product_id]} size={44} />
               <div className="min-w-0 flex-1 basis-40">
                 <p className="truncate text-sm font-bold" title={l.name}>{l.name}</p>
