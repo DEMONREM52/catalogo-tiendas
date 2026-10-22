@@ -221,9 +221,10 @@ export const HELP: Help[] = [
     { target: "text:Metas", title: "1. Metas del mes", text: "Por punto o por vendedor: cuánto llevan, el ritmo y si van a cumplir." },
     { target: "text:Comisiones", title: "2. Comisiones", text: "Un % general o por categoría. La tabla muestra lo que gana cada vendedor este mes." },
   ] },
-  { key: "fiscal", match: "/dashboard/fiscal", title: "Factura electrónica", tips: ["Configura la numeración y el proveedor una sola vez por punto."], steps: [
+  { key: "fiscal", match: "/dashboard/fiscal", title: "Factura electrónica", tips: ["Configura la numeración y el proveedor una sola vez por punto.", "Proveedor: Alanube (Alegra). Primero en pruebas, luego en producción."], steps: [
     { target: "text:Centro fiscal", title: "1. Centro fiscal", text: "Facturas electrónicas, notas y lo pendiente por facturar." },
     { target: ["text:Configuración", "text:Numeración"], title: "2. Configuración", text: "Resolución y numeración de cada punto, y el proveedor de facturación." },
+    { target: ["text:Habilitación con Alanube", "text:Proveedor"], title: "3. Alanube", text: "Conecta Alanube con tu token, crea la empresa, conecta avisos y envía el set de pruebas. La guía paso a paso explica el portal de la DIAN." },
   ] },
   // ---------------------------------------------------------------- ajustes
   { key: "usuarios", match: "/dashboard/store/users", title: "Usuarios", tips: ["Usa una plantilla (Vendedor, Cajero, Bodega…) para dar permisos en un clic.", "Cada usuario puede quedar limitado a su punto."], steps: [
@@ -234,7 +235,8 @@ export const HELP: Help[] = [
   { key: "tienda", match: "/dashboard/store", title: "Mi tienda", tips: ["Logo, ciudad y frase ayudan a salir en Google.", "Cliente fiel, cobros con QR y copia de seguridad también están aquí."], steps: [
     { target: ["text:Logo de tienda", "main h1"], title: "1. Tu marca", text: "Logo, portada, frase, ciudad y dirección. Salen en tu catálogo y en Google." },
     { target: "text:Dominio y Google", title: "2. Dominio y Google", text: "Tu enlace, tu dominio propio y cómo te ve Google." },
-    { target: "text:Cliente fiel", title: "3. Cliente fiel", text: "Cuántos puntos gana el cliente en general y en cada punto de venta." },
+    { target: "text:Aparecer en Google", title: "3. Aparecer en Google", text: "El código de Google Search Console, la página de cada punto y qué productos mejorar para que te encuentren." },
+    { target: "text:Cliente fiel", title: "4. Cliente fiel", text: "Cuántos puntos gana el cliente en general y en cada punto de venta." },
     { target: "text:Cobros con QR", title: "4. Cobros con QR", text: "Sube el QR de Nequi, Bre-B o tu banco para mostrarlo en el POS." },
     { target: "text:Copia de seguridad", title: "5. Copia de seguridad", text: "Descarga un Excel con todos tus datos cuando quieras." },
   ] },

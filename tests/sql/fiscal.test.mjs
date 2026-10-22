@@ -2,6 +2,7 @@
 import { makeDb } from "./setup.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 const report = (e) => {
   console.error("FALLA:", e?.message, e?.query ? "\nSQL: " + e.query.slice(0, 300) : "", e?.where ? "\nDónde: " + e.where : "");
   process.exit(2);
@@ -515,6 +516,13 @@ ok(anonP.rows && anonP.rows.length === 1, "El catálogo público sigue leyendo n
 const anonC = await anonQ("select cost_price from public.products limit 1");
 ok(anonC.err && /permission denied/i.test(anonC.err), "   pero no el costo de los productos", anonC.err);
 ok((await as(OWNER_B, "select count(*)::int n from public.orders where store_id = $1", [A]))[0].n === 0, "Un usuario de otra tienda no lee las ventas de la tienda A");
+
+// Alanube (20261231): el adaptador «alegra» queda disponible y la migración se puede correr dos veces.
+const ALANUBE = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "migraciones/20261231_alanube.sql"), "utf8").replace(/notify pgrst[^;]*;/g, "");
+await db.exec(ALANUBE);
+await db.exec(ALANUBE);
+const alg = (await raw("select name, status, supports_production, requires_certificate from public.fiscal_providers where code = 'alegra'"))[0];
+ok(alg?.status === "available" && alg.supports_production && !alg.requires_certificate && /Alanube/.test(alg.name), "Alanube (Alegra) queda disponible, con producción y sin certificado propio", alg);
 
 console.log(results.join("\n"));
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);

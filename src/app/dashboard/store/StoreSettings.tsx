@@ -10,6 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { normalizeStoreContactChannels, STORE_CONTACT_ICONS, type StoreContactChannel } from "@/lib/store-contacts";
 import { MarketingPanel } from "./MarketingPanel";
 import { DomainPanel } from "./DomainPanel";
+import { GooglePanel } from "./GooglePanel";
 import { PRODUCTION_HOST } from "@/lib/share/origin";
 import { EditableNickname, useNicknameUpdates } from "../Nickname";
 import { BackupPanel } from "./BackupPanel";
@@ -1126,6 +1127,7 @@ export default function StoreSettings() {
 
         <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
         <DomainPanel storeId={store.id} storeSlug={store.slug} storeName={store.name} canEdit={canEdit} />
+        <GooglePanel storeId={store.id} storeSlug={store.slug} canEdit={canEdit} />
         {canEdit ? <LoyaltyPanel storeId={store.id} /> : null}
         {canEdit ? <QrPanel storeId={store.id} /> : null}
         {canEdit ? <BackupPanel storeId={store.id} storeSlug={store.slug} /> : null}

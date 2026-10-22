@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     .filter(Boolean).join(" ").slice(0, 300);
   const image = isSafe(home.banner_url) ? home.banner_url : isSafe(home.logo_url) ? home.logo_url : undefined;
   return {
-    title: seo?.city ? `${home.name} en ${seo.city} · Catálogo y precios` : `${home.name} · Catálogo y precios`,
+    title: { absolute: seo?.city ? `${home.name} en ${seo.city} · Catálogo y precios` : `${home.name} · Catálogo y precios` },
     keywords: [home.name, ...(seo?.categories ?? []), ...(seo?.city ? [seo.city, `${(seo.categories ?? [])[0] ?? "tienda"} en ${seo.city}`] : [])],
     description,
     alternates: { canonical },

@@ -101,6 +101,58 @@ const META_SECONDS = 300;
 const cachedStoreBySlug = unstable_cache(findStoreBySlug, ["catalog-store-meta-v1"], { revalidate: META_SECONDS });
 const cachedCatalogMeta = unstable_cache(findCatalogMeta, ["catalog-meta-v1"], { revalidate: META_SECONDS });
 
+/**
+ * Lo que Google necesita para mostrar la tienda o el punto al buscarlo por nombre («la vitrina zamora»):
+ * nombre del punto, dirección, ciudad y WhatsApp (de la vitrina, 20261202) y la ciudad de la tienda (20261227).
+ */
+type PublicPoint = { id: string; name: string; city: string | null; address: string | null; whatsapp: string | null };
+type PublicPlace = {
+  storeName: string;
+  storeSlug: string;
+  whatsapp: string | null;
+  logo: string | null;
+  catalogName: string | null;
+  point: PublicPoint | null;
+  city: string | null;
+  address: string | null;
+  headline: string | null;
+};
+async function findPublicPlace(slugRaw: string, catalogSlug: string): Promise<PublicPlace | null> {
+  try {
+    const sb = supabaseServerPublic();
+    const slug = decodeURIComponent(slugRaw || "");
+    const [home, seo] = await Promise.all([sb.rpc("store_public_home", { p_slug: slug }), sb.rpc("store_public_seo", { p_slug: slug })]);
+    const h = home.error ? null : (home.data as { name: string; slug: string; whatsapp: string | null; logo_url: string | null; catalogs: Array<{ slug: string; name: string; point?: PublicPoint | null }> } | null);
+    if (!h) return null;
+    const s = seo.error ? null : (seo.data as { city: string | null; address: string | null; headline: string | null } | null);
+    const c = h.catalogs?.find((x) => x.slug === decodeURIComponent(catalogSlug || "").toLowerCase()) ?? null;
+    return {
+      storeName: h.name, storeSlug: h.slug, whatsapp: h.whatsapp, logo: h.logo_url,
+      catalogName: c?.name ?? null, point: c?.point ?? null,
+      city: c?.point?.city || s?.city || null, address: c?.point ? c.point.address : s?.address ?? null, headline: s?.headline ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+const cachedPublicPlace = unstable_cache(findPublicPlace, ["catalog-public-place-v1"], { revalidate: 600 });
+
+/** «La Vitrina Zamora»: el punto con el nombre de la tienda delante (sin repetirlo si ya lo trae). */
+function placeName(p: PublicPlace) {
+  if (!p.point || !p.catalogName) return p.storeName;
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return norm(p.catalogName).includes(norm(p.storeName)) ? p.catalogName : `${p.storeName} ${p.catalogName}`;
+}
+/** Frase con punto final, para que la descripción se lea bien en Google. */
+const sentence = (v: string | null | undefined) => {
+  const t = (v ?? "").trim();
+  return t ? (/[.!?…]$/.test(t) ? t : `${t}.`) : null;
+};
+const waNumber = (v: string | null) => {
+  const n = (v ?? "").replace(/\D/g, "");
+  return n ? (n.length === 10 ? `+57${n}` : `+${n}`) : undefined;
+};
+
 export async function generateMetadata({
   params,
 }: {
@@ -108,13 +160,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, mode } = await params;
   const siteUrl = getSiteUrl();
-  const [store, catalogMeta] = await Promise.all([cachedStoreBySlug(slug), cachedCatalogMeta(slug, mode)]);
+  const [store, catalogMeta, place] = await Promise.all([cachedStoreBySlug(slug), cachedCatalogMeta(slug, mode), cachedPublicPlace(slug, mode)]);
 
   const storeName = catalogMeta?.store_name || store?.name || "Catálogo";
-  const title = catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} · Catálogo y pedidos`;
-  const description = catalogMeta?.headline
+  // Catálogo de un punto: «La Vitrina Zamora · Catálogo y precios en Bucaramanga», con su dirección.
+  const pointTitle = place?.point ? placeName(place) : null;
+  const where = place?.city && !(pointTitle ?? storeName).toLowerCase().includes(place.city.toLowerCase()) ? ` en ${place.city}` : "";
+  const title = pointTitle
+    ? `${pointTitle} · Catálogo y precios${where}`
+    : catalogMeta ? `${catalogMeta.name} · ${storeName}` : `${storeName} · Catálogo y precios${where}`;
+  const placeLine = [place?.address, place?.city].filter(Boolean).join(", ");
+  const description = pointTitle
+    ? [`${pointTitle}${placeLine ? `: ${placeLine}` : ""}.`, sentence(catalogMeta?.headline), "Mira productos y precios al día y pide por WhatsApp."].filter(Boolean).join(" ")
+    : catalogMeta?.headline
     || (storeName !== "Catálogo"
-      ? `Catálogo online de ${storeName}. Mira productos, precios y realiza pedidos por WhatsApp.`
+      ? [place?.headline, `Catálogo online de ${storeName}${where}. Mira productos, precios y realiza pedidos por WhatsApp.`].filter(Boolean).join(" ")
       : "Catálogo online. Mira productos, precios y realiza pedidos por WhatsApp.");
 
   // Dirección única para Google: el dominio de la tienda si tiene uno (o remhub.co/tienda).
@@ -140,7 +200,8 @@ export async function generateMetadata({
 
   return {
     metadataBase: new URL(siteUrl),
-    title,
+    // Sin «— RemHub» al final: en Google sale completo el nombre de la tienda o del punto.
+    title: { absolute: title },
     description,
     alternates: { canonical },
 
@@ -188,8 +249,31 @@ export default async function StoreCatalogLayout({
   params: Promise<{ slug: string; mode: string }>;
 }) {
   const { slug, mode } = await params;
+  // Ficha de negocio para Google (schema.org/Store): el punto con su dirección o la tienda.
+  const place = await cachedPublicPlace(slug, mode);
+  let jsonLd: Record<string, unknown> | null = null;
+  if (place) {
+    const base = await storeBase(place.storeSlug);
+    const url = storeUrl(base, `/${decodeURIComponent(mode)}`);
+    const name = placeName(place);
+    const point = place.point;
+    jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Store",
+      name,
+      url,
+      image: place.logo && /^https:\/\//i.test(place.logo) ? place.logo : undefined,
+      telephone: waNumber(point?.whatsapp || place.whatsapp),
+      description: place.headline || undefined,
+      address: place.address || place.city ? { "@type": "PostalAddress", streetAddress: place.address || undefined, addressLocality: place.city || undefined, addressCountry: "CO" } : undefined,
+      hasMap: place.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([place.storeName, place.address, place.city].filter(Boolean).join(" "))}` : undefined,
+      parentOrganization: point ? { "@type": "Organization", name: place.storeName, url: storeUrl(base, "/inicio") } : undefined,
+    };
+  }
   return (
     <>
+      {/* JSON seguro dentro de <script>: se escapa «<». */}
+      {jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} /> : null}
       <ManifestLink base={`/${slug}/${mode}/app.webmanifest`} param="key" />
       {children}
     </>

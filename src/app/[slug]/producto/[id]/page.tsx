@@ -64,7 +64,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const sb = supabaseServer();
   const { data: store, error: storeError } = await sb
     .from("stores")
-    .select("id")
+    .select("id,name")
     .eq("slug", decodeURIComponent(slug))
     .eq("active", true)
     .eq("catalog_retail", true)
@@ -96,20 +96,23 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const images = photos.length ? photos : [`/api/og?store=${encodeURIComponent(decodeURIComponent(slug))}`];
 
   const canonical = storeUrl(await storeBase(slug), `/producto/${id}`);
+  // «Producto · Tienda»: así sale al buscar el producto con el nombre de la tienda (ej. «zapatero la vitrina»).
+  const storeName = (store as { name?: string | null }).name?.trim();
+  const title = storeName ? `${product.name} · ${storeName}` : product.name;
   return {
     ...appMeta,
-    title: product.name,
+    title: { absolute: title },
     description,
     // Una sola dirección por producto: la del catálogo clásico (los catálogos de campaña apuntan aquí).
     alternates: { canonical },
     openGraph: {
       type: "website",
-      title: product.name,
+      title,
       description,
       url: canonical,
-      images,
+      images: images.map((url) => ({ url, alt: title })),
     },
-    twitter: { card: "summary_large_image", title: product.name, description, images },
+    twitter: { card: "summary_large_image", title, description, images },
   };
 }
 
@@ -208,6 +211,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     description: description.replace(/\s+/g, " ").slice(0, 500) || undefined,
     image: gallery.length ? gallery : undefined,
     sku: code ?? undefined,
+    brand: { "@type": "Brand", name: (store as { name?: string }).name ?? store.slug },
     category: categoryName ?? undefined,
     url: canonical,
     offers: Number(price) > 0 ? {

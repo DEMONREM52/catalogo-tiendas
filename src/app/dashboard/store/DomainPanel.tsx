@@ -183,12 +183,12 @@ export function DomainPanel({ storeId, storeSlug, storeName, canEdit }: { storeI
         <p className="flex items-center gap-1.5 text-sm font-bold"><Search size={15} /> Así te puede ver Google</p>
         <div className="mt-2 rounded-xl border bg-white p-3 text-left" style={{ borderColor: "#e5e7eb" }}>
           <p className="truncate text-xs" style={{ color: "#202124" }}>{publicUrl.replace(/^https:\/\//, "")}</p>
-          <p className="truncate text-base" style={{ color: "#1a0dab" }}>{storeName} · Catálogo y pedidos</p>
+          <p className="truncate text-base" style={{ color: "#1a0dab" }}>{storeName} · Catálogo y precios</p>
           <p className="line-clamp-2 text-xs" style={{ color: "#4d5156" }}>Catálogo online de {storeName}. Mira productos, precios y realiza pedidos por WhatsApp.</p>
         </div>
         <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs" style={{ color: "var(--t-muted)" }}>
           <li>RemHub ya le da a Google el mapa de tu catálogo (<b>/sitemap.xml</b>) y la ficha de cada producto con foto y precio.</li>
-          <li>Entra a <a className="underline" href="https://search.google.com/search-console" target="_blank" rel="noreferrer">Google Search Console</a>, agrega tu dominio y envía <b>{publicUrl.replace(/\/$/, "")}/sitemap.xml</b>. Así Google lo encuentra en días, no en semanas.</li>
+          <li>Entra a <a className="underline" href="https://search.google.com/search-console" target="_blank" rel="noreferrer">Google Search Console</a>, verifícalo con el código (abajo, en «Aparecer en Google») y envía <b>{publicUrl.replace(/\/$/, "")}/sitemap.xml</b>. Así Google lo encuentra en días, no en semanas.</li>
           <li>Crea tu ficha gratis en <a className="underline" href="https://business.google.com" target="_blank" rel="noreferrer">Google Business</a> con el enlace de tu catálogo: es lo que aparece en Maps y al buscar tu negocio por nombre.</li>
           <li>Productos con buena foto, nombre claro y descripción aparecen mejor. Compartir el enlace en Instagram, Facebook y WhatsApp también ayuda.</li>
         </ol>

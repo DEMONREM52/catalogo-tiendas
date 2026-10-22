@@ -6,11 +6,10 @@ export const PROVIDER_CREDENTIAL_FIELDS: Record<string, CredentialFieldInfo[]> =
   sandbox: [
     { key: "webhook_secret", label: "Secreto del webhook", secret: true, required: false, help: "Se genera con «Generar secreto»; sirve para firmar webhooks de prueba." },
   ],
-  // TODO: reemplazar por los campos exactos que exija Alegra según el contrato (no inventados aquí).
+  // Alanube (API e-Provider de Alegra): un token Bearer por cuenta; cada NIT emisor es una «compañía».
   alegra: [
-    { key: "api_user", label: "Usuario de la API", secret: false, required: true, help: "Según el contrato con Alegra (confirmar en su documentación oficial)." },
-    { key: "api_token", label: "Token / llave de la API", secret: true, required: true, help: "Se guarda cifrado; nunca se muestra completo." },
-    { key: "webhook_secret", label: "Secreto de los webhooks", secret: true, required: false, help: "Solo si Alegra firma los webhooks (confirmar esquema)." },
+    { key: "api_token", label: "Token de Alanube", secret: true, required: true, help: "Se saca de tu cuenta de Alanube (Bearer). Se guarda cifrado y nunca se muestra completo." },
+    { key: "webhook_secret", label: "Secreto de los avisos (webhooks)", secret: true, required: false, help: "Se genera con «Generar secreto» y se registra en Alanube con «Conectar avisos»." },
   ],
 };
 

@@ -242,6 +242,8 @@ export interface ElectronicInvoicingProvider {
   downloadPdf(ctx: ProviderContext, doc: ClaimedDocument): Promise<ProviderFile | null>;
   verifyWebhook(input: WebhookInput): WebhookVerification;
   processWebhook(payload: unknown): ParsedWebhook;
+  /** Acciones de configuración propias del proveedor (set de pruebas, resoluciones…). Opcional. */
+  runAction?(ctx: ProviderContext, action: string, input: Record<string, unknown>): Promise<ProviderHealth>;
 }
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- métodos base: cada proveedor sobrescribe solo lo que soporta. */

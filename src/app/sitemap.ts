@@ -21,11 +21,29 @@ async function storeEntries(store: StoreRow, limit: number): Promise<MetadataRou
   const base = await storeBase(store.slug);
   const home = base.target === "inicio" ? "/inicio" : `/${base.target}`;
   const out: MetadataRoute.Sitemap = [{ url: storeUrl(base, home), lastModified: store.updated_at ?? undefined, changeFrequency: "daily", priority: 1 }];
-  const products = (cols: string) => client.from("products").select(cols).eq("store_id", store.id).eq("active", true).or("stock.is.null,stock.gt.0").limit(limit);
+  // Cada catálogo público (el de cada punto, mayoristas, campañas) y la vitrina: así Google encuentra «tienda + punto».
+  const { data: pub } = await client.rpc("store_public_home", { p_slug: store.slug });
+  const catalogs = ((pub as { catalogs?: Array<{ slug: string; point?: unknown }> } | null)?.catalogs ?? []).map((c) => ({ path: `/${c.slug}`, point: Boolean(c.point) }));
+  // Con un solo catálogo la vitrina redirige a él: no se anuncia.
+  for (const c of [...(catalogs.length > 1 ? [{ path: "/inicio", point: false }] : []), ...catalogs]) {
+    const url = storeUrl(base, c.path);
+    if (out.some((e) => e.url === url)) continue;
+    out.push({ url, changeFrequency: "daily", priority: c.point ? 0.9 : 0.8 });
+  }
+  // La base entrega máximo 1.000 filas por consulta: se lee en tandas hasta el límite.
+  const PAGE = 1000;
+  const products = (cols: string, from: number) => client.from("products").select(cols).eq("store_id", store.id).eq("active", true).or("stock.is.null,stock.gt.0")
+    .order("id").range(from, Math.min(from + PAGE, limit) - 1);
   // Si el público no puede leer la fecha de cambio, el sitemap sale igual, sin fechas.
-  const first = await products("id,updated_at");
-  const data = first.error ? (await products("id")).data : first.data;
-  for (const p of (data ?? []) as unknown as Array<{ id: string; updated_at?: string | null }>) {
+  const first = await products("id,updated_at", 0);
+  const cols = first.error ? "id" : "id,updated_at";
+  const data: unknown[] = [...((first.error ? (await products("id", 0)).data : first.data) ?? [])];
+  for (let from = PAGE; data.length === from && from < limit; from += PAGE) {
+    const next = (await products(cols, from)).data ?? [];
+    data.push(...next);
+    if (!next.length) break;
+  }
+  for (const p of data as Array<{ id: string; updated_at?: string | null }>) {
     out.push({ url: storeUrl(base, `/producto/${p.id}`), lastModified: p.updated_at ?? undefined, changeFrequency: "weekly", priority: 0.7 });
   }
   return out;

@@ -9,6 +9,7 @@ import type { ProviderAccount } from "@/lib/fiscal/types";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, CopyButton, Drawer, EmptyState, EnvBadge, Field, Notice, SectionTitle, askReasonDialog, fmtDate, fmtDateTime, inputCls, inputStyle, notify, swal } from "./ui";
 import { DateField } from "@/components/forms/Fields";
+import { AlanubePanel } from "./AlanubePanel";
 
 type AccountDraft = { id?: string; fiscal_entity_id: string; provider: string; environment: string; label: string; external_account_id: string; settings: Record<string, string>; credentials: Record<string, string> };
 
@@ -129,7 +130,7 @@ export function ProviderTab({ access, data, reload }: { access: FiscalAccess; da
       </div>
 
       {data.accounts.length === 0 ? (
-        <EmptyState icon="🔌" title="Ningún proveedor conectado" text="Para probar todo el flujo sin riesgo usa el «Simulador RemHub» en ambiente de pruebas. Cuando tengas el contrato con tu proveedor (Alegra u otro), lo conectas aquí." />
+        <EmptyState icon="🔌" title="Ningún proveedor conectado" text="Para probar todo el flujo sin riesgo usa el «Simulador RemHub» en ambiente de pruebas. Para facturar de verdad conecta «Alanube (Alegra e-Provider)» con tu token: primero en pruebas y luego en producción." />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {data.accounts.map((a) => {
@@ -159,6 +160,7 @@ export function ProviderTab({ access, data, reload }: { access: FiscalAccess; da
                     <CopyButton text={url} label="Copiar URL" />
                   </div>
                 ) : null}
+                {a.provider === "alegra" ? <AlanubePanel account={a} canEdit={canEdit} reload={reload} /> : null}
                 {canEdit ? (
                   <div className="flex flex-wrap gap-2">
                     <Button variant="primary" icon={<Wifi size={14} />} busy={busy === `test-${a.id}`} onClick={() => void test(a)}>Probar conexión</Button>
