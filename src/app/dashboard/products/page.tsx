@@ -726,6 +726,14 @@ export default function ProductsListPage() {
                 </button>
 
                 <Link
+                  href="/dashboard/products/importar"
+                  className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
+                  style={{ borderColor: "var(--t-card-border)" }}
+                  title="Subir muchos productos de una vez desde Excel"
+                >
+                  📥 Importar Excel
+                </Link>
+                <Link
                   href="/dashboard/products/crear"
                   className={clsBtnPrimary()}
                   style={{ padding: "8px 10px", fontSize: 12 }}

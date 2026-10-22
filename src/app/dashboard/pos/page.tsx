@@ -30,6 +30,7 @@ import { LIMIT_LABEL, keepApprovals, useApprovals, usePriceFloors, type Approval
 import { CashStatusChip } from "../caja/CashStatusChip";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { reinsert, undoToast } from "@/lib/ui/undo";
+import { PosToolbar, requestPasses, usePromotions, type Passes } from "./PosExtras";
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -385,9 +386,15 @@ export default function PosPage() {
       alive = false;
     };
   }, [storeId, pointId]);
-  const priceOf = useCallback(
+  // Promociones vigentes del punto (20261228): el precio de la lista baja solo mientras dure la promoción.
+  const { promoFor } = usePromotions(storeId, pointId);
+  const basePriceOf = useCallback(
     (product: Product, level: PriceLevel) => pointPrices.get(product.id)?.[level - 1] ?? getProductPrice(product, level),
     [pointPrices],
+  );
+  const priceOf = useCallback(
+    (product: Product, level: PriceLevel) => { const base = basePriceOf(product, level); return promoFor(product.id, base)?.price ?? base; },
+    [basePriceOf, promoFor],
   );
 
   useEffect(() => {
@@ -648,6 +655,92 @@ export default function PosPage() {
   }
 
   const finderSource = useErpFinderSource(storeId, { activeOnly: true });
+
+  const approvalsRef = useRef(approvals);
+  useEffect(() => { approvalsRef.current = approvals; }, [approvals]);
+  const mergePasses = useCallback((passes: Passes) => {
+    if (Object.keys(passes).length) void restoreApprovals({ ...approvalsRef.current, ...passes });
+  }, [restoreApprovals]);
+  // Un precio de promoción por debajo del límite del vendedor recibe su pase automático (la base revisa que sea la promoción).
+  const promoAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!storeId || editingDoc) return;
+    const need = cart.filter((i) => {
+      const p = productById.get(i.productId);
+      if (!p) return false;
+      const promo = promoFor(p.id, basePriceOf(p, i.priceLevel));
+      const key = `${i.productId}:${i.price}`;
+      return promo && i.price === promo.price && approvalsRef.current[i.productId]?.status !== "approved" && !promoAsked.current.has(key);
+    });
+    if (!need.length) return;
+    for (const i of need) promoAsked.current.add(`${i.productId}:${i.price}`);
+    void requestPasses(storeId, pointId, "promo", null, need.map((i) => ({ product_id: i.productId, price: i.price, qty: i.qty }))).then(mergePasses);
+  }, [cart, storeId, pointId, editingDoc, productById, promoFor, basePriceOf, mergePasses]);
+
+  // Apartado que se entrega o cotización que se convierte en venta (?apartado=… / ?cotizacion=…).
+  const layawayRef = useRef<{ id: string; number: number } | null>(null);
+  const quoteRef = useRef<{ id: string; number: number } | null>(null);
+  const [fromDoc, setFromDoc] = useState<string | null>(null);
+  const sourceDone = useRef(false);
+  useEffect(() => {
+    if (sourceDone.current || !storeId || loading || !allProducts.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const layId = params.get("apartado");
+    const quoteId = params.get("cotizacion");
+    if (!layId && !quoteId) return;
+    sourceDone.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    void (async () => {
+      const sb = supabaseBrowser();
+      type Src = { id: string; number: number; point_id: string | null; customer_name: string | null; customer_phone: string | null; items: Array<{ product_id: string; name: string; qty: number; price: number }>; balance?: number };
+      let src: Src | undefined;
+      if (layId) {
+        const { data } = await sb.rpc("erp_layaways_list", { p_store: storeId, p_status: "open" });
+        src = ((data as { items?: Src[] } | null)?.items ?? []).find((x) => x.id === layId);
+      } else {
+        const { data } = await sb.rpc("erp_quotes_list", { p_store: storeId, p_status: "open" });
+        src = ((Array.isArray(data) ? data : []) as Src[]).find((x) => x.id === quoteId);
+      }
+      if (!src) return void Swal.fire({ icon: "warning", title: "No se encontró", text: "Ya se entregó, se anuló o no es de esta tienda.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+      if (layId && Number(src.balance ?? 0) > 0) return void Swal.fire({ icon: "warning", title: "Falta pagar", text: `El apartado #${src.number} tiene saldo de ${money(Number(src.balance))}. Recibe el abono en Apartados y vuelve a entregar.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
+      const next: CartItem[] = src.items.filter((it) => productById.has(it.product_id)).map((it) => ({
+        productId: it.product_id, name: it.name, qty: Number(it.qty), price: Number(it.price), priceLevel: currentPriceList, note: layId ? `Apartado #${src!.number}` : "", manual: true,
+      }));
+      setEditingDoc(null);
+      setCart(next);
+      if (src.customer_name) setCustomerName(src.customer_name);
+      if (src.customer_phone) setCustomerWhatsApp(src.customer_phone);
+      if (layId) {
+        layawayRef.current = { id: src.id, number: src.number };
+        if (src.point_id && src.point_id !== pointId && !lockedPoint) setPointId(src.point_id);
+        mergePasses(await requestPasses(storeId, src.point_id ?? pointId, "layaway", src.id, next.map((i) => ({ product_id: i.productId, price: i.price, qty: i.qty }))));
+        setFromDoc(`📌 Entregando apartado #${src.number} (ya está pagado). Cobra con «Contado»: la caja se ajusta sola con los abonos.`);
+      } else {
+        quoteRef.current = { id: src.id, number: src.number };
+        setFromDoc(`📝 Venta de la cotización #${src.number}. Revisa precios y existencias y cobra.`);
+      }
+    })();
+  }, [storeId, loading, allProducts, productById, pointId, lockedPoint, currentPriceList, mergePasses]);
+
+  function addComboLines(add: Array<{ productId: string; name: string; qty: number; price: number }>, passes: Passes, comboName: string) {
+    setCart((prev) => [...prev, ...add.filter((a) => !prev.some((p) => p.productId === a.productId)).map((a) => ({
+      productId: a.productId, name: a.name, qty: a.qty, price: a.price, priceLevel: currentPriceList, note: `Combo ${comboName}`, manual: true,
+    }))]);
+    mergePasses(passes);
+    playTone("pop", 0.3);
+  }
+  function applyPrices(prices: Record<string, number>, passes: Passes, note: string) {
+    setCart((prev) => prev.map((i) => (prices[i.productId] !== undefined ? { ...i, price: prices[i.productId], manual: true, note: i.note || note } : i)));
+    mergePasses(passes);
+  }
+  function clearAfterLayaway() {
+    setCart([]);
+    setCustomerNote("");
+    setSelectedClientId("");
+    setPayment(EMPTY_PAYMENT);
+    forgetApproval();
+  }
+  const holdLayaway = () => { if (layawayRef.current) void supabaseBrowser().rpc("erp_layaway_hold", { p_id: layawayRef.current.id }); };
 
   const lines: CartLine[] = useMemo(() => cart.map((item) => {
     const p = productById.get(item.productId);
@@ -978,6 +1071,16 @@ export default function PosPage() {
       }
     }
 
+    // Apartado que se entrega: sus unidades estaban reservadas; se sueltan para que la venta las descuente.
+    if (layawayRef.current && !editingDoc) {
+      const { data: rel, error: relErr } = await supabaseBrowser().rpc("erp_layaway_release", { p_id: layawayRef.current.id, p_point: pointId || null });
+      const ok = rel as { ok?: boolean; error?: string } | null;
+      if (relErr || !ok?.ok) {
+        await Swal.fire({ icon: "error", title: "No se pudo entregar el apartado", text: relErr?.message ?? ok?.error, background: "#0b0b0b", color: "#fff" });
+        return;
+      }
+    }
+
     // Antes de guardar se revisa contra la base: otra persona pudo vender esas unidades hace un momento.
     if (pointId && !editingDoc) {
       const short = await checkStockNow(store.id, pointId, cart.map((i) => ({ product_id: i.productId, qty: i.qty, name: i.name })));
@@ -1002,7 +1105,24 @@ export default function PosPage() {
             return next;
           });
         }
+        holdLayaway();
         return;
+      }
+    }
+
+    // Precio por debajo del costo (20261225): se avisa antes de cobrar y la venta queda registrada para el dueño.
+    if (!editingDoc) {
+      const { data: low } = await supabaseBrowser().rpc("erp_below_cost_check", { p_store: store.id, p_items: cart.map((i) => ({ product_id: i.productId, price: i.price })) });
+      const list = Array.isArray(low) ? (low as Array<{ name: string }>) : [];
+      if (list.length) {
+        const go = await Swal.fire({
+          icon: "warning",
+          title: "Precio por debajo del costo",
+          html: `<div style="text-align:left;font-size:13px;line-height:1.6">${list.map((l) => `• <b>${l.name.replace(/[<>&]/g, "")}</b>`).join("<br>")}</div><br><small>Con este precio se pierde plata. Si sigues, la venta queda registrada y se le avisa al administrador.</small>`,
+          showCancelButton: true, confirmButtonText: "Vender así", cancelButtonText: "Revisar precio",
+          background: "#0b0b0b", color: "#fff", confirmButtonColor: "#ef4444", reverseButtons: true,
+        });
+        if (!go.isConfirmed) { holdLayaway(); return; }
       }
     }
 
@@ -1198,6 +1318,16 @@ export default function PosPage() {
         confirmButtonColor: "#22c55e",
       });
 
+      // Apartado entregado / cotización vendida: queda ligado a la venta (y la caja se compensa con los abonos).
+      if (createdToken && layawayRef.current) {
+        await supabaseBrowser().rpc("erp_layaway_complete", { p_id: layawayRef.current.id, p_order_token: createdToken }).then(() => null, () => null);
+        layawayRef.current = null;
+      }
+      if (createdToken && quoteRef.current) {
+        await supabaseBrowser().rpc("erp_quote_set_status", { p_id: quoteRef.current.id, p_status: "accepted", p_order_token: createdToken }).then(() => null, () => null);
+        quoteRef.current = null;
+      }
+      setFromDoc(null);
       setCart([]);
       setCustomerNote("");
       setSelectedClientId("");
@@ -1208,6 +1338,7 @@ export default function PosPage() {
       setDraftId(null);
     } catch (err: unknown) {
       if (receiptWindow && !receiptWindow.closed) receiptWindow.close();
+      if (!createdToken) holdLayaway();
       // Se cayó la red antes de crear la venta: se ofrece guardarla como borrador (nunca si ya se creó).
       if (!createdToken && isNetworkError(err) && paymentType !== "credito") {
         reportNetworkError();
@@ -1917,6 +2048,29 @@ export default function PosPage() {
               flash={flash}
               onNext={goSearch}
             />
+
+            {fromDoc ? (
+              <div className="mt-2 flex items-start justify-between gap-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}>
+                <span>{fromDoc}</span>
+                <button type="button" className="shrink-0 underline" onClick={() => { if (layawayRef.current) holdLayaway(); layawayRef.current = null; quoteRef.current = null; setFromDoc(null); setCart([]); }}>Cancelar</button>
+              </div>
+            ) : null}
+            {store && !editingDoc ? (
+              <PosToolbar
+                storeId={store.id}
+                storeName={store.name}
+                pointId={pointId}
+                cart={cart.map((c) => ({ productId: c.productId, name: c.name, qty: c.qty, price: c.price }))}
+                total={total}
+                customerName={customerName}
+                customerPhone={customerWhatsApp}
+                customerDoc={customerDocument}
+                priceOf={(id) => { const p = productById.get(id); return p ? priceOf(p, currentPriceList) : null; }}
+                onAddCombo={addComboLines}
+                onSetPrices={applyPrices}
+                onClear={clearAfterLayaway}
+              />
+            ) : null}
 
             {cart.length ? (
               <div className="mt-3 space-y-1 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>

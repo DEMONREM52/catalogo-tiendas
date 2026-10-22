@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField } from "@/components/forms/Fields";
+import { HELP_SCREENS } from "@/components/HelpButton";
 
 /**
  * Centro de suscripciones de RemHub (solo el administrador de la plataforma).
@@ -11,7 +12,7 @@ import { DateField } from "@/components/forms/Fields";
  * Necesita 20261211_saas_planes_suscripciones.sql.
  */
 
-type Tab = "resumen" | "salud" | "clientes" | "planes" | "pagos" | "ajustes";
+type Tab = "resumen" | "salud" | "clientes" | "planes" | "pagos" | "ajustes" | "videos";
 type Dash = {
   ok: boolean; error?: string;
   settings: { enforce_limits: boolean; enforce_modules?: boolean; default_trial_plan: string; default_trial_days: number; grace_days: number };
@@ -111,7 +112,7 @@ export default function AdminSubscriptionsPage() {
           <p className="text-sm" style={muted}>Planes, clientes, cobros y conversión. Solo ingresos de RemHub: las ventas de las tiendas no se mezclan aquí.</p>
         </div>
         <nav className="flex flex-wrap gap-1 rounded-2xl border p-1 text-sm font-bold" style={box}>
-          {([["resumen", "Resumen"], ["salud", "❤️ Salud"], ["clientes", "Clientes"], ["planes", "Planes"], ["pagos", "Pagos"], ["ajustes", "Ajustes"]] as const).map(([k, l]) => (
+          {([["resumen", "Resumen"], ["salud", "❤️ Salud"], ["clientes", "Clientes"], ["planes", "Planes"], ["pagos", "Pagos"], ["ajustes", "Ajustes"], ["videos", "🎬 Videos"]] as const).map(([k, l]) => (
             <button key={k} type="button" onClick={() => setTab(k)} className="rounded-xl px-3 py-1.5 transition" style={tab === k ? { background: "#8b5cf6", color: "#fff" } : undefined}>{l}</button>
           ))}
         </nav>
@@ -174,6 +175,7 @@ export default function AdminSubscriptionsPage() {
 
       {tab === "resumen" && dash ? <Referrals /> : null}
       {tab === "salud" ? <Health /> : null}
+      {tab === "videos" ? <HelpVideos /> : null}
       {tab === "clientes" ? <Customers plans={plans} onChanged={() => void loadDash()} /> : null}
       {tab === "planes" ? <Plans plans={plans} onSaved={() => { void loadPlans(); void loadDash(); }} /> : null}
       {tab === "pagos" ? <Payments /> : null}
@@ -700,6 +702,49 @@ function Health() {
               <p className="mt-1 text-xs font-semibold" style={{ color }}>{r.reason}</p>
               <p className="mt-1 text-xs opacity-80">Entró {ago(r.owner_seen)} · última venta {ago(r.last_sale)} · {r.sales_7} ventas en 7 días · {cop(r.total_30)} en 30 días · {r.products} productos · {r.users} usuarios</p>
               {link ? <a href={link} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-xl px-3 py-1.5 text-xs font-bold text-white" style={{ background: "#16a34a" }}>💬 Escribirle</a> : <p className="mt-2 text-[11px] opacity-60">Sin WhatsApp en la tienda.</p>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ----------------------------- videos de ayuda (20261227) ----------------------------- */
+
+function HelpVideos() {
+  const [rows, setRows] = useState<Record<string, { title: string; url: string }>>({});
+  const [err, setErr] = useState("");
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  useEffect(() => {
+    void supabaseBrowser().from("saas_help_videos").select("screen,title,url").then(({ data, error }) => {
+      if (error) return setErr(/saas_help_videos|does not exist|schema cache/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261227_crecer.sql." : error.message);
+      setRows(Object.fromEntries(((data ?? []) as Array<{ screen: string; title: string; url: string }>).map((r) => [r.screen, { title: r.title, url: r.url }])));
+    });
+  }, []);
+  async function save(key: string) {
+    const r = rows[key] ?? { title: "", url: "" };
+    const { data, error } = await supabaseBrowser().rpc("saas_admin_help_video_save", { p_screen: key, p_title: r.title, p_url: r.url });
+    const v = data as { ok: boolean; error?: string } | null;
+    if (error || !v?.ok) return void Swal.fire({ icon: "error", title: "No se guardó", text: v?.error ?? error?.message });
+    setSavedKey(key);
+    window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
+  }
+  return (
+    <section className="space-y-3">
+      <p className="text-sm opacity-80">Un video corto (30 segundos) por pantalla. Aparece en el botón «?» de esa pantalla para todas las tiendas. Sirve un enlace de YouTube (puede ser «no listado»), Vimeo o un .mp4. Deja el enlace vacío para quitarlo.</p>
+      {err ? <p className="rounded-xl border border-amber-400/40 p-3 text-sm">⚠️ {err}</p> : null}
+      <div className="space-y-2">
+        {HELP_SCREENS.map((sc) => {
+          const r = rows[sc.key] ?? { title: "", url: "" };
+          return (
+            <div key={sc.key} className="grid gap-2 rounded-2xl border p-3 sm:grid-cols-[160px_1fr_1.4fr_auto] sm:items-center" style={{ borderColor: "rgba(148,163,184,.3)" }}>
+              <b className="text-sm">{sc.title}</b>
+              <input className="rounded-xl border bg-transparent px-3 py-2 text-sm" style={{ borderColor: "rgba(148,163,184,.35)" }} placeholder="Título (ej: Cómo vender en el POS)"
+                value={r.title} onChange={(e) => setRows((c) => ({ ...c, [sc.key]: { ...r, title: e.target.value } }))} />
+              <input className="rounded-xl border bg-transparent px-3 py-2 text-sm" style={{ borderColor: "rgba(148,163,184,.35)" }} placeholder="https://youtu.be/…"
+                value={r.url} onChange={(e) => setRows((c) => ({ ...c, [sc.key]: { ...r, url: e.target.value.trim() } }))} />
+              <button type="button" onClick={() => void save(sc.key)} className="rounded-xl px-3 py-2 text-sm font-bold text-white" style={{ background: "#8b5cf6" }}>{savedKey === sc.key ? "✅" : "Guardar"}</button>
             </div>
           );
         })}

@@ -11,9 +11,11 @@ import { PayablesTab } from "./Payables";
 import { InternalCreditTab } from "./InternalCredit";
 import { OverviewTab, WarehousesTab } from "./StockTabs";
 import { StockBrowser } from "./StockBrowser";
+import { StaleStockTab } from "./StaleStock";
+import { ExpiryTab } from "./InventoryExtras";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
 
-type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit";
+type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry";
 
 const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: string[] }> = [
   { key: "overview", icon: "📊", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
@@ -22,6 +24,8 @@ const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: strin
   { key: "transfers", icon: "🚚", label: "Traslados", permissions: ["transfers", "inventory"] },
   { key: "adjustments", icon: "🛠️", label: "Ajustes", permissions: ["inventory_adjust", "inventory"] },
   { key: "kardex", icon: "📒", label: "Kardex", permissions: ["inventory"] },
+  { key: "stale", icon: "💤", label: "Sin movimiento", permissions: ["inventory", "reports"] },
+  { key: "expiry", icon: "📅", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
   { key: "purchases", icon: "🛒", label: "Ingreso de factura", permissions: ["purchases"] },
   { key: "suppliers", icon: "🏭", label: "Proveedores", permissions: ["suppliers", "purchases"] },
   { key: "payables", icon: "💸", label: "Cuentas por pagar", permissions: ["payables"] },
@@ -105,7 +109,15 @@ export default function InventarioPage() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                setTab(t.key);
+                // La pestaña queda en la dirección (enlace directo, ayuda y recorrido guiado de esa pestaña).
+                const url = new URL(window.location.href);
+                url.searchParams.set("tab", t.key);
+                url.searchParams.delete("q");
+                window.history.replaceState(null, "", url.toString());
+                window.dispatchEvent(new Event("remhub-tab-change"));
+              }}
               className="shrink-0 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5"
               style={
                 selected
@@ -125,6 +137,8 @@ export default function InventarioPage() {
       {current.key === "transfers" ? <TransfersTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "adjustments" ? <AdjustmentsTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "kardex" ? <KardexTab ctx={ctx} warehouses={warehouses} /> : null}
+      {current.key === "stale" ? <StaleStockTab ctx={ctx} warehouses={warehouses} /> : null}
+      {current.key === "expiry" ? <ExpiryTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "purchases" ? <PurchasesTab ctx={ctx} warehouses={ctx.pointId ? warehouses.filter((w) => w.id === ctx.pointId) : warehouses} /> : null}
       {current.key === "suppliers" ? <SuppliersTab ctx={ctx} /> : null}
       {current.key === "payables" ? <PayablesTab ctx={ctx} /> : null}

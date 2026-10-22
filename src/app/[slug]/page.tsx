@@ -23,16 +23,27 @@ const loadHome = unstable_cache(async (slugRaw: string): Promise<Home | null | "
 
 const isSafe = (u: string | null | undefined): u is string => Boolean(u) && /^https:\/\//i.test(String(u));
 
+/** Lo que ayuda a salir en Google (20261227): frase, ciudad, dirección, categorías y productos con foto. */
+type Seo = { headline: string | null; city: string | null; address: string | null; categories: string[]; products: Array<{ id: string; name: string; image: string; price: number | null }>; count: number };
+const loadSeo = unstable_cache(async (slugRaw: string): Promise<Seo | null> => {
+  const { data, error } = await supabaseServer().rpc("store_public_seo", { p_slug: decodeURIComponent(slugRaw || "") });
+  return error ? null : ((data as Seo | null) ?? null);
+}, ["store-public-seo-v1"], { revalidate: 600 });
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const home = await loadHome(slug);
+  const [home, seo] = await Promise.all([loadHome(slug), loadSeo(slug)]);
   if (!home || home === "missing") return { title: "Tienda no disponible · RemHub", robots: { index: false, follow: false } };
   const base = await storeBase(home.slug);
   const canonical = storeUrl(base, "/inicio");
-  const description = `Catálogos de ${home.name}: ${home.catalogs.map((c) => c.name).join(", ")}. Mira productos y precios y pide por WhatsApp.`.slice(0, 300);
+  // Título y descripción pensados para búsquedas locales: «Tienda en Ciudad», qué vende y cómo pedir.
+  const what = seo?.categories?.length ? seo.categories.slice(0, 4).join(", ") : home.catalogs.map((c) => c.name).join(", ");
+  const description = [seo?.headline, `${home.name}${seo?.city ? ` en ${seo.city}` : ""}: ${what}.`, `${seo?.count ? `${seo.count} productos con ` : ""}precios al día. Pide por WhatsApp.`]
+    .filter(Boolean).join(" ").slice(0, 300);
   const image = isSafe(home.banner_url) ? home.banner_url : isSafe(home.logo_url) ? home.logo_url : undefined;
   return {
-    title: `${home.name} · Catálogos`,
+    title: seo?.city ? `${home.name} en ${seo.city} · Catálogo y precios` : `${home.name} · Catálogo y precios`,
+    keywords: [home.name, ...(seo?.categories ?? []), ...(seo?.city ? [seo.city, `${(seo.categories ?? [])[0] ?? "tienda"} en ${seo.city}`] : [])],
     description,
     alternates: { canonical },
     openGraph: { type: "website", title: home.name, description, url: canonical, images: image ? [image] : undefined },
@@ -50,6 +61,7 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   if (home.catalogs.length === 1) redirect(`/${home.slug}/${home.catalogs[0].slug}`);
 
   const base = await storeBase(home.slug);
+  const seo = await loadSeo(slug);
   // En el espacio de la tienda (su subdominio o dominio propio) los enlaces van sin el nombre (sin redirección por clic).
   const h = await headers();
   const onStoreHost = Boolean(h.get("x-store-host")) && (h.get("x-store-slug") ?? "").toLowerCase() === home.slug.toLowerCase();
@@ -62,6 +74,20 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
     logo: isSafe(home.logo_url) ? home.logo_url : undefined,
     image: isSafe(home.banner_url) ? home.banner_url : undefined,
     telephone: home.whatsapp || undefined,
+    description: seo?.headline || undefined,
+    address: seo?.city || seo?.address ? { "@type": "PostalAddress", streetAddress: seo?.address || undefined, addressLocality: seo?.city || undefined, addressCountry: "CO" } : undefined,
+    areaServed: seo?.city || undefined,
+    // Lo que vende, para que Google entienda la tienda (sin precios de costo ni existencias).
+    hasOfferCatalog: seo?.products?.length ? {
+      "@type": "OfferCatalog",
+      name: `Productos de ${home.name}`,
+      itemListElement: seo.products.slice(0, 12).map((p) => ({
+        "@type": "Offer",
+        priceCurrency: "COP",
+        price: p.price ? Math.round(p.price) : undefined,
+        itemOffered: { "@type": "Product", name: p.name, image: isSafe(p.image) ? p.image : undefined, url: storeUrl(base, `/producto/${p.id}`) },
+      })),
+    } : undefined,
   };
   const wa = (home.whatsapp ?? "").replace(/\D/g, "");
   const KIND: Record<Catalog["kind"], string> = { retail: "🛍️", wholesale: "📦", catalog: "✨" };

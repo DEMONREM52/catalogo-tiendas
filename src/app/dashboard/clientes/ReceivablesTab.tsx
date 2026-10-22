@@ -10,6 +10,7 @@ import { askPayment } from "./StatementDrawer";
 import { errorText, methodLabel, money, shortDate, waLink, type ThirdParty } from "./terceros";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
+import { createPortal } from "react-dom";
 
 type Item = {
   id: string; customer_id: string; customer: string; document: string | null; mobile: string | null; doc_number: string | null;
@@ -63,6 +64,9 @@ export function ReceivablesTab({
   onOpenStatement: (party: ThirdParty) => void;
   refreshKey: number;
 }) {
+  // Recordatorio a todos los vencidos (uno por cliente, con todos sus documentos y el total).
+  const [remind, setRemind] = useState(false);
+  const [sent, setSent] = useState<Set<string>>(() => new Set());
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,7 @@ export function ReceivablesTab({
   if (!data) return <div className="h-64 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />;
 
   const totalAging = AGING.reduce((s, [k]) => s + Number(data.aging[k]), 0);
+
 
   return (
     <div className="space-y-4">
@@ -180,6 +185,9 @@ export function ReceivablesTab({
             ))}
           </div>
           <div className="flex flex-1 flex-wrap justify-end gap-2">
+            {data.items.some((i) => i.late > 0) ? (
+              <button type="button" onClick={() => setRemind(true)} className="rounded-xl px-3 py-2 text-xs font-bold text-white" style={{ background: "#16a34a" }}>📨 Recordar a todos los vencidos</button>
+            ) : null}
             <div className="relative min-w-48 flex-1 sm:max-w-xs">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
               <input className="w-full rounded-xl border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente o documento…" />
@@ -269,6 +277,44 @@ export function ReceivablesTab({
             ))}
           </div>
         </section>
+      ) : null}
+      {remind && data ? createPortal(
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,.55)" }} onMouseDown={(e) => { if (e.target === e.currentTarget) setRemind(false); }}>
+          <div role="dialog" aria-modal="true" aria-label="Recordar a los vencidos" className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border p-5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-black">📨 Recordar a los vencidos</h3>
+              <button type="button" onClick={() => setRemind(false)} className="rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cerrar</button>
+            </div>
+            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Un mensaje por cliente con todos sus documentos vencidos. Toca cada uno: se abre WhatsApp con el texto listo y queda marcado como enviado.</p>
+            <div className="mt-3 flex-1 space-y-1.5 overflow-y-auto">
+              {Object.values(data.items.filter((i) => i.late > 0).reduce<Record<string, { id: string; name: string; mobile: string | null; total: number; docs: typeof data.items }>>((acc, i) => {
+                const k = i.customer_id;
+                acc[k] ??= { id: k, name: i.customer, mobile: i.mobile, total: 0, docs: [] };
+                acc[k].total += Number(i.balance);
+                acc[k].docs.push(i);
+                return acc;
+              }, {})).sort((a, b) => b.total - a.total).map((c) => {
+                const text = [
+                  `Hola ${c.name.split(" ")[0]}, te escribimos de ${storeName}. Tienes un saldo vencido de ${money(c.total)}:`,
+                  ...c.docs.map((d) => `• ${d.doc_number ?? "Documento"}: ${money(d.balance)} (venció el ${shortDate(d.due_date)})`),
+                  "¿Nos confirmas cuándo puedes ponerte al día? ¡Gracias!",
+                ].join("\n");
+                const link = waLink(c.mobile, text);
+                const done = sent.has(c.id);
+                return (
+                  <div key={c.id} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: done ? "color-mix(in oklab, #10b981 45%, var(--t-card-border))" : "var(--t-card-border)", opacity: done ? 0.7 : 1 }}>
+                    <span className="min-w-0 flex-1"><b className="block truncate">{c.name}</b><span className="text-xs" style={{ color: "var(--t-muted)" }}>{c.docs.length} documento(s) · {money(c.total)}</span></span>
+                    {link ? (
+                      <a href={link} target="_blank" rel="noreferrer" onClick={() => setSent((cur) => new Set(cur).add(c.id))} className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: done ? "#64748b" : "#16a34a" }}>{done ? "✓ Enviado" : "💬 Enviar"}</a>
+                    ) : <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>Sin celular</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-center text-xs" style={{ color: "var(--t-muted)" }}>{sent.size} enviado(s)</p>
+          </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

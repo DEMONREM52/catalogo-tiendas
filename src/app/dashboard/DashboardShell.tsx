@@ -31,6 +31,7 @@ import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
 import { HelpButton } from "@/components/HelpButton";
+import { GuidedTourHost } from "@/components/tour/GuidedTour";
 
 type Role = "admin" | "store";
 
@@ -203,12 +204,16 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   billing: [
     { href: "/dashboard/pos", icon: "💳", label: "POS / Vender", short: "POS", permissions: ["pos"] },
     { href: "/dashboard/caja", icon: "💵", label: "Caja", permissions: ["cash", "cash_manage"] },
+    { href: "/dashboard/apartados", icon: "📌", label: "Apartados y cotizaciones", short: "Apartados", permissions: ["pos", "orders"] },
+    { href: "/dashboard/promociones", icon: "🏷️", label: "Promociones y combos", short: "Promos", permissions: ["products_prices", "profit_rules", "price_approve"] },
+    { href: "/dashboard/garantias", icon: "🛠️", label: "Garantías y devoluciones", short: "Garantías", permissions: ["pos", "inventory", "sales_return"] },
     { href: "/dashboard/fiscal", icon: "🏛️", label: "Factura electrónica", short: "Electrónica", permissions: FISCAL_PERMISSIONS },
     { href: "/dashboard/store/billing", icon: "🧾", label: "Datos de facturación", short: "Datos", permissions: ["billing"], adminOnly: true },
   ],
   finance: [
     { href: "/dashboard/rentabilidad", icon: "📈", label: "Rentabilidad", permissions: PROFIT_PERMISSIONS },
     { href: "/dashboard/gastos", icon: "💸", label: "Gastos y nómina", short: "Gastos", permissions: FINANCE_PERMISSIONS },
+    { href: "/dashboard/equipo", icon: "🏆", label: "Comisiones y metas", short: "Metas", permissions: ["pos", "payroll", "profit_view", "reports"] },
   ],
   settings: [
     { href: "/dashboard/store", icon: "🏪", label: "Mi tienda", permissions: ["store"] },
@@ -765,13 +770,14 @@ export default function DashboardShell({
     add({ href: "/dashboard/inventario?tab=transfers", emoji: "🚚", label: "Nuevo traslado", keywords: "enviar mercancia bodega punto" }, canOpen("transfers") || canOpen("inventory"));
     add({ href: "/dashboard/inventario?tab=purchases", emoji: "🛒", label: "Ingresar factura de compra", keywords: "proveedor compra ingreso" }, canOpen("purchases"));
     add({ href: "/dashboard/products/crear", emoji: "✨", label: "Nuevo producto", keywords: "crear articulo" }, canOpen("products"));
+    add({ href: "/dashboard/products/importar", emoji: "📥", label: "Importar productos desde Excel", keywords: "excel csv subir masivo plantilla" }, canOpen("products"));
     add({ href: "/dashboard/pedidos?tab=internos", emoji: "📨", label: "Nuevo pedido interno", keywords: "pedir mercancia punto bodega" }, ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)));
     for (const g of menu) for (const i of g.items) add({ href: i.href, emoji: i.emoji, label: i.label, hint: i.hint ?? g.title }, true);
     for (const tabs of Object.values(MODULE_TABS)) for (const t of tabs) add({ href: t.href, emoji: t.icon, label: t.label }, t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || storeIsOwner || isStoreAdmin));
     const inv: Array<[string, string, string, string[]]> = [
       ["stock", "📦", "Existencias", ["inventory"]], ["transfers", "🚚", "Traslados", ["transfers", "inventory"]], ["adjustments", "🛠️", "Ajustes de inventario", ["inventory_adjust", "inventory"]],
       ["kardex", "📒", "Kardex", ["inventory"]], ["purchases", "🛒", "Facturas de compra", ["purchases"]], ["suppliers", "🏭", "Proveedores", ["suppliers", "purchases"]],
-      ["payables", "💸", "Cuentas por pagar", ["payables"]], ["internal", "🤝", "Cuenta con puntos", ["internal_credit", "internal_credit_manage"]],
+      ["payables", "💸", "Cuentas por pagar", ["payables"]], ["internal", "🤝", "Cuenta con puntos", ["internal_credit", "internal_credit_manage"]], ["stale", "💤", "Productos sin movimiento", ["inventory", "reports"]], ["expiry", "📅", "Vencimientos", ["inventory", "purchases", "products"]],
     ];
     for (const [key, emoji, label, perms] of inv) add({ href: `/dashboard/inventario?tab=${key}`, emoji, label, hint: "Inventario" }, perms.some((p) => canOpen(p)));
     return out;
@@ -974,6 +980,7 @@ export default function DashboardShell({
             ) : null}
             {role === "store" && store?.id ? <CommandPalette storeId={store.id} links={paletteLinks} can={canOpen} /> : null}
             {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
+            {role === "store" && store?.id ? <GuidedTourHost /> : null}
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
             {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}

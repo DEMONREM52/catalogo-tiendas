@@ -12,6 +12,8 @@ import { MarketingPanel } from "./MarketingPanel";
 import { DomainPanel } from "./DomainPanel";
 import { PRODUCTION_HOST } from "@/lib/share/origin";
 import { EditableNickname, useNicknameUpdates } from "../Nickname";
+import { BackupPanel } from "./BackupPanel";
+import { LoyaltyPanel, QrPanel } from "./SalesSettings";
 
 type StoreProfileDraft = {
   headline: string;
@@ -1124,6 +1126,9 @@ export default function StoreSettings() {
 
         <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
         <DomainPanel storeId={store.id} storeSlug={store.slug} storeName={store.name} canEdit={canEdit} />
+        {canEdit ? <LoyaltyPanel storeId={store.id} /> : null}
+        {canEdit ? <QrPanel storeId={store.id} /> : null}
+        {canEdit ? <BackupPanel storeId={store.id} storeSlug={store.slug} /> : null}
 
         <Panel title="Acceso rápido" description="Elige qué accesos mostrar como tarjetas en la página inicial del dashboard.">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

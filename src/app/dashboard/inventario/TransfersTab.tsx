@@ -9,6 +9,7 @@ import { InternalCreditPreview } from "./InternalCredit";
 import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import { TransferEditor } from "./TransferEditor";
 import { reinsert, undoToast } from "@/lib/ui/undo";
+import { ScanCounter } from "@/components/ScanCounter";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import {
@@ -223,6 +224,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const setTfField = (k: keyof typeof tf, v: string) => { setTf((cur) => ({ ...cur, [k]: v })); setLimit(30); };
   const filtersOn = Boolean(tf.q || tf.from || tf.to || tf.origin || tf.dest || filter !== "all");
   const [receiving, setReceiving] = useState<{ id: string; qty: Record<string, number>; notes: string } | null>(null);
+  const [scanReceive, setScanReceive] = useState(false);
   // Corrección de productos (solo en tránsito y antes de «Revisado»; 20261217).
   const [editingId, setEditingId] = useState<string | null>(null);
   const editable = (row: TransferRow) => row.status === "in_transit" && !(row.erp_transfer_signatures ?? []).some((s) => s.step === "sent" || s.step === "delivered" || s.step === "received");
@@ -795,7 +797,31 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
 
                 {receiving?.id === row.id ? (
                   <div className="mt-3 space-y-2 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
-                    <p className="text-sm font-semibold">Cuenta lo que llegó</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">Cuenta lo que llegó</p>
+                      <Btn variant="ghost" onClick={() => setScanReceive(true)}><span title="Opcional: con la cámara del celular o un lector de códigos">📷 Recibir escaneando</span></Btn>
+                    </div>
+                    {scanReceive ? (
+                      <ScanCounter
+                        storeId={ctx.storeId}
+                        title={`Recibir traslado #${row.number}`}
+                        allowed={new Map(row.erp_transfer_items.map((i) => [i.product_id, { name: itemName(i), sku: (Array.isArray(i.products) ? i.products[0] : i.products)?.sku ?? null, max: i.qty }]))}
+                        zeroOthersLabel="Lo que no escaneé no llegó (queda en 0)"
+                        onClose={() => setScanReceive(false)}
+                        onDone={(counts, zeroOthers) => {
+                          setScanReceive(false);
+                          const got = new Map(counts.map((c) => [c.product_id, c.qty]));
+                          const qty = { ...receiving.qty };
+                          for (const i of row.erp_transfer_items) {
+                            if (got.has(i.product_id)) qty[i.product_id] = Math.min(i.qty, got.get(i.product_id)!);
+                            else if (zeroOthers) qty[i.product_id] = 0;
+                          }
+                          setReceiving({ ...receiving, qty });
+                          const short = row.erp_transfer_items.filter((i) => (qty[i.product_id] ?? i.qty) < i.qty).length;
+                          void toast(short ? `Faltan unidades en ${short} producto(s)` : "Llegó todo completo", short ? "warning" : "success", short ? "Revisa y explica el faltante en las notas." : undefined);
+                        }}
+                      />
+                    ) : null}
                     {row.erp_transfer_items.map((i) => (
                       <label key={i.product_id} className="flex items-center justify-between gap-3 text-sm">
                         <span className="min-w-0 truncate">{itemName(i)} <span style={{ color: "var(--t-muted)" }}>(enviadas {i.qty})</span></span>

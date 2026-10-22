@@ -14,6 +14,7 @@ import {
 } from "./shared";
 import { DateField } from "@/components/forms/Fields";
 import { PurchaseHistory } from "./PurchaseHistory";
+import { ExpiryDialog, PurchaseSuggestions, type ExpiryLine } from "./InventoryExtras";
 import { usePurchaseSearch, type PurchaseRow } from "./purchase-search";
 import { MarkupToolbar } from "./MarkupToolbar";
 import { QuickProductModal } from "./QuickProductModal";
@@ -172,6 +173,9 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const canPrices = ctx.can("products_prices");
   // Crear producto rápido sin salir de la factura (null = cerrado; texto = nombre sugerido).
   const [quickName, setQuickName] = useState<string | null>(null);
+  // Vencimientos (opcional, 20261226): después de registrar se ofrece anotar fechas.
+  const [expiryAsk, setExpiryAsk] = useState<{ purchaseId: string; number: number | null; lines: ExpiryLine[] } | null>(null);
+  const [expiryOpen, setExpiryOpen] = useState(false);
   const canCreateProducts = ctx.can("products");
   const pricing = usePurchasePricing(ctx.storeId, form.lines.map((l) => l.product_id), canBuy && canPrices);
   const search = usePurchaseSearch(ctx.storeId, suppliers);
@@ -483,6 +487,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setRestored(false);
     // Se conservan proveedor, fecha, forma de pago, bodega y quién revisó para la siguiente factura.
     setForm((cur) => ({ ...cur, lines: [], invoiceRef: "", notes: "" }));
+    if (purchaseId) setExpiryAsk({ purchaseId: purchaseId as string, number: created?.number ?? null, lines: f.lines.filter((l) => l.qty > 0).map((l) => ({ product_id: l.product_id, name: l.name, qty: l.qty, warehouse_id: l.warehouse_id || defaultWh })) });
     if (purchaseId) {
       const url = purchaseReceiptUrl(purchaseId as string, true);
       if (receiptWin && !receiptWin.closed) receiptWin.location.href = url;
@@ -539,6 +544,30 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
               </div>
             }
           >
+            {expiryAsk ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                <span>📅 ¿Algo del ingreso{expiryAsk.number ? ` #${expiryAsk.number}` : ""} vence? (opcional)</span>
+                <span className="flex gap-2">
+                  <Btn variant="ghost" onClick={() => setExpiryAsk(null)}>No</Btn>
+                  <Btn onClick={() => setExpiryOpen(true)}>Anotar fechas</Btn>
+                </span>
+              </div>
+            ) : null}
+            {expiryAsk && expiryOpen ? (
+              <ExpiryDialog storeId={ctx.storeId} purchaseId={expiryAsk.purchaseId} number={expiryAsk.number} lines={expiryAsk.lines} onClose={() => { setExpiryOpen(false); setExpiryAsk(null); }} />
+            ) : null}
+            {!editing ? (
+              <PurchaseSuggestions storeId={ctx.storeId} supplier={form.supplier} onAdd={(add, supplierId) => {
+                setForm((cur) => ({
+                  ...cur,
+                  supplier: cur.supplier || supplierId || "",
+                  lines: [...cur.lines, ...add.filter((a) => !cur.lines.some((l) => l.product_id === a.product_id)).map((a) => ({
+                    product_id: a.product_id, name: a.name, sku: a.sku, current: 0, qty: a.qty, unit_cost: a.unit_cost, tax_rate: 0, warehouse_id: defaultWh,
+                  }))],
+                }));
+                void toast(`${add.length} producto(s) agregados a la factura`, "success", "Revisa cantidades y costos antes de registrar.");
+              }} />
+            ) : null}
             {restored && hasWork ? (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, transparent)", background: "color-mix(in oklab, var(--t-accent) 10%, transparent)" }}>
                 <span>📝 Recuperamos tu borrador{editing ? ` de la edición del #${editing.number}` : ""} ({form.lines.length} producto{form.lines.length === 1 ? "" : "s"}). Sigue donde ibas.</span>

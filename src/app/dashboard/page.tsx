@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import { OnboardingCard } from "./OnboardingCard";
-import { MyTasks, PointToday } from "./HomePanels";
+import { GoalsCard, MyTasks, PointToday } from "./HomePanels";
+import { CostAlertsCard, DailyCloseButton } from "./MoneyPanels";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
@@ -79,6 +80,8 @@ export default function DashboardHome() {
   const [quickAccess, setQuickAccess] = useState<string[] | null>(null);
   const [canReports, setCanReports] = useState(false);
   const [canPos, setCanPos] = useState(false);
+  const [canMoney, setCanMoney] = useState(false);
+  const [canClose, setCanClose] = useState(false);
   const [points, setPoints] = useState<Array<{ id: string; name: string; kind: string }>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
@@ -107,6 +110,8 @@ export default function DashboardHome() {
         setActions(QUICK_ACTIONS.filter((a) => can(a.permission)));
         setCanReports(can("reports"));
         setCanPos(can("pos"));
+        setCanMoney(can("costs_view") || can("profit_view") || can("price_approve"));
+        setCanClose(can("reports") || can("cash_manage") || can("profit_view"));
         if (access.store) {
           const [profileRes, pointsRes] = await Promise.all([
             sb.from("store_profiles").select("quick_access").eq("store_id", access.store.id).maybeSingle(),
@@ -155,8 +160,9 @@ export default function DashboardHome() {
               {store?.name ? `Esto es lo que pasa hoy en ${store.name}.` : "Tus herramientas de trabajo en un solo lugar."}
             </p>
           </motion.div>
-          {actions.length ? (
+          {actions.length || (store && canClose) ? (
             <div className="flex flex-wrap gap-2">
+              {store && canClose ? <DailyCloseButton storeId={store.id} storeName={store.name} /> : null}
               {actions.map((a, i) => (
                 <motion.div key={a.href + a.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.05 * i } }}>
                   <Link
@@ -176,7 +182,9 @@ export default function DashboardHome() {
       {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
 
       {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
+      {store && !isAdmin && canMoney ? <CostAlertsCard storeId={store.id} /> : null}
       {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
+      {store && !isAdmin ? <GoalsCard storeId={store.id} /> : null}
 
       {loadError ? (
         <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>

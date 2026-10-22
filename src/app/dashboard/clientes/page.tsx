@@ -11,11 +11,12 @@ import { docWithDv } from "../nit";
 import { CreditMeter, KindBadge } from "./CreditMeter";
 import { ReceivablesTab } from "./ReceivablesTab";
 import { FrequentCustomers } from "./FrequentCustomers";
+import { LoyaltyCustomers } from "./LoyaltyCustomers";
 import { StatementDrawer } from "./StatementDrawer";
 import { ThirdPartyForm } from "./ThirdPartyForm";
 import { KINDS, errorText, initials, kindInfo, loadBalances, loadThirdParties, money, waLink, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 
-type Tab = "terceros" | "cartera" | "frecuentes";
+type Tab = "terceros" | "cartera" | "frecuentes" | "puntos";
 type CreditFilter = "all" | "with" | "overdue" | "over" | "blocked";
 const PAGE = 60;
 
@@ -27,6 +28,7 @@ export default function TercerosPage() {
   const [legacy, setLegacy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("terceros");
+  const [canLoyalty, setCanLoyalty] = useState(false);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<ThirdKind | "all">("all");
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
@@ -45,9 +47,11 @@ export default function TercerosPage() {
         const params = new URLSearchParams(window.location.search);
         if (params.get("tab") === "cartera") setTab("cartera");
         if (params.get("tab") === "frecuentes") setTab("frecuentes");
+        if (params.get("tab") === "puntos") setTab("puntos");
         if (params.get("q")) setQ(params.get("q") ?? "");
         if (!access.store) throw new Error("No tienes acceso a ninguna tienda.");
         const can = (p: string) => hasStorePermission(access, p);
+        setCanLoyalty(can("store") || can("price_approve"));
         setStore(access.store);
         setPerm({ clients: can("clients"), delete: can("clients_delete"), credit: can("credit"), receivables: can("receivables") || can("credit") });
         const { rows, legacy: isLegacy } = await loadThirdParties(access.store.id);
@@ -199,7 +203,7 @@ export default function TercerosPage() {
       ) : null}
 
       <div className="flex gap-1 rounded-full border p-1 text-sm font-bold sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
+        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
           <button
             key={k}
             type="button"
@@ -218,7 +222,9 @@ export default function TercerosPage() {
         ))}
       </div>
 
-      {tab === "frecuentes" && store ? (
+      {tab === "puntos" && store ? (
+        <LoyaltyCustomers storeId={store.id} canAdjust={canLoyalty} />
+      ) : tab === "frecuentes" && store ? (
         <FrequentCustomers storeId={store.id} storeName={store.name} />
       ) : tab === "cartera" && store ? (
         <ReceivablesTab storeId={store.id} storeName={store.name} canPay={perm.receivables} parties={parties} onOpenStatement={setStatementFor} refreshKey={refreshKey} />

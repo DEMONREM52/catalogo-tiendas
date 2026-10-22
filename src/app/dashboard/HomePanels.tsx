@@ -109,3 +109,46 @@ export function PointToday({ storeId, hideWhenAllPoints }: { storeId: string; hi
     </section>
   );
 }
+
+type GoalRow = { id: string; point: string | null; seller: string | null; amount: number; done: number; pct: number; projection: number };
+
+/** Metas del mes y comisión propia (20261229): cómo va el punto o el vendedor. */
+export function GoalsCard({ storeId }: { storeId: string }) {
+  const [data, setData] = useState<{ goals: GoalRow[]; commission: number | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1), to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    void Promise.all([
+      supabaseBrowser().rpc("erp_goals_progress", { p_store: storeId, p_month: null }),
+      supabaseBrowser().rpc("erp_commissions", { p_store: storeId, p_from: from.toISOString(), p_to: to.toISOString() }),
+    ]).then(([g, c]) => {
+      if (!alive) return;
+      const gv = g.data as { ok?: boolean; goals?: GoalRow[]; manage?: boolean } | null;
+      const cv = c.data as { ok?: boolean; all?: boolean; sellers?: Array<{ commission: number }> } | null;
+      const mine = cv?.ok && !cv.all ? Number(cv.sellers?.[0]?.commission ?? 0) : null;
+      if (gv?.ok && (gv.goals?.length || mine)) setData({ goals: (gv.goals ?? []).slice(0, 4), commission: mine });
+    });
+    return () => { alive = false; };
+  }, [storeId]);
+  if (!data) return null;
+  return (
+    <section className="rounded-[28px] border p-4 sm:p-5" style={card}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold">🎯 Metas del mes</h3>
+        <Link href="/dashboard/equipo" className="text-xs font-semibold" style={{ color: "var(--t-accent)" }}>Ver todo →</Link>
+      </div>
+      {data.commission !== null ? <p className="mb-2 text-sm">💰 Tu comisión del mes: <b style={{ color: "#10b981" }}>{money(data.commission)}</b></p> : null}
+      <div className="space-y-2.5">
+        {data.goals.map((g) => (
+          <div key={g.id}>
+            <p className="flex justify-between text-xs"><b>{g.seller ? `👤 ${g.seller}` : `📍 ${g.point ?? "Tienda"}`}</b><span>{money(g.done)} / {money(g.amount)} · <b>{g.pct} %</b></span></p>
+            <div className="mt-1 h-2.5 overflow-hidden rounded-full" style={{ background: "var(--t-card-bg-soft)" }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, g.pct)}%`, background: g.pct >= 100 ? "#10b981" : "linear-gradient(90deg,#8b5cf6,#0ea5e9)" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}

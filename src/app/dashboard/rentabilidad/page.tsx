@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Calculator, HandCoins, ShieldCheck, Store, Tags, TrendingUp } from "lucide-react";
+import { BarChart3, Calculator, HandCoins, Package, ShieldCheck, Store, Tags, TrendingUp } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { Simulator } from "./Simulator";
@@ -10,9 +10,10 @@ import { PointRules, type ProfitSettings } from "./PointRules";
 import { Settlements } from "./Settlements";
 import { PriceLimits } from "./PriceLimits";
 import { PointsBoard } from "./PointsBoard";
+import { ProductMargins } from "./ProductMargins";
 import { cardStyle, rpcError, type Point } from "./shared";
 
-type Tab = "summary" | "points" | "rules" | "limits" | "settle" | "sim";
+type Tab = "summary" | "points" | "products" | "rules" | "limits" | "settle" | "sim";
 
 /** Centro de rentabilidad: informe, precios por punto y simulador. */
 export default function RentabilidadPage() {
@@ -59,6 +60,7 @@ export default function RentabilidadPage() {
   const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode; show: boolean }> = [
     { key: "summary", label: "Resumen", icon: <BarChart3 size={15} />, show: perm.view },
     { key: "points", label: "Puntos", icon: <Store size={15} />, show: perm.view },
+    { key: "products", label: "Por producto", icon: <Package size={15} />, show: perm.view },
     { key: "rules", label: "Precios por punto", icon: <Tags size={15} />, show: perm.view || perm.rules || perm.approve },
     { key: "limits", label: "Límites de precio", icon: <ShieldCheck size={15} />, show: perm.view || perm.rules || perm.price },
     { key: "settle", label: "Repartos y liquidaciones", icon: <HandCoins size={15} />, show: perm.settle || perm.view },
@@ -80,7 +82,7 @@ export default function RentabilidadPage() {
 
       <nav className="flex w-full gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
         {tabs.filter((t) => t.show).map((t) => (
-          <button key={t.key} type="button" onClick={() => setTab(t.key)} className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 transition" style={current === t.key ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
+          <button key={t.key} type="button" onClick={() => { setTab(t.key); const url = new URL(window.location.href); url.searchParams.set("tab", t.key); window.history.replaceState(null, "", url.toString()); window.dispatchEvent(new Event("remhub-tab-change")); }} className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 transition" style={current === t.key ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
             {t.icon} {t.label}
           </button>
         ))}
@@ -88,6 +90,7 @@ export default function RentabilidadPage() {
 
       {current === "summary" && perm.view ? <Summary storeId={storeId} points={points} myPoints={settings?.my_points ?? null} /> : null}
       {current === "points" && perm.view ? <PointsBoard storeId={storeId} /> : null}
+      {current === "products" && perm.view ? <ProductMargins storeId={storeId} points={points} /> : null}
       {current === "rules" ? (
         settings ? (
           <PointRules storeId={storeId} points={points} settings={settings} onSettings={() => void loadSettings(storeId)} />

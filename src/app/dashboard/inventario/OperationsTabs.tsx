@@ -9,6 +9,7 @@ import {
 } from "./shared";
 import { DateField } from "@/components/forms/Fields";
 import Swal from "sweetalert2";
+import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 
 type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
@@ -29,6 +30,28 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [countCat, setCountCat] = useState("");
   const [loadingCount, setLoadingCount] = useState(false);
+  const [scanning, setScanning] = useState(false);
+
+  /** Conteo escaneando (opcional): lo escaneado es lo que hay; lo demás de la lista queda igual (o en 0 si se pide). */
+  async function applyScan(counts: ScanCount[], zeroOthers: boolean) {
+    setScanning(false);
+    const have = new Map<string, number>();
+    const ids = counts.map((c) => c.product_id).filter((id) => !lines.some((l) => l.product_id === id));
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await supabaseBrowser().from("erp_stock_levels").select("product_id,qty").eq("warehouse_id", warehouse).in("product_id", ids.slice(i, i + 200));
+      for (const r of (data ?? []) as Array<{ product_id: string; qty: number }>) have.set(r.product_id, Number(r.qty));
+    }
+    const byId = new Map(counts.map((c) => [c.product_id, c]));
+    setLines((cur) => {
+      const next = cur.map((l) => (byId.has(l.product_id) ? { ...l, qty: byId.get(l.product_id)!.qty } : zeroOthers ? { ...l, qty: 0 } : l));
+      for (const c of counts) if (!cur.some((l) => l.product_id === c.product_id)) {
+        next.push({ product_id: c.product_id, name: c.name, sku: c.sku, current: have.get(c.product_id) ?? 0, qty: c.qty, unit_cost: 0, tax_rate: 0, warehouse_id: warehouse });
+      }
+      return next;
+    });
+    setReason("count");
+    void toast(`Conteo escaneado: ${counts.length} productos`, "success", "Revisa las diferencias y aplica el ajuste.");
+  }
 
   useEffect(() => {
     void supabaseBrowser().from("product_categories").select("id,name").eq("store_id", ctx.storeId).eq("active", true).order("name")
@@ -155,10 +178,15 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <Btn variant="ghost" onClick={() => void loadCategory()} disabled={!countCat || loadingCount}>{loadingCount ? "Cargando…" : "Traer productos para contar"}</Btn>
+              <Btn variant="ghost" onClick={() => setScanning(true)}><span title="Opcional: con la cámara del celular o un lector de códigos">📷 Contar escaneando</span></Btn>
               <span className="w-full text-[11px]" style={{ color: "var(--t-muted)" }}>Trae todos los productos de esa categoría con lo que dice el sistema. Solo se ajustan los que cambies; si alguien vende mientras cuentas, te avisamos al aplicar.</span>
             </div>
           ) : null}
           {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} /></div> : null}
+          {scanning && warehouse ? (
+            <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
+              zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />
+          ) : null}
           <div className="mt-3"><Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : "✅ Aplicar ajuste"}</Btn></div>
         </Panel>
       ) : null}

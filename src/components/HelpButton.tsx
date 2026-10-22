@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { openCommandPalette, openShortcuts } from "./CommandPalette";
+import { HELP, helpFor } from "./tour/tours";
+import { startTour } from "./tour/GuidedTour";
 
 /**
  * Ayuda dentro del panel: consejos cortos de la pantalla donde estás, atajos y soporte por WhatsApp
@@ -12,67 +15,23 @@ import { openCommandPalette, openShortcuts } from "./CommandPalette";
 
 const SUPPORT = process.env.NEXT_PUBLIC_REMHUB_WHATSAPP || "573218846041";
 
-type Guide = { match: string; title: string; tips: string[] };
-const GUIDES: Guide[] = [
-  { match: "/dashboard/pos", title: "POS / Vender", tips: [
-    "Busca por nombre, referencia o escanea el código de barras; F2 abre la búsqueda con fotos.",
-    "Las existencias se actualizan solas: si otra persona vende, aquí baja el número («Existencias en vivo»).",
-    "Antes de cobrar se revisa que haya unidades; si alguien vendió primero, te ofrecemos ajustar el carrito.",
-    "¿Quitaste un producto por error? Toca «Deshacer» en el aviso de abajo.",
-    "«En espera» guarda la venta mientras atiendes a otro cliente.",
-  ] },
-  { match: "/dashboard/caja", title: "Caja", tips: [
-    "Abre la caja al empezar con la base en efectivo.",
-    "Al cerrar, cuenta billetes y monedas: el sistema te dice si cuadra, sobra o falta.",
-    "Después de cerrar puedes enviar el resumen por WhatsApp (botón 💬 también en el historial).",
-  ] },
-  { match: "/dashboard/inventario?tab=transfers", title: "Traslados", tips: [
-    "Elige origen y destinos; «💡 Sugerir según ventas» propone cantidades con lo que vendió cada punto.",
-    "Enter pasa al siguiente destino; ↑ ↓ cambian de producto; F2 agrega otro.",
-    "«Disponible» baja en vivo si otra persona vende o traslada mientras armas el traslado.",
-    "Mientras nadie firme «Revisado», el traslado se puede corregir.",
-    "🏷️ Etiquetas imprime códigos de barras con el precio del punto que recibe.",
-  ] },
-  { match: "/dashboard/inventario?tab=purchases", title: "Ingreso de factura", tips: [
-    "F2 busca productos con fotos; Ctrl + Enter guarda el ingreso.",
-    "«✨ Crear producto» crea uno nuevo sin salir de la factura.",
-    "Con el % de cada producto se recalculan sus 5 precios al guardar.",
-    "En el historial puedes buscar por proveedor, número o producto, y sacar 🏷️ etiquetas.",
-  ] },
-  { match: "/dashboard/inventario?tab=adjustments", title: "Ajustes y conteos", tips: [
-    "«Contar por partes» trae una categoría completa para contarla.",
-    "Solo se ajustan los productos que cambies.",
-    "Si alguien vende mientras cuentas, al aplicar te ofrecemos descontar esas ventas de tu conteo.",
-  ] },
-  { match: "/dashboard/inventario", title: "Inventario", tips: [
-    "Existencias: filtra por punto, categoría, sin costo o con pocas unidades.",
-    "Kardex: cada entrada y salida de un producto, con quién y cuándo.",
-  ] },
-  { match: "/dashboard/pedidos", title: "Pedidos", tips: [
-    "Pedidos internos: un punto le pide mercancía a la bodega u otro punto.",
-    "Antes de enviar te avisamos si ese producto ya está pedido y cuánto le queda libre a quien surte.",
-  ] },
-  { match: "/dashboard/clientes", title: "Clientes y cartera", tips: [
-    "«Frecuentes» muestra quién compra más y a quién conviene escribirle para que vuelva.",
-    "Cartera: lo que te deben, abonos y estados de cuenta.",
-  ] },
-  { match: "/dashboard/products", title: "Productos", tips: [
-    "Los productos nuevos quedan activos aunque no tengan unidades.",
-    "🏷️ Etiqueta imprime el código de barras con el precio.",
-  ] },
-  { match: "/dashboard/rentabilidad", title: "Rentabilidad", tips: [
-    "Reglas de precio por punto: un % o un precio fijo por punto, categoría o producto.",
-    "Liquidación: venta menos costo de cada punto.",
-  ] },
-  { match: "/dashboard", title: "Inicio", tips: [
-    "«Tus pendientes» muestra lo que espera una acción tuya: traslados, pedidos, precios y productos sin costo.",
-    "Ctrl + K busca cualquier cosa: páginas, productos, #traslados, clientes y ventas.",
-  ] },
-];
+/** Pantallas con ayuda (el administrador de RemHub les pone un video en «Videos de ayuda»). */
+export const HELP_SCREENS = HELP.filter((g) => g.key !== "panel").map((g) => ({ key: g.key, title: g.title }));
+
+/** Enlace para incrustar: YouTube y Vimeo como reproductor; un .mp4 directo como video. */
+function embedOf(url: string): { kind: "iframe" | "video"; src: string } | null {
+  try {
+    const u = new URL(url);
+    const yt = u.hostname.includes("youtu.be") ? u.pathname.slice(1) : u.hostname.includes("youtube.com") ? (u.searchParams.get("v") ?? u.pathname.split("/").filter(Boolean).pop() ?? "") : "";
+    if (yt) return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yt)}?rel=0` };
+    if (u.hostname.includes("vimeo.com")) return { kind: "iframe", src: `https://player.vimeo.com/video/${u.pathname.split("/").filter(Boolean).pop()}` };
+    if (/.(mp4|webm)$/i.test(u.pathname)) return { kind: "video", src: url };
+    return null;
+  } catch { return null; }
+}
 
 function guideFor(path: string, search: string) {
-  const full = `${path}${search}`;
-  return GUIDES.find((g) => (g.match.includes("?") ? full.startsWith(g.match) : path === g.match || path.startsWith(`${g.match}/`))) ?? GUIDES[GUIDES.length - 1];
+  return helpFor(path, search) ?? HELP[HELP.length - 1];
 }
 
 export function HelpButton({ storeName, userName }: { storeName?: string | null; userName?: string | null }) {
@@ -81,6 +40,15 @@ export function HelpButton({ storeName, userName }: { storeName?: string | null;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const guide = guideFor(pathname, search);
+  const [video, setVideo] = useState<{ title: string; url: string } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void supabaseBrowser().from("saas_help_videos").select("title,url").eq("screen", guide.key).maybeSingle()
+      .then(({ data }) => { if (alive) setVideo((data as { title: string; url: string } | null) ?? null); });
+    return () => { alive = false; };
+  }, [open, guide.key]);
+  const embed = video ? embedOf(video.url) : null;
 
   const support = () => {
     const text = [
@@ -108,12 +76,27 @@ export function HelpButton({ storeName, userName }: { storeName?: string | null;
               <h3 className="text-lg font-black">💡 Ayuda · {guide.title}</h3>
               <button type="button" autoFocus onClick={() => setOpen(false)} className="rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cerrar</button>
             </div>
+            {video ? (
+              <div className="mt-4">
+                <p className="mb-1.5 text-xs font-bold">🎬 {video.title}</p>
+                {embed?.kind === "iframe" ? (
+                  <iframe src={embed.src} title={video.title} className="aspect-video w-full rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+                ) : embed?.kind === "video" ? (
+                  <video src={embed.src} controls playsInline className="aspect-video w-full rounded-xl border bg-black" style={{ borderColor: "var(--t-card-border)" }} />
+                ) : (
+                  <a href={video.url} target="_blank" rel="noreferrer" className="block rounded-xl border px-3 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>▶️ Ver el video</a>
+                )}
+              </div>
+            ) : null}
             <ul className="mt-4 flex-1 space-y-2.5 overflow-y-auto text-sm">
               {guide.tips.map((t) => (
                 <li key={t} className="flex gap-2 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}><span aria-hidden>✔️</span><span>{t}</span></li>
               ))}
             </ul>
             <div className="mt-4 space-y-2">
+              {guide.steps.length ? (
+                <button type="button" onClick={() => { setOpen(false); window.setTimeout(() => startTour(guide.key), 150); }} className="w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>▶️ Mostrarme cómo ({guide.steps.length} pasos)</button>
+              ) : null}
               <button type="button" onClick={() => { setOpen(false); openCommandPalette(); }} className="w-full rounded-xl border px-3 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>🔍 Buscar algo (Ctrl + K)</button>
               <button type="button" onClick={() => { setOpen(false); openShortcuts(); }} className="w-full rounded-xl border px-3 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>⌨️ Ver atajos de teclado</button>
               <button type="button" onClick={support} className="w-full rounded-xl px-3 py-2.5 text-sm font-bold text-white" style={{ background: "#16a34a" }}>💬 Hablar con soporte por WhatsApp</button>
