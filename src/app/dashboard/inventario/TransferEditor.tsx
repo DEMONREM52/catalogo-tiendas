@@ -55,14 +55,23 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
     const el = qtyRefs.current.get(focusId.current);
     if (el) { el.focus(); el.select(); el.scrollIntoView({ block: "center", behavior: "smooth" }); focusId.current = null; }
   }, [lines, focusTick]);
-  // F2: agregar otro producto.
+  // F2: agregar otro producto. Ctrl + Enter: guardar la corrección.
+  const saveRef = useRef<() => void>(() => {});
+  const reasonRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "F2") { e.preventDefault(); setModal(true); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); setModal(true); }
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveRef.current(); }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const changed = lines.some((l) => l.qty !== l.original);
+  const diffs = lines.filter((l) => l.qty !== l.original);
+  const added = diffs.filter((l) => l.original === 0 && l.qty > 0).length;
+  const removed = diffs.filter((l) => l.original > 0 && l.qty === 0).length;
+  const edited = diffs.length - added - removed;
   const addedQty = Object.fromEntries(lines.map((l) => [l.product_id, l.qty]));
   const units = lines.reduce((s, l) => s + l.qty, 0);
   const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -71,7 +80,7 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
   async function save() {
     if (!changed) return onClose();
     if (!lines.some((l) => l.qty > 0)) return void toast("El traslado debe tener al menos un producto", "warning", "Para quitarlo todo, anúlalo.");
-    if (reason.trim().length < 3) return void toast("Escribe el motivo del cambio", "warning");
+    if (reason.trim().length < 3) { reasonRef.current?.focus(); return void toast("Escribe el motivo del cambio", "warning", "Está en la barra de abajo."); }
     const diff = lines.filter((l) => l.qty !== l.original).map((l) => `${l.name}: ${l.original} → ${l.qty}`).join("<br>");
     const ok = await Swal.fire({
       icon: "question", title: `Corregir traslado #${number}`,
@@ -94,6 +103,7 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
     onSaved();
   }
 
+  useEffect(() => { saveRef.current = () => void save(); });
   const box = { borderColor: "var(--t-card-border)" };
   return (
     <div className="mt-3 space-y-3 rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))" }}>
@@ -164,12 +174,26 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
         {q && !shown.length ? <li className="text-xs" style={{ color: "var(--t-muted)" }}>Ningún producto del traslado coincide.</li> : null}
       </ul>
 
-      <input className="w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none" style={{ ...box, color: "var(--t-text)" }}
-        placeholder="Motivo del cambio * (ej: se contó mal, faltó un producto)" value={reason} onChange={(e) => setReason(e.target.value)} />
       <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>La bodega de origen se ajusta sola por la diferencia. Cuando alguien firme «Revisado», el traslado ya no se podrá cambiar.</p>
-      <div className="flex flex-wrap gap-2">
-        <Btn onClick={() => void save()} disabled={busy || !changed}>{busy ? "Guardando…" : "💾 Guardar corrección"}</Btn>
-        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+
+      {/* Barra fija: motivo y guardar siempre a la vista, sin bajar hasta el final de la lista. */}
+      <div className="sticky bottom-2 z-20 -mx-1 rounded-2xl border p-2.5 shadow-2xl backdrop-blur-xl sm:bottom-3"
+        style={{ borderColor: changed ? "color-mix(in oklab, var(--t-accent) 55%, var(--t-card-border))" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 90%, transparent)" }}>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <p className="shrink-0 text-xs font-semibold lg:w-56" style={{ color: changed ? "var(--t-text)" : "var(--t-muted)" }}>
+            {changed ? (
+              <>✏️ {[edited ? `${edited} cambiado(s)` : "", added ? `${added} nuevo(s)` : "", removed ? `${removed} quitado(s)` : ""].filter(Boolean).join(" · ")}
+                <span className="block font-normal" style={{ color: "var(--t-muted)" }}>{units} unidades en total</span></>
+            ) : "Sin cambios todavía"}
+          </p>
+          <input ref={reasonRef} className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none" style={{ ...box, color: "var(--t-text)" }}
+            placeholder="Motivo del cambio * (ej: se contó mal, faltó un producto)" value={reason} onChange={(e) => setReason(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void save(); } }} aria-label="Motivo del cambio" />
+          <div className="flex shrink-0 gap-2">
+            <Btn onClick={() => void save()} disabled={busy || !changed}><span title="Atajo: Ctrl + Enter">{busy ? "Guardando…" : "💾 Guardar corrección"}</span></Btn>
+            <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          </div>
+        </div>
       </div>
     </div>
   );

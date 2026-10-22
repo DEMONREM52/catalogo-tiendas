@@ -25,6 +25,7 @@ function RequestPrint() {
   const [format, setFormat] = useState<"carta" | "tirilla">(search.get("formato") === "tirilla" ? "tirilla" : "carta");
   const [showPrices, setShowPrices] = useState(search.get("precios") !== "0");
   const [showRetail, setShowRetail] = useState(false);
+  const [showImages, setShowImages] = useState(search.get("fotos") !== "0");
 
   useEffect(() => {
     void (async () => {
@@ -64,7 +65,7 @@ function RequestPrint() {
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb" }}>
       <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)} pricesReason={pricesReason}
-        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/dashboard/pedidos/internos?pedido=${r.id}`} />
+        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/dashboard/pedidos/internos?pedido=${r.id}`} showImages={showImages} onShowImages={setShowImages} />
       <div style={{ padding: "16px 0" }}>
         <MovementDocument
           kind="Pedido interno"
@@ -91,7 +92,9 @@ function RequestPrint() {
             qty: sent ? i.qty_approved ?? 0 : i.qty_requested,
             extra: sent ? [i.qty_requested, ...(received ? [i.qty_received] : [])] : [],
             price2: prices?.get(i.product_id)?.price2 ?? null, price3: prices?.get(i.product_id)?.price3 ?? null,
+            image: i.image_url ?? null,
           }))}
+          showImages={showImages}
           showPrices={Boolean(prices) && showPrices}
           showRetail={showRetail}
           notes={[["Nota del pedido", r.note ?? ""], ["Motivo de cierre", r.close_reason ?? ""]]}

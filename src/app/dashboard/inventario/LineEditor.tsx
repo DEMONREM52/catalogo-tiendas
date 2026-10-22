@@ -572,11 +572,27 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
   const info = pricing.info[line.product_id];
   const current = uniformMarkup(info);
   const [draft, setDraft] = useState<string | null>(null);
+  // Precio de venta escrito a mano: con él se calcula el % (así no hay que sacar la cuenta).
+  const [priceDraft, setPriceDraft] = useState<string | null>(null);
   const shown = draft ?? (line.markup === null || line.markup === undefined ? "" : String(line.markup).replace(".", ","));
   const pct = line.markup ?? current;
   const sale = pct !== null && pct !== undefined ? priceFromMarkup(line.unit_cost, pct, pricing.step, pricing.dir) : 0;
   const today = info?.prices?.[2] ?? 0;
   const changed = line.markup !== null && line.markup !== undefined;
+  const wanted = priceDraft !== null ? Number(priceDraft.replace(/D/g, "")) : null;
+  const fmt = (n: number) => (n > 0 ? Math.round(n).toLocaleString("es-CO") : "");
+
+  function fromPrice(raw: string) {
+    const digits = raw.replace(/D/g, "").slice(0, 12);
+    setPriceDraft(digits ? Number(digits).toLocaleString("es-CO") : "");
+    setDraft(null);
+    const price = Number(digits);
+    if (!digits) return onValue(null);
+    if (!(line.unit_cost > 0)) return;
+    // % = (precio ÷ costo − 1) × 100, con 2 decimales; nunca negativo (vender bajo el costo se cambia en el producto).
+    onValue(Math.min(1000, Math.max(0, Math.round((price / line.unit_cost - 1) * 10000) / 100)));
+  }
+
   return (
     <div>
       <PctInput
@@ -588,6 +604,7 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
         title="% de ganancia para los 5 precios. Se guarda en el producto al registrar la factura. Vacío = no cambia."
         onChange={(raw) => {
           setDraft(raw);
+          setPriceDraft(null);
           if (!raw.trim()) return onValue(null);
           const v = Number(raw.replace(",", "."));
           if (Number.isFinite(v)) onValue(Math.min(1000, Math.max(0, Math.round(v * 100) / 100)));
@@ -595,14 +612,33 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
         onBlur={() => setDraft(null)}
         onKeyDown={onKeyDown}
       />
-      <div className="mt-1 text-right text-[11px] leading-tight tabular-nums">
+      <label className="mt-1 flex h-8 items-center overflow-hidden rounded-lg border focus-within:ring-2"
+        title="O escribe el precio de venta y calculamos el %"
+        style={{ borderColor: priceDraft !== null ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", ["--tw-ring-color" as string]: "color-mix(in oklab, var(--t-accent) 45%, transparent)" }}>
+        <span className="shrink-0 select-none pl-2 text-[11px] font-bold" style={{ color: "var(--t-muted)" }} aria-hidden>Venta $</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          className="h-full w-full min-w-0 flex-1 border-0 bg-transparent text-right text-xs font-bold tabular-nums outline-none"
+          style={{ color: changed ? "var(--t-accent)" : "var(--t-text)", padding: "0 8px 0 4px", background: "transparent", border: "none", boxShadow: "none", minHeight: 0, borderRadius: 0 }}
+          value={priceDraft ?? fmt(sale)}
+          placeholder={line.unit_cost > 0 ? "precio" : "falta costo"}
+          disabled={!(line.unit_cost > 0)}
+          aria-label={`Precio de venta de ${line.name}`}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => fromPrice(e.target.value)}
+          onBlur={() => setPriceDraft(null)}
+          onKeyDown={onKeyDown}
+        />
+      </label>
+      <div className="mt-0.5 text-right text-[11px] leading-tight tabular-nums">
+        {wanted && sale > 0 && wanted !== sale ? (
+          <span className="block" style={{ color: "#f59e0b" }} title="La tienda redondea los precios">Queda en {money(sale)} por el redondeo</span>
+        ) : null}
         {sale > 0 ? (
-          <>
-            <span className="font-bold" style={{ color: changed ? "var(--t-accent)" : "var(--t-text)" }}>Venta {money(sale)}</span>
-            {today > 0 && today !== sale ? (
-              <span className="block" style={{ color: sale > today ? "#10b981" : "#ef4444" }}>{sale > today ? "▲" : "▼"} hoy {money(today)}</span>
-            ) : today > 0 ? <span className="block" style={{ color: "var(--t-muted)" }}>= hoy</span> : null}
-          </>
+          today > 0 && today !== sale ? (
+            <span className="block" style={{ color: sale > today ? "#10b981" : "#ef4444" }}>{sale > today ? "▲" : "▼"} hoy {money(today)}</span>
+          ) : today > 0 ? <span className="block" style={{ color: "var(--t-muted)" }}>= hoy</span> : null
         ) : <span style={{ color: "var(--t-muted)" }}>{line.unit_cost > 0 ? "sin % todavía" : "falta el costo"}</span>}
       </div>
     </div>

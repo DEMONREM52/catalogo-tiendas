@@ -12,7 +12,7 @@ type Track = {
   number: number; status: "in_transit" | "received" | "cancelled"; created_at: string; created_by_name: string | null;
   checked_by_name: string | null; carrier_name: string | null; notes: string | null; received_at: string | null; received_notes: string | null;
   store: { name: string; logo_url: string | null } | null; from: Place; to: Place;
-  items: Array<{ product_id: string; name: string; qty: number; received_qty: number | null }>;
+  items: Array<{ product_id: string; name: string; qty: number; received_qty: number | null; image_url?: string | null }>;
   signatures: Array<{ step: TransferStep; signer_name: string; signer_doc: string | null; signature: string | null; signed_at: string }>;
 };
 type Linked = { number: number; requested_by_name: string | null; items: Array<{ product_id: string; requested: number }> } | null;
@@ -34,6 +34,7 @@ function TransferPrint() {
   const [format, setFormat] = useState<"carta" | "tirilla">(search.get("formato") === "tirilla" ? "tirilla" : "carta");
   const [showPrices, setShowPrices] = useState(search.get("precios") !== "0");
   const [showRetail, setShowRetail] = useState(false);
+  const [showImages, setShowImages] = useState(search.get("fotos") !== "0");
 
   useEffect(() => {
     void Promise.all([
@@ -70,7 +71,7 @@ function TransferPrint() {
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb" }}>
       <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)} pricesReason={pricesReason}
-        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/traslado/${token}`} />
+        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/traslado/${token}`} showImages={showImages} onShowImages={setShowImages} />
       <div style={{ padding: "16px 0" }}>
         <MovementDocument
           kind="Traslado"
@@ -93,7 +94,9 @@ function TransferPrint() {
             key: i.product_id, name: i.name, sku: prices?.get(i.product_id)?.sku ?? null, qty: i.qty,
             extra: [...(linked ? [requested.get(i.product_id) ?? null] : []), ...(received ? [i.received_qty] : [])],
             price2: prices?.get(i.product_id)?.price2 ?? null, price3: prices?.get(i.product_id)?.price3 ?? null,
+            image: i.image_url ?? null,
           }))}
+          showImages={showImages}
           showPrices={Boolean(prices) && showPrices}
           showRetail={showRetail}
           notes={[["Observaciones", track.notes ?? ""], ["Novedades al recibir", track.received_notes ?? ""]]}

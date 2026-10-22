@@ -33,6 +33,8 @@ export type DocItem = {
   extra?: Array<number | null>;
   price2?: number | null;
   price3?: number | null;
+  /** Foto del producto (se muestra si la hoja va «con fotos»). */
+  image?: string | null;
 };
 export type DocSignature = { title: string; who: string; name?: string | null; doc?: string | null; image?: string | null; at?: string | null };
 
@@ -51,6 +53,8 @@ export type MovementDocProps = {
   items: DocItem[];
   showPrices: boolean;
   showRetail?: boolean;
+  /** Foto pequeña de cada producto junto al nombre. */
+  showImages?: boolean;
   notes?: Array<[string, string]>;
   signatures: DocSignature[];
   qrUrl?: string | null;
@@ -153,8 +157,17 @@ export function MovementDocument(p: MovementDocProps) {
             <tr key={i.key}>
               {narrow ? null : <td className="muted">{idx + 1}</td>}
               <td>
-                <div style={{ fontWeight: 700 }}>{i.name}</div>
-                {i.sku ? <div className="muted" style={{ fontSize: 10 }}>Ref. {i.sku}</div> : null}
+                <div style={{ display: "flex", alignItems: "center", gap: narrow ? 6 : 10 }}>
+                  {p.showImages ? (
+                    i.image
+                      ? <img src={i.image} alt="" style={{ width: narrow ? 30 : 44, height: narrow ? 30 : 44, objectFit: "cover", borderRadius: 6, border: "1px solid #e5e7eb", flexShrink: 0 }} />
+                      : <span style={{ width: narrow ? 30 : 44, height: narrow ? 30 : 44, borderRadius: 6, border: "1px dashed #d1d5db", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📦</span>
+                  ) : null}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700 }}>{i.name}</div>
+                    {i.sku ? <div className="muted" style={{ fontSize: 10 }}>Ref. {i.sku}</div> : null}
+                  </div>
+                </div>
               </td>
               {(i.extra ?? []).map((x, k) => <td key={k} className="num">{x ?? "—"}</td>)}
               <td className="num" style={{ fontWeight: 800 }}>{i.qty}</td>
@@ -215,12 +228,14 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
 }
 
 /** Barra de opciones de impresión (no sale en la hoja). */
-export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, pricesAvailable, pricesReason, showRetail, onShowRetail, backHref }: {
+export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, pricesAvailable, pricesReason, showRetail, onShowRetail, backHref, showImages, onShowImages }: {
   format: "carta" | "tirilla"; onFormat: (f: "carta" | "tirilla") => void;
   showPrices: boolean; onShowPrices: (v: boolean) => void; pricesAvailable: boolean;
   /** Por qué no hay precios (para decirlo claro en la barra). */
   pricesReason?: "loading" | "ok" | "no_session" | "denied";
   showRetail: boolean; onShowRetail: (v: boolean) => void; backHref?: string;
+  /** Si viene, aparece el botón «Con fotos / Sin fotos». */
+  showImages?: boolean; onShowImages?: (v: boolean) => void;
 }) {
   const btn = (active: boolean) => ({
     border: "1px solid #ccc", borderRadius: 999, padding: "6px 12px", fontSize: 13, fontWeight: 700,
@@ -243,6 +258,7 @@ export function PrintToolbar({ format, onFormat, showPrices, onShowPrices, price
             : <>⚠️ Sin precios: aquí no hay sesión iniciada ({typeof window !== "undefined" ? window.location.host : ""}). <Link href="/login" style={{ color: "#7c3aed" }}>Inicia sesión</Link> y vuelve a abrir esta hoja.</>}
         </span>
       )}
+      {onShowImages ? <button type="button" style={btn(Boolean(showImages))} onClick={() => onShowImages(!showImages)}>{showImages ? "🖼️ Con fotos" : "🚫 Sin fotos"}</button> : null}
       <button type="button" style={{ ...btn(true), background: "#7c3aed", borderColor: "#7c3aed" }} onClick={() => window.print()}>🖨️ Imprimir</button>
     </div>
   );

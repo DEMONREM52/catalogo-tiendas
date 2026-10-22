@@ -466,7 +466,6 @@ export default function DashboardShell({
   const [staffUsername, setStaffUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   useNicknameUpdates(setDisplayName);
-  const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   // Drawer (montaje + animación)
   const [drawerMounted, setDrawerMounted] = useState(false);
@@ -778,34 +777,6 @@ export default function DashboardShell({
     return out;
   }, [canAccessStorePages, menu, canOpen, storeIsOwner, isStoreAdmin]);
 
-  const detalUrl = useMemo(() => {
-    if (!store?.slug) return "#";
-    return `/${store.slug}/detal`;
-  }, [store]);
-
-  const mayorUrl = useMemo(() => {
-    if (!store?.slug) return "#";
-    const base = `/${store.slug}/mayor`;
-    return store.wholesale_key
-      ? `${base}?key=${encodeURIComponent(store.wholesale_key)}`
-      : base;
-  }, [store]);
-
-  async function copyLink(url: string) {
-    if (!url || url === "#") return;
-    try {
-      const absolute = window.location.origin + url;
-      await navigator.clipboard.writeText(absolute);
-      setCopyMsg("✅ Link copiado");
-      window.setTimeout(() => setCopyMsg(null), 1200);
-      haptic(10);
-    } catch {
-      setCopyMsg("❌ No se pudo copiar");
-      window.setTimeout(() => setCopyMsg(null), 1400);
-      haptic(16);
-    }
-  }
-
   if (!ready) {
     return (
       <main
@@ -836,8 +807,6 @@ export default function DashboardShell({
 
   // ✅ Ahora Detal/Mayor dependen de tienda activa EN VIVO + catálogos
   const storeLiveActive = store ? isStoreActiveNow(store) : false;
-  const canDetal = !!store && storeLiveActive && store.catalog_retail;
-  const canMayor = !!store && storeLiveActive && store.catalog_wholesale;
 
   const burgerOpen = drawerMounted && drawerOpen;
 
@@ -947,7 +916,6 @@ export default function DashboardShell({
               </p>
             ) : null}
 
-            {copyMsg ? <p className="mt-2 text-xs">{copyMsg}</p> : null}
 
             {role === "store" &&
             store?.catalog_wholesale &&
@@ -966,93 +934,6 @@ export default function DashboardShell({
 
           {/* Acciones derecha */}
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {role === "store" && canOpen("store") ? (
-              <>
-                <Link
-                  href={detalUrl}
-                  target="_blank"
-                  className={cx(
-                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                  )}
-                  style={
-                    canDetal
-                      ? {
-                          background:
-                            "color-mix(in oklab, var(--t-accent) 70%, white 8%)",
-                          color: "#0b0b0b",
-                        }
-                      : {
-                          opacity: 0.5,
-                          pointerEvents: "none",
-                          border: "1px solid var(--t-card-border)",
-                          background:
-                            "color-mix(in oklab, var(--t-card-bg) 75%, transparent)",
-                          color:
-                            "color-mix(in oklab, var(--t-text) 70%, transparent)",
-                        }
-                  }
-                >
-                  Detal
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={() => copyLink(detalUrl)}
-                  disabled={!canDetal}
-                  className="rounded-xl border px-2.5 py-1.5 text-xs transition disabled:opacity-40"
-                  style={{
-                    borderColor: "var(--t-card-border)",
-                    background:
-                      "color-mix(in oklab, var(--t-card-bg) 82%, transparent)",
-                    color: "var(--t-text)",
-                  }}
-                >
-                  Copiar
-                </button>
-
-                <Link
-                  href={mayorUrl}
-                  target="_blank"
-                  className={cx(
-                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                  )}
-                  style={
-                    canMayor
-                      ? {
-                          background: "rgba(16,185,129,0.85)",
-                          color: "#07120d",
-                        }
-                      : {
-                          opacity: 0.5,
-                          pointerEvents: "none",
-                          border: "1px solid var(--t-card-border)",
-                          background:
-                            "color-mix(in oklab, var(--t-card-bg) 75%, transparent)",
-                          color:
-                            "color-mix(in oklab, var(--t-text) 70%, transparent)",
-                        }
-                  }
-                >
-                  Mayoristas
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={() => copyLink(mayorUrl)}
-                  disabled={!canMayor}
-                  className="rounded-xl border px-2.5 py-1.5 text-xs transition disabled:opacity-40"
-                  style={{
-                    borderColor: "var(--t-card-border)",
-                    background:
-                      "color-mix(in oklab, var(--t-card-bg) 82%, transparent)",
-                    color: "var(--t-text)",
-                  }}
-                >
-                  Copiar
-                </button>
-              </>
-            ) : null}
-
             {role === "store" && canOpen("products") ? (
               <Link
                 href="/dashboard/social"
