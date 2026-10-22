@@ -572,25 +572,28 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
   const info = pricing.info[line.product_id];
   const current = uniformMarkup(info);
   const [draft, setDraft] = useState<string | null>(null);
-  // Precio de venta escrito a mano: con él se calcula el % (así no hay que sacar la cuenta).
+  // Precio de venta escrito a mano: mientras se escribe no se toca nada; al salir o con Enter se calcula el %.
   const [priceDraft, setPriceDraft] = useState<string | null>(null);
+  const [priceNote, setPriceNote] = useState<string | null>(null);
   const shown = draft ?? (line.markup === null || line.markup === undefined ? "" : String(line.markup).replace(".", ","));
   const pct = line.markup ?? current;
   const sale = pct !== null && pct !== undefined ? priceFromMarkup(line.unit_cost, pct, pricing.step, pricing.dir) : 0;
   const today = info?.prices?.[2] ?? 0;
   const changed = line.markup !== null && line.markup !== undefined;
-  const wanted = priceDraft !== null ? Number(priceDraft.replace(/D/g, "")) : null;
   const fmt = (n: number) => (n > 0 ? Math.round(n).toLocaleString("es-CO") : "");
 
-  function fromPrice(raw: string) {
-    const digits = raw.replace(/D/g, "").slice(0, 12);
-    setPriceDraft(digits ? Number(digits).toLocaleString("es-CO") : "");
+  function applyPrice() {
+    if (priceDraft === null) return;
+    const price = Number(priceDraft.replace(/D/g, ""));
+    setPriceDraft(null);
+    if (!price || !(line.unit_cost > 0)) return setPriceNote(null);
+    if (price < line.unit_cost) return setPriceNote(`${money(price)} es menor que el costo (${money(line.unit_cost)}): no se cambió.`);
+    // % = (precio ÷ costo − 1) × 100, con 2 decimales.
+    const next = Math.min(1000, Math.round((price / line.unit_cost - 1) * 10000) / 100);
+    const real = priceFromMarkup(line.unit_cost, next, pricing.step, pricing.dir);
+    setPriceNote(real !== price ? `Queda en ${money(real)} por el redondeo de la tienda.` : null);
     setDraft(null);
-    const price = Number(digits);
-    if (!digits) return onValue(null);
-    if (!(line.unit_cost > 0)) return;
-    // % = (precio ÷ costo − 1) × 100, con 2 decimales; nunca negativo (vender bajo el costo se cambia en el producto).
-    onValue(Math.min(1000, Math.max(0, Math.round((price / line.unit_cost - 1) * 10000) / 100)));
+    onValue(next);
   }
 
   return (
@@ -605,6 +608,7 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
         onChange={(raw) => {
           setDraft(raw);
           setPriceDraft(null);
+          setPriceNote(null);
           if (!raw.trim()) return onValue(null);
           const v = Number(raw.replace(",", "."));
           if (Number.isFinite(v)) onValue(Math.min(1000, Math.max(0, Math.round(v * 100) / 100)));
@@ -612,29 +616,28 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
         onBlur={() => setDraft(null)}
         onKeyDown={onKeyDown}
       />
-      <label className="mt-1 flex h-8 items-center overflow-hidden rounded-lg border focus-within:ring-2"
-        title="O escribe el precio de venta y calculamos el %"
+      <label className="mt-1 flex h-9 items-center overflow-hidden rounded-xl border focus-within:ring-2"
+        title="O escribe el precio de venta (P3) y al dar Enter calculamos el %"
         style={{ borderColor: priceDraft !== null ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", ["--tw-ring-color" as string]: "color-mix(in oklab, var(--t-accent) 45%, transparent)" }}>
-        <span className="shrink-0 select-none pl-2 text-[11px] font-bold" style={{ color: "var(--t-muted)" }} aria-hidden>Venta $</span>
+        <span className="shrink-0 select-none pl-2.5 text-xs font-bold" style={{ color: "var(--t-muted)" }} aria-hidden>$</span>
         <input
           type="text"
           inputMode="numeric"
-          className="h-full w-full min-w-0 flex-1 border-0 bg-transparent text-right text-xs font-bold tabular-nums outline-none"
-          style={{ color: changed ? "var(--t-accent)" : "var(--t-text)", padding: "0 8px 0 4px", background: "transparent", border: "none", boxShadow: "none", minHeight: 0, borderRadius: 0 }}
+          className="h-full w-full min-w-0 flex-1 text-right text-sm font-bold tabular-nums"
+          style={{ color: changed ? "var(--t-accent)" : "var(--t-text)", padding: "0 10px 0 4px", background: "transparent", border: "none", boxShadow: "none", minHeight: 0, borderRadius: 0, outline: "none" }}
           value={priceDraft ?? fmt(sale)}
-          placeholder={line.unit_cost > 0 ? "precio" : "falta costo"}
+          placeholder={line.unit_cost > 0 ? "Precio venta" : "Falta costo"}
           disabled={!(line.unit_cost > 0)}
           aria-label={`Precio de venta de ${line.name}`}
-          onFocus={(e) => e.currentTarget.select()}
-          onChange={(e) => fromPrice(e.target.value)}
-          onBlur={() => setPriceDraft(null)}
-          onKeyDown={onKeyDown}
+          onFocus={(e) => { setPriceDraft(e.currentTarget.value.replace(/D/g, "")); const el = e.currentTarget; requestAnimationFrame(() => el.select()); }}
+          onChange={(e) => setPriceDraft(e.target.value.replace(/D/g, "").slice(0, 12))}
+          onBlur={applyPrice}
+          onKeyDown={(e) => { if (e.key === "Enter") applyPrice(); onKeyDown(e); }}
         />
       </label>
       <div className="mt-0.5 text-right text-[11px] leading-tight tabular-nums">
-        {wanted && sale > 0 && wanted !== sale ? (
-          <span className="block" style={{ color: "#f59e0b" }} title="La tienda redondea los precios">Queda en {money(sale)} por el redondeo</span>
-        ) : null}
+        {priceDraft !== null ? <span className="block" style={{ color: "var(--t-muted)" }}>Enter para calcular el %</span> : null}
+        {priceNote ? <span className="block" style={{ color: "#f59e0b" }}>{priceNote}</span> : null}
         {sale > 0 ? (
           today > 0 && today !== sale ? (
             <span className="block" style={{ color: sale > today ? "#10b981" : "#ef4444" }}>{sale > today ? "▲" : "▼"} hoy {money(today)}</span>
@@ -830,7 +833,7 @@ export function LineEditor({
   const total = lines.reduce((sum, l) => sum + l.qty * l.unit_cost * (1 + l.tax_rate / 100), 0);
   const activeWarehouses = (warehouses ?? []).filter((w) => w.active);
   const grid = withPrice
-    ? "md:grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_88px_140px_76px_118px_120px_40px]"
+    ? "md:grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_88px_140px_76px_150px_120px_40px]"
     : isPurchase
     ? "md:grid-cols-[minmax(0,2.4fr)_minmax(130px,1.1fr)_96px_150px_84px_120px_40px]"
     : "md:grid-cols-[minmax(0,2.4fr)_96px_120px_96px_40px]";
