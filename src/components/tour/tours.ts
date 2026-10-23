@@ -213,10 +213,11 @@ export const HELP: Help[] = [
     { target: "text:Precios por punto", title: "3. Precios por punto", text: "Cada punto puede vender con su % o precio fijo, aprobado por la madre." },
     { target: "text:Repartos y liquidaciones", title: "4. Liquidaciones", text: "Cuánto le corresponde a cada punto o beneficiario." },
   ] },
-  { key: "gastos", match: "/dashboard/gastos", title: "Gastos y nómina", tips: ["Gastos fijos para no olvidarlos.", "Nómina con días, horas extra y comisiones."], steps: [
+  { key: "gastos", match: "/dashboard/gastos", title: "Gastos y nómina", tips: ["Gastos fijos para no olvidarlos.", "Nómina con días, horas extra y comisiones.", "Vales y préstamos: productos o dinero para un empleado, en cuotas que se descuentan solas en la nómina."], steps: [
     { target: "text:Nuevo gasto", title: "1. Gastos", text: "Registra lo que pagas: arriendo, servicios, transporte… con su categoría y punto." },
     { target: "text:Gasto fijo", title: "2. Gastos fijos", text: "Los que se repiten cada mes, para que no se te olviden." },
     { target: "text:Nueva nómina", title: "3. Nómina", text: "Empleados, días trabajados, horas extra y comisiones. Se aprueba y se paga." },
+    { target: "text:Vales y préstamos", title: "4. Vales y préstamos", text: "Productos (salen del inventario) o dinero prestado (puede salir de la caja) en cuotas que se descuentan solas en cada nómina, con interés si quieres." },
   ] },
   { key: "equipo", match: "/dashboard/equipo", title: "Comisiones y metas", tips: ["Cada vendedor ve solo lo suyo.", "La meta muestra el ritmo y cuánto falta por día."], steps: [
     { target: "text:Metas", title: "1. Metas del mes", text: "Por punto o por vendedor: cuánto llevan, el ritmo y si van a cumplir." },

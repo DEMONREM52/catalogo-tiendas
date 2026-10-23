@@ -306,6 +306,24 @@ export const EXPORTS: ExportDef[] = [
     },
   },
   {
+    key: "vales", icon: "🧾", title: "Vales y préstamos a empleados", detail: "Cada vale con productos o dinero, cuotas, interés, saldo y lo descontado en nómina o abonado.",
+    perms: ["payroll", "payroll_approve", "payroll_pay"],
+    async build({ storeId }) {
+      const { data, error } = await sb().rpc("erp_employee_loans_list", { p_store: storeId });
+      if (error) throw new Error(error.message);
+      const loans = ((data as { loans?: Row[] } | null)?.loans ?? []) as Row[];
+      const ST: Record<string, string> = { active: "activo", paid: "pagado", void: "anulado" };
+      return [
+        { name: "Vales", head: ["Número", "Empleado", "Documento", "Tipo", "Descripción", "Punto", "Valor", "Interés", "Total", "Cuotas", "Cuota", "Desde", "Saldo", "Estado", "Pausado", "Dio", "Fecha"],
+          rows: loans.map((l) => [n(l.number), s(l.employee), s(l.document), l.kind === "product" ? "productos" : "dinero", s(l.description), s(l.point), n(l.principal), n(l.interest), n(l.total),
+            n(l.installments), n(l.installment), xDate(l.start_on), n(l.balance), ST[String(l.status)] ?? s(l.status), l.paused ? "Sí" : "No", s(l.created_by_name), xDate(l.created_at)]) },
+        { name: "Descuentos y abonos", head: ["Vale", "Empleado", "Fecha", "Origen", "Valor", "Nota", "Anulado"],
+          rows: loans.flatMap((l) => ((l.payments as Row[] | null) ?? []).map((p) => [n(l.number), s(l.employee), xDate(p.paid_at), p.source === "payroll" ? `nómina #${s(p.run_number)}` : "abono",
+            n(p.amount), s(p.note), p.voided ? "Sí" : "No"])) },
+      ];
+    },
+  },
+  {
     key: "trabajadores", icon: "🧑‍🔧", title: "Trabajadores", detail: "Los empleados de nómina con cargo, salario y datos de pago.",
     perms: ["payroll"],
     async build({ storeId }) {

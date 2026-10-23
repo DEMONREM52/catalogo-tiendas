@@ -2,20 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
+import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Printer, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import {
-  ChoiceChips, DateField, Field, METHODS, MoneyField, NumberField, PERIOD_LABEL, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, fail, fdate, field, ghostBtn,
+  ChoiceChips, DateField, Field, METHODS, MoneyField, NumberField, PERIOD_LABEL, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, esc, fail, fdate, field, ghostBtn,
   inputStyle, label, n, periodWindow, primaryBg, primaryBtn, swalTheme, type Catalog, type Concept, type Employee, type Period, type Point,
 } from "./shared";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
+import { downloadRunExcel, periodReport, printRunReport, type PayrollDetail } from "./PayrollReport";
 
 type Run = { id: string; number: number; point_id: string | null; point_name: string | null; period_kind: Period; period_start: string; period_end: string; status: RunStatus;
   earnings: number; deductions: number; net: number; employer_cost: number; total_cost: number; created_by_name: string | null; approved_by_name: string | null; employees: number; paid: number };
 type RunStatus = "draft" | "approved" | "partial" | "paid" | "void";
-type Item = { concept_id: string; code: string; name: string; kind: Concept["kind"]; calc: Concept["calc"]; value: number; amount: number };
+type Item = { concept_id: string; code: string; name: string; kind: Concept["kind"]; calc: Concept["calc"] | "loan"; value: number; amount: number; loan_id?: string; balance?: number; override?: boolean };
 type Line = { id: string; employee_id: string; full_name: string; document: string | null; position: string | null; bank_name: string | null; bank_account: string | null;
   days: number; salary_base: number; manual: Record<string, number>; items: Item[]; earnings: number; deductions: number; net: number; employer_cost: number; paid: number; notes: string | null };
 type Detail = { run: Run & { notes: string | null; void_reason: string | null }; lines: Line[]; payments: Array<{ id: string; line_id: string; amount: number; method: string; reference: string | null; paid_at: string; created_by_name: string | null; voided: boolean; void_reason: string | null }> };
@@ -33,6 +34,7 @@ export function PayrollTab({ storeId, points, cat, onChanged }: { storeId: strin
   const [runs, setRuns] = useState<Run[]>([]);
   const [showVoid, setShowVoid] = useState(false);
   const [openRun, setOpenRun] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | "new" | null>(null);
   const employees = cat.employees ?? [];
@@ -70,6 +72,7 @@ export function PayrollTab({ storeId, points, cat, onChanged }: { storeId: strin
           ))}
         </div>
         <span className="flex-1" />
+        {view === "runs" && runs.length ? <button type="button" onClick={() => setReporting(true)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Printer size={13} /> Informe del periodo</button> : null}
         {view === "runs" && cat.can.payroll ? <button type="button" onClick={() => setCreating(true)} className={primaryBtn} style={primaryBg}><FileSpreadsheet size={16} /> Nueva nómina</button> : null}
         {view === "people" && cat.can.payroll ? <button type="button" onClick={() => setEditingEmp("new")} className={primaryBtn} style={primaryBg}><UserPlus size={16} /> Empleado</button> : null}
       </div>
@@ -153,8 +156,41 @@ export function PayrollTab({ storeId, points, cat, onChanged }: { storeId: strin
 
       <AnimatePresence>{creating ? <RunCreate key="new" storeId={storeId} points={visible} cat={cat} employees={employees} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void loadRuns(); setOpenRun(id); }} /> : null}</AnimatePresence>
       <AnimatePresence>{editingEmp ? <EmployeeForm key="emp" storeId={storeId} points={visible} cat={cat} initial={editingEmp === "new" ? null : editingEmp} onClose={() => setEditingEmp(null)} onSaved={() => { setEditingEmp(null); onChanged(); }} /> : null}</AnimatePresence>
-      <AnimatePresence>{openRun ? <RunSheet key={openRun} id={openRun} cat={cat} onClose={() => setOpenRun(null)} onChanged={() => { void loadRuns(); onChanged(); }} /> : null}</AnimatePresence>
+      <AnimatePresence>{reporting ? <PeriodReport key="rep" storeId={storeId} onClose={() => setReporting(false)} /> : null}</AnimatePresence>
+      <AnimatePresence>{openRun ? <RunSheet key={openRun} id={openRun} storeId={storeId} cat={cat} onClose={() => setOpenRun(null)} onChanged={() => { void loadRuns(); onChanged(); }} /> : null}</AnimatePresence>
     </div>
+  );
+}
+
+/** Informe de todas las nóminas de un rango (por defecto el mes actual), para entregar a quien paga. */
+function PeriodReport({ storeId, onClose }: { storeId: string; onClose: () => void }) {
+  const [[from, to], setRange] = useState(() => periodWindow("monthly"));
+  const [busy, setBusy] = useState<string | null>(null);
+  async function run(format: "excel" | "print") {
+    if (from > to) return void Swal.fire({ ...swalTheme, icon: "warning", title: "Revisa las fechas" });
+    setBusy("Buscando nóminas…");
+    try { await periodReport(storeId, from, to, format, setBusy); } catch (e) { fail(e); } finally { setBusy(null); }
+  }
+  return (
+    <Sheet title="Informe de nómina del periodo" icon={<Printer size={18} />} onClose={onClose}
+      footer={<>
+        <span className="flex-1 text-xs" style={{ color: "var(--t-muted)" }}>{busy ?? ""}</span>
+        <ExportGate><button type="button" disabled={!!busy} onClick={() => void run("excel")} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Excel</button></ExportGate>
+        <button type="button" disabled={!!busy} onClick={() => void run("print")} className={primaryBtn} style={primaryBg}><Printer size={15} /> Imprimir / PDF</button>
+      </>}>
+      <div className="space-y-3">
+        <p className="text-sm" style={{ color: "var(--t-muted)" }}>Junta todas las nóminas del rango (menos las anuladas): totales, lo pagado y lo que falta, cada empleado con su banco y cuenta, cada concepto (salud, pensión, horas extra, vales…) y los vales pendientes.</p>
+        <div className="flex flex-wrap gap-2">
+          {([["Este mes", periodWindow("monthly")], ["Mes pasado", periodWindow("prev_month")], ["Esta quincena", periodWindow("biweekly")]] as const).map(([l, r]) => (
+            <button key={l} type="button" onClick={() => setRange([r[0], r[1]])} className={ghostBtn} style={{ borderColor: from === r[0] && to === r[1] ? "var(--t-accent)" : "var(--t-card-border)" }}>{l}</button>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Desde"><DateField value={from} onChange={(v) => setRange([v, to])} /></Field>
+          <Field label="Hasta"><DateField value={to} onChange={(v) => setRange([from, v])} /></Field>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
@@ -270,7 +306,7 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
   );
 }
 
-function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; onClose: () => void; onChanged: () => void }) {
+function RunSheet({ id, storeId, cat, onClose, onChanged }: { id: string; storeId: string; cat: Catalog; onClose: () => void; onChanged: () => void }) {
   const [d, setD] = useState<Detail | null>(null);
   const [editLine, setEditLine] = useState<Line | null>(null);
   const [paying, setPaying] = useState<Line | null>(null);
@@ -315,6 +351,20 @@ function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; o
     done("Pago registrado");
     await after();
   }
+  /** Cambiar o saltar la cuota de un vale solo en esta nómina (20261240). */
+  async function loanOverride(l: Line, i: Item) {
+    const res = await Swal.fire({
+      ...swalTheme, title: "Cuota del vale en esta nómina", html: `<p style="font-size:13px">${esc(i.name)}<br/>Cuota normal ${cop(n(i.value))} · saldo ${cop(n(i.balance))}</p>`,
+      input: "text", inputValue: String(n(i.amount)), inputPlaceholder: "0 = no descontar esta vez", showCancelButton: true, showDenyButton: !!i.override,
+      confirmButtonText: "Guardar", denyButtonText: "Volver a la cuota normal", cancelButtonText: "Cancelar",
+      inputValidator: (v) => (/^\d[\d.]*$/.test(v.trim()) ? null : "Escribe un valor (0 para no descontar)"),
+    });
+    if (res.isDismissed) return;
+    const amount = res.isDenied ? null : Number(String(res.value).replace(/\D/g, ""));
+    const { error } = await supabaseBrowser().rpc("erp_payroll_loan_override", { p_line: l.id, p_loan: i.loan_id, p_amount: amount });
+    if (error) return fail(error);
+    await after();
+  }
   async function voidPay(pid: string) {
     const reason = await ask("¿Por qué anulas este pago?");
     if (!reason) return;
@@ -337,7 +387,9 @@ function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; o
       subtitle={r ? <><span style={{ color: RUN_STATUS[r.status].color, fontWeight: 700 }}>{RUN_STATUS[r.status].icon} {RUN_STATUS[r.status].label}</span> · {fdate(r.period_start)} – {fdate(r.period_end)} · preparó {r.created_by_name ?? "—"}{r.approved_by_name ? ` · aprobó ${r.approved_by_name}` : ""}</> : null}
       onClose={onClose} footer={r ? (
         <>
-          <ExportGate><button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Planilla</button></ExportGate>
+          <button type="button" onClick={() => void printRunReport(storeId, d as unknown as PayrollDetail)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }} title="Resumen, lista para pagar con banco y cuenta, detalle, vales, firmas y un desprendible por empleado"><Printer size={13} /> Informe para pagar</button>
+          <ExportGate><button type="button" onClick={() => downloadRunExcel(d as unknown as PayrollDetail)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Excel completo</button></ExportGate>
+          <ExportGate><button type="button" onClick={exportCsv} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Planilla CSV</button></ExportGate>
           {r.status === "draft" && (cat.can.payroll || cat.can.payroll_approve) ? <button type="button" onClick={() => void removeDraft()} className={ghostBtn} style={{ borderColor: "var(--t-card-border)", color: "#e66767" }}><Trash2 size={13} /> Eliminar</button> : null}
           {(r.status === "approved" || r.status === "partial") && cat.can.payroll_approve && !anyPaid ? <button type="button" onClick={() => void transition("reopen")} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Undo2 size={13} /> Volver a borrador</button> : null}
           {r.status !== "void" && r.status !== "draft" && cat.can.payroll_approve && !anyPaid ? <button type="button" onClick={() => void transition("void")} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><XCircle size={13} /> Anular</button> : null}
@@ -374,10 +426,13 @@ function RunSheet({ id, cat, onClose, onChanged }: { id: string; cat: Catalog; o
                   </button>
                   {isOpen ? (
                     <div className="space-y-1 border-t px-4 py-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
-                      {l.items.filter((i) => n(i.amount) !== 0).map((i) => (
+                      {l.items.filter((i) => n(i.amount) !== 0 || i.calc === "loan").map((i) => (
                         <div key={i.concept_id} className="flex items-baseline gap-2">
-                          <span>{KIND_LABEL[i.kind].icon}</span>
-                          <span className="min-w-0 flex-1 truncate">{i.name}{i.calc === "base_pct" ? <span className="text-xs" style={{ color: "var(--t-muted)" }}> · {n(i.value)} %</span> : null}</span>
+                          <span>{i.calc === "loan" ? "🧾" : KIND_LABEL[i.kind].icon}</span>
+                          <span className="min-w-0 flex-1 truncate">{i.name}{i.calc === "base_pct" ? <span className="text-xs" style={{ color: "var(--t-muted)" }}> · {n(i.value)} %</span> : null}
+                            {i.calc === "loan" ? <span className="text-xs" style={{ color: "var(--t-muted)" }}> · saldo {cop(n(i.balance))}{i.override ? " · cuota cambiada" : ""}</span> : null}
+                            {i.calc === "loan" && r.status === "draft" && cat.can.payroll && i.loan_id ? <button type="button" onClick={() => void loanOverride(l, i)} className="ml-2 text-xs underline" style={{ color: "var(--t-accent)" }}>cambiar</button> : null}
+                          </span>
                           <b className={`tabular-nums ${i.kind === "deduction" ? "text-red-400" : ""}`} style={i.kind === "employer" ? { color: "var(--t-muted)" } : undefined}>{i.kind === "deduction" ? "−" : ""}{cop(i.amount)}</b>
                         </div>
                       ))}

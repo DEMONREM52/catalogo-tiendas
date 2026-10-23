@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LayoutDashboard, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
+import { HandCoins, LayoutDashboard, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { Overview } from "./Overview";
 import { Expenses } from "./Expenses";
 import { BudgetsTab, RecurringTab, ReservesTab } from "./Planning";
 import { PayrollTab } from "./Payroll";
+import { LoansTab } from "./Loans";
 import { cardStyle, rpcError, type Catalog, type Point } from "./shared";
 
-type Tab = "overview" | "expenses" | "recurring" | "budgets" | "payroll" | "reserves";
+type Tab = "overview" | "expenses" | "recurring" | "budgets" | "payroll" | "loans" | "reserves";
 
 /** Gastos y nómina: egresos, gastos fijos, presupuestos, nómina y reservas de la madre y sus puntos. */
 export default function GastosPage() {
@@ -70,6 +71,7 @@ export default function GastosPage() {
     { key: "recurring", label: "Gastos fijos", icon: <Repeat size={15} />, show: can.expenses || can.budgets },
     { key: "budgets", label: "Presupuestos", icon: <Target size={15} />, show: can.budgets || can.expenses },
     { key: "payroll", label: "Nómina", icon: <Users size={15} />, show: payroll },
+    { key: "loans", label: "Vales y préstamos", icon: <HandCoins size={15} />, show: payroll },
     { key: "reserves", label: "Reservas", icon: <PiggyBank size={15} />, show: can.budgets },
   ];
 
@@ -96,6 +98,7 @@ export default function GastosPage() {
       {tab === "recurring" ? <RecurringTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
       {tab === "budgets" ? <BudgetsTab key={refresh} storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
       {tab === "payroll" ? <PayrollTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
+      {tab === "loans" ? <LoansTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
       {tab === "reserves" ? <ReservesTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
     </main>
   );
