@@ -71,6 +71,27 @@ ok(h.ok && h.items.some((x) => x.kind === "adjust") && h.items.some((x) => x.kin
 const list = await one(OWNER, "select public.erp_loyalty_customers($1) r", [A]);
 ok(list.ok && list.customers.length === 2 && list.customers[0].doc === "1098765432" && !list.customers.some((c) => c.name === "SIN CEDULA"), "Lista de clientes con puntos (las ventas sin cédula no cuentan)", list.customers);
 
+console.log("Nombre propio del programa (20261233)");
+{ const sql = fs.readFileSync(path.join(MIG, "20261233_nombre_puntos.sql"), "utf8"); await db.exec(sql); await db.exec(sql); }
+r = await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, Z]);
+ok(r.name === "Puntos" && r.unit === "puntos", "Sin nombre propio se llama «Puntos»", r);
+ok((await one(OWNER, "select public.erp_loyalty_settings_save($1, $2::jsonb) r", [A, JSON.stringify({ enabled: true, pesos_per_point: 1000, point_value: 10, min_redeem: 50, program_name: "  Puntos   La Vitrina ", unit_name: "estrellas" })])).ok, "El dueño le pone nombre al programa y a la unidad");
+r = await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, C]);
+ok(r.name === "Puntos La Vitrina" && r.unit === "estrellas", "Todos los puntos usan el nombre general (sin espacios de más)", r);
+await one(OWNER, "select public.erp_loyalty_point_rules_save($1, $2::jsonb) r", [A, JSON.stringify([{ point_id: Z, earns: true, pesos_per_point: 500, program_name: "Puntos Zamora" }])]);
+ok((await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, Z])).name === "Puntos Zamora", "Zamora tiene su propio nombre");
+ok((await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, C])).name === "Puntos La Vitrina", "   y Centro sigue con el general");
+await one(OWNER, "select public.erp_loyalty_point_rules_save($1, $2::jsonb) r", [A, JSON.stringify([{ point_id: Z, earns: true, pesos_per_point: 400 }])]);
+r = await one(SELLER, "select public.erp_loyalty_point_rules_get($1) r", [A]);
+ok(r.find((x) => x.point === "ZAMORA").program_name === "Puntos Zamora" && r.find((x) => x.point === "ZAMORA").pesos_per_point === 400, "Cambiar la tasa no borra el nombre del punto", r);
+await one(OWNER, "select public.erp_loyalty_settings_save($1, $2::jsonb) r", [A, JSON.stringify({ enabled: true, pesos_per_point: 1000, point_value: 10, min_redeem: 50 })]);
+ok((await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, C])).name === "Puntos La Vitrina", "Guardar la tasa general no borra el nombre");
+r = await one(SELLER, "select public.erp_loyalty_balance($1, '1098765432') r", [A]);
+ok(r.earned === 250 && r.points === r.earned + r.adjusted - r.used, "El saldo sigue igual de bien calculado: solo cambia el nombre (Zamora a $400 = 250)", r);
+ok((await one(OWNER, "select public.erp_loyalty_settings_save($1, $2::jsonb) r", [A, JSON.stringify({ enabled: true, program_name: "x".repeat(60) })])).ok, "Un nombre muy largo se recorta a 40 letras");
+ok((await one(SELLER, "select public.erp_loyalty_brand($1, $2) r", [A, C])).name.length === 40, "   (queda de 40)");
+ok((await one(U(9), "select public.erp_loyalty_brand($1, $2) r", [A, C])) === null, "Alguien de otra tienda no lo ve");
+
 console.log(`\n${pass} bien, ${fail} mal`);
 await db.close();
 process.exitCode = fail ? 1 : 0;

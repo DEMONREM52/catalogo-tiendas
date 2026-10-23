@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { createPortal } from "react-dom";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { useLoyaltyBrand, type LoyaltyBrand } from "@/lib/loyalty/brand";
 import { DateField } from "@/components/forms/Fields";
 import { friendlyStockError } from "@/lib/stock/live-stock";
 import type { ApprovalState } from "./usePriceFloors";
@@ -122,6 +123,8 @@ export function PosToolbar({
   const [loyalty, setLoyalty] = useState<{ enabled: boolean; points: number; value: number; point_value: number; min_redeem: number } | null>(null);
   const realName = customerName.trim() && !/^consumidor final$/i.test(customerName.trim()) ? customerName.trim() : "";
   const doc = customerDoc.replace(/[^0-9A-Za-z]/g, "");
+  // Nombre del programa en este punto (20261233): «Puntos La Vitrina», «estrellas»…
+  const brand = useLoyaltyBrand(storeId, pointId);
 
   // Puntos del cliente por su documento (si el programa está encendido).
   useEffect(() => {
@@ -144,13 +147,13 @@ export function PosToolbar({
         <button type="button" className={btn} style={bs} onClick={() => setOpen("combo")} title="Agregar un combo">🎁 Combos</button>
         {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("layaway")} title="El cliente abona y las unidades quedan reservadas">📌 Apartar</button> : null}
         {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("quote")} title="Guardar como cotización y compartirla">📝 Cotizar</button> : null}
-        {loyalty && loyalty.points > 0 && cart.length ? <button type="button" className={btn} style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, var(--t-card-border))", background: "rgba(245,158,11,.1)" }} onClick={() => setOpen("points")}>⭐ {loyalty.points} puntos ({money(loyalty.value)})</button> : null}
+        {loyalty && loyalty.points > 0 && cart.length ? <button type="button" className={btn} style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, var(--t-card-border))", background: "rgba(245,158,11,.1)" }} onClick={() => setOpen("points")} title={brand.name}>⭐ {loyalty.points} {brand.unit} ({money(loyalty.value)})</button> : null}
         {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("qr")} title="Mostrar el QR de pago con el valor">📱 Cobrar con QR</button> : null}
       </div>
       {open === "combo" ? <ComboPicker storeId={storeId} pointId={pointId} priceOf={priceOf} inCart={new Set(cart.map((c) => c.productId))} onClose={() => setOpen(null)} onAdd={(l, p, n) => { onAddCombo(l, p, n); setOpen(null); }} /> : null}
       {open === "layaway" ? <LayawayDialog storeId={storeId} storeName={storeName} pointId={pointId} cart={cart} total={total} customerName={realName} customerPhone={customerPhone} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onClear(); }} /> : null}
       {open === "quote" ? <QuoteDialog storeId={storeId} storeName={storeName} pointId={pointId} cart={cart} total={total} customerName={realName} customerPhone={customerPhone} onClose={() => setOpen(null)} /> : null}
-      {open === "points" && loyalty ? <PointsDialog storeId={storeId} pointId={pointId} cart={cart} total={total} customer={doc} name={realName} loyalty={loyalty} onClose={() => setOpen(null)} onApply={(prices, passes, note) => { onSetPrices(prices, passes, note); setOpen(null); }} /> : null}
+      {open === "points" && loyalty ? <PointsDialog storeId={storeId} pointId={pointId} cart={cart} total={total} customer={doc} name={realName} loyalty={loyalty} brand={brand} onClose={() => setOpen(null)} onApply={(prices, passes, note) => { onSetPrices(prices, passes, note); setOpen(null); }} /> : null}
       {open === "qr" ? <QrDialog storeId={storeId} pointId={pointId} total={total} onClose={() => setOpen(null)} /> : null}
     </>
   );
@@ -301,9 +304,9 @@ function QuoteDialog({ storeId, storeName, pointId, cart, total, customerName, c
   );
 }
 
-function PointsDialog({ storeId, pointId, cart, total, customer, name, loyalty, onClose, onApply }: {
+function PointsDialog({ storeId, pointId, cart, total, customer, name, loyalty, brand, onClose, onApply }: {
   storeId: string; pointId: string; cart: CartLite[]; total: number; customer: string; name: string;
-  loyalty: { points: number; point_value: number; min_redeem: number }; onClose: () => void; onApply: (prices: Record<string, number>, passes: Passes, note: string) => void;
+  loyalty: { points: number; point_value: number; min_redeem: number }; brand: LoyaltyBrand; onClose: () => void; onApply: (prices: Record<string, number>, passes: Passes, note: string) => void;
 }) {
   const maxPoints = Math.min(loyalty.points, Math.floor((total - cart.length) / loyalty.point_value));
   const [pts, setPts] = useState(String(Math.max(0, maxPoints)));
@@ -311,7 +314,7 @@ function PointsDialog({ storeId, pointId, cart, total, customer, name, loyalty, 
   const n = Math.max(0, Math.min(maxPoints, Number(pts.replace(/\D/g, "")) || 0));
   const value = Math.round(n * loyalty.point_value);
   async function apply() {
-    if (n < loyalty.min_redeem) return void Swal.fire({ icon: "warning", title: `Mínimo ${loyalty.min_redeem} puntos`, ...swal });
+    if (n < loyalty.min_redeem) return void Swal.fire({ icon: "warning", title: `Mínimo ${loyalty.min_redeem} ${brand.unit}`, ...swal });
     // El descuento se reparte entre los productos según su valor (el último ajusta el redondeo).
     let left = value;
     const lines = cart.map((c, k) => {
@@ -329,15 +332,15 @@ function PointsDialog({ storeId, pointId, cart, total, customer, name, loyalty, 
     setBusy(false);
     const r = data as { ok: boolean; error?: string; passes?: Passes } | null;
     if (error || !r?.ok) return void Swal.fire({ icon: "error", title: "No se pudo canjear", text: error?.message ?? r?.error, ...swal });
-    onApply(Object.fromEntries(lines.map((l) => [l.product_id, l.price])), r.passes ?? {}, `⭐ Canje de ${n} puntos`);
+    onApply(Object.fromEntries(lines.map((l) => [l.product_id, l.price])), r.passes ?? {}, `⭐ Canje de ${n} ${brand.unit} (${brand.name})`);
   }
   return (
-    <Modal title="⭐ Canjear puntos" onClose={onClose}>
-      <p className="text-sm"><b>{name || "El cliente"}</b> (documento {customer}) tiene <b>{loyalty.points}</b> puntos (cada punto vale {money(loyalty.point_value)}).</p>
-      <input className={`${field} mt-3 text-center text-2xl font-black`} style={fieldStyle} inputMode="numeric" value={pts} onChange={(e) => setPts(e.target.value.replace(/\D/g, ""))} aria-label="Puntos a canjear" />
+    <Modal title={`⭐ Canjear ${brand.name}`} onClose={onClose}>
+      <p className="text-sm"><b>{name || "El cliente"}</b> (documento {customer}) tiene <b>{loyalty.points}</b> {brand.unit} (cada uno vale {money(loyalty.point_value)}).</p>
+      <input className={`${field} mt-3 text-center text-2xl font-black`} style={fieldStyle} inputMode="numeric" value={pts} onChange={(e) => setPts(e.target.value.replace(/\D/g, ""))} aria-label={`${brand.unit} a canjear`} />
       <p className="mt-2 text-center text-sm">Descuento: <b className="text-lg">{money(value)}</b> · total queda en <b>{money(total - value)}</b></p>
-      <p className="mt-1 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>Mínimo {loyalty.min_redeem} puntos. Los puntos se descuentan ya; si no cobras la venta, avísale al administrador.</p>
-      <button type="button" disabled={busy || n < loyalty.min_redeem} onClick={() => void apply()} className="mt-3 w-full rounded-xl px-3 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{busy ? "Canjeando…" : `Canjear ${n} puntos`}</button>
+      <p className="mt-1 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>Mínimo {loyalty.min_redeem} {brand.unit}. Se descuentan ya; si no cobras la venta, avísale al administrador.</p>
+      <button type="button" disabled={busy || n < loyalty.min_redeem} onClick={() => void apply()} className="mt-3 w-full rounded-xl px-3 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{busy ? "Canjeando…" : `Canjear ${n} ${brand.unit}`}</button>
     </Modal>
   );
 }

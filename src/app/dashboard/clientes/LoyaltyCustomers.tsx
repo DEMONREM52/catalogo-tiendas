@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { useLoyaltyBrand } from "@/lib/loyalty/brand";
 
 /**
  * Cliente fiel (20261230): clientes con puntos por su cédula, historial y ajustes (regalar o quitar con motivo).
@@ -24,6 +25,9 @@ export function LoyaltyCustomers({ storeId, canAdjust }: { storeId: string; canA
   const [pointValue, setPointValue] = useState(10);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  // Nombre general del programa (20261233); los puntos del cliente son los mismos en todos los puntos.
+  const brand = useLoyaltyBrand(storeId);
+  const unit = brand.unit;
 
   const load = useCallback(async () => {
     const { data, error: e } = await supabaseBrowser().rpc("erp_loyalty_customers", { p_store: storeId });
@@ -44,15 +48,15 @@ export function LoyaltyCustomers({ storeId, canAdjust }: { storeId: string; canA
     const label = { earn: "🛍️", redeem: "🎁", adjust: "✍️" } as const;
     await Swal.fire({
       title: `⭐ ${esc(r.name ?? r.doc)}`,
-      html: `<p style="font-size:13px">Documento ${esc(r.doc)} · <b>${r.points} puntos</b> (${money(r.points * pointValue)})</p>
+      html: `<p style="font-size:13px">Documento ${esc(r.doc)} · <b>${r.points} ${esc(unit)}</b> (${money(r.points * pointValue)})</p>
         <div style="text-align:left;max-height:50vh;overflow:auto;font-size:12px;line-height:1.6">${items.map((h) => `${label[h.kind]} ${new Date(h.at).toLocaleDateString("es-CO")} · <b style="color:${h.points >= 0 ? "#10b981" : "#ef4444"}">${h.points > 0 ? "+" : ""}${h.points}</b> · ${esc(h.detail ?? "")}${h.point ? ` · ${esc(h.point)}` : ""}${h.by ? ` · ${esc(h.by)}` : ""}`).join("<br>") || "Sin movimientos."}</div>`,
       ...swal,
     });
   }
   async function adjust(r: Row) {
     const res = await Swal.fire({
-      title: `Ajustar puntos · ${esc(r.name ?? r.doc)}`,
-      html: `<p style="font-size:13px">Tiene <b>${r.points}</b> puntos. Escribe un número positivo para regalar o negativo para quitar.</p><input id="pts" class="swal2-input" placeholder="Ej. 100 o -50" inputmode="numeric">`,
+      title: `Ajustar ${esc(unit)} · ${esc(r.name ?? r.doc)}`,
+      html: `<p style="font-size:13px">Tiene <b>${r.points}</b> ${esc(unit)}. Escribe un número positivo para regalar o negativo para quitar.</p><input id="pts" class="swal2-input" placeholder="Ej. 100 o -50" inputmode="numeric">`,
       input: "text", inputPlaceholder: "Motivo (ej. cumpleaños, error en una venta)", showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
       preConfirm: (reason) => ({ reason: String(reason ?? ""), points: Number(((document.getElementById("pts") as HTMLInputElement | null)?.value ?? "").replace(/[^\d-]/g, "")) }), ...swal,
     });
@@ -64,8 +68,8 @@ export function LoyaltyCustomers({ storeId, canAdjust }: { storeId: string; canA
   }
   async function newAdjust() {
     const res = await Swal.fire({
-      title: "Regalar puntos",
-      html: `<input id="doc" class="swal2-input" placeholder="Cédula o NIT *"><input id="nm" class="swal2-input" placeholder="Nombre (opcional)"><input id="pts" class="swal2-input" placeholder="Puntos *" inputmode="numeric">`,
+      title: `Regalar ${esc(unit)}`,
+      html: `<input id="doc" class="swal2-input" placeholder="Cédula o NIT *"><input id="nm" class="swal2-input" placeholder="Nombre (opcional)"><input id="pts" class="swal2-input" placeholder="${esc(unit)} *" inputmode="numeric">`,
       input: "text", inputPlaceholder: "Motivo *", showCancelButton: true, confirmButtonText: "Regalar", cancelButtonText: "Cancelar",
       preConfirm: (reason) => ({
         reason: String(reason ?? ""), doc: (document.getElementById("doc") as HTMLInputElement).value, name: (document.getElementById("nm") as HTMLInputElement).value,
@@ -83,16 +87,16 @@ export function LoyaltyCustomers({ storeId, canAdjust }: { storeId: string; canA
   return (
     <section className="space-y-4">
       {error ? <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, transparent)" }}>⚠️ {error}</p> : null}
-      {!enabled && !error ? <p className="rounded-2xl border p-4 text-sm" style={box}>El programa de puntos está apagado. Enciéndelo en <b>Mi tienda → Cliente fiel</b> (ahí pones cuánto gana el cliente en general y en cada punto de venta).</p> : null}
+      {!enabled && !error ? <p className="rounded-2xl border p-4 text-sm" style={box}>El programa {brand.name} está apagado. Enciéndelo en <b>Mi tienda → Cliente fiel</b> (ahí pones cuánto gana el cliente en general y en cada punto de venta).</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
           <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 opacity-60" />
           <input className="w-full rounded-full border py-2 pr-4 text-sm outline-none" style={{ ...box, paddingLeft: "2.3rem", color: "var(--t-text)" }} placeholder="Buscar por cédula o nombre…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        {canAdjust ? <button type="button" onClick={() => void newAdjust()} className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>🎁 Regalar puntos</button> : null}
-        {rows?.length ? <span className="text-sm" style={{ color: "var(--t-muted)" }}>{rows.length} clientes · {total.toLocaleString("es-CO")} puntos ({money(total * pointValue)}) por canjear</span> : null}
+        {canAdjust ? <button type="button" onClick={() => void newAdjust()} className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>🎁 Regalar {unit}</button> : null}
+        {rows?.length ? <span className="text-sm" style={{ color: "var(--t-muted)" }}>{rows.length} clientes · {total.toLocaleString("es-CO")} {unit} ({money(total * pointValue)}) por canjear · {brand.name}</span> : null}
       </div>
-      {rows && !shown.length && enabled && !error ? <p className="rounded-2xl border p-6 text-center text-sm" style={{ ...box, color: "var(--t-muted)" }}>Todavía nadie tiene puntos. Escribe la cédula o NIT del cliente al vender y empezará a sumar.</p> : null}
+      {rows && !shown.length && enabled && !error ? <p className="rounded-2xl border p-6 text-center text-sm" style={{ ...box, color: "var(--t-muted)" }}>Todavía nadie tiene {unit}. Escribe la cédula o NIT del cliente al vender y empezará a sumar.</p> : null}
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {shown.slice(0, 200).map((r) => (
           <div key={r.doc} className="rounded-2xl border p-3 text-sm" style={box}>

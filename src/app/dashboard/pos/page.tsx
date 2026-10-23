@@ -20,7 +20,7 @@ import { OfflineDrafts } from "./OfflineDrafts";
 import { removeDraft, saveDraft, type PosDraft } from "@/lib/pos/drafts";
 import { isNetworkError, isOnline, reportNetworkError, useNetStatus } from "@/lib/net/status";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pause, Play, Search, UserRound, X } from "lucide-react";
+import { Pause, Play, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
 import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
@@ -189,6 +189,8 @@ export default function PosPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  // El buscador de clientes se abre solo al tocar «Elegir / Cambiar cliente» (así nadie busca productos ahí).
+  const [clientPicking, setClientPicking] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [customerName, setCustomerName] = useState(DEFAULT_CLIENT_NAME);
   const [customerEmail, setCustomerEmail] = useState("");
@@ -1402,6 +1404,11 @@ export default function PosPage() {
     })();
   }, [storeId, loading, allProducts, pointId, pointStock, priceOf, currentPriceList, cart.length]);
 
+  // En computador el cursor queda en el buscador de productos al abrir (en celular no, para no tapar con el teclado).
+  useEffect(() => {
+    if (!loading && window.matchMedia("(min-width: 1024px)").matches) searchRef.current?.focus();
+  }, [loading]);
+
   const shortcuts = useRef({ submit: createInvoice, hold: holdSale });
   useEffect(() => { shortcuts.current = { submit: createInvoice, hold: holdSale }; });
   useEffect(() => {
@@ -1463,50 +1470,195 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div {...cardProps()}>
-        <div className="flex flex-wrap items-center gap-2">
-          <motion.button
-            type="button"
-            layout
-            onClick={() => setSelectedClientId("")}
-            className="inline-flex max-w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left"
-            style={{ borderColor: selectedClient ? "var(--t-accent)" : "var(--t-card-border)", background: selectedClient ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : "transparent" }}
-            title={selectedClient ? "Volver a Consumidor final" : "Cliente predeterminado"}
-          >
-            <UserRound size={16} className="shrink-0" />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
-              <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>
-                {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito" : " · 💳 crédito") : ""}` : "Predeterminado · Lista P3"}
-              </span>
-            </span>
-            {selectedClient ? <X size={14} className="shrink-0 opacity-70" /> : null}
-          </motion.button>
-          <div className="relative min-w-[220px] flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-            <input
-              {...inputProps()}
-              style={{ ...inputProps().style, paddingLeft: 34 }}
-              value={clientSearch}
-              onChange={(e) => setClientSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); }
-                if (e.key === "Escape") setClientSearch("");
-              }}
-              placeholder="Buscar cliente por nombre, cédula/NIT o teléfono…"
-              aria-label="Buscar cliente"
-            />
-            <AnimatePresence>
-              {clientSearch.trim() ? (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl"
-                  style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}
-                >
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <div className="space-y-3">
+          <div {...cardProps()}>
+            <label htmlFor="pos-product-search" className="mb-2 flex flex-wrap items-end justify-between gap-1">
+              <span className="text-base font-black">🛍️ ¿Qué producto vas a vender?</span>
+              <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>Escribe el nombre, escanea el código o toma una foto 📷</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                {...inputProps()}
+                id="pos-product-search"
+                style={{ ...inputProps().style, fontSize: 16, paddingTop: 14, paddingBottom: 14, borderWidth: 2, borderColor: "color-mix(in oklab, var(--t-accent) 65%, var(--t-card-border))" }}
+                ref={searchRef}
+                enterKeyHint="search"
+                autoComplete="off"
+                placeholder="🔍 Busca el producto: nombre o código…  (F2)"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setVisibleCount(48);
+                }}
+                onKeyDown={(e) => {
+                  // ↓: baja a los resultados para escoger con las flechas y Enter.
+                  if (e.key === "ArrowDown") {
+                    const first = document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])");
+                    if (first) { e.preventDefault(); first.focus(); }
+                    return;
+                  }
+                  // Enter con un código exacto agrega el producto (lector de códigos de barras).
+                  if (e.key !== "Enter") return;
+                  const hit = filteredProducts.find((p) => isExactCode(p, search.trim().toLowerCase()));
+                  if (!hit) {
+                    // Sin código exacto: si queda un solo producto disponible se agrega; si hay varios, se baja a escogerlo.
+                    const available = search.trim() ? filteredProducts.filter((p) => p.active && p.stock !== 0) : [];
+                    if (available.length === 1) { e.preventDefault(); addProduct(available[0]); }
+                    else if (available.length > 1) {
+                      e.preventDefault();
+                      document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])")?.focus();
+                    }
+                    return;
+                  }
+                  e.preventDefault();
+                  if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
+                  addProduct(hit, true);
+                  setSearch("");
+                }}
+              />
+              <PhotoSearchButton
+                source={finderSource}
+                pickLabel="Agregar"
+                title="Agregar producto"
+                subtitle="Toma una foto del producto o escribe su nombre o código."
+                storageKey={`pos:${storeId ?? ""}`}
+                renderExtra={(hit) => {
+                  const stock = pointStock ? pointStock.get(hit.id) ?? 0 : allProducts.find((p) => p.id === hit.id)?.stock ?? null;
+                  return stock === null ? null : (
+                    <span className="mt-0.5 block text-[11px] font-semibold" style={{ color: stock > 0 ? "#16a34a" : "#dc2626" }}>
+                      {stock > 0 ? `${stock} disponibles aquí` : "Sin existencias aquí"}
+                    </span>
+                  );
+                }}
+                onPick={(hit) => {
+                  const product = allProducts.find((p) => p.id === hit.id);
+                  const stock = product ? (pointStock ? pointStock.get(product.id) ?? 0 : product.stock) : 0;
+                  if (!product || !product.active || stock === 0) {
+                    void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
+                    return;
+                  }
+                  addProduct({ ...product, stock });
+                }}
+              />
+            </div>
+
+            {loading || (pointId && !pointStock) ? (
+              <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
+                {loading ? "Cargando productos..." : "Cargando existencias del punto..."}
+              </p>
+            ) : filteredProducts.length === 0 ? (
+              <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
+                {search.trim()
+                  ? "No hay productos con ese nombre en esta tienda."
+                  : pointStock
+                    ? "Este punto no tiene existencias. Recibe mercancía con un ingreso de factura o un traslado."
+                    : "No se encontraron productos."}
+              </p>
+            ) : (
+              <div className="mt-3 max-h-[62vh] overflow-y-auto pr-1">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredProducts.slice(0, visibleCount).map((product) => {
+                    const disabled = !product.active || product.stock === 0;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        disabled={disabled}
+                        data-pos-result
+                        onClick={() => addProduct(product)}
+                        onKeyDown={(e) => {
+                          // Flechas para moverse entre resultados; Esc vuelve a buscar (Enter agrega: es un botón).
+                          const all = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pos-result]:not([disabled])"));
+                          const i = all.indexOf(e.currentTarget);
+                          const cols = window.innerWidth >= 1280 ? 3 : window.innerWidth >= 640 ? 2 : 1;
+                          const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key as "ArrowRight"];
+                          if (e.key === "Escape") { e.preventDefault(); goSearch(); }
+                          else if (move !== undefined) {
+                            e.preventDefault();
+                            const next = i + move;
+                            if (next < 0) goSearch();
+                            else all[Math.min(next, all.length - 1)]?.focus();
+                          }
+                        }}
+                        className="group flex items-center gap-2.5 rounded-xl border p-2 text-left transition hover:-translate-y-0.5 disabled:opacity-50"
+                        style={{
+                          borderColor: "var(--t-card-border)",
+                          background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
+                        }}
+                      >
+                        <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}>
+                          {product.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          ) : (
+                            <span>🛍️</span>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</span>
+                          <span className="mt-0.5 block text-[11px]" style={{ color: "var(--t-muted)" }}>
+                            {money(priceOf(product, currentPriceList))}
+                            {product.stock === 0 ? " · Agotado" : product.stock !== null ? ` · ${product.stock} disp.` : ""}
+                          </span>
+                        </span>
+                        <span
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-lg font-bold"
+                          style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}
+                        >
+                          +
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {filteredProducts.length > visibleCount ? (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((n) => n + 48)}
+                    className="mt-3 w-full rounded-xl border py-2 text-xs font-semibold"
+                    style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
+                  >
+                    Mostrar más ({filteredProducts.length - visibleCount} restantes)
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        <div className="space-y-3 lg:sticky lg:top-2" ref={cartRef}>
+          <div {...cardProps()}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>👤 Cliente de esta venta</p>
+              {selectedClient && !clientPicking ? (
+                <button type="button" onClick={() => setSelectedClientId("")} className="inline-flex items-center gap-1 text-[11px] font-semibold underline" style={{ color: "var(--t-muted)" }}>
+                  <X size={12} /> Volver a consumidor final
+                </button>
+              ) : null}
+            </div>
+            {clientPicking ? (
+              <div className="mt-2">
+                <div className="relative">
+                  <UserRound size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+                  <input
+                    {...inputProps()}
+                    style={{ ...inputProps().style, paddingLeft: 34, borderColor: "var(--t-accent)" }}
+                    autoFocus
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); setClientPicking(false); }
+                      if (e.key === "Escape") { setClientSearch(""); setClientPicking(false); }
+                    }}
+                    placeholder="Nombre, cédula/NIT o teléfono del cliente"
+                    aria-label="Buscar cliente"
+                  />
+                </div>
+                <div className="mt-1 max-h-64 overflow-y-auto rounded-2xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
                   {filteredClients.slice(0, 8).map((client) => (
-                    <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); }}
+                    <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); setClientPicking(false); }}
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }}>
                         {client.name.slice(0, 1)}
@@ -1522,26 +1674,40 @@ export default function PosPage() {
                   {filteredClients.length === 0 ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
                       <span>No encontramos ese cliente.</span>
-                      <button type="button" onClick={prefillNewClient} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}>
+                      <button type="button" onClick={() => { prefillNewClient(); setClientPicking(false); }} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}>
                         ➕ Crear cliente
                       </button>
                     </div>
                   ) : null}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
-        </div>
-        <details className="mt-2">
+                </div>
+                <button type="button" onClick={() => { setClientSearch(""); setClientPicking(false); }} className="mt-2 w-full rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                  Cancelar · seguir con {effectiveClient.name}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setClientPicking(true)} title="Elegir el cliente de esta venta"
+                className="mt-2 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition hover:-translate-y-0.5"
+                style={{ borderColor: selectedClient ? "var(--t-accent)" : "var(--t-card-border)", background: selectedClient ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : "transparent" }}>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: "color-mix(in oklab, var(--t-accent) 20%, transparent)" }}><UserRound size={17} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
+                  <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito" : " · 💳 crédito") : ""}` : "Venta sin cliente registrado · Lista P3"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
+              </button>
+            )}
+        <details className="mt-3 border-t pt-3" style={{ borderColor: "var(--t-card-border)" }}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
           <span className="min-w-0">
-            <span className="text-base font-black">👤 Cliente y documento</span>
+            <span className="text-sm font-black">⚙️ Detalles de la venta</span>
             <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
               {documentKind === "factura" ? "🧾 Factura" : "📄 Remisión"} · {paymentType === "credito" ? "💳 Crédito" : "💵 Contado"} · {points.find((pt) => pt.id === pointId)?.name ?? "Sin punto"}
               {sellerId ? ` · 🧑‍💼 ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}
             </span>
           </span>
-          <span className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Más opciones ▾</span>
+          <span className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cambiar ▾</span>
         </summary>
 
         <div className="mt-3 space-y-3">
@@ -1831,159 +1997,7 @@ export default function PosPage() {
           </div>
         </div>
         </details>
-      </div>
-
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <div className="space-y-3">
-          <div {...cardProps()}>
-            <div className="flex gap-2">
-              <input
-                {...inputProps()}
-                ref={searchRef}
-                placeholder="🔍 Nombre, código o código de barras…  (F2)"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setVisibleCount(48);
-                }}
-                onKeyDown={(e) => {
-                  // ↓: baja a los resultados para escoger con las flechas y Enter.
-                  if (e.key === "ArrowDown") {
-                    const first = document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])");
-                    if (first) { e.preventDefault(); first.focus(); }
-                    return;
-                  }
-                  // Enter con un código exacto agrega el producto (lector de códigos de barras).
-                  if (e.key !== "Enter") return;
-                  const hit = filteredProducts.find((p) => isExactCode(p, search.trim().toLowerCase()));
-                  if (!hit) {
-                    // Sin código exacto: si queda un solo producto disponible se agrega; si hay varios, se baja a escogerlo.
-                    const available = search.trim() ? filteredProducts.filter((p) => p.active && p.stock !== 0) : [];
-                    if (available.length === 1) { e.preventDefault(); addProduct(available[0]); }
-                    else if (available.length > 1) {
-                      e.preventDefault();
-                      document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])")?.focus();
-                    }
-                    return;
-                  }
-                  e.preventDefault();
-                  if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
-                  addProduct(hit, true);
-                  setSearch("");
-                }}
-              />
-              <PhotoSearchButton
-                source={finderSource}
-                pickLabel="Agregar"
-                title="Agregar producto"
-                subtitle="Toma una foto del producto o escribe su nombre o código."
-                storageKey={`pos:${storeId ?? ""}`}
-                renderExtra={(hit) => {
-                  const stock = pointStock ? pointStock.get(hit.id) ?? 0 : allProducts.find((p) => p.id === hit.id)?.stock ?? null;
-                  return stock === null ? null : (
-                    <span className="mt-0.5 block text-[11px] font-semibold" style={{ color: stock > 0 ? "#16a34a" : "#dc2626" }}>
-                      {stock > 0 ? `${stock} disponibles aquí` : "Sin existencias aquí"}
-                    </span>
-                  );
-                }}
-                onPick={(hit) => {
-                  const product = allProducts.find((p) => p.id === hit.id);
-                  const stock = product ? (pointStock ? pointStock.get(product.id) ?? 0 : product.stock) : 0;
-                  if (!product || !product.active || stock === 0) {
-                    void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
-                    return;
-                  }
-                  addProduct({ ...product, stock });
-                }}
-              />
-            </div>
-
-            {loading || (pointId && !pointStock) ? (
-              <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
-                {loading ? "Cargando productos..." : "Cargando existencias del punto..."}
-              </p>
-            ) : filteredProducts.length === 0 ? (
-              <p className="mt-6 text-sm" style={{ color: "var(--t-muted)" }}>
-                {search.trim()
-                  ? "No hay productos con ese nombre en esta tienda."
-                  : pointStock
-                    ? "Este punto no tiene existencias. Recibe mercancía con un ingreso de factura o un traslado."
-                    : "No se encontraron productos."}
-              </p>
-            ) : (
-              <div className="mt-3 max-h-[62vh] overflow-y-auto pr-1">
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredProducts.slice(0, visibleCount).map((product) => {
-                    const disabled = !product.active || product.stock === 0;
-                    return (
-                      <button
-                        key={product.id}
-                        type="button"
-                        disabled={disabled}
-                        data-pos-result
-                        onClick={() => addProduct(product)}
-                        onKeyDown={(e) => {
-                          // Flechas para moverse entre resultados; Esc vuelve a buscar (Enter agrega: es un botón).
-                          const all = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pos-result]:not([disabled])"));
-                          const i = all.indexOf(e.currentTarget);
-                          const cols = window.innerWidth >= 1280 ? 3 : window.innerWidth >= 640 ? 2 : 1;
-                          const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key as "ArrowRight"];
-                          if (e.key === "Escape") { e.preventDefault(); goSearch(); }
-                          else if (move !== undefined) {
-                            e.preventDefault();
-                            const next = i + move;
-                            if (next < 0) goSearch();
-                            else all[Math.min(next, all.length - 1)]?.focus();
-                          }
-                        }}
-                        className="group flex items-center gap-2.5 rounded-xl border p-2 text-left transition hover:-translate-y-0.5 disabled:opacity-50"
-                        style={{
-                          borderColor: "var(--t-card-border)",
-                          background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)",
-                        }}
-                      >
-                        <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}>
-                          {product.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                          ) : (
-                            <span>🛍️</span>
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="line-clamp-2 text-xs font-semibold leading-tight">{product.name}</span>
-                          <span className="mt-0.5 block text-[11px]" style={{ color: "var(--t-muted)" }}>
-                            {money(priceOf(product, currentPriceList))}
-                            {product.stock === 0 ? " · Agotado" : product.stock !== null ? ` · ${product.stock} disp.` : ""}
-                          </span>
-                        </span>
-                        <span
-                          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-lg font-bold"
-                          style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}
-                        >
-                          +
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {filteredProducts.length > visibleCount ? (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount((n) => n + 48)}
-                    className="mt-3 w-full rounded-xl border py-2 text-xs font-semibold"
-                    style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
-                  >
-                    Mostrar más ({filteredProducts.length - visibleCount} restantes)
-                  </button>
-                ) : null}
-              </div>
-            )}
           </div>
-
-        </div>
-
-        <div className="space-y-3 lg:sticky lg:top-2" ref={cartRef}>
           <div {...cardProps()}>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-black">🛒 Carrito <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{cart.length ? `${cart.length} producto${cart.length === 1 ? "" : "s"} · ${units} und.` : ""}</span></h2>

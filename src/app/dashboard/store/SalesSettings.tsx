@@ -18,10 +18,10 @@ const fs = { borderColor: "var(--t-card-border)", background: "var(--t-card-bg)"
 const money = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString("es-CO")}`;
 
 export function LoyaltyPanel({ storeId }: { storeId: string }) {
-  const [cfg, setCfg] = useState<{ enabled: boolean; pesos_per_point: number; point_value: number; min_redeem: number } | null>(null);
+  const [cfg, setCfg] = useState<{ enabled: boolean; pesos_per_point: number; point_value: number; min_redeem: number; program_name?: string | null; unit_name?: string | null } | null>(null);
   const [error, setError] = useState("");
   // Regla de cada punto de venta (20261230): da puntos o no, y con qué tasa (vacío = la general).
-  const [rules, setRules] = useState<Array<{ point_id: string; point: string; earns: boolean; pesos_per_point: number | null }> | null>(null);
+  const [rules, setRules] = useState<Array<{ point_id: string; point: string; earns: boolean; pesos_per_point: number | null; program_name?: string | null }> | null>(null);
   useEffect(() => {
     void supabaseBrowser().rpc("erp_loyalty_point_rules_get", { p_store: storeId }).then(({ data, error: e }) => { if (!e && Array.isArray(data)) setRules(data as NonNullable<typeof rules>); });
   }, [storeId]);
@@ -42,11 +42,14 @@ export function LoyaltyPanel({ storeId }: { storeId: string }) {
     if (e || !(data as { ok?: boolean } | null)?.ok) void Swal.fire({ icon: "error", title: "No se guardó", text: e?.message ?? (data as { error?: string } | null)?.error, ...swal });
   }
   const pct = cfg ? Math.round((cfg.point_value / cfg.pesos_per_point) * 1000) / 10 : 0;
+  // Nombre del programa y de la unidad (20261233): vacío = «Puntos» / «puntos».
+  const programName = cfg?.program_name?.trim() || "Puntos";
+  const unit = cfg?.unit_name?.trim() || "puntos";
   return (
     <section className="rounded-3xl border p-5" style={box}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-black">⭐ Cliente fiel (puntos)</h3>
+          <h3 className="text-base font-black">⭐ Cliente fiel ({programName})</h3>
           <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cada compra suma puntos al cliente por su <b>cédula o NIT</b> (escríbelo en la venta). En el POS aparecen sus puntos y se canjean como descuento. Las ventas sin documento no suman.</p>
         </div>
         {cfg ? (
@@ -58,18 +61,23 @@ export function LoyaltyPanel({ storeId }: { storeId: string }) {
       {error ? <p className="mt-2 text-sm text-amber-500">⚠️ {error}</p> : null}
       {cfg ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <label className="text-xs font-semibold sm:col-span-2" style={{ color: "var(--t-muted)" }}>Nombre del programa
+            <input className={field} style={fs} maxLength={40} placeholder="Ej. Puntos La Vitrina" value={cfg.program_name ?? ""} onChange={(e) => setCfg({ ...cfg, program_name: e.target.value })} onBlur={() => void save(cfg)} /></label>
+          <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Cómo se llama cada uno
+            <input className={field} style={fs} maxLength={20} placeholder="puntos, estrellas, vitricoins…" value={cfg.unit_name ?? ""} onChange={(e) => setCfg({ ...cfg, unit_name: e.target.value })} onBlur={() => void save(cfg)} /></label>
           <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>1 punto por cada $
             <input className={field} style={fs} inputMode="numeric" value={cfg.pesos_per_point} onChange={(e) => setCfg({ ...cfg, pesos_per_point: Number(e.target.value.replace(/\D/g, "")) || 0 })} onBlur={() => void save(cfg)} /></label>
           <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Cada punto vale $
             <input className={field} style={fs} inputMode="numeric" value={cfg.point_value} onChange={(e) => setCfg({ ...cfg, point_value: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} onBlur={() => void save(cfg)} /></label>
           <label className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Canje mínimo (puntos)
             <input className={field} style={fs} inputMode="numeric" value={cfg.min_redeem} onChange={(e) => setCfg({ ...cfg, min_redeem: Number(e.target.value.replace(/\D/g, "")) || 0 })} onBlur={() => void save(cfg)} /></label>
-          <p className="text-xs sm:col-span-3" style={{ color: "var(--t-muted)" }}>Así le devuelves al cliente el <b>{pct} %</b> de lo que compra. Ejemplo: compra {money(100000)} → gana {Math.floor(100000 / Math.max(1, cfg.pesos_per_point))} puntos = {money(Math.floor(100000 / Math.max(1, cfg.pesos_per_point)) * cfg.point_value)} para su próxima compra. Los puntos cuentan desde que lo enciendes.</p>
+          <p className="text-xs sm:col-span-3" style={{ color: "var(--t-muted)" }}>Así le devuelves al cliente el <b>{pct} %</b> de lo que compra. Ejemplo: compra {money(100000)} → gana {Math.floor(100000 / Math.max(1, cfg.pesos_per_point))} {unit} de «{programName}» = {money(Math.floor(100000 / Math.max(1, cfg.pesos_per_point)) * cfg.point_value)} para su próxima compra. Los puntos cuentan desde que lo enciendes.</p>
         </div>
       ) : null}
       {cfg && rules?.length ? (
         <div className="mt-4">
-          <p className="mb-2 text-sm font-bold">📍 Por punto de venta</p>
+          <p className="text-sm font-bold">📍 Por punto de venta</p>
+          <p className="mb-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Si un punto no tiene nombre propio, usa «{programName}». El cliente tiene los mismos {unit} en todos los puntos.</p>
           <div className="space-y-1.5">
             {rules.map((r) => (
               <div key={r.point_id} className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
@@ -82,7 +90,12 @@ export function LoyaltyPanel({ storeId }: { storeId: string }) {
                       onBlur={() => void saveRule(rules.find((x) => x.point_id === r.point_id) ?? r)} aria-label={`Tasa de ${r.point}`} />
                   </label>
                 ) : null}
-                <span className="w-full text-[11px] sm:w-auto" style={{ color: "var(--t-muted)" }}>{r.earns ? `${r.pesos_per_point ? "Tasa propia" : "Usa la general"}: compra ${money(100000)} = ${Math.floor(100000 / Math.max(50, r.pesos_per_point ?? cfg.pesos_per_point))} puntos` : "Las ventas de este punto no suman puntos"}</span>
+                <span className="w-full text-[11px] sm:w-auto" style={{ color: "var(--t-muted)" }}>{r.earns ? `${r.pesos_per_point ? "Tasa propia" : "Usa la general"}: compra ${money(100000)} = ${Math.floor(100000 / Math.max(50, r.pesos_per_point ?? cfg.pesos_per_point))} ${unit}` : `Las ventas de este punto no suman ${unit}`}</span>
+                <label className="flex w-full items-center gap-1 text-xs sm:w-auto">Nombre aquí
+                  <input className="w-48 rounded-lg border px-2 py-1" style={fs} maxLength={40} placeholder={programName} value={r.program_name ?? ""}
+                    onChange={(e) => setRules((cur) => (cur ?? []).map((x) => (x.point_id === r.point_id ? { ...x, program_name: e.target.value } : x)))}
+                    onBlur={() => void saveRule(rules.find((x) => x.point_id === r.point_id) ?? r)} aria-label={`Nombre del programa en ${r.point}`} />
+                </label>
               </div>
             ))}
           </div>
