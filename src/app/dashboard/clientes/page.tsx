@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
@@ -171,11 +172,16 @@ export default function TercerosPage() {
               Un solo lugar para todas las personas y empresas con las que trabajas, sus créditos y lo que te deben.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          <Link href="/dashboard/datos" className="inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Subir o descargar terceros y cartera en Excel">
+            🔄 Importar / exportar
+          </Link>
           {canEdit && tab === "terceros" ? (
             <button type="button" onClick={() => openForm(null)} className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
               <Plus size={17} /> Nuevo tercero
             </button>
           ) : null}
+          </div>
         </div>
         <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[

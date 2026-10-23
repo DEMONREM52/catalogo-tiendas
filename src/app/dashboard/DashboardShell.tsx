@@ -220,6 +220,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/plan", icon: "💎", label: "Mi plan", permissions: ["store"], adminOnly: true },
     { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
     { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
+    { href: "/dashboard/datos", icon: "🔄", label: "Importar y exportar", short: "Datos", permissions: ["exports", "products", "clients", "receivables", "payables", "suppliers", "categories", "inventory_adjust"] },
   ],
 };
 

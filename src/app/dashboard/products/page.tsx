@@ -734,6 +734,14 @@ export default function ProductsListPage() {
                   📥 Importar Excel
                 </Link>
                 <Link
+                  href="/dashboard/datos"
+                  className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
+                  style={{ borderColor: "var(--t-card-border)" }}
+                  title="Exportar o importar productos, terceros, cartera, inventario y más"
+                >
+                  🔄 Exportar / importar todo
+                </Link>
+                <Link
                   href="/dashboard/products/crear"
                   className={clsBtnPrimary()}
                   style={{ padding: "8px 10px", fontSize: 12 }}

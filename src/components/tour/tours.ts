@@ -233,6 +233,10 @@ export const HELP: Help[] = [
     { target: ["text:Vendedor", "text:Plantilla"], title: "2. Permisos con plantilla", text: "Vendedor, Cajero, Bodega, Supervisor… o los permisos uno por uno." },
     { target: "text:Dar permiso temporal", title: "3. Permisos temporales", text: "Da un permiso por unas horas o días y se quita solo." },
   ] },
+  { key: "datos", match: "/dashboard/datos", title: "Importar y exportar", tips: ["Exportar: escoge los temas y baja un solo Excel con una hoja por tema.", "Importar: baja la plantilla, llénala y súbela. Antes de guardar ves fila por fila qué va a pasar.", "Importar dos veces el mismo archivo no duplica: lo que ya existe se omite."], steps: [
+    { target: ["text:Exportar", "main h1"], title: "1. Exportar", text: "Marca lo que quieres (productos, terceros, cartera, ventas…) y descarga. Ventas, compras, traslados, gastos y caja van por fechas." },
+    { target: ["text:Importar", "main h1"], title: "2. Importar", text: "Productos, terceros, proveedores, categorías, cartera inicial, deudas con proveedores y conteo de inventario." },
+  ] },
   { key: "tienda", match: "/dashboard/store", title: "Mi tienda", tips: ["Logo, ciudad y frase ayudan a salir en Google.", "Cliente fiel, cobros con QR y copia de seguridad también están aquí."], steps: [
     { target: ["text:Logo de tienda", "main h1"], title: "1. Tu marca", text: "Logo, portada, frase, ciudad y dirección. Salen en tu catálogo y en Google." },
     { target: "text:Dominio y Google", title: "2. Dominio y Google", text: "Tu enlace, tu dominio propio y cómo te ve Google." },
