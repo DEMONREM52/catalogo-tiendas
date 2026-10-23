@@ -191,6 +191,8 @@ export default function PosPage() {
   const [clientSearch, setClientSearch] = useState("");
   // El buscador de clientes se abre solo al tocar «Elegir / Cambiar cliente» (así nadie busca productos ahí).
   const [clientPicking, setClientPicking] = useState(false);
+  // Celular: el carrito se abre encima (hoja de abajo) sin perder la búsqueda.
+  const [cartSheet, setCartSheet] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [customerName, setCustomerName] = useState(DEFAULT_CLIENT_NAME);
   const [customerEmail, setCustomerEmail] = useState("");
@@ -2138,19 +2140,61 @@ export default function PosPage() {
 
         </div>
       </div>
-      {/* Celular: el carrito queda abajo de los productos; esta barra lo trae con un toque. */}
+      {/* Celular: barra fija con el carrito; al tocarla se abre encima con todo lo agregado. */}
+      {cart.length ? <style>{"@media (max-width:1023px){.theme-control{display:none!important}}"}</style> : null}
       <AnimatePresence>
-        {cart.length ? (
+        {cart.length && !cartSheet ? (
           <motion.div initial={{ y: 80 }} animate={{ y: 0 }} exit={{ y: 80 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}
             className="fixed inset-x-3 bottom-3 z-40 lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-            <button type="button" onClick={() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            <button type="button" onClick={() => setCartSheet(true)}
               className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-white shadow-[0_14px_40px_rgba(0,0,0,.45)]" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
-              <span className="text-xl">🛒</span>
-              <span className="min-w-0 flex-1 text-sm font-bold">{units} und. · {cart.length} producto{cart.length === 1 ? "" : "s"}</span>
+              <span className="relative text-2xl">🛒<motion.span key={units} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="absolute -right-2 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-black text-violet-700">{units}</motion.span></span>
+              <span className="min-w-0 flex-1 text-sm font-bold leading-tight">{cart.length} producto{cart.length === 1 ? "" : "s"}<span className="block text-[11px] font-semibold opacity-80">Toca para ver el carrito</span></span>
               <motion.span key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="text-lg font-black tabular-nums">{money(total)}</motion.span>
-              <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-black">Ver carrito ↓</span>
+              <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-black">Ver ↑</span>
             </button>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence>
+        {cartSheet && cart.length ? (
+          <>
+            <motion.div key="cart-sheet-bg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/55 lg:hidden" onClick={() => setCartSheet(false)} />
+            <motion.div key="cart-sheet" role="dialog" aria-label="Carrito" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", stiffness: 360, damping: 34 }}
+              className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] flex-col rounded-t-3xl border-t lg:hidden"
+              style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+              <div className="mx-auto mt-2 h-1.5 w-12 rounded-full" style={{ background: "var(--t-card-border)" }} />
+              <div className="flex items-center justify-between gap-2 px-4 pt-2">
+                <h2 className="text-base font-black">🛒 Lo que lleva <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{cart.length} producto{cart.length === 1 ? "" : "s"} · {units} und.</span></h2>
+                <button type="button" onClick={() => setCartSheet(false)} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}><X size={16} /></button>
+              </div>
+              <p className="px-4 text-[11px]" style={{ color: "var(--t-muted)" }}>👤 {effectiveClient.name} · Lista P{currentPriceList}</p>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3">
+                <PosCartLines
+                  lines={lines}
+                  floors={floors}
+                  approvals={approvals}
+                  onQty={setQty}
+                  onPrice={setItemPrice}
+                  onLevel={(id, lv) => setItemLevel(id, lv as PriceLevel)}
+                  onRemove={removeItem}
+                  onRequest={askApproval}
+                  flash={flash}
+                  onNext={() => { setCartSheet(false); goSearch(); }}
+                />
+              </div>
+              <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
+                {listTotal > total ? <p className="flex justify-between text-xs text-amber-400"><span>🏷️ Descuento</span><span className="tabular-nums">−{money(listTotal - total)}</span></p> : null}
+                <p className="flex items-end justify-between"><span className="font-bold">Total</span><span className="text-2xl font-black tabular-nums">{money(total)}</span></p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => { setCartSheet(false); goSearch(); }} className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>➕ Agregar más</button>
+                  <button type="button" onClick={() => { setCartSheet(false); window.setTimeout(() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 220); }}
+                    className="rounded-2xl px-3 py-3 text-sm font-black" style={{ background: "var(--t-cta)", color: "#0b0b0b" }}>💳 Ir a cobrar</button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         ) : null}
       </AnimatePresence>
       {newClient && store ? (
