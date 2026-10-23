@@ -2,6 +2,7 @@
 //   create_company   → crea la compañía emisora en el proveedor y guarda su id en la cuenta.
 //   register_webhooks → registra en el proveedor la dirección de avisos de esta cuenta con su secreto.
 //   test_set / test_set_status / resolutions → habilitación ante la DIAN y numeración.
+//   intelligent_start / intelligent_status → habilitación automática (Alanube hace los sets de pruebas con el AuthToken de la DIAN).
 import { loadSecrets } from "@/lib/fiscal/engine";
 import { sanitizePayload, type IssuerSnapshot, type ProviderContext } from "@/lib/fiscal/provider";
 import { getProvider } from "@/lib/fiscal/providers";
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     const body = await readJson<{ account_id?: string; action?: string; input?: Record<string, unknown> }>(request);
     if (!isUuid(body.account_id)) throw new FiscalApiError("Falta la cuenta del proveedor.", 400, "INVALID");
     const action = String(body.action ?? "");
-    if (!["create_company", "register_webhooks", "test_set", "test_set_status", "resolutions"].includes(action)) throw new FiscalApiError("Acción no reconocida.", 400, "INVALID");
+    if (!["create_company", "register_webhooks", "test_set", "test_set_status", "resolutions", "intelligent_start", "intelligent_status"].includes(action)) throw new FiscalApiError("Acción no reconocida.", 400, "INVALID");
     const access = assertOk(await rpc<Access>(ctx.db, "fiscal_provider_access", { p_account: body.account_id }));
     const provider = getProvider(access.provider);
     if (!provider) throw new FiscalApiError("Este proveedor aún no tiene adaptador en RemHub.", 422, "PROVIDER_PENDING");
@@ -70,6 +71,11 @@ export async function POST(request: Request) {
     } else {
       if (!provider.runAction) throw new FiscalApiError("Este proveedor no tiene esa acción.", 422, "INVALID");
       result = await provider.runAction(pctx, action, body.input ?? {});
+      // Se guarda el proceso de habilitación automática para consultar su avance después (el enlace de la DIAN nunca se guarda).
+      const processId = result.details?.process_id;
+      if (action === "intelligent_start" && result.ok && typeof processId === "string" && processId) {
+        await admin.from("fiscal_provider_accounts").update({ settings: { ...(access.settings ?? {}), intelligent_process_id: processId, intelligent_started_at: new Date().toISOString() } }).eq("id", body.account_id);
+      }
     }
     await rpc(admin, "fiscal__provider_test_result", { p_account: body.account_id, p_ok: result.ok, p_message: `[${action}] ${result.message}`.slice(0, 500), p_details: sanitizePayload(result.details ?? {}) });
     return jsonOk({ result });

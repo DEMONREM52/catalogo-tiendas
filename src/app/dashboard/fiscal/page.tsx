@@ -16,6 +16,7 @@ import { WebhooksTab } from "./WebhooksTab";
 import { ContingencyTab } from "./ContingencyTab";
 import { AuditTab } from "./AuditTab";
 import { SettingsTab } from "./SettingsTab";
+import { PlanUsageBanner } from "./PlanUsageBanner";
 
 type Tab = "resumen" | "documentos" | "pendientes" | "numeracion" | "contribuyentes" | "proveedor" | "webhooks" | "contingencias" | "auditoria" | "configuracion";
 const TABS: Tab[] = ["resumen", "documentos", "pendientes", "numeracion", "contribuyentes", "proveedor", "webhooks", "contingencias", "auditoria", "configuracion"];
@@ -87,6 +88,7 @@ function FiscalCenter() {
           <Stat label="En cola / con error" value={data ? `${data.queue.pending} / ${data.queue.errors}` : "…"} tone={data?.queue.errors ? "warn" : undefined} />
           <Stat label="Puntos listos" value={data ? `${readyCount} de ${data.points.length}` : "…"} tone={data && readyCount < data.points.length ? "warn" : "good"} />
         </div>
+        <PlanUsageBanner storeId={store?.id ?? null} />
         <form
           className="relative mt-4"
           onSubmit={(e) => {

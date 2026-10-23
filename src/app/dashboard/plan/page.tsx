@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ReferralCard } from "./ReferralCard";
+import { FiscalAddonCard } from "./FiscalAddonCard";
 
 /**
  * «Mi plan»: plan y estado de la tienda, días de prueba, consumo frente a los límites, comparación de planes,
@@ -26,7 +27,8 @@ type Plan = {
   max_products: number | null; max_users: number | null; max_points: number | null; max_catalogs: number | null;
   extra_point_price: number | null; features: string[]; trial_days: number; highlight: boolean;
 };
-type Pay = { reference: string; plan_id: string; period: string; amount: number; status: string; method: string | null; created_at: string; approved_at: string | null };
+type Pay = { reference: string; plan_id: string; period: string; amount: number; status: string; method: string | null; created_at: string; approved_at: string | null;
+  kind?: "subscription" | "fiscal"; addon_id?: string | null; addon_amount?: number; overage_amount?: number };
 
 // WhatsApp de RemHub para contratar mientras no hay pagos en línea (NEXT_PUBLIC_REMHUB_WHATSAPP lo cambia).
 const REMHUB_WHATSAPP = process.env.NEXT_PUBLIC_REMHUB_WHATSAPP || "573218846041";
@@ -170,7 +172,7 @@ function PlanView() {
       {/* Resultado del pago al volver de Wompi */}
       {ref ? (
         <div className="rounded-2xl border p-4 text-sm" style={{ ...card, borderColor: refPay?.status === "approved" ? "#10b981" : refPay?.status === "declined" ? "#ef4444" : "var(--t-card-border)" }}>
-          {refPay?.status === "approved" ? <>✅ <b>¡Pago aprobado!</b> Tu plan ya está activo. Gracias por confiar en RemHub.</>
+          {refPay?.status === "approved" ? <>✅ <b>¡Pago aprobado!</b> {refPay.kind === "fiscal" ? "Tu facturación electrónica ya está al día." : "Tu plan ya está activo."} Gracias por confiar en RemHub.</>
             : refPay?.status === "declined" || refPay?.status === "error" || refPay?.status === "voided" ? <>❌ <b>El pago no se aprobó</b> ({PAY[refPay.status]}). No se cobró nada; puedes intentarlo de nuevo.</>
             : <>⏳ <b>Estamos confirmando tu pago con Wompi…</b> Esto tarda unos segundos. Puedes quedarte aquí o volver más tarde.</>}
         </div>
@@ -263,6 +265,8 @@ function PlanView() {
         <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>Precios en pesos colombianos. Pagas por adelantado el mes o el año; no hay cobros automáticos escondidos. Si cancelas, conservas tus datos.</p>
       </section>
 
+      {storeId ? <FiscalAddonCard storeId={storeId} period={period} /> : null}
+
       {/* Historial */}
       {pays.length ? (
         <section className="rounded-3xl border p-5" style={card}>
@@ -274,7 +278,7 @@ function PlanView() {
                 {pays.map((p) => (
                   <tr key={p.reference} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
                     <td className="px-2 py-1.5">{date(p.created_at)}</td>
-                    <td className="px-2 py-1.5">{plans.find((x) => x.id === p.plan_id)?.name ?? p.plan_id}</td>
+                    <td className="px-2 py-1.5">{p.kind === "fiscal" ? `🧾 Facturación electrónica${p.addon_amount && p.overage_amount ? " + extras" : p.overage_amount ? " · extras" : ""}` : plans.find((x) => x.id === p.plan_id)?.name ?? p.plan_id}</td>
                     <td className="px-2 py-1.5">{p.period === "year" ? "Anual" : "Mensual"}</td>
                     <td className="px-2 py-1.5 font-semibold">{cop(p.amount)}</td>
                     <td className="px-2 py-1.5" style={{ color: p.status === "approved" ? "#10b981" : p.status === "declined" ? "#ef4444" : undefined }}>{PAY[p.status] ?? p.status}</td>

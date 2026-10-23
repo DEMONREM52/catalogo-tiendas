@@ -16,6 +16,8 @@ type Plan = {
   extra_point_price: number | null; modules: string[]; features: string[]; trial_days: number; highlight: boolean;
 };
 
+type Addon = { id: string; name: string; tagline: string | null; monthly_price: number; yearly_price: number; included_docs: number; overage_price: number; highlight: boolean };
+
 const COP = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`;
 const lim = (n: number | null) => (n === null ? "Ilimitados" : n.toLocaleString("es-CO"));
 
@@ -39,10 +41,13 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [period, setPeriod] = useState<"month" | "year">("year");
   const [showTable, setShowTable] = useState(false);
+  // Facturación electrónica como adicional de cualquier plan (20261241).
+  const [addons, setAddons] = useState<Addon[]>([]);
 
   useEffect(() => {
     const sb = supabaseBrowser();
     void sb.rpc("saas_public_plans").then(({ data, error }) => setPlans(error ? [] : ((data ?? []) as Plan[])));
+    void sb.rpc("saas_public_addons").then(({ data, error }) => setAddons(error ? [] : ((data ?? []) as Addon[])));
     void sb.rpc("saas_track", { p_kind: "pricing_view", p_store: null, p_detail: { from: "inicio" } });
   }, []);
 
@@ -114,6 +119,36 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
         ¿Ya tienes tienda? <Link href="/dashboard/plan" className="font-bold underline">Mira y cambia tu plan</Link>.
       </p>
 
+      {addons.length ? (
+        <div className="mt-10 rounded-[2rem] border p-6" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-muted)" }}>Adicional para cualquier plan</p>
+            <h3 className="mt-1 text-2xl font-black">🧾 Facturación electrónica DIAN</h3>
+            <p className="mx-auto mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>Factura electrónica y documento equivalente POS desde tu caja, con proveedor autorizado por la DIAN. Actívalo solo si lo necesitas y escoge cuántos documentos al mes.</p>
+          </div>
+          <div className={`mt-5 grid gap-3 ${addons.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+            {addons.map((a) => {
+              const price = period === "year" ? a.yearly_price : a.monthly_price;
+              return (
+                <div key={a.id} className="relative flex flex-col rounded-2xl border p-5" style={{ borderColor: a.highlight ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+                  {a.highlight ? <span className="absolute -top-3 left-5 rounded-full px-3 py-1 text-[11px] font-bold text-white" style={{ background: "var(--t-cta)" }}>Más elegido</span> : null}
+                  <p className="font-black">{a.name}</p>
+                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>{a.tagline}</p>
+                  <p className="mt-3 text-3xl font-black">+{COP(price)}</p>
+                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>{period === "year" ? `al año · ${COP(price / 12)}/mes` : "al mes"}</p>
+                  <ul className="mt-3 space-y-1.5 text-sm">
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /> {a.included_docs.toLocaleString("es-CO")} documentos al mes</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /> Documento extra: {COP(a.overage_price)}</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /> Factura, POS, notas crédito y débito</li>
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-center text-xs" style={{ color: "var(--t-muted)" }}>Cuentan los documentos aceptados por la DIAN en el mes. Si te pasas, cada documento extra se cobra al cerrar el mes. Lo activas desde «Mi plan».</p>
+        </div>
+      ) : null}
+
       <div className="mt-6 text-center">
         <button type="button" onClick={() => setShowTable((v) => !v)} className="rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }} aria-expanded={showTable}>
           {showTable ? "Ocultar comparación" : "Comparar todos los planes"}
@@ -135,7 +170,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
                   <td className="p-3">{label}</td>
                   {plans.map((p) => (
                     <td key={p.id} className="p-3 text-center">
-                      {p.modules?.includes(mod) ? <Check size={18} className="mx-auto text-emerald-500" aria-label="Incluido" /> : <Minus size={18} className="mx-auto opacity-30" aria-label="No incluido" />}
+                      {mod === "fiscal" && addons.length ? <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Adicional</span> : p.modules?.includes(mod) ? <Check size={18} className="mx-auto text-emerald-500" aria-label="Incluido" /> : <Minus size={18} className="mx-auto opacity-30" aria-label="No incluido" />}
                     </td>
                   ))}
                 </tr>

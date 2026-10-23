@@ -18,9 +18,9 @@ const STEPS: Array<[string, string]> = [
   ["Token de Alanube", "Crea tu cuenta en Alanube y copia el token. Pégalo en «Editar / credenciales» y toca «Probar conexión»."],
   ["Compañía emisora", "Cada NIT es una «compañía» en Alanube. «🏢 Crear empresa en Alanube» la crea con los datos del contribuyente (firma con el certificado de Alegra, sin costo)."],
   ["Avisos automáticos", "«Generar secreto» y luego «🔔 Conectar avisos»: Alanube le avisa a RemHub cuando la DIAN acepta o rechaza cada documento."],
-  ["Portal DIAN · modo de operación", "En el portal de habilitación de la DIAN: Registro y habilitación → Documentos electrónicos → Factura electrónica (o Documentos equivalentes para POS) → Asociar modo de operación → «Software de un proveedor tecnológico» → proveedor «Soluciones Alegra S.A.S». Copia el código del set de pruebas."],
-  ["Set de pruebas", "«🧪 Enviar set de pruebas» con ese código. Alanube manda los documentos de prueba y la DIAN habilita la empresa (POS: 30 documentos y 10 notas). En pruebas (sandbox) se usa un código fijo."],
-  ["Resolución electrónica", "En Muisca: Numeración de facturación → Autorizar rangos → «Facturación electrónica» (o «D.E. / P.O.S.») con su prefijo. Debe empezar por 1876. Luego en «Facturando electrónicamente» → Rangos de numeración → asocia el prefijo a «Soluciones Alegra S.A.S» (1 hora después)."],
+  ["Portal DIAN · modo de operación", "Si es la primera vez: Registro y habilitación → Documentos electrónicos → registra como correo de recepción el de tu cuenta de Alanube. Luego, en el portal de habilitación de la DIAN: Registro y habilitación → Documentos electrónicos → Factura electrónica (o Documentos equivalentes para POS) → Asociar modo de operación → «Software de un proveedor tecnológico» → proveedor «Soluciones Alegra S.A.S». Copia el código del set de pruebas."],
+  ["Set de pruebas (automático)", "Recomendado: «⚡ Habilitación automática». En el portal de habilitación de la DIAN genera el enlace de acceso (AuthToken), pégalo y escoge factura y/o POS: Alanube envía sola todos los documentos de prueba. Revisa el avance con «Ver avance» hasta que diga ✅ habilitado. (También puedes hacerlo a mano con «🧪 Enviar set de pruebas» y el código del set.)"],
+  ["Resolución electrónica", "En Muisca: Numeración de facturación → Autorizar rangos → «Facturación electrónica» (o «D.E. / P.O.S.») con su prefijo. Debe empezar por 1876. Luego en «Facturando electrónicamente» → Rangos de numeración → asocia el prefijo a «Soluciones Alegra S.A.S» (1 hora después). Si no ves la numeración o el proveedor, usa «Sincronizar contribuyente a producción» en Documentos equivalentes."],
   ["Numeración en RemHub", "En producción, «📋 Ver resoluciones» trae los rangos de la DIAN con su clave técnica: regístralos en la pestaña Numeración del punto."],
   ["Salida a producción", "En el portal de habilitación indica la fecha de inicio (tu RUT queda con la responsabilidad 52) y crea en RemHub la cuenta en ambiente de producción con el mismo token."],
 ];
@@ -44,6 +44,32 @@ export function AlanubePanel({ account, canEdit, reload }: { account: ProviderAc
     } finally {
       setBusy(null);
     }
+  }
+
+  async function intelligentStart() {
+    const r = await Swal.fire({
+      ...swal, title: "⚡ Habilitación automática ante la DIAN", width: 620,
+      html: `<div style="text-align:left;font-size:13px;line-height:1.45">
+        <ol style="padding-left:18px;margin:0 0 10px">
+          <li>Entra al <a href="https://catalogo-vpfe-hab.dian.gov.co/User/Login" target="_blank" rel="noreferrer" style="text-decoration:underline">portal de habilitación de la DIAN</a> con el NIT de esta empresa (como representante legal o con el certificado).</li>
+          <li>Asocia el modo de operación <b>«Software de un proveedor tecnológico»</b> → <b>Soluciones Alegra S.A.S</b> para lo que vas a habilitar.</li>
+          <li>Genera el <b>enlace de acceso (AuthToken)</b> y cópialo completo. Empieza por <code>https://catalogo-vpfe-hab.dian.gov.co/User/AuthToken?</code></li>
+        </ol>
+        <p style="margin:6px 0 4px"><b>¿Qué quieres habilitar?</b></p>
+        <label style="display:block"><input type="checkbox" id="d-inv" checked> Factura electrónica</label>
+        <label style="display:block"><input type="checkbox" id="d-pos" checked> Documento equivalente POS (tiquete de caja)</label>
+        <label style="display:block"><input type="checkbox" id="d-sup"> Documento soporte (compras a no obligados a facturar)</label>
+        <label style="display:block"><input type="checkbox" id="d-pay"> Nómina electrónica</label>
+        <p style="font-size:11px;opacity:.75;margin-top:8px">El enlace es como una clave: RemHub lo pasa a Alanube y no lo guarda.</p></div>`,
+      input: "url", inputPlaceholder: "https://catalogo-vpfe-hab.dian.gov.co/User/AuthToken?…", showCancelButton: true, confirmButtonText: "Iniciar habilitación", cancelButtonText: "Cancelar",
+      preConfirm: (v) => {
+        const docs = [["d-inv", "invoices"], ["d-pos", "pos"], ["d-sup", "supportDocuments"], ["d-pay", "payrolls"]].filter(([id]) => (document.getElementById(id) as HTMLInputElement | null)?.checked).map(([, d]) => d);
+        if (!docs.length) { Swal.showValidationMessage("Escoge al menos un tipo de documento."); return false; }
+        if (!String(v ?? "").trim().startsWith("https://catalogo-vpfe-hab.dian.gov.co/User/AuthToken")) { Swal.showValidationMessage("Pega el enlace completo de la DIAN (AuthToken)."); return false; }
+        return { tokenDIAN: String(v).trim(), documents: docs };
+      },
+    });
+    if (r.isConfirmed) await run("intelligent_start", r.value);
   }
 
   async function testSet() {
@@ -74,7 +100,9 @@ export function AlanubePanel({ account, canEdit, reload }: { account: ProviderAc
         <div className="flex flex-wrap gap-2">
           {!account.external_account_id ? <Button variant="primary" busy={busy === "create_company"} onClick={() => void run("create_company")}>🏢 Crear empresa en Alanube</Button> : null}
           <Button busy={busy === "register_webhooks"} onClick={() => void run("register_webhooks")}>🔔 Conectar avisos</Button>
-          <Button busy={busy === "test_set"} onClick={() => void testSet()}>🧪 Enviar set de pruebas</Button>
+          {account.external_account_id ? <Button variant="primary" busy={busy === "intelligent_start"} onClick={() => void intelligentStart()}>⚡ Habilitación automática DIAN</Button> : null}
+          {account.settings?.intelligent_process_id ? <Button busy={busy === "intelligent_status"} onClick={() => void run("intelligent_status")}>📊 Ver avance de la habilitación</Button> : null}
+          <Button busy={busy === "test_set"} onClick={() => void testSet()}>🧪 Set de pruebas a mano</Button>
           <Button busy={busy === "test_set_status"} onClick={() => void testSetStatus()}>Estado del set</Button>
           <Button busy={busy === "resolutions"} onClick={() => void run("resolutions")}>📋 Ver resoluciones</Button>
         </div>

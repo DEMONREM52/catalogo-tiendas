@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField } from "@/components/forms/Fields";
 import { HELP_SCREENS } from "@/components/HelpButton";
+import { FiscalAdmin } from "./FiscalAdmin";
 
 /**
  * Centro de suscripciones de RemHub (solo el administrador de la plataforma).
@@ -12,7 +13,7 @@ import { HELP_SCREENS } from "@/components/HelpButton";
  * Necesita 20261211_saas_planes_suscripciones.sql.
  */
 
-type Tab = "resumen" | "salud" | "clientes" | "planes" | "pagos" | "ajustes" | "videos";
+type Tab = "resumen" | "salud" | "clientes" | "planes" | "facturacion" | "pagos" | "ajustes" | "videos";
 type Dash = {
   ok: boolean; error?: string;
   settings: { enforce_limits: boolean; enforce_modules?: boolean; default_trial_plan: string; default_trial_days: number; grace_days: number };
@@ -112,7 +113,7 @@ export default function AdminSubscriptionsPage() {
           <p className="text-sm" style={muted}>Planes, clientes, cobros y conversión. Solo ingresos de RemHub: las ventas de las tiendas no se mezclan aquí.</p>
         </div>
         <nav className="flex flex-wrap gap-1 rounded-2xl border p-1 text-sm font-bold" style={box}>
-          {([["resumen", "Resumen"], ["salud", "❤️ Salud"], ["clientes", "Clientes"], ["planes", "Planes"], ["pagos", "Pagos"], ["ajustes", "Ajustes"], ["videos", "🎬 Videos"]] as const).map(([k, l]) => (
+          {([["resumen", "Resumen"], ["salud", "❤️ Salud"], ["clientes", "Clientes"], ["planes", "Planes"], ["facturacion", "🧾 Facturación electrónica"], ["pagos", "Pagos"], ["ajustes", "Ajustes"], ["videos", "🎬 Videos"]] as const).map(([k, l]) => (
             <button key={k} type="button" onClick={() => setTab(k)} className="rounded-xl px-3 py-1.5 transition" style={tab === k ? { background: "#8b5cf6", color: "#fff" } : undefined}>{l}</button>
           ))}
         </nav>
@@ -178,6 +179,7 @@ export default function AdminSubscriptionsPage() {
       {tab === "videos" ? <HelpVideos /> : null}
       {tab === "clientes" ? <Customers plans={plans} onChanged={() => void loadDash()} /> : null}
       {tab === "planes" ? <Plans plans={plans} onSaved={() => { void loadPlans(); void loadDash(); }} /> : null}
+      {tab === "facturacion" ? <FiscalAdmin /> : null}
       {tab === "pagos" ? <Payments /> : null}
       {tab === "ajustes" && dash ? <Settings dash={dash} plans={plans} onSaved={() => void loadDash()} /> : null}
     </main>

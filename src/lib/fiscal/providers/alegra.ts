@@ -230,7 +230,7 @@ async function api(ctx: ProviderContext, method: string, path: string, body?: un
   // 503 / EPR500 / EPR503: falla con la DIAN o tiempo agotado → reintentar.
   if (res.status >= 500 || /EPR50[03]/.test(code)) throw new ProviderError(message, { code, retryable: true, transmitted: method !== "GET" });
   // 409: la misma operación sigue en curso o su resultado no se pudo registrar → consultar/reintentar con la misma llave.
-  if (res.status === 409) throw new ProviderError(message, { code, retryable: true, transmitted: true });
+  if (res.status === 409) throw new ProviderError(message, { code, retryable: true, transmitted: true, cause: json });
   throw new ProviderError(message, { code, retryable: false, transmitted: false });
 }
 
@@ -333,6 +333,10 @@ export function alanubePayload(ctx: ProviderContext, doc: ClaimedDocument): Reco
     ...(note ? { note } : {}),
   };
 }
+
+/** Estado de un set de pruebas en palabras. */
+const setStatus = (st: unknown) => ({ ACCEPTED: "✅ aceptado por la DIAN (habilitado)", REJECTED: "⛔ rechazado por la DIAN", FAILED: "⚠️ falló el envío", PENDING_TO_SEND: "⏳ por enviar", WAITING_RESPONSE: "🔄 esperando respuesta de la DIAN" } as Record<string, string>)[String(st ?? "")] ?? String(st ?? "en proceso");
+const docLabel = (d: string) => ({ invoices: "factura electrónica", pos: "documento equivalente POS", supportDocuments: "documento soporte", payrolls: "nómina electrónica" } as Record<string, string>)[d] ?? d;
 
 export class AlegraProvider extends BaseInvoicingProvider {
   readonly code = "alegra";
@@ -450,15 +454,49 @@ export class AlegraProvider extends BaseInvoicingProvider {
       const governmentId = String(input.governmentId ?? "").trim() || (ctx.environment === "sandbox" ? "a70562e0-631e-4ceb-aa65-36887b57dc17" : "");
       if (!/^[0-9a-f-]{20,}$/i.test(governmentId)) return { ok: false, message: "Pega el código del set de pruebas (TestSetId) que muestra la DIAN." };
       const res = await api(ctx, "POST", "/test-sets", { company: { id: companyIdOf(ctx) }, type, governmentId });
-      const set = ((res.testSets ?? []) as Array<Record<string, unknown>>)[0] ?? {};
-      return { ok: true, message: `Set de pruebas enviado a la DIAN (${type}): ${set.status ?? "en proceso"}. Puede tardar unos minutos.`, details: { test_set_id: set.id ?? null, status: set.status ?? null } };
+      // Alanube responde «testSet» (uno) en la creación; algunas versiones usan «testSets» (lista).
+      const set = ((res.testSet as Record<string, unknown> | undefined) ?? ((res.testSets ?? []) as Array<Record<string, unknown>>)[0] ?? {}) as Record<string, unknown>;
+      return { ok: true, message: `Set de pruebas de ${docLabel(type)} enviado a la DIAN: ${setStatus(set.status)}. Puede tardar unos minutos; consulta con «Estado del set».`, details: { test_set_id: set.id ?? null, status: set.status ?? null } };
     }
     if (action === "test_set_status") {
       const id = String(input.id ?? "");
       if (!id) return { ok: false, message: "Falta el id del set de pruebas." };
       const res = await api(ctx, "GET", `/test-sets/${id}`);
-      const set = ((res.testSet ?? res.testSets ?? res) as Record<string, unknown>);
-      return { ok: true, message: `Set de pruebas: ${String((Array.isArray(set) ? set[0]?.status : set.status) ?? "sin dato")}`, details: { response: res } };
+      const raw = (res.testSet ?? res.testSets ?? res) as Record<string, unknown> | Array<Record<string, unknown>>;
+      const set = (Array.isArray(raw) ? raw[0] ?? {} : raw) as Record<string, unknown>;
+      const errs = (Array.isArray(set.errors) ? set.errors : Array.isArray(res.errors) ? res.errors : []).map((e) => (typeof e === "string" ? e : String((e as { message?: unknown }).message ?? ""))).filter(Boolean);
+      return { ok: set.status !== "REJECTED" && set.status !== "FAILED", message: `Set de pruebas de ${docLabel(String(set.type ?? ""))}: ${setStatus(set.status)}${errs.length ? ` · ${errs.join(" · ")}` : ""}`, details: { status: set.status ?? null, errors: errs } };
+    }
+    // Habilitación inteligente: Alanube hace sola los sets de pruebas ante la DIAN con el AuthToken del portal de habilitación.
+    if (action === "intelligent_start") {
+      const tokenDIAN = String(input.tokenDIAN ?? "").trim();
+      let ok = false;
+      try { const u = new URL(tokenDIAN); ok = u.origin === "https://catalogo-vpfe-hab.dian.gov.co" && u.pathname.toLowerCase() === "/user/authtoken" && u.searchParams.has("rk") && u.searchParams.has("token"); } catch { ok = false; }
+      if (!ok) return { ok: false, message: "Pega el enlace completo que genera la DIAN: empieza por https://catalogo-vpfe-hab.dian.gov.co/User/AuthToken?… (con rk y token)." };
+      const allowed = ["invoices", "pos", "supportDocuments", "payrolls"];
+      const docs = (Array.isArray(input.documents) ? input.documents : []).map(String).filter((d, i, a) => allowed.includes(d) && a.indexOf(d) === i);
+      if (!docs.length) return { ok: false, message: "Escoge al menos un tipo de documento para habilitar." };
+      try {
+        const res = await api(ctx, "POST", "/test-sets/intelligent", { tokenDIAN, documents: docs, companyId: companyIdOf(ctx) });
+        return { ok: true, message: `Habilitación iniciada (${docs.map(docLabel).join(", ")}). Alanube envía los sets de pruebas a la DIAN: revisa el avance en unos minutos.`, details: { process_id: res.processId ?? null, status: res.status ?? null, plan: res.executionPlan ?? [] } };
+      } catch (error) {
+        const body = error instanceof ProviderError ? (error.cause as Record<string, unknown> | undefined) : undefined;
+        const active = ((body?.errors as Array<{ code?: string; activeProcessId?: string }> | undefined) ?? []).find((e) => e.activeProcessId)?.activeProcessId;
+        if (active) return { ok: true, message: "Ya hay una habilitación en curso para esta empresa: te muestro su avance.", details: { process_id: active, status: "IN_PROCESS" } };
+        if (error instanceof ProviderError && /COMPANY_DIAN_MISMATCH/.test(error.message)) return { ok: false, message: "El enlace de la DIAN es de otro NIT: genéralo entrando al portal con el NIT de esta empresa." };
+        if (error instanceof ProviderError && /INVALID_DIAN_TOKEN/.test(error.message)) return { ok: false, message: "La DIAN no aceptó el enlace (puede haber vencido): genera uno nuevo en el portal y pégalo otra vez." };
+        throw error;
+      }
+    }
+    if (action === "intelligent_status") {
+      const id = String(input.id ?? ctx.account.settings?.intelligent_process_id ?? "");
+      if (!id) return { ok: false, message: "Todavía no has iniciado la habilitación automática." };
+      const res = await api(ctx, "GET", `/test-sets/intelligent/${encodeURIComponent(id)}`);
+      const plan = ((res.executionPlan ?? []) as Array<Record<string, unknown>>).filter((p) => p.requested || p.requiredBy);
+      const ST: Record<string, string> = { PENDING: "⏳ en cola", IN_PROCESS: "🔄 en proceso", AUTHORIZED: "✅ habilitado", REJECTED: "⛔ rechazado", FAILED: "⚠️ falló" };
+      const lines = plan.map((p) => `${docLabel(String(p.documentType))}: ${ST[String(p.status)] ?? String(p.status ?? "")}${p.errorMessage ? ` (${String(p.errorMessage)})` : ""}`);
+      const global = res.status === "FINISHED" ? "Habilitación terminada." : res.status === "FAILED" ? `La habilitación falló${res.errorMessage ? `: ${String(res.errorMessage)}` : ""}.` : "Habilitación en proceso.";
+      return { ok: res.status !== "FAILED", message: `${global} ${lines.join(" · ")}`, details: { process_id: id, status: res.status ?? null, error_code: res.errorCode ?? null, plan } };
     }
     if (action === "resolutions") {
       const list = await this.getNumbering({ ...ctx, account: { ...ctx.account, settings: { ...ctx.account.settings, nit: input.nit ?? ctx.account.settings?.nit } } });
