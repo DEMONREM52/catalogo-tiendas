@@ -23,8 +23,11 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
+import { getDashboardStore, hasStorePermission, type DashboardAccess, type DashboardStore } from "@/lib/store-utils";
+import { isNetworkError } from "@/lib/net/status";
+import { storedSessionUser } from "@/lib/supabase/offline-session";
 import { OnboardingCard } from "./OnboardingCard";
+import { DrillCard } from "./DrillCard";
 import { GoalsCard, MyTasks, PointToday } from "./HomePanels";
 import { CostAlertsCard, DailyCloseButton } from "./MoneyPanels";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -88,6 +91,9 @@ export default function DashboardHome() {
   const [isStoreAdmin, setIsStoreAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // No se pudieron leer los permisos (no es lo mismo que no tener secciones).
+  const [accessFailed, setAccessFailed] = useState<"network" | "other" | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const alerts = useStoreAlerts(store?.id);
 
   useEffect(() => {
@@ -95,14 +101,27 @@ export default function DashboardHome() {
     (async () => {
       try {
         const sb = supabaseBrowser();
-        const [access, userRes] = await Promise.all([getDashboardStore(), sb.auth.getUser()]);
+        let access: DashboardAccess;
+        try {
+          access = await getDashboardStore();
+        } catch (error: unknown) {
+          // Sin permisos cargados no se puede decir «no tienes secciones»: se avisa que la base no respondió.
+          if (mounted) {
+            setAccessFailed(isNetworkError(error) ? "network" : "other");
+            setLoadError(error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? error));
+          }
+          return;
+        }
+        // La sesión guardada en el equipo trae el nombre; no hace falta otra consulta al servidor
+        // (sin conexión y con el token vencido, se lee directo del equipo).
+        const sessionUser = (await sb.auth.getSession().catch(() => null))?.data.session?.user ?? storedSessionUser();
         if (!mounted) return;
-        const meta = userRes.data.user?.user_metadata ?? {};
+        const meta = sessionUser?.user_metadata ?? {};
         setName(String(meta.display_name || "").trim());
-        setFallbackName(String(meta.internal_username || userRes.data.user?.email?.split("@")[0] || ""));
+        setFallbackName(String(meta.internal_username || sessionUser?.email?.split("@")[0] || ""));
         setStore(access.store);
         setIsAdmin(access.profileRole === "admin");
-        setMyId(userRes.data.user?.id ?? null);
+        setMyId(sessionUser?.id ?? null);
         setIsStoreAdmin(Boolean(access.isOwner) || access.membership?.role === "store_admin");
         const can = (permission: string) => hasStorePermission(access, permission);
         // Cartera aparece aparte solo si no se ve ya el módulo de terceros.
@@ -112,7 +131,7 @@ export default function DashboardHome() {
         setCanPos(can("pos"));
         setCanMoney(can("costs_view") || can("profit_view") || can("price_approve"));
         setCanClose(can("reports") || can("cash_manage") || can("profit_view"));
-        if (access.store) {
+        if (access.store && !access.cachedAt) {
           const [profileRes, pointsRes] = await Promise.all([
             sb.from("store_profiles").select("quick_access").eq("store_id", access.store.id).maybeSingle(),
             sb.from("erp_warehouses").select("id,name,kind").eq("store_id", access.store.id).eq("active", true).order("name"),
@@ -125,7 +144,8 @@ export default function DashboardHome() {
           setPoints((pointsRes.data ?? []) as Array<{ id: string; name: string; kind: string }>);
         }
       } catch (error: unknown) {
-        if (mounted) {
+        // Los accesos ya se pintaron; si solo falló lo secundario por la base, el aviso de arriba basta.
+        if (mounted && !isNetworkError(error)) {
           setLoadError(error instanceof Error ? error.message : error && typeof error === "object" && "message" in error ? String(error.message) : "No se pudieron cargar los datos del dashboard.");
         }
       } finally {
@@ -135,7 +155,14 @@ export default function DashboardHome() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [reloadKey]);
+
+  function retry() {
+    setLoading(true);
+    setAccessFailed(null);
+    setLoadError(null);
+    setReloadKey((n) => n + 1);
+  }
 
   const shortcuts = useMemo(() => (quickAccess ? allowed.filter((m) => quickAccess.includes(m.key)) : allowed), [allowed, quickAccess]);
   const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
@@ -182,11 +209,26 @@ export default function DashboardHome() {
       {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
 
       {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
+      {store && !isAdmin && (canPos || isStoreAdmin) ? <DrillCard storeId={store.id} /> : null}
       {store && !isAdmin && canMoney ? <CostAlertsCard storeId={store.id} /> : null}
       {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
       {store && !isAdmin ? <GoalsCard storeId={store.id} /> : null}
 
-      {loadError ? (
+      {accessFailed ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-[24px] border border-amber-400/40 p-5 text-sm" style={{ background: "color-mix(in oklab, #f59e0b 8%, transparent)" }}>
+          <span className="min-w-0 flex-1">
+            <b className="block">No pudimos cargar tus permisos.</b>
+            <span style={{ color: "var(--t-muted)" }}>
+              {accessFailed === "network"
+                ? "La base de datos no respondió a tiempo. Tus secciones siguen igual; no es un problema de tu cuenta."
+                : `Ocurrió un error al leerlos: ${loadError ?? "sin detalle"}.`}
+            </span>
+          </span>
+          <button type="button" onClick={retry} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
+            Reintentar
+          </button>
+        </div>
+      ) : loadError ? (
         <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>
       ) : null}
 
@@ -211,7 +253,7 @@ export default function DashboardHome() {
 
       {store && canReports ? <ReportsDashboard storeId={store.id} points={points} /> : null}
 
-      {!loading && !isAdmin ? (
+      {!loading && !isAdmin && !accessFailed ? (
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold">Accesos rápidos</h3>

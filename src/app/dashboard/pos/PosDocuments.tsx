@@ -6,6 +6,7 @@ import { Ban, CheckCircle2, FilePlus2, Lock, Printer, Search, Undo2, X } from "l
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "./VoidSaleDialog";
+import { reprintOrder } from "@/lib/print/print-order";
 
 export type PosDocument = {
   order_id: string;
@@ -85,7 +86,8 @@ export function PosDocuments({
   }, [open, storeId, pointId, query, refreshKey, reloadTick]);
 
   function openReceipt(doc: PosDocument) {
-    window.open(`${window.location.origin}/pedido/${doc.token}?formato=${printFormat === "carta" ? "carta" : "t80"}`, "_blank");
+    // Directo a la térmica si este equipo la tiene configurada; si no, el comprobante en otra pestaña.
+    void reprintOrder(doc.token, printFormat);
   }
 
   async function confirmDoc(doc: PosDocument) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { WithDv, docWithDv } from "@/app/dashboard/nit";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -17,15 +17,27 @@ import { matchesSearch, smartFilter } from "@/lib/search";
 import { CreditMeter } from "../clientes/CreditMeter";
 import type { CreditState } from "../clientes/terceros";
 import { OfflineDrafts } from "./OfflineDrafts";
-import { removeDraft, saveDraft, type PosDraft } from "@/lib/pos/drafts";
-import { isNetworkError, isOnline, reportNetworkError, useNetStatus } from "@/lib/net/status";
+import { OfflineReadiness } from "./OfflineReadiness";
+import { DrillGuide } from "./DrillGuide";
+import { PRACTICE_PRINT_EVENT } from "@/lib/pos/drill";
+import { clearPracticeDrafts, getDrafts, removeDraft, saveDraft, subscribeDrafts, type PosDraft, type PosDraftFiscal, type PosDraftKind } from "@/lib/pos/drafts";
+import { resolveOfflineIssue, setSyncSkip } from "@/lib/pos/sync";
+import { availableNumbers, giveBackContingencyNumber, loadContingency, refreshContingency, takeContingencyNumber, type ContingencyPool } from "@/lib/pos/contingency";
+import { offlineReceiptHtml, printOfflineReceipt, ticketFromDraft } from "@/lib/pos/offline-receipt";
+import { getPrinterSettings, isDirect } from "@/lib/print/settings";
+import { printLocalTicket, printOrderDirect, reportPrintFailure, reprintOrder } from "@/lib/print/print-order";
+import { PrinterChip } from "@/components/print/PrinterSetup";
+import { deviceId } from "@/lib/offline/device";
+import { storedSessionUser } from "@/lib/supabase/offline-session";
+import { canReachData, isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
+import { cacheAge, cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
 import { AnimatePresence, motion } from "framer-motion";
 import { Pause, Play, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
 import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
 import { PosCartLines, focusPosField, lineStatus, type CartLine } from "./PosCart";
-import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState } from "./PosPayment";
+import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState, type PayMethod, type PayPart } from "./PosPayment";
 import { LIMIT_LABEL, keepApprovals, useApprovals, usePriceFloors, type ApprovalState } from "./usePriceFloors";
 import { CashStatusChip } from "../caja/CashStatusChip";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
@@ -48,6 +60,8 @@ type Product = {
   active: boolean;
   sku?: string | null;
   barcode?: string | null;
+  /** IVA (%): lo necesita la factura de contingencia que se imprime sin conexión. */
+  tax_rate?: number | null;
 };
 
 type Client = {
@@ -174,7 +188,7 @@ export default function PosPage() {
   const [listOverride, setListOverride] = useState<number | null>(null);
   const [pointId, setPointId] = useState("");
   // Existencias del punto en vivo: si otra persona vende, el número baja aquí sin recargar (20261220).
-  const { stock: pointStock, setStock: setPointStock, live: stockLive } = useLiveStock(store?.id, pointId);
+  const { stock: pointStock, setStock: setPointStock, live: stockLive, refresh: refreshStock } = useLiveStock(store?.id, pointId);
   // Los productos inactivos no se muestran nunca; los agotados (activos) sí, al buscarlos.
   const activeProducts = useMemo(() => allProducts.filter((p) => p.active !== false), [allProducts]);
   // Solo se ofrecen los productos con existencias en el punto elegido.
@@ -186,6 +200,11 @@ export default function PosPage() {
   }, [activeProducts, pointStock]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  // Productos y clientes de la copia guardada (hora) cuando la base no respondió; o no hubo ni copia.
+  const [offlineAt, setOfflineAt] = useState<number | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Hora de la copia de productos y clientes que tiene este equipo (para vender sin conexión).
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -290,11 +309,22 @@ export default function PosPage() {
   useEffect(() => {
     if (!pointId) return;
     let alive = true;
-    void supabaseBrowser().rpc("fiscal_point_readiness", { p_point: pointId }).then(({ data, error }) => {
-      if (!alive) return;
-      const r = data as (PointReadiness & { ok?: boolean }) | null;
-      setFiscal(!error && r && r.ok !== false ? r : null);
-    });
+    const cacheKey = `pos-fiscal:${pointId}`;
+    void (async () => {
+      try {
+        const { data, error } = await withTimeout(supabaseBrowser().rpc("fiscal_point_readiness", { p_point: pointId }), 15_000, "configuración fiscal");
+        if (error) throw error;
+        const r = data as (PointReadiness & { ok?: boolean }) | null;
+        const value = r && r.ok !== false ? r : null;
+        if (!alive) return;
+        setFiscal(value);
+        void cacheSave(cacheKey, value);
+      } catch (e) {
+        // Sin conexión vale la configuración de la última vez: «Factura» sigue siendo electrónica (contingencia).
+        const cached = isNetworkError(e) ? await cacheLoad<PointReadiness | null>(cacheKey) : null;
+        if (alive) setFiscal(cached?.data ?? null);
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -310,6 +340,14 @@ export default function PosPage() {
     unlockAudioOnFirstTouch();
   }, []);
 
+  // Cuando la base vuelve: se recargan productos y clientes en silencio (el carrito no se toca).
+  const dataBack = net.online && net.db === "ok";
+  useEffect(() => {
+    if (!dataBack || (!offlineAt && !loadFailed)) return;
+    void load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataBack, offlineAt, loadFailed]);
+
   const storeId = store?.id;
   // Hasta cuánto puede bajar el precio quien vende (la base lo revisa en cada venta).
   const floors = usePriceFloors(storeId, pointId, cart.map((i) => i.productId));
@@ -318,6 +356,36 @@ export default function PosPage() {
   const cartApprovals = useMemo(() => keepApprovals(approvals, cart.map((i) => i.productId)), [approvals, cart]);
   const [payment, setPayment] = useState<PaymentState>(EMPTY_PAYMENT);
   const { held, hold, take } = useHeldSales(storeId, pointId);
+  const localDrafts = useSyncExternalStore(subscribeDrafts, () => getDrafts(storeId), () => getDrafts(null));
+
+  // Números de contingencia de este equipo: facturas en papel si se cae el internet en un punto electrónico (20261243).
+  // Con conexión se separan (o se completan) y se guarda lo necesario para imprimir; sin conexión se usa la copia.
+  const [contingency, setContingency] = useState<{ point: string; pool: ContingencyPool } | null>(null);
+  const pool = contingency && contingency.point === pointId && fiscalOn ? contingency.pool : null;
+  const contingencyLeft = pool && storeId ? availableNumbers(pool, storeId).length : 0;
+  useEffect(() => {
+    if (!storeId || !pointId || !fiscalOn) return;
+    let alive = true;
+    void (async () => {
+      const local = await loadContingency(storeId, pointId);
+      if (alive && local) setContingency({ point: pointId, pool: local });
+      if (!canReachData()) return;
+      try {
+        const fresh = await refreshContingency(storeId, pointId);
+        if (alive) setContingency({ point: pointId, pool: fresh });
+      } catch {
+        // Sin conexión o sin la migración 20261243: se queda la copia del equipo.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [storeId, pointId, fiscalOn, dataBack, docsRefresh]);
+
+  // Venta guardada cargada en el carrito: no se envía sola mientras tanto (se registra con el botón).
+  useEffect(() => {
+    setSyncSkip(cart.length ? draftId : null);
+  }, [cart.length, draftId]);
 
   // Venta en curso: al entrar se recupera la que quedó sin terminar (recarga, cierre, sin internet, actualización)…
   useEffect(() => {
@@ -372,17 +440,34 @@ export default function PosPage() {
       const PAGE = 1000;
       const map = new Map<string, number[]>();
       let failed: string | null = null;
+      const cacheKey = `pos-prices:${storeId}:${pointId}`;
+      let networkFail = false;
       for (let from = 0; from < 100_000; from += PAGE) {
-        const { data, error } = await sb
-          .rpc("erp_point_prices", { p_store: storeId, p_point: pointId })
-          .order("product_id")
-          .range(from, from + PAGE - 1);
+        let res: { data: unknown; error: { message?: string } | null };
+        try {
+          res = await withTimeout(
+            sb.rpc("erp_point_prices", { p_store: storeId, p_point: pointId }).order("product_id").range(from, from + PAGE - 1),
+            20_000, "carga de precios",
+          );
+        } catch (e) {
+          res = { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+        }
         if (!alive) return;
-        if (error) { failed = error.message || "Error desconocido"; break; }
+        const { data, error } = res;
+        if (error) { failed = error.message || "Error desconocido"; networkFail = isNetworkError(error); break; }
         const rows = (data ?? []) as Array<{ product_id: string; price_1: number; price_2: number; price_3: number; price_4: number; price_5: number }>;
         for (const r of rows) map.set(r.product_id, [r.price_1, r.price_2, r.price_3, r.price_4, r.price_5].map(Number));
         if (rows.length < PAGE) break;
       }
+      // Base caída: se usan los precios del punto de la última vez (no los de la madre).
+      const cached = failed && networkFail ? await cacheLoad<Array<[string, number[]]>>(cacheKey) : null;
+      if (!alive) return;
+      if (cached) {
+        setPointPricesError(null);
+        setPointPrices(new Map(cached.data));
+        return;
+      }
+      if (!failed) void cacheSave(cacheKey, [...map]);
       setPointPricesError(failed);
       setPointPrices(map);
     })();
@@ -458,22 +543,37 @@ export default function PosPage() {
 
   async function loadErp(storeId: string) {
     const sb = supabaseBrowser();
-    const [pointsRes, sellersRes, userRes] = await Promise.all([
-      sb
-        .from("erp_warehouses")
-        // Se puede vender desde puntos y bodegas: cada uno con sus propias existencias.
-        .select("id,name,kind,is_default,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number")
-        .eq("store_id", storeId)
-        .eq("active", true)
-        .order("kind", { ascending: false })
-        .order("name"),
-      sb.rpc("erp_sellers", { p_store: storeId }),
-      sb.auth.getUser(),
-    ]);
-    // Si erp_ops.sql aún no está aplicado el POS sigue funcionando sin punto ni vendedor.
-    const pointRows = (pointsRes.data ?? []) as PointOption[];
-    const sellerRows = (sellersRes.data ?? []) as SellerOption[];
-    const myPoint = (await sb.rpc("erp_my_point", { p_store: storeId })).data as string | null;
+    const cacheKey = `pos-erp:${storeId}`;
+    type ErpCache = { points: PointOption[]; sellers: SellerOption[]; myPoint: string | null };
+    // La sesión guardada basta para saber quién vende (no hace falta preguntarle al servidor).
+    // Sin conexión (aunque el token haya vencido) se usa la sesión guardada en el equipo.
+    const me = (await sb.auth.getSession()).data.session?.user.id ?? storedSessionUser()?.id;
+    let erp: ErpCache;
+    try {
+      const [pointsRes, sellersRes, myPointRes] = await withTimeout(Promise.all([
+        sb
+          .from("erp_warehouses")
+          // Se puede vender desde puntos y bodegas: cada uno con sus propias existencias.
+          .select("id,name,kind,is_default,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number")
+          .eq("store_id", storeId)
+          .eq("active", true)
+          .order("kind", { ascending: false })
+          .order("name"),
+        sb.rpc("erp_sellers", { p_store: storeId }),
+        sb.rpc("erp_my_point", { p_store: storeId }),
+      ]), 20_000, "carga de puntos");
+      if (pointsRes.error && isNetworkError(pointsRes.error)) throw pointsRes.error;
+      // Si erp_ops.sql aún no está aplicado el POS sigue funcionando sin punto ni vendedor.
+      erp = { points: (pointsRes.data ?? []) as PointOption[], sellers: (sellersRes.data ?? []) as SellerOption[], myPoint: myPointRes.data as string | null };
+      if (!pointsRes.error) void cacheSave(cacheKey, erp);
+    } catch (e) {
+      const cached = isNetworkError(e) ? await cacheLoad<ErpCache>(cacheKey) : null;
+      if (!cached) throw e;
+      erp = cached.data;
+    }
+    const pointRows = erp.points;
+    const sellerRows = erp.sellers;
+    const myPoint = erp.myPoint;
     const visiblePoints = myPoint ? pointRows.filter((pt) => pt.id === myPoint) : pointRows;
     setPoints(visiblePoints);
     setLockedPoint(Boolean(myPoint));
@@ -484,14 +584,14 @@ export default function PosPage() {
       visiblePoints[0]?.id ||
       "";
     setPointId((current) => current || initialPoint);
-    const me = userRes.data.user?.id;
     const ofPoint = sellersForPoint(sellerRows, initialPoint);
     setSellerId((current) => current || ofPoint.find((r) => r.user_id === me)?.user_id || ofPoint[0]?.user_id || "");
     setMeId(me ?? "-");
   }
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
+    setLoadFailed(false);
     try {
       const access = await getDashboardStore();
       if (!access.store) {
@@ -501,47 +601,67 @@ export default function PosPage() {
       setCanCredit(hasStorePermission(access, "credit"));
       const sb = supabaseBrowser();
 
-      const productPages: Product[] = [];
-      let productError: unknown = null;
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await sb
-          .from("products")
-          .select("id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active,sku,barcode")
-          .eq("store_id", access.store.id)
-          .order("name", { ascending: true })
-          .order("id")
-          .range(from, from + 999);
-        if (error) {
-          productError = error;
-          break;
-        }
-        productPages.push(...((data as Product[]) ?? []));
-        if (!data || data.length < 1000) break;
+      type Settings = { electronic_provider?: string | null; invoice_prefix?: string | null; remision_prefix?: string | null } | null;
+      type PosCache = { products: Product[]; clients: Client[]; settings: Settings };
+      const cacheKey = `pos:${access.store.id}`;
+      let data: PosCache;
+      try {
+        data = await withTimeout((async () => {
+          const productPages: Product[] = [];
+          let productError: unknown = null;
+          for (let from = 0; ; from += 1000) {
+            const { data, error } = await sb
+              .from("products")
+              .select("id,name,price_1,price_2,price_3,price_4,price_5,min_wholesale,stock,image_url,active,sku,barcode,tax_rate")
+              .eq("store_id", access.store!.id)
+              .order("name", { ascending: true })
+              .order("id")
+              .range(from, from + 999);
+            if (error) {
+              productError = error;
+              break;
+            }
+            productPages.push(...((data as Product[]) ?? []));
+            if (!data || data.length < 1000) break;
+          }
+          const [
+            { data: clientData, error: clientError },
+            { data: settingsData },
+          ] = await Promise.all([
+            loadPosClients(access.store!.id),
+            sb
+              .from("billing_settings")
+              .select("electronic_provider,invoice_prefix,remision_prefix")
+              .eq("store_id", access.store!.id)
+              .maybeSingle(),
+          ]);
+
+          if (productError) throw productError;
+          if (clientError) throw clientError;
+          return { products: productPages, clients: (clientData as Client[]) ?? [], settings: (settingsData as Settings) ?? null };
+        })(), 45_000, "carga del POS");
+        void cacheSave(cacheKey, data).then((saved) => setSavedAt(saved ? Date.now() : null));
+        setOfflineAt(null);
+      } catch (err) {
+        // Sin internet o con la base caída: se abre con los productos y clientes de la última vez.
+        const cached = isNetworkError(err) ? await cacheLoad<PosCache>(cacheKey) : null;
+        if (!cached) throw err;
+        reportNetworkError();
+        data = cached.data;
+        setOfflineAt(cached.at);
+        setSavedAt(cached.at);
       }
-      const [
-        { data: clientData, error: clientError },
-        { data: settingsData },
-      ] = await Promise.all([
-        loadPosClients(access.store.id),
-        sb
-          .from("billing_settings")
-          .select("electronic_provider,invoice_prefix,remision_prefix")
-          .eq("store_id", access.store.id)
-          .maybeSingle(),
-      ]);
 
-      if (productError) throw productError;
-      if (clientError) throw clientError;
-
-      setProducts(productPages);
-      setClients((clientData as Client[]) ?? []);
-      void loadErp(access.store.id);
-      setBillingSettings((settingsData as {
-        electronic_provider?: string | null;
-        invoice_prefix?: string | null;
-        remision_prefix?: string | null;
-      } | null) ?? null);
+      setProducts(data.products);
+      setClients(data.clients);
+      void loadErp(access.store.id).catch(() => undefined);
+      setBillingSettings(data.settings);
     } catch (err: unknown) {
+      if (isNetworkError(err)) {
+        reportNetworkError();
+        setLoadFailed(true);
+        return;
+      }
       await Swal.fire({
         icon: "error",
         title: "No se pudo cargar el POS",
@@ -875,26 +995,144 @@ export default function PosPage() {
     });
   }
 
-  function storeDraft() {
+  /**
+   * Venta sin conexión (o con la base caída). En un punto electrónico, «Factura» se hace como factura de
+   * contingencia en papel con un número separado por este equipo; si no hay números, se emite al volver.
+   */
+  async function offlineSale() {
     if (!store) return;
-    saveDraft({
-      storeId: store.id, cart, total, customerName: customerName.trim(), customerNote: customerNote.trim(),
-      customerWhatsApp: customerWhatsApp.trim(), customerDocument: customerDocument.trim(), selectedClientId,
-      documentKind, pointId, sellerId, approvals: cartApprovals,
+    let kind: PosDraftKind = documentKind;
+    // Modo práctica: nunca se usan números reales de la DIAN.
+    const practice = net.simulated;
+    if (documentKind === "factura" && fiscalOn) {
+      const next = practice
+        ? { block: { prefix: "PRUEBA-" }, number: getDrafts(store.id).filter((d) => d.practice).length + 1 }
+        : pool ? availableNumbers(pool, store.id)[0] : null;
+      const res = await Swal.fire({
+        icon: "question",
+        title: "Factura sin conexión",
+        html: next
+          ? `Se imprime una <b>factura de contingencia</b> (papel) con el número <b>${next.block.prefix}${next.number}</b>. Cuando vuelva la conexión se registra y se envía sola a la DIAN.<br/><small>${practice ? "🎓 Práctica: número de prueba, no se registra." : `Quedan ${contingencyLeft} números en este equipo.`}</small>`
+          : `Este equipo no tiene números de contingencia${pool?.info.reason ? `: ${pool.info.reason}` : "."}<br/>La factura electrónica se emitirá apenas vuelva la conexión; al cliente se le entrega un comprobante provisional.<br/><small>Para quedar en regla sin internet, carga la numeración de contingencia en Centro fiscal → Numeración.</small>`,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: next ? "🧾 Factura de contingencia" : "Factura al volver la conexión",
+        denyButtonText: "Remisión",
+        cancelButtonText: "Volver",
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#8b5cf6",
+        denyButtonColor: "#f59e0b",
+      });
+      if (res.isDismissed) return;
+      kind = res.isDenied ? "remision" : next ? "contingencia" : "factura";
+    }
+    // Sin conexión no se puede revisar el mínimo de descuento: se avisa (la base lo revisa al registrarla).
+    const discounted = cart.filter((i) => {
+      const p = productById.get(i.productId);
+      return p && i.price < priceOf(p, i.priceLevel);
     });
-    if (draftId) removeDraft(store.id, draftId);
+    if (discounted.length) {
+      const go = await Swal.fire({
+        icon: "warning",
+        title: "Hay precios con descuento",
+        html: `${discounted.map((i) => `• ${i.name.replace(/[<>&]/g, "")}`).join("<br/>")}<br/><br/><small>Sin conexión no se puede revisar tu mínimo permitido. Si quedó por debajo, la venta quedará para autorizar cuando vuelva la conexión.</small>`,
+        showCancelButton: true,
+        confirmButtonText: "Guardar así",
+        cancelButtonText: "Revisar precios",
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#f59e0b",
+      });
+      if (!go.isConfirmed) return;
+    }
+    await storeDraft(kind);
+  }
+
+  async function storeDraft(kind: PosDraftKind) {
+    if (!store) return;
+    const practice = net.simulated;
+    let fiscalNumber: PosDraftFiscal | null = null;
+    if (kind === "contingencia" && practice) {
+      const n = getDrafts(store.id).filter((d) => d.practice).length + 1;
+      fiscalNumber = { block_id: "practica", range_id: "practica", number: n, prefix: "PRUEBA-", full_number: `PRUEBA-${n}`, environment: "sandbox" };
+    } else if (kind === "contingencia") {
+      fiscalNumber = await takeContingencyNumber(store.id, pointId);
+      if (!fiscalNumber) {
+        await Swal.fire({ icon: "warning", title: "Se acabaron los números de contingencia", text: "Este equipo ya usó todos sus números. Haz la venta como «Factura al volver la conexión» o como remisión.", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        return;
+      }
+    }
+    const pay = paymentSummary(payment, total);
+    const point = points.find((p) => p.id === pointId);
+    const seller = sellers.find((s) => s.user_id === sellerId);
+    const sold = cart;
+    const { draft, durable } = await saveDraft({
+      storeId: store.id,
+      cart: sold.map((i) => ({ productId: i.productId, name: i.name, qty: i.qty, price: i.price, priceLevel: i.priceLevel, note: i.note, taxRate: Number(productById.get(i.productId)?.tax_rate ?? 0) })),
+      total, customerName: customerName.trim(), customerNote: customerNote.trim(),
+      customerWhatsApp: customerWhatsApp.trim(), customerDocument: customerDocument.trim(), selectedClientId,
+      documentKind: kind === "remision" ? "remision" : "factura", kind, pointId, pointName: point?.name, sellerId, sellerName: seller?.name,
+      approvals: cartApprovals,
+      payment: paymentType === "contado" ? { method: pay.method, parts: pay.parts, received: pay.received, change: pay.change } : undefined,
+      fiscal: fiscalNumber ?? undefined,
+      deviceId: deviceId(),
+      practice: practice || undefined,
+    });
+    if (!durable) {
+      // El navegador no dejó guardarla en el equipo (modo privado, sin espacio…): NO se da por guardada.
+      await removeDraft(store.id, draft.id);
+      if (fiscalNumber && !practice) await giveBackContingencyNumber(store.id, pointId, fiscalNumber);
+      await Swal.fire({
+        icon: "error",
+        title: "La venta NO se pudo guardar en este equipo",
+        html: "Este navegador no deja guardar datos (modo privado o sin espacio). <b>Anota la venta en papel</b> o usa otro navegador/equipo.<br/><small>El carrito sigue intacto.</small>",
+        background: "#0b0b0b",
+        color: "#fff",
+        confirmButtonColor: "#ef4444",
+      });
+      return;
+    }
+    if (draftId) await removeDraft(store.id, draftId);
+    // Las existencias del punto bajan ya en este equipo (para no vender dos veces lo mismo sin conexión).
+    if (pointStock && pointId) {
+      const next = new Map(pointStock);
+      for (const i of sold) next.set(i.productId, Math.max(0, (next.get(i.productId) ?? 0) - i.qty));
+      setPointStock(next);
+      if (!practice) void cacheSave(`stock:${store.id}:${pointId}`, [...next]);
+    }
     setDraftId(null);
     setCart([]);
     setCustomerNote("");
     setSelectedClientId("");
-    void Swal.fire({
-      icon: "info",
-      title: "Guardada sin internet",
-      html: "La venta quedó como <b>borrador</b> en este equipo.<br/><small>Cuando vuelva la conexión, regístrala desde «Ventas guardadas sin internet». Hasta entonces no descuenta inventario ni tiene número.</small>",
-      background: "var(--t-bg-base)",
-      color: "var(--t-text)",
-      confirmButtonColor: "#f59e0b",
+    setPayment(EMPTY_PAYMENT);
+    forgetApproval();
+    playTone("caja-registradora", 0.5);
+    const change = paymentType === "contado" && pay.change > 0 ? `<br/><b style="color:#22c55e">💵 Vuelto: ${money(pay.change)}</b>` : "";
+    // Impresora directa con «imprimir al cobrar»: sale sola (sin conexión también funciona).
+    const printer = getPrinterSettings();
+    const autoPrinted = isDirect(printer) && printer.autoPrint;
+    if (autoPrinted) printDraft(draft);
+    const res = await Swal.fire({
+      icon: "success",
+      title: practice ? "🎓 Venta de práctica guardada" : fiscalNumber ? `Factura de contingencia ${fiscalNumber.full_number}` : "Venta guardada sin conexión",
+      html: practice ? `<b>Total:</b> ${money(total)}${change}<br/><small>Es una práctica: no se registra y se borra al terminar.</small>` : `${fiscalNumber ? "<b>Entrégale al cliente la factura impresa.</b><br/>" : ""}<b>Total:</b> ${money(total)}${change}<br/><small>Quedó guardada en este equipo y se registra sola cuando vuelva la conexión${fiscalNumber ? " (y se envía a la DIAN)" : ""}.</small>`,
+      showCancelButton: true,
+      confirmButtonText: autoPrinted ? "🖨️ Reimprimir" : fiscalNumber ? "🖨️ Imprimir factura" : "🖨️ Imprimir comprobante",
+      cancelButtonText: "Seguir vendiendo",
+      background: "#0b0b0b",
+      color: "#fff",
+      confirmButtonColor: "#22c55e",
     });
+    if (res.isConfirmed) printDraft(draft);
+  }
+
+  function printDraft(d: PosDraft) {
+    if (!store) return;
+    // Paso «imprimir» del simulacro mensual.
+    if (d.practice) window.dispatchEvent(new Event(PRACTICE_PRINT_EVENT));
+    const ctx = { storeName: store.name, contingency: pool?.info ?? null, size: printSize };
+    void printLocalTicket(ticketFromDraft(d, ctx), printSize, () => printOfflineReceipt(offlineReceiptHtml(d, ctx)));
   }
 
   function loadDraft(d: PosDraft) {
@@ -910,6 +1148,14 @@ export default function PosPage() {
     setDocumentKind(d.documentKind);
     if (!lockedPoint && d.pointId) setPointId(d.pointId);
     if (d.sellerId) setSellerId(d.sellerId);
+    if (d.payment) {
+      setPaymentType("contado");
+      setPayment({
+        method: d.payment.method as PayMethod,
+        received: d.payment.received,
+        parts: d.payment.method === "mixto" ? d.payment.parts.map((p) => ({ method: p.method as PayPart["method"], amount: p.amount })) : [],
+      });
+    }
     setDraftId(d.id);
     void Swal.fire({ icon: "info", title: "Borrador cargado", text: "Revisa precios y existencias y pulsa el botón para registrarla.", timer: 2200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
   }
@@ -958,9 +1204,7 @@ export default function PosPage() {
         color: "var(--t-text)",
         confirmButtonColor: "#22c55e",
       });
-      if (res.isConfirmed) {
-        window.open(`${window.location.origin}/pedido/${doc.token}?formato=${printSize === "carta" ? "carta" : "t80"}`, "_blank");
-      }
+      if (res.isConfirmed) void reprintOrder(doc.token, printSize);
     } catch (err: unknown) {
       await Swal.fire({
         icon: "error",
@@ -1020,13 +1264,13 @@ export default function PosPage() {
 
     if (editingDoc) return saveEdit(editingDoc);
 
-    // Sin internet: la venta se guarda como borrador (el crédito necesita validar el cupo en línea).
-    if (!isOnline()) {
+    // Sin internet o con la base caída: la venta se guarda como borrador (el crédito necesita validar el cupo en línea).
+    if (!canReachData()) {
       if (paymentType === "credito") {
-        await Swal.fire({ icon: "warning", title: "El crédito necesita internet", text: "Para vender a crédito hay que revisar el cupo del cliente. Cambia a contado o espera la conexión.", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        await Swal.fire({ icon: "warning", title: net.online ? "El crédito necesita la base de datos" : "El crédito necesita internet", text: "Para vender a crédito hay que revisar el cupo del cliente. Cambia a contado o espera la conexión.", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
         return;
       }
-      return storeDraft();
+      return offlineSale();
     }
 
     if (documentKind === "factura" && fiscalOn && fiscal && !fiscal.ready) {
@@ -1132,6 +1376,8 @@ export default function PosPage() {
 
     setSaving(true);
     let receiptWindow: Window | null = null;
+    const printer = getPrinterSettings();
+    const directPrinter = isDirect(printer);
     let createdToken: string | null = null;
 
     try {
@@ -1147,7 +1393,8 @@ export default function PosPage() {
       const sb = supabaseBrowser();
       // Se abre la pestaña ya (los navegadores bloquean ventanas abiertas después de esperar)
       // y se carga el comprobante cuando el documento tiene su número del punto.
-      receiptWindow = window.open("", "_blank");
+      // Con impresora directa no se abre la pestaña: el tiquete sale solo (o con el botón «Imprimir»).
+      receiptWindow = directPrinter ? null : window.open("", "_blank");
       const { data, error } = await sb.rpc("create_order_from_cart", {
         p_store_id: store.id,
         p_catalog_type: "retail",
@@ -1251,8 +1498,12 @@ export default function PosPage() {
 
       // El comprobante sugiere al imprimir el tamaño elegido en el POS.
       const invoiceUrl = `${window.location.origin}/pedido/${token}?formato=${printSize === "carta" ? "carta" : "t80"}`;
-      if (receiptWindow && !receiptWindow.closed) receiptWindow.location.href = invoiceUrl;
-      else window.open(invoiceUrl, "_blank");
+      if (!directPrinter) {
+        if (receiptWindow && !receiptWindow.closed) receiptWindow.location.href = invoiceUrl;
+        else window.open(invoiceUrl, "_blank");
+      } else if (printer.autoPrint) {
+        void printOrderDirect(token, printSize).then((r) => reportPrintFailure(r, () => window.open(invoiceUrl, "_blank")));
+      }
       setDocsRefresh((n) => n + 1);
  
       if (!electronic && requestElectronicInvoice && documentKind === "factura" && siigoConfigured) {
@@ -1312,7 +1563,7 @@ export default function PosPage() {
       }
 
       const kindLabel = documentKind === "factura" ? "Factura" : "Remisión";
-      await Swal.fire({
+      const done = await Swal.fire({
         icon: "success",
         title: `${kindLabel} creada`,
         html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${fiscalNote}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName.replace(/[<>&]/g, "")}<br/><b>Total:</b> ${money(total)}${paymentType === "contado" && pay.change > 0 ? `<br/><b style="color:#22c55e">💵 Vuelto: ${money(pay.change)}</b>` : ""}${creditNote}`,
@@ -1320,7 +1571,10 @@ export default function PosPage() {
         color: "#fff",
         confirmButtonText: "Ver comprobante",
         confirmButtonColor: "#22c55e",
+        ...(directPrinter ? { showDenyButton: true, denyButtonText: printer.autoPrint ? "🖨️ Reimprimir" : "🖨️ Imprimir", denyButtonColor: "#8b5cf6" } : {}),
       });
+      if (directPrinter && done.isConfirmed) window.open(invoiceUrl, "_blank");
+      if (directPrinter && done.isDenied) void reprintOrder(token, printSize);
 
       // Apartado entregado / cotización vendida: queda ligado a la venta (y la caja se compensa con los abonos).
       if (createdToken && layawayRef.current) {
@@ -1338,7 +1592,11 @@ export default function PosPage() {
       setPayment(EMPTY_PAYMENT);
       forgetApproval();
       playTone("caja-registradora", 0.5);
-      if (draftId) removeDraft(store.id, draftId);
+      if (draftId) {
+        void removeDraft(store.id, draftId);
+        // Si estaba «por revisar» en el panel, queda resuelta.
+        void resolveOfflineIssue(draftId, `Registrada a mano en el POS${docNumber ? `: ${docNumber}` : ""}`);
+      }
       setDraftId(null);
     } catch (err: unknown) {
       if (receiptWindow && !receiptWindow.closed) receiptWindow.close();
@@ -1348,7 +1606,7 @@ export default function PosPage() {
         reportNetworkError();
         setSaving(false);
         const go = await Swal.fire({ icon: "warning", title: "Se perdió la conexión", text: "La venta no alcanzó a registrarse. ¿La guardas como borrador para enviarla cuando vuelva internet?", showCancelButton: true, confirmButtonText: "Guardar borrador", cancelButtonText: "Seguir intentando", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
-        if (go.isConfirmed) storeDraft();
+        if (go.isConfirmed) await offlineSale();
         return;
       }
       await Swal.fire({
@@ -1425,7 +1683,8 @@ export default function PosPage() {
 
   return (
     <main className="space-y-3 pb-20 lg:pb-0">
-      <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} />
+      <DrillGuide storeId={store?.id} pointId={pointId} fiscalOn={fiscalOn} practice={localDrafts.filter((d) => d.practice)} />
+      <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} onPrint={printDraft} />
       <div {...cardProps()}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -1433,6 +1692,16 @@ export default function PosPage() {
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>
               {store?.name ? `${store.name} · ` : ""}{products.length} producto{products.length === 1 ? "" : "s"} · {clients.length} cliente{clients.length === 1 ? "" : "s"}
             </p>
+            {offlineAt ? (
+              <p className="mt-1 text-xs font-semibold" style={{ color: "#f59e0b" }}>
+                📦 Usando productos, precios y existencias guardados ({cacheAge(offlineAt)}). Las ventas quedan como borrador y se envían solas cuando vuelva la conexión.
+              </p>
+            ) : loadFailed ? (
+              <p className="mt-1 text-xs font-semibold" style={{ color: "#ef4444" }}>
+                ⚠️ No se pudieron cargar los productos y este equipo aún no tiene una copia guardada. Se reintenta solo cuando la base responda.{" "}
+                <button type="button" className="underline" onClick={() => void load()}>Reintentar</button>
+              </p>
+            ) : null}
             {pointPricesError ? (
               <p className="mt-1 text-xs font-semibold" style={{ color: "#f59e0b" }}>
                 ⚠️ No cargaron los precios de este punto (sus reglas): se están mostrando los de la madre. Detalle: {pointPricesError}
@@ -1441,6 +1710,21 @@ export default function PosPage() {
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <CashStatusChip storeId={store?.id} pointId={pointId} />
+            <PrinterChip size={printSize} />
+            <OfflineReadiness
+              savedAt={savedAt}
+              products={allProducts.length}
+              clients={clients.length}
+              stockReady={Boolean(pointStock)}
+              fiscalOn={fiscalOn}
+              contingencyLeft={contingencyLeft}
+              contingencyReason={pool?.info.reason ?? (fiscalOn && !pool ? "Aún no se han separado números: abre el POS con conexión." : null)}
+              pending={localDrafts.filter((d) => !d.practice).length}
+              onEndPractice={() => {
+                if (store) void clearPracticeDrafts(store.id);
+                void refreshStock();
+              }}
+            />
             <PosDocuments
               storeId={store?.id}
               pointId={pointId}
@@ -2122,8 +2406,12 @@ export default function PosPage() {
                 ? saving
                   ? "Guardando cambios..."
                   : `💾 Guardar cambios en ${editingDoc.doc_number ?? `#${editingDoc.receipt_no}`}`
-                : !net.online
-                ? "💾 Guardar sin internet (borrador)"
+                : !net.online || net.db === "down"
+                ? documentKind === "factura" && fiscalOn
+                  ? contingencyLeft
+                    ? `🧾 Factura de contingencia (sin ${net.online ? "base de datos" : "internet"})`
+                    : "💾 Guardar factura (se emite al volver)"
+                  : `💾 Guardar sin ${net.online ? "base de datos" : "internet"}`
                 : saving
                 ? documentKind === "factura"
                   ? "Creando factura..."

@@ -1,21 +1,23 @@
 "use client";
 
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { signOutEverywhere } from "@/lib/supabase/offline-session";
 import { useRouter } from "next/navigation";
 import { logSessionEvent } from "@/lib/audit-client";
 import { forgetStaffAccess } from "@/lib/session-resume";
 import { logoutRedirect } from "@/lib/store-space";
+import { cacheClear } from "@/lib/offline/cache";
 
 export function LogoutButton() {
   const router = useRouter();
 
   async function logout() {
-    const sb = supabaseBrowser();
     await logSessionEvent("auth.logout");
-    await sb.auth.signOut();
+    // También sin conexión (Supabase no borra la sesión si no logra avisarle al servidor).
+    await signOutEverywhere();
 
     document.cookie = "app_session=; path=/; max-age=0";
     forgetStaffAccess();
+    await cacheClear();
     const to = logoutRedirect();
     if (to.startsWith("http")) window.location.replace(to);
     else router.push(to);

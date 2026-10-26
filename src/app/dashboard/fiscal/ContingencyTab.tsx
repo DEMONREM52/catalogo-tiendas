@@ -6,6 +6,7 @@ import { TriangleAlert } from "lucide-react";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, EmptyState, Notice, SectionTitle, fmtDateTime, notify, swal } from "./ui";
+import { OfflineFiscal } from "./OfflineFiscal";
 
 const KINDS: Array<[string, string]> = [["provider", "Proveedor tecnológico caído"], ["dian", "Servicio DIAN no disponible"], ["connectivity", "Sin internet en el punto"], ["power", "Sin energía"], ["other", "Otro"]];
 
@@ -76,6 +77,7 @@ export function ContingencyTab({ access, data, reload }: { access: FiscalAccess;
           ))}
         </div>
       )}
+      <OfflineFiscal access={access} />
     </div>
   );
 }

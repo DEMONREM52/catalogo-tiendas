@@ -4,6 +4,7 @@
     { "path": "/api/audit/anchor", "schedule": "0 8 * * *" },
     { "path": "/api/push/payables", "schedule": "0 13 * * *" },
     { "path": "/api/push/daily-close", "schedule": "0 2 * * *" },
-    { "path": "/api/saas/fiscal-close", "schedule": "0 8 1 * *" }
+    { "path": "/api/saas/fiscal-close", "schedule": "0 8 1 * *" },
+    { "path": "/api/notify/offline-watch", "schedule": "0 * * * *" }
   ]
 }

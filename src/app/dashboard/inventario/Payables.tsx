@@ -18,7 +18,7 @@ const purchaseReceiptUrl = (id: string) => `/comprobante/ingreso/${id}`;
 const DAY_CHOICES = [30, 15, 10, 7, 5, 3, 2, 1, 0];
 const EVERY_CHOICES = [1, 2, 3, 5, 7, 15, 30];
 const METHOD_TEXT: Record<string, string> = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta", other: "Otro" };
-type Filter = "open" | "overdue" | "week" | "alert" | "closed";
+type Filter = "open" | "overdue" | "week" | "fortnight" | "alert" | "closed";
 
 const dayLabel = (d: number) => (d === 0 ? "El mismo día" : d === 1 ? "1 día antes" : `${d} días antes`);
 const shortDate = (iso: string | null | undefined) =>
@@ -125,6 +125,7 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
     if (filter === "open" && r.status !== "open") return false;
     if (filter === "overdue" && !(r.status === "open" && (r.days_left ?? 1) < 0)) return false;
     if (filter === "week" && !(r.status === "open" && r.days_left !== null && r.days_left <= 7)) return false;
+    if (filter === "fortnight" && !(r.status === "open" && r.days_left !== null && r.days_left <= 15)) return false;
     if (filter === "alert" && !(r.status === "open" && r.reason)) return false;
     if (filter === "closed" && r.status === "open") return false;
     const needle = q.trim().toLowerCase();
@@ -135,6 +136,7 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
     ["open", "Abiertas", open.length],
     ["overdue", "🔴 Vencidas", overdueRows.length],
     ["week", "🟠 Próximos 7 días", open.filter((r) => r.days_left !== null && r.days_left <= 7).length],
+    ["fortnight", "🟡 Próximos 15 días", open.filter((r) => r.days_left !== null && r.days_left <= 15).length],
     ["alert", "🔔 Con aviso hoy", open.filter((r) => r.reason).length],
     ["closed", "Pagadas / anuladas", rows.length - open.length],
   ];

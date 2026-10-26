@@ -81,9 +81,9 @@ ok(pj.lines.length === 2 && pj.lines.every((l) => n(l.amount) === 3112.5), "Repa
 
 console.log("Restar gastos (opcional)");
 const [{ id: CAT }] = await raw("insert into erp_expense_categories (store_id, name) values ($1, 'Arriendo') returning id", [A]);
-const [{ id: E1 }] = await raw("insert into erp_expenses (store_id, point_id, category_id, number, description, amount, incurred_on) values ($1, $2, $3, 1, 'Arriendo local', 1000, current_date) returning id", [A, J, CAT]);
-await raw("insert into erp_payroll_runs (store_id, point_id, number, period_kind, period_start, period_end, status, total_cost) values ($1, $2, 1, 'biweekly', current_date - 14, current_date, 'approved', 500)", [A, J]);
-await raw("insert into erp_payroll_runs (store_id, point_id, number, period_kind, period_start, period_end, status, total_cost) values ($1, $2, 2, 'biweekly', current_date - 14, current_date, 'draft', 9999)", [A, J]);
+const [{ id: E1 }] = await raw("insert into erp_expenses (store_id, point_id, category_id, number, description, amount, incurred_on) values ($1, $2, $3, 1, 'Arriendo local', 1000, (now() at time zone 'America/Bogota')::date) returning id", [A, J, CAT]);
+await raw("insert into erp_payroll_runs (store_id, point_id, number, period_kind, period_start, period_end, status, total_cost) values ($1, $2, 1, 'biweekly', (now() at time zone 'America/Bogota')::date - 14, (now() at time zone 'America/Bogota')::date, 'approved', 500)", [A, J]);
+await raw("insert into erp_payroll_runs (store_id, point_id, number, period_kind, period_start, period_end, status, total_cost) values ($1, $2, 2, 'biweekly', (now() at time zone 'America/Bogota')::date - 14, (now() at time zone 'America/Bogota')::date, 'draft', 9999)", [A, J]);
 ok(n((await ovJ()).pool_total) === 6225, "Apagado: los gastos no se restan (solo ganancias)");
 await settings(MADRE, "total", true);
 pj = await ovJ();

@@ -5,8 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
+import type { User } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
+import { cacheAge, cacheClear, withTimeout } from "@/lib/offline/cache";
 import { PlanNotice } from "./PlanNotice";
+import { OfflineSync } from "./OfflineSync";
+import { pendingDraftCount } from "@/lib/pos/drafts";
+import { resilientUser, signOutEverywhere } from "@/lib/supabase/offline-session";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
 import { InstallButton } from "@/components/pwa/InstallButton";
@@ -461,6 +467,11 @@ export default function DashboardShell({
   const pathname = usePathname();
 
   const [ready, setReady] = useState(false);
+  // Cuando la base no responde: error para la pantalla de «Reintentar», o la hora de los permisos guardados.
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessCachedAt, setAccessCachedAt] = useState<number | null>(null);
+  const [accessTry, setAccessTry] = useState(0);
+  const net = useNetStatus();
   const [email, setEmail] = useState<string>("");
   const [role, setRole] = useState<Role | null>(null);
 
@@ -480,21 +491,30 @@ export default function DashboardShell({
   useEffect(() => {
     (async () => {
       const sb = supabaseBrowser();
+      setAccessError(null);
 
-      const { data } = await sb.auth.getUser();
-      if (!data.user) {
+      // Si el servidor de acceso no contesta se sigue con la sesión guardada en el equipo (no se saca a nadie),
+      // aunque su token de una hora ya haya vencido: se renueva solo al volver la conexión.
+      let user: User | null = null;
+      try {
+        user = (await resilientUser()).user;
+      } catch {
+        user = null;
+      }
+      if (!user) {
         router.replace("/login");
         return;
       }
 
-      setMyUserId(data.user.id);
-      const internalUsername = String(data.user.user_metadata?.internal_username ?? "");
+      setMyUserId(user.id);
+      const internalUsername = String(user.user_metadata?.internal_username ?? "");
       setStaffUsername(internalUsername);
-      setEmail(internalUsername ? `Usuario: ${internalUsername}` : data.user.email ?? "");
-      setDisplayName(String(data.user.user_metadata?.display_name ?? internalUsername));
+      setEmail(internalUsername ? `Usuario: ${internalUsername}` : user.email ?? "");
+      setDisplayName(String(user.user_metadata?.display_name ?? internalUsername));
 
       try {
         const access = await getDashboardStore();
+        setAccessCachedAt(access.cachedAt ?? null);
         setStore(access.store);
         setStorePermissions(access.membership?.permissions ?? []);
         setStoreIsOwner(access.isOwner);
@@ -523,7 +543,7 @@ export default function DashboardShell({
             window.location.replace(pass && "url" in pass ? pass.url : `${PRODUCTION_ORIGIN}/login`);
             return;
           }
-        } else if (access.profileRole !== "admin") {
+        } else if (access.profileRole !== "admin" && !access.cachedAt) {
           const jump = await storeSpaceJump(path);
           if (jump) {
             window.location.replace(jump);
@@ -531,6 +551,12 @@ export default function DashboardShell({
           }
         }
       } catch (err: unknown) {
+        // Base caída o lenta: no es culpa del usuario. Se muestra «Reintentar» en vez de cerrarle la sesión.
+        if (isNetworkError(err)) {
+          reportNetworkError();
+          setAccessError(String((err as Error)?.message ?? err));
+          return;
+        }
         await sb.auth.signOut();
         await Swal.fire({
           icon: "error",
@@ -546,7 +572,15 @@ export default function DashboardShell({
 
       setReady(true);
     })();
-  }, [router]);
+  }, [router, accessTry]);
+
+  // Cuando la base vuelve a responder: reintenta la entrada o refresca los permisos guardados.
+  const dbBack = net.online && net.db === "ok";
+  useEffect(() => {
+    if (!dbBack || (!accessError && !accessCachedAt)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccessTry((n) => n + 1);
+  }, [dbBack, accessError, accessCachedAt]);
 
   useEffect(() => {
     const refreshStoreSettings = () => {
@@ -712,14 +746,30 @@ export default function DashboardShell({
   }
 
   async function logout() {
-    const sb = supabaseBrowser();
-    await logSessionEvent("auth.logout", store?.id ?? null);
-    await sb.auth.signOut();
+    // Ventas hechas sin conexión que aún no se envían: se quedan en el equipo (no se borran al salir).
+    const pending = store?.id ? pendingDraftCount(store.id) : 0;
+    if (pending) {
+      const go = await Swal.fire({
+        icon: "warning",
+        title: `Hay ${pending} venta${pending === 1 ? "" : "s"} sin enviar en este equipo`,
+        html: "Se quedan guardadas aquí y se envían solas cuando alguien de la tienda vuelva a entrar <b>en este mismo equipo</b> con conexión.<br/><small>No borres los datos del navegador mientras tanto.</small>",
+        showCancelButton: true,
+        confirmButtonText: "Cerrar sesión igual",
+        cancelButtonText: "Quedarme",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+        confirmButtonColor: "#f59e0b",
+      });
+      if (!go.isConfirmed) return;
+    }
+    await withTimeout(logSessionEvent("auth.logout", store?.id ?? null), 4_000, "registro de salida").catch(() => undefined);
+    await signOutEverywhere();
     document.cookie = "app_session=; path=/; max-age=0";
     forgetStaffAccess();
+    await cacheClear();
     const to = logoutRedirect();
-    if (to.startsWith("http")) window.location.replace(to);
-    else router.replace(to);
+    // Recarga completa: así no queda nada de la sesión anterior en memoria.
+    window.location.replace(to.startsWith("http") ? to : new URL(to, window.location.origin).toString());
   }
 
   const canAccessStorePages = Boolean(store) && role === "store";
@@ -798,14 +848,31 @@ export default function DashboardShell({
               background: "var(--t-card-bg)",
             }}
           >
-            <p
-              className="text-sm"
-              style={{
-                color: "color-mix(in oklab, var(--t-text) 78%, transparent)",
-              }}
-            >
-              Cargando dashboard...
-            </p>
+            {accessError ? (
+              <div className="grid gap-3">
+                <p className="text-lg font-black">{!net.online ? "Sin internet" : "La base de datos no responde"}</p>
+                <p className="text-sm" style={{ color: "color-mix(in oklab, var(--t-text) 78%, transparent)" }}>
+                  {!net.online
+                    ? "No pudimos cargar tus permisos porque no hay conexión. Tu sesión sigue abierta; en cuanto vuelva el internet entramos solos."
+                    : "Tu internet funciona, pero el servidor no contestó a tiempo. No es un problema de tu cuenta ni de tus permisos: tu sesión sigue abierta y reintentamos solos cuando responda."}
+                </p>
+                <p className="text-xs opacity-60">Las ventas que guardaste como borrador siguen en este equipo y se envían al volver.</p>
+                <div>
+                  <button type="button" onClick={() => setAccessTry((n) => n + 1)} className="rounded-full px-5 py-2 text-sm font-bold text-white" style={{ background: "var(--t-accent)" }}>
+                    {net.checking ? "Revisando…" : "Reintentar"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p
+                className="text-sm"
+                style={{
+                  color: "color-mix(in oklab, var(--t-text) 78%, transparent)",
+                }}
+              >
+                Cargando dashboard...
+              </p>
+            )}
           </div>
         </div>
       </main>
@@ -820,6 +887,11 @@ export default function DashboardShell({
   return (
     <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
       {simulation ? <SimulationBanner sim={simulation} /> : null}
+      {accessCachedAt ? (
+        <div className="px-3 py-1.5 text-center text-xs font-semibold" style={{ background: "color-mix(in oklab, #f59e0b 18%, var(--t-bg-base))" }}>
+          Trabajando con tus permisos guardados ({cacheAge(accessCachedAt)}) porque la base de datos no respondió. Se actualizan solos al volver.
+        </div>
+      ) : null}
       {myAccess?.outside_schedule && !simulation ? (
         <OutsideScheduleScreen access={myAccess} onSignOut={() => void supabaseBrowser().auth.signOut().then(() => router.replace("/login"))} />
       ) : null}
@@ -982,6 +1054,7 @@ export default function DashboardShell({
             {role === "store" && store?.id ? <CommandPalette storeId={store.id} links={paletteLinks} can={canOpen} /> : null}
             {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
             {role === "store" && store?.id ? <GuidedTourHost /> : null}
+            {role === "store" && store?.id ? <OfflineSync storeId={store.id} /> : null}
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
             {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}

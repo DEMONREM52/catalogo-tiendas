@@ -183,7 +183,8 @@ export default function PedidoPage() {
 
   // Remisión/factura del POS con su numeración por punto; si no existe, comprobante del pedido.
   const docKindLabel = fiscalDoc
-    ? fiscalDoc.document_type === "pos_equivalent" ? "Documento equivalente electrónico POS" : "Factura electrónica de venta"
+    ? fiscalDoc.document_type === "pos_equivalent" ? "Documento equivalente electrónico POS"
+      : fiscalDoc.document_type === "contingency_invoice" ? "Factura de venta (contingencia)" : "Factura electrónica de venta"
     : erpDoc?.doc_kind === "remision" ? "Remisión" : erpDoc?.doc_kind === "factura" ? "Factura de venta" : "Comprobante de pedido";
   const docNumberLabel = fiscalDoc?.full_number || erpDoc?.doc_number || (receiptNumber ? `#${receiptNumber}` : "—");
 
@@ -196,6 +197,7 @@ export default function PedidoPage() {
       const r = fiscalDoc.resolution;
       return [
         r.number ? `Resolución DIAN N.º ${r.number}${r.date ? ` del ${d(r.date)}` : ""}. Numeración autorizada del ${r.prefix}${r.from} al ${r.prefix}${r.to}${r.valid_until ? `, vigente hasta ${d(r.valid_until)}` : ""}.` : "",
+        fiscalDoc.document_type === "contingency_invoice" ? "Factura expedida en contingencia (sin conexión) y transmitida a la DIAN como factura electrónica." : "",
         fiscalDoc.cufe ? `CUFE: ${fiscalDoc.cufe}` : "Documento electrónico en validación.",
         fiscalDoc.environment === "sandbox" ? "DOCUMENTO DE PRUEBAS: SIN VALIDEZ FISCAL." : "",
       ].filter(Boolean).join(" ");

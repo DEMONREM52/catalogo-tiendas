@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { isNetworkError } from "@/lib/net/status";
+import { cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
 
 /**
  * Existencias de una bodega o punto EN VIVO (20261220).
@@ -19,17 +21,27 @@ export function useLiveStock(storeId: string | null | undefined, warehouseId: st
     const run = ++alive.current;
     const sb = supabaseBrowser();
     const map = new Map<string, number>();
+    const cacheKey = `stock:${storeId}:${warehouseId}`;
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await sb
-        .from("erp_stock_levels")
-        .select("product_id,qty")
-        .eq("store_id", storeId)
-        .eq("warehouse_id", warehouseId)
-        .gt("qty", 0)
-        .order("product_id")
-        .range(from, from + 999);
+      let res: { data: unknown[] | null; error: unknown };
+      try {
+        res = await withTimeout(
+          sb.from("erp_stock_levels").select("product_id,qty").eq("store_id", storeId).eq("warehouse_id", warehouseId).gt("qty", 0).order("product_id").range(from, from + 999),
+          20_000, "carga de existencias",
+        );
+      } catch (e) {
+        res = { data: null, error: e };
+      }
       if (run !== alive.current) return;
+      const { data, error } = res;
       if (error || !data) {
+        if (isNetworkError(error)) {
+          // Sin conexión o con la base caída se conservan las existencias que ya se veían (o las de la última vez).
+          const cached = await cacheLoad<Array<[string, number]>>(cacheKey);
+          if (run !== alive.current) return;
+          setStock((cur) => cur ?? (cached ? new Map(cached.data) : new Map()));
+          return;
+        }
         // Sin acceso a existencias no se ofrece nada para no vender lo que no hay.
         setStock(new Map());
         return;
@@ -37,7 +49,10 @@ export function useLiveStock(storeId: string | null | undefined, warehouseId: st
       for (const row of data as { product_id: string; qty: number }[]) map.set(row.product_id, Number(row.qty));
       if (data.length < 1000) break;
     }
-    if (run === alive.current) setStock(map);
+    if (run === alive.current) {
+      void cacheSave(cacheKey, [...map]);
+      setStock(map);
+    }
   }, [storeId, warehouseId]);
 
   useEffect(() => {

@@ -1,4 +1,7 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { isNetworkError, reportNetworkError } from "@/lib/net/status";
+import { cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
+import { resilientUser } from "@/lib/supabase/offline-session";
 
 export type StoreMemberRole = "store_admin" | "seller" | "accounting" | "viewer";
 
@@ -26,14 +29,44 @@ export type StoreMembership = {
   username?: string | null;
 };
 
-export async function getDashboardStore() {
+export type DashboardAccess = {
+  store: DashboardStore | null;
+  profileRole: string | null;
+  membership: StoreMembership | null;
+  isOwner: boolean;
+  /** Fecha (ms) de la copia guardada cuando la base no respondió y se usaron los permisos de la última vez. */
+  cachedAt?: number;
+};
+
+/** Usuario de la sesión. Si el servidor de acceso no contesta se usa la sesión guardada en el equipo. */
+export async function getSessionUserId(): Promise<string | null> {
+  return (await resilientUser()).user?.id ?? null;
+}
+
+/**
+ * Tienda y permisos del usuario. Si la base no responde (o tarda más de 15 s) se usan los
+ * permisos de la última vez que cargaron bien, para no sacar a nadie ni mostrar «sin secciones».
+ */
+export async function getDashboardStore(): Promise<DashboardAccess> {
+  const userId = await getSessionUserId();
+  if (!userId) throw new Error("No hay sesión activa.");
+  const key = `access:${userId}`;
+  try {
+    const access = await withTimeout(loadDashboardStore(userId), 15_000, "carga de permisos");
+    if (access.store) void cacheSave(key, access);
+    return access;
+  } catch (e) {
+    const cached = isNetworkError(e) ? await cacheLoad<DashboardAccess>(key) : null;
+    if (cached?.data.store) {
+      reportNetworkError();
+      return { ...cached.data, cachedAt: cached.at };
+    }
+    throw e;
+  }
+}
+
+async function loadDashboardStore(userId: string): Promise<DashboardAccess> {
   const sb = supabaseBrowser();
-
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr) throw userErr;
-  if (!userData?.user) throw new Error("No hay sesión activa.");
-
-  const userId = userData.user.id;
 
   const { data: profile, error: profileErr } = await sb
     .from("user_profiles")

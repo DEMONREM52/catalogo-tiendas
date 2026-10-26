@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronAuthorized } from "@/lib/audit/anchor";
-import { pushAdminClient, pushConfigured, sendToUsers, type PushPayload } from "@/lib/push/server";
+import { pushAdminClient, sendToUsers, type PushPayload } from "@/lib/push/server";
+import { notifyStoreWhatsApp } from "@/lib/notify/store-whatsapp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,12 +20,14 @@ const money = (v: number) => `$ ${Math.round(Number(v) || 0).toLocaleString("es-
 export async function GET(request: Request) {
   if (!cronAuthorized(request)) return NextResponse.json({ ok: false }, { status: 401 });
   const admin = pushAdminClient();
-  if (!admin || !pushConfigured()) return NextResponse.json({ ok: false, skipped: "not-configured" });
+  // Sin notificaciones al celular configuradas igual sale el WhatsApp (sendToUsers no envía nada).
+  if (!admin) return NextResponse.json({ ok: false, skipped: "not-configured" });
   const { data, error } = await admin.rpc("erp_daily_close_digest");
   if (error) return NextResponse.json({ ok: false, error: "digest" }, { status: 500 });
 
   const day = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   let sent = 0;
+  let whatsapp = 0;
   for (const row of (data ?? []) as Array<{ store_id: string; summary: Summary; users: string[] }>) {
     const s = row.summary;
     const top = s.points[0];
@@ -52,6 +55,11 @@ export async function GET(request: Request) {
       if (!dup) payloads.set(u, payload);
     }
     if (payloads.size) sent += (await sendToUsers(admin, row.store_id, payloads)).sent;
+    // WhatsApp al equipo (si la tienda eligió «cierre del día»).
+    const { data: st } = await admin.from("stores").select("name").eq("id", row.store_id).maybeSingle();
+    const name = (st?.name as string | undefined) ?? "Tu tienda";
+    whatsapp += (await notifyStoreWhatsApp(admin, row.store_id, "daily_close", name,
+      `📊 ${name} · cierre de hoy: ${money(s.total)} en ${s.count} venta(s)${parts.length ? ` · ${parts.join(" · ")}` : ""}.`, day)).sent;
   }
-  return NextResponse.json({ ok: true, stores: (data ?? []).length, sent });
+  return NextResponse.json({ ok: true, stores: (data ?? []).length, sent, whatsapp });
 }

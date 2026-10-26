@@ -49,6 +49,9 @@ function paymentMethod(method: string | null | undefined): string {
 }
 const num = (v: unknown) => Math.round(Number(v ?? 0) * 100) / 100;
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+/** Fecha (AAAA-MM-DD) en hora de Colombia: un documento de las 8 p. m. no debe quedar con la fecha del día siguiente (UTC). */
+const BOGOTA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" });
+const bogotaDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : BOGOTA_DAY.format(new Date(iso)));
 
 function issuerTaxCode(issuer: IssuerSnapshot): string {
   // 01 = IVA (responsable); ZZ = no aplica (no responsable de IVA).
@@ -132,7 +135,7 @@ function paymentsBlock(doc: ClaimedDocument) {
   return [{
     paymentForm: credit ? "2" : "1",
     paymentMethod: paymentMethod(doc.document.payment_method),
-    ...(credit ? { paymentDueDate: doc.document.due_date ?? doc.document.issue_date.slice(0, 10) } : {}),
+    ...(credit ? { paymentDueDate: doc.document.due_date ?? bogotaDate(doc.document.issue_date) } : {}),
   }];
 }
 
@@ -143,8 +146,8 @@ function resolutionBlock(doc: ClaimedDocument, ctx: ProviderContext, withKey: bo
     ...(r.prefix ? { prefix: r.prefix } : {}),
     minNumber: Number(r.range_from),
     maxNumber: Number(r.range_to),
-    startDate: (r.valid_from ?? r.resolution_date ?? doc.document.issue_date).slice(0, 10),
-    endDate: (r.valid_until ?? doc.document.issue_date).slice(0, 10),
+    startDate: bogotaDate(r.valid_from ?? r.resolution_date ?? doc.document.issue_date),
+    endDate: bogotaDate(r.valid_until ?? doc.document.issue_date),
     ...(withKey ? { technicalKey: ctx.technicalKey ?? "" } : {}),
   };
 }
@@ -304,8 +307,8 @@ export function alanubePayload(ctx: ProviderContext, doc: ClaimedDocument): Reco
     return {
       number: String(number),
       documentReference: r.provider_document_id
-        ? { id: r.provider_document_id, issueDate: r.issue_date.slice(0, 10) }
-        : { fullNumber: r.full_number, cude: r.cufe, issueDate: r.issue_date.slice(0, 10) },
+        ? { id: r.provider_document_id, issueDate: bogotaDate(r.issue_date) }
+        : { fullNumber: r.full_number, cude: r.cufe, issueDate: bogotaDate(r.issue_date) },
       discrepancy: { responseCode: Math.min(5, Math.max(1, Number(d.note_concept ?? 1))), description: (d.note_reason ?? "Ajuste").slice(0, 500) },
       resolution: resolutionBlock(doc, ctx, false),
       company, items, payments, totalAmounts,
@@ -320,15 +323,21 @@ export function alanubePayload(ctx: ProviderContext, doc: ClaimedDocument): Reco
       number,
       conceptCode: String(d.note_concept ?? (d.document_type === "credit_note" ? "1" : "4")),
       ...(doc.range?.prefix ? { prefix: doc.range.prefix } : {}),
-      associatedDocuments: [{ date: r.issue_date.slice(0, 10), documentType: "01", number: plainNumber(r.full_number, prefixOf), ...(prefixOf ? { prefix: prefixOf } : {}), uuid: r.cufe }],
+      associatedDocuments: [{ date: bogotaDate(r.issue_date), documentType: "01", number: plainNumber(r.full_number, prefixOf), ...(prefixOf ? { prefix: prefixOf } : {}), uuid: r.cufe }],
       company, customer: customerBlock(doc), items, payments, totalAmounts,
       note: [(d.note_reason ?? "Corrección").slice(0, 5000), ...(note ?? [])],
     };
   }
+  // Factura de contingencia (talonario/papel hecha sin conexión): «04 · Contingencia Facturador Electrónico»,
+  // con la factura en papel en additionalDocumentReference (obligatorio) y la clave técnica solo si la numeración la tiene.
+  const contingency = d.document_type === "contingency_invoice";
+  const paperNumber = String(d.metadata?.paper_number ?? d.full_number ?? number);
+  const paperDate = bogotaDate(String(d.metadata?.paper_issued_at ?? d.issue_date));
   return {
-    documentType: d.document_type === "export_invoice" ? "02" : d.document_type === "contingency_invoice" ? "04" : "01",
+    documentType: d.document_type === "export_invoice" ? "02" : contingency ? "04" : "01",
     number,
-    resolution: resolutionBlock(doc, ctx, true),
+    resolution: resolutionBlock(doc, ctx, !contingency || Boolean(ctx.technicalKey)),
+    ...(contingency ? { additionalDocumentReference: { number: paperNumber, issueDate: paperDate } } : {}),
     company, customer: customerBlock(doc), items, payments, totalAmounts,
     ...(note ? { note } : {}),
   };

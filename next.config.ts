@@ -7,15 +7,19 @@ import { LEGACY_HOSTS, PRODUCTION_ORIGIN } from "./src/lib/share/origin";
  * - El navegador siempre usa https (HSTS) y no adivina tipos de archivo.
  * - Al salir hacia otros sitios solo se comparte el dominio, nunca la ruta (que puede llevar enlaces de comprobantes).
  * - Cámara y ubicación solo para RemHub (búsqueda por foto, «cómo llegar»); micrófono, USB y demás, apagados.
+ * - Dentro del panel (/dashboard) USB, puerto serie y Bluetooth quedan permitidos SOLO para RemHub: la impresión
+ *   directa en impresoras térmicas los usa (y el navegador igual pide elegir el aparato con un toque).
  * La política de contenido completa (CSP) queda pendiente: hay que inventariar GTM, píxeles, Wompi, Addi y jsdelivr.
  */
+const permissions = (hardware: "()" | "(self)") =>
+  `camera=(self), geolocation=(self), microphone=(), usb=${hardware}, serial=${hardware}, bluetooth=${hardware}, payment=(self), browsing-topics=()`;
 const SECURITY_HEADERS = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=(), usb=(), serial=(), bluetooth=(), payment=(self), browsing-topics=()" },
+  { key: "Permissions-Policy", value: permissions("()") },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   { key: "X-DNS-Prefetch-Control", value: "on" },
 ];
@@ -42,9 +46,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
+      // Impresión directa (impresora térmica USB, puerto serie o Bluetooth) solo en el panel. Va después: manda sobre la de arriba.
+      { source: "/dashboard/:path*", headers: [{ key: "Permissions-Policy", value: permissions("(self)") }] },
+      { source: "/dashboard", headers: [{ key: "Permissions-Policy", value: permissions("(self)") }] },
       // Las respuestas privadas de la API nunca se guardan en cachés compartidas (datos de cada tienda).
       // (QR, íconos y vistas previas son públicos y sí se pueden guardar.)
-      ...["admin", "fiscal", "payments", "store-team", "store-domains", "push", "siigo", "session"].map((p) => ({
+      ...["admin", "fiscal", "payments", "store-team", "store-domains", "push", "siigo", "session", "notify"].map((p) => ({
         source: `/api/${p}/:path*`,
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       })),

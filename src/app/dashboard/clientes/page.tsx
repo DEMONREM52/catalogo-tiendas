@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
+import { Bell, Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
+import { NoticeTray } from "./NoticeTray";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
@@ -17,7 +18,7 @@ import { StatementDrawer } from "./StatementDrawer";
 import { ThirdPartyForm } from "./ThirdPartyForm";
 import { KINDS, errorText, initials, kindInfo, loadBalances, loadThirdParties, money, waLink, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 
-type Tab = "terceros" | "cartera" | "frecuentes" | "puntos";
+type Tab = "terceros" | "cartera" | "avisos" | "frecuentes" | "puntos";
 type CreditFilter = "all" | "with" | "overdue" | "over" | "blocked";
 const PAGE = 60;
 
@@ -47,6 +48,7 @@ export default function TercerosPage() {
         const access = await getDashboardStore();
         const params = new URLSearchParams(window.location.search);
         if (params.get("tab") === "cartera") setTab("cartera");
+        if (params.get("tab") === "avisos") setTab("avisos");
         if (params.get("tab") === "frecuentes") setTab("frecuentes");
         if (params.get("tab") === "puntos") setTab("puntos");
         if (params.get("q")) setQ(params.get("q") ?? "");
@@ -209,7 +211,7 @@ export default function TercerosPage() {
       ) : null}
 
       <div className="flex gap-1 rounded-full border p-1 text-sm font-bold sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
+        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"], ["avisos", <Bell key="b" size={15} />, "Avisos del día"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
           <button
             key={k}
             type="button"
@@ -232,6 +234,8 @@ export default function TercerosPage() {
         <LoyaltyCustomers storeId={store.id} canAdjust={canLoyalty} />
       ) : tab === "frecuentes" && store ? (
         <FrequentCustomers storeId={store.id} storeName={store.name} />
+      ) : tab === "avisos" && store ? (
+        <NoticeTray storeId={store.id} storeName={store.name} />
       ) : tab === "cartera" && store ? (
         <ReceivablesTab storeId={store.id} storeName={store.name} canPay={perm.receivables} parties={parties} onOpenStatement={setStatementFor} refreshKey={refreshKey} />
       ) : (

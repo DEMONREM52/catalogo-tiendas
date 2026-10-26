@@ -34,6 +34,15 @@ const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: strin
   { key: "audit", icon: "🛡️", label: "Auditoría", permissions: ["audit"] },
 ];
 
+// Las pestañas se agrupan en secciones: primero se elige la sección y debajo salen solo sus pestañas.
+type GroupKey = "stock" | "buy" | "control";
+const GROUPS: Array<{ key: GroupKey; icon: string; label: string; hint: string; tabs: TabKey[] }> = [
+  { key: "stock", icon: "📦", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "kardex"] },
+  { key: "buy", icon: "🧾", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "suppliers", "payables", "internal"] },
+  { key: "control", icon: "🔎", label: "Control", hint: "Lo quieto, lo que vence, manifiestos y auditoría", tabs: ["stale", "expiry", "manifests", "audit"] },
+];
+const groupOf = (k: TabKey) => GROUPS.find((g) => g.tabs.includes(k))?.key ?? "stock";
+
 // Un usuario de punto ve las pestañas que su permiso le da, con alcance a SU punto (lo valida la base:
 // compras 20261118, cuentas por pagar 20261120, auditoría por RLS). Proveedores son de toda la tienda.
 // El «Resumen» muestra totales de toda la tienda: queda solo para la madre.
@@ -87,6 +96,17 @@ export default function InventarioPage() {
 
   const visibleTabs = useMemo(() => (ctx ? TABS.filter((t) => t.permissions.some((p) => ctx.can(p)) && !(ctx.pointId && POINT_HIDDEN.includes(t.key))) : []), [ctx]);
   const current = visibleTabs.find((t) => t.key === tab) ?? visibleTabs[0];
+  const groups = useMemo(() => GROUPS.map((g) => ({ ...g, visible: visibleTabs.filter((t) => g.tabs.includes(t.key)) })).filter((g) => g.visible.length), [visibleTabs]);
+
+  function open(key: TabKey) {
+    setTab(key);
+    // La pestaña queda en la dirección (enlace directo, ayuda y recorrido guiado de esa pestaña).
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", key);
+    url.searchParams.delete("q");
+    window.history.replaceState(null, "", url.toString());
+    window.dispatchEvent(new Event("remhub-tab-change"));
+  }
 
   if (error) return <Empty text={error} />;
   if (!ctx) return <Empty text="Cargando módulo…" />;
@@ -102,26 +122,42 @@ export default function InventarioPage() {
         </p>
       </section>
 
-      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Secciones del módulo">
-        {visibleTabs.map((t) => {
+      {/* 1. Sección (Inventario · Compras y pagos · Control) */}
+      <nav className="grid gap-2 sm:grid-cols-3" aria-label="Secciones del módulo">
+        {groups.map((g) => {
+          const selected = groupOf(current.key) === g.key;
+          return (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => { if (!selected) open(g.visible[0].key); }}
+              className="rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5"
+              style={
+                selected
+                  ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", color: "var(--t-cta-text, #fff)", borderColor: "transparent" }
+                  : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
+              }
+            >
+              <span className="block text-sm font-bold">{g.icon} {g.label} <span className="font-normal opacity-75">· {g.visible.length}</span></span>
+              <span className="block text-xs" style={{ opacity: selected ? 0.85 : 0.6 }}>{g.hint}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* 2. Pestañas de esa sección (sin barra de desplazamiento: bajan a otra línea si no caben) */}
+      <nav className="flex flex-wrap gap-2" aria-label="Pestañas de la sección">
+        {(groups.find((g) => g.key === groupOf(current.key))?.visible ?? []).map((t) => {
           const selected = t.key === current.key;
           return (
             <button
               key={t.key}
               type="button"
-              onClick={() => {
-                setTab(t.key);
-                // La pestaña queda en la dirección (enlace directo, ayuda y recorrido guiado de esa pestaña).
-                const url = new URL(window.location.href);
-                url.searchParams.set("tab", t.key);
-                url.searchParams.delete("q");
-                window.history.replaceState(null, "", url.toString());
-                window.dispatchEvent(new Event("remhub-tab-change"));
-              }}
-              className="shrink-0 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5"
+              onClick={() => open(t.key)}
+              className="rounded-full border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5"
               style={
                 selected
-                  ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", color: "var(--t-cta-text, #fff)", borderColor: "transparent" }
+                  ? { background: "color-mix(in oklab, var(--t-accent) 22%, var(--t-card-bg))", color: "var(--t-text)", borderColor: "var(--t-accent)" }
                   : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
               }
             >

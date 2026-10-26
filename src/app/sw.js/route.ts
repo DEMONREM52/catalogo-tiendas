@@ -3,8 +3,10 @@
  *
  * Estrategia conservadora:
  *   · Guarda en caché SOLO archivos estáticos con versión (/_next/static), iconos y la página «sin conexión».
- *   · Las páginas siempre se piden a internet; sin conexión se muestra /offline (sin datos de nadie).
- *   · Nunca guarda el panel, la API, datos de clientes, facturas, sesiones ni nada de Supabase.
+ *   · Las páginas siempre se piden a internet; sin conexión se muestra /offline (sin datos de nadie),
+ *     salvo el armazón de /dashboard y /dashboard/pos (última copia), para seguir vendiendo con borradores.
+ *   · Nunca guarda la API, datos de clientes, facturas, sesiones ni nada de Supabase.
+ *     (Los datos de trabajo del POS los guarda la app en el equipo y se borran al cerrar sesión.)
  *   · Solo borra sus propias cachés antiguas («remhub-…»); no toca nada más del navegador.
  */
 export const dynamic = "force-dynamic";
@@ -18,6 +20,9 @@ const VERSION =
 const SW = (version: string) => `/* RemHub SW ${version} */
 const VERSION = ${JSON.stringify(version)};
 const STATIC_CACHE = "remhub-static-" + VERSION;
+// Páginas que abren sin conexión (solo el armazón de la página: los datos los guarda la app en el equipo).
+const PAGES_CACHE = "remhub-pages-" + VERSION;
+const OFFLINE_PAGES = ["/dashboard", "/dashboard/pos"];
 const PRECACHE = ["/offline", "/icons/remhub-192.png", "/icons/remhub-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -70,10 +75,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Páginas: siempre de internet (nunca se guardan). Sin conexión: aviso amable.
+  // Páginas: siempre de internet. Sin conexión: el POS (y el inicio del panel) abren desde la última copia
+  // para seguir vendiendo con borradores; el resto muestra el aviso amable.
   if (req.mode === "navigate") {
+    const keep = OFFLINE_PAGES.includes(url.pathname);
     event.respondWith(
-      fetch(req).catch(async () => (await caches.match("/offline")) || new Response("Sin conexión", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }))
+      fetch(req)
+        .then((res) => {
+          if (keep && res.ok && res.type === "basic" && !res.redirected) {
+            const copy = res.clone();
+            caches.open(PAGES_CACHE).then((cache) => cache.put(url.pathname, copy)).catch(() => undefined);
+          }
+          return res;
+        })
+        .catch(async () =>
+          (keep && (await caches.match(url.pathname, { cacheName: PAGES_CACHE }))) ||
+          (await caches.match("/offline")) ||
+          new Response("Sin conexión", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })
+        )
     );
   }
   // Todo lo demás (API, datos, imágenes de productos…): el navegador lo maneja normal, sin caché del SW.

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { getProvider, implementedProviders } from "../../src/lib/fiscal/providers";
 import { sanitizePayload, submitDocument, type ClaimedDocument, type ProviderContext } from "../../src/lib/fiscal/provider";
 import { buildSignatureHeader } from "../../src/lib/fiscal/webhook-signature";
+import { alanubePayload } from "../../src/lib/fiscal/providers/alegra";
 
 function claimed(overrides: Partial<ClaimedDocument["document"]> = {}, extra: Partial<ClaimedDocument> = {}): ClaimedDocument {
   return {
@@ -97,12 +98,41 @@ test("webhook del simulador: firma válida, firma inválida y lectura del estado
   if (parsed.kind === "document_status") assert.equal(parsed.status, "ACCEPTED");
 });
 
-test("Alegra está preparado pero no inventa la integración (todo pendiente)", async () => {
+const alanubeCtx = (technicalKey: string | null = "clave-tecnica"): ProviderContext => ({
+  account: { id: "a", provider: "alegra", environment: "sandbox", external_account_id: "comp-1", settings: {}, store_id: "s" },
+  environment: "sandbox",
+  credentials: { api_token: "t" },
+  technicalKey,
+  requestId: "req-1",
+});
+
+test("Alanube: factura normal con su resolución y clave técnica (sin llamar a internet)", () => {
+  const body = alanubePayload(alanubeCtx(), claimed()) as Record<string, unknown> & { resolution: Record<string, unknown> };
+  assert.equal(body.documentType, "01");
+  assert.equal(body.resolution.technicalKey, "clave-tecnica");
+  assert.equal(body.additionalDocumentReference, undefined);
+});
+
+test("Alanube: factura de contingencia (04) con la factura en papel y la fecha de Colombia", () => {
+  // Venta en papel a las 8:30 p. m. del 23/10 en Colombia (01:30 del 24/10 en UTC).
+  const doc = claimed({ document_type: "contingency_invoice", prefix: "CONT", number: 7, full_number: "CONT7", issue_date: "2026-10-24T01:30:00Z",
+    metadata: { paper_number: "CONT7", paper_issued_at: "2026-10-24T01:30:00Z" } });
+  const body = alanubePayload(alanubeCtx(null), doc) as Record<string, unknown> & { resolution: Record<string, unknown> };
+  assert.equal(body.documentType, "04");
+  assert.deepEqual(body.additionalDocumentReference, { number: "CONT7", issueDate: "2026-10-23" });
+  assert.equal("technicalKey" in body.resolution, false, "la numeración de contingencia no tiene clave técnica");
+});
+
+test("Alanube: las fechas de documentos relacionados van en hora de Colombia", () => {
+  const related = { id: "r1", document_type: "invoice", full_number: "MA1", issue_date: "2026-10-24T02:00:00Z", cufe: "CUFE-1", provider_document_id: null, total: 119000 };
+  const note = claimed({ document_type: "credit_note", note_concept: "1", note_reason: "Devolución" }, { related } as Partial<ClaimedDocument>);
+  const body = alanubePayload(alanubeCtx(), note) as { associatedDocuments: Array<{ date: string }> };
+  assert.equal(body.associatedDocuments[0].date, "2026-10-23");
+});
+
+test("Alanube: webhook sin el secreto no es válido", () => {
   const p = getProvider("alegra");
   assert.ok(p);
-  const health = await p.healthCheck({ ...ctx(), credentials: { api_user: "u", api_token: "t" } });
-  assert.equal(health.ok, false);
-  await assert.rejects(() => submitDocument(p, ctx(), claimed()), /aún no está implementado/);
   assert.equal(p.verifyWebhook({ headers: new Headers(), rawBody: "{}", secret: "x", now: new Date() }).valid, false);
 });
 
