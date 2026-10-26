@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ReferralCard } from "./ReferralCard";
 import { FiscalAddonCard } from "./FiscalAddonCard";
+import { ImplementationPackages } from "@/components/landing/ImplementationPackages";
 
 /**
  * «Mi plan»: plan y estado de la tienda, días de prueba, consumo frente a los límites, comparación de planes,
@@ -266,6 +267,13 @@ function PlanView() {
       </section>
 
       {storeId ? <FiscalAddonCard storeId={storeId} period={period} /> : null}
+
+      {/* Implementación: opcional y de pago único, aparte de la mensualidad. */}
+      <section>
+        <h2 className="text-xl font-black">¿Quieres que te la deje lista?</h2>
+        <p className="mb-3 text-sm" style={{ color: "var(--t-muted)" }}>Puedes arrancar solo con las guías, o pedir que cargue tus datos, configure todo y capacite a tu equipo.</p>
+        <ImplementationPackages contactHref={(text) => `https://wa.me/${REMHUB_WHATSAPP}?text=${encodeURIComponent(text)}`} />
+      </section>
 
       {/* Historial */}
       {pays.length ? (

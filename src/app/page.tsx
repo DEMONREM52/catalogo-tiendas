@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { PricingSection } from "@/components/landing/PricingSection";
+import { ImplementationPackages, TraditionalComparison } from "@/components/landing/ImplementationPackages";
 import { Showcase } from "@/components/landing/Showcase";
 import { captureReferral } from "@/lib/saas/referral";
 
@@ -286,6 +287,7 @@ export default function HomePage() {
             <a href="#producto" className="hover:text-[color:var(--t-text)]">Cómo se ve</a>
             <a href="#funciones" className="hover:text-[color:var(--t-text)]">Funciones</a>
             <a href="#planes" className="hover:text-[color:var(--t-text)]">Planes</a>
+            <a href="#implementacion" className="hover:text-[color:var(--t-text)]">Implementación</a>
             <a href="#preguntas" className="hover:text-[color:var(--t-text)]">Preguntas</a>
           </div>
           <div className="flex items-center gap-2">
@@ -471,6 +473,24 @@ export default function HomePage() {
           ))}
         </div>
         } />
+      </section>
+
+      <section id="implementacion" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-20">
+        <Reveal className="mb-6">
+          <Kicker>Implementación</Kicker>
+          <h2 className="mt-4 text-3xl font-black sm:text-4xl">Arranca solo o te la dejamos lista</h2>
+          <p className="mt-2" style={{ color: "var(--t-muted)" }}>Es opcional y de pago único. Sin anticipos que se pierdan y sin permanencia.</p>
+        </Reveal>
+        <ImplementationPackages contactHref={waLink} />
+      </section>
+
+      <section id="comparar" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-20">
+        <Reveal className="mb-6">
+          <Kicker>Compara</Kicker>
+          <h2 className="mt-4 text-3xl font-black sm:text-4xl">RemHub frente a los sistemas tradicionales</h2>
+          <p className="mt-2" style={{ color: "var(--t-muted)" }}>Lo mismo que necesitas para vender, sin pagar millones por empezar.</p>
+        </Reveal>
+        <TraditionalComparison />
       </section>
 
       <section id="preguntas" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-20">

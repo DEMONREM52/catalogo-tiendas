@@ -220,6 +220,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/rentabilidad", icon: "📈", label: "Rentabilidad", permissions: PROFIT_PERMISSIONS },
     { href: "/dashboard/gastos", icon: "💸", label: "Gastos y nómina", short: "Gastos", permissions: FINANCE_PERMISSIONS },
     { href: "/dashboard/equipo", icon: "🏆", label: "Comisiones y metas", short: "Metas", permissions: ["pos", "payroll", "profit_view", "reports"] },
+    { href: "/dashboard/contador", icon: "🧮", label: "Para el contador", short: "Contador", permissions: ["exports"] },
   ],
   settings: [
     { href: "/dashboard/store", icon: "🏪", label: "Mi tienda", permissions: ["store"] },
@@ -227,6 +228,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
     { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
     { href: "/dashboard/datos", icon: "🔄", label: "Importar y exportar", short: "Datos", permissions: ["exports", "products", "clients", "receivables", "payables", "suppliers", "categories", "inventory_adjust"] },
+    { href: "/dashboard/seguridad", icon: "🛡️", label: "Copias y seguridad", short: "Seguridad", permissions: ["users"] },
   ],
 };
 

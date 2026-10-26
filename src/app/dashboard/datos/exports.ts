@@ -25,7 +25,7 @@ const endOf = (d: string) => `${d}T23:59:59-05:00`;
 const startOf = (d: string) => `${d}T00:00:00-05:00`;
 
 /** Todas las filas (la base entrega máximo 1.000 por consulta). */
-async function all(make: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, max = 100000): Promise<Row[]> {
+export async function all(make: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, max = 100000): Promise<Row[]> {
   const out: Row[] = [];
   for (let from = 0; from < max; from += 1000) {
     const { data, error } = await make(from, from + 999);
@@ -38,7 +38,7 @@ async function all(make: (from: number, to: number) => PromiseLike<{ data: unkno
 }
 
 /** Trae filas por lotes de ids (para detalles: líneas de venta, de compra…). */
-async function byIds(table: string, cols: string, col: string, ids: string[], step?: (t: string) => void, label = "") {
+export async function byIds(table: string, cols: string, col: string, ids: string[], step?: (t: string) => void, label = "") {
   const out: Row[] = [];
   for (let i = 0; i < ids.length; i += 150) {
     step?.(`${label} ${Math.min(i + 150, ids.length)} de ${ids.length}…`);

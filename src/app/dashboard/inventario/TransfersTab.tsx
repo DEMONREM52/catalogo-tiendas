@@ -871,6 +871,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                             className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                             🏷️ Etiquetas
                           </a>
+                          <a href={`/documento/rotulo?traslado=${row.id}`} target="_blank" rel="noopener noreferrer" title="Rótulo para cada bulto: para quién va, bulto N de M y QR para recibir"
+                            className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                            📦 Rótulo
+                          </a>
                           <a
                             href={transferTrackUrl(row.track_token)}
                             target="_blank"

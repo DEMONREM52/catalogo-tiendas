@@ -1,6 +1,6 @@
 "use client";
 
-import { getPrinterSettings, savePrinterSettings, type PrinterSettings } from "./settings";
+import { MODE_INFO, getPrinterSettings, savePrinterSettings, type PrinterSettings } from "./settings";
 import { ticketEscpos, ticketHtml, type TicketData } from "./ticket";
 
 /**
@@ -260,18 +260,23 @@ export async function printTicket(t: TicketData, size: "tirilla" | "carta", sett
   }
 }
 
-/** Abre el cajón monedero (solo térmicas ESC/POS con cajón conectado). */
-export async function openDrawer(settings: PrinterSettings = getPrinterSettings()): Promise<PrintResult> {
-  const bytes = Uint8Array.from([0x1b, 0x40, 0x1b, 0x70, 0x00, 0x19, 0xfa]);
+/** Manda bytes ESC/POS ya armados (etiquetas, rótulos) a la térmica conectada directo. Nunca lanza error. */
+export async function sendEscpos(bytes: Uint8Array, settings: PrinterSettings = getPrinterSettings()): Promise<PrintResult> {
   try {
     if (settings.mode === "usb") await sendUsb(bytes, settings);
     else if (settings.mode === "serial") await sendSerial(bytes, settings);
     else if (settings.mode === "bluetooth") await sendBluetooth(bytes, settings);
     else if (settings.mode === "rawbt") sendRawbt(bytes);
-    else return { ok: false, message: "El cajón se abre solo con una térmica conectada directo (USB, COM, Bluetooth o RawBT)." };
+    else return { ok: false, message: "Esto se imprime directo solo con una térmica conectada (USB, COM, Bluetooth o RawBT)." };
     return { ok: true };
   } catch (e) {
     usbOpen = null;
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Abre el cajón monedero (solo térmicas ESC/POS con cajón conectado). */
+export async function openDrawer(settings: PrinterSettings = getPrinterSettings()): Promise<PrintResult> {
+  if (!MODE_INFO[settings.mode].escpos) return { ok: false, message: "El cajón se abre solo con una térmica conectada directo (USB, COM, Bluetooth o RawBT)." };
+  return sendEscpos(Uint8Array.from([0x1b, 0x40, 0x1b, 0x70, 0x00, 0x19, 0xfa]), settings);
 }

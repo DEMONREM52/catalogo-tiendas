@@ -1,12 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 
 /** Piezas comunes de las ventanas del ERP (cuentas por pagar, cuenta con puntos…). */
 
 export function Modal({ title, subtitle, children, footer, onClose, wide }: { title: string; subtitle?: string; children: ReactNode; footer: ReactNode; onClose: () => void; wide?: boolean }) {
-  return (
+  // Va directo al <body>: dentro de una sección animada (transform) el «fixed» quedaba pegado a la sección
+  // y la ventana salía más abajo, fuera de la vista.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <motion.div className="fixed inset-0 z-150 grid place-items-center bg-black/55 p-3 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         role="dialog" aria-modal="true"
@@ -22,7 +26,8 @@ export function Modal({ title, subtitle, children, footer, onClose, wide }: { ti
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">{children}</div>
         <footer className="flex flex-wrap justify-end gap-2 border-t px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>{footer}</footer>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 

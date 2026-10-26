@@ -1,3 +1,4 @@
 import type { Metadata } from "next";
-export const metadata: Metadata = { title: "Recuperar contraseña - RemHub" };
+// Páginas de cuenta: no van en Google.
+export const metadata: Metadata = { title: "Recuperar contraseña - RemHub", robots: { index: false, follow: false } };
 export default function Layout({ children }: { children: React.ReactNode }) { return children; }

@@ -13,6 +13,7 @@ import {
   type PayableReminder, type PayableRow, type PayableSettings, type PayablesBoard,
 } from "./payables-shared";
 import { DateField } from "@/components/forms/Fields";
+import { PayablesReport } from "./PayablesReport";
 
 const purchaseReceiptUrl = (id: string) => `/comprobante/ingreso/${id}`;
 const DAY_CHOICES = [30, 15, 10, 7, 5, 3, 2, 1, 0];
@@ -74,6 +75,7 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [reminderFor, setReminderFor] = useState<PayableRow | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const canPay = ctx.can("payables");
   const names = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
@@ -145,7 +147,12 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
     <Panel
       title="Cuentas por pagar"
       subtitle={`Saldo pendiente con proveedores: ${money(sum(open))}`}
-      actions={board?.can_config ? <Btn variant="ghost" onClick={() => setSettingsOpen(true)}>⚙️ Avisos y recordatorios</Btn> : null}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          {board ? <Btn variant="ghost" onClick={() => setReportOpen(true)}>📋 Informe</Btn> : null}
+          {board?.can_config ? <Btn variant="ghost" onClick={() => setSettingsOpen(true)}>⚙️ Avisos y recordatorios</Btn> : null}
+        </div>
+      }
     >
       {legacy ? (
         <p className="mb-3 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, transparent)", color: "var(--t-muted)" }}>
@@ -259,6 +266,7 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
 
       <AnimatePresence>
         {reminderFor && board ? <ReminderDialog key="rem" row={reminderFor} board={board} name={supplierName(reminderFor)} onClose={() => setReminderFor(null)} onSaved={() => { setReminderFor(null); reload(); }} /> : null}
+        {reportOpen && board ? <PayablesReport key="rep" rows={rows} today={board.today} storeId={ctx.storeId} suppliers={suppliers} supplierName={supplierName} onClose={() => setReportOpen(false)} /> : null}
         {settingsOpen && board ? <SettingsDialog key="set" storeId={ctx.storeId} initial={settings} onClose={() => setSettingsOpen(false)} onSaved={() => { setSettingsOpen(false); reload(); }} /> : null}
       </AnimatePresence>
     </Panel>

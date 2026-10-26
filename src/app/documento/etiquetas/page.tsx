@@ -4,13 +4,18 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import JsBarcode from "jsbarcode";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { PrinterChip } from "@/components/print/PrinterSetup";
+import { labelsEscpos, type CodeKind } from "@/lib/print/labels";
+import { MODE_INFO, usePrinterSettings } from "@/lib/print/settings";
+import { sendEscpos } from "@/lib/print/transports";
 
 /**
  * Etiquetas con código de barras y precio para imprimir.
  *   /documento/etiquetas?traslado=<id>   → productos y unidades del traslado; precio del punto que recibe
  *   /documento/etiquetas?ingreso=<id>    → productos y unidades de una factura de compra
  *   /documento/etiquetas?productos=a,b   → un producto por etiqueta
- * Se elige el punto (sus reglas de precio), el precio (1 a 5), una etiqueta por unidad o por producto y el tamaño.
+ * Se elige el punto (sus reglas de precio), el precio (1 a 5), una etiqueta por unidad o por producto, el tamaño
+ * y si lleva código de barras o QR. Con una térmica conectada directo se imprime sin la ventana del navegador.
  */
 
 type Prod = { id: string; name: string; sku: string | null; barcode: string | null; prices: number[] };
@@ -34,6 +39,10 @@ function Labels() {
   const [perUnit, setPerUnit] = useState(true);
   const [size, setSize] = useState<"rollo" | "carta">("rollo");
   const [showName, setShowName] = useState(true);
+  const [codeKind, setCodeKind] = useState<CodeKind>("barcode");
+  const [sending, setSending] = useState(false);
+  const printer = usePrinterSettings();
+  const direct = MODE_INFO[printer.mode].escpos;
   const [error, setError] = useState("");
   const [storeId, setStoreId] = useState("");
 
@@ -117,6 +126,12 @@ function Labels() {
   if (!products.size) return <p style={{ padding: 32, textAlign: "center", fontFamily: "system-ui" }}>Preparando etiquetas…</p>;
 
   const missing = labels.filter((l) => !l.code).length;
+  async function printDirect() {
+    setSending(true);
+    const r = await sendEscpos(labelsEscpos(labels, printer, { code: codeKind, showName }), printer);
+    setSending(false);
+    if (!r.ok) window.alert(`No se pudo imprimir directo: ${r.message ?? "error"}`);
+  }
   const btn = (on: boolean): React.CSSProperties => ({ padding: "7px 12px", borderRadius: 10, border: "1px solid #d1d5db", background: on ? "#111827" : "#fff", color: on ? "#fff" : "#111827", fontWeight: 600, fontSize: 13, cursor: "pointer" });
 
   return (
@@ -142,6 +157,8 @@ function Labels() {
         .carta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; }
         .carta .lbl { height: 25mm; border: 1px dashed #d1d5db; padding: 1.5mm; }
         .lbl svg { display: block; max-width: 100%; height: 11mm; flex-shrink: 0; }
+        .lbl .qr { display: flex; align-items: center; gap: 1.2mm; font-size: 6.5pt; }
+        .lbl .qr img { width: 12mm; height: 12mm; image-rendering: pixelated; }
       `}</style>
       <div className="no-print" style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "center", padding: 12, background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
         <label style={{ fontSize: 13, fontWeight: 600 }}>Precios de{" "}
@@ -160,6 +177,12 @@ function Labels() {
         <button type="button" style={btn(size === "rollo")} onClick={() => setSize("rollo")}>🏷️ Rollo 50×25 mm</button>
         <button type="button" style={btn(size === "carta")} onClick={() => setSize("carta")}>📄 Hoja carta</button>
         <button type="button" style={btn(showName)} onClick={() => setShowName((v) => !v)}>{showName ? "✓ " : ""}Nombre</button>
+        <button type="button" style={btn(codeKind === "barcode")} onClick={() => setCodeKind("barcode")}>▥ Barras</button>
+        <button type="button" style={btn(codeKind === "qr")} onClick={() => setCodeKind("qr")}>▦ QR</button>
+        <PrinterChip size="tirilla" />
+        {direct ? (
+          <button type="button" disabled={sending} onClick={() => void printDirect()} style={{ ...btn(true), background: "#16a34a", borderColor: "#16a34a" }} title="A la térmica conectada, sin ventana">⚡ {sending ? "Enviando…" : `Térmica ${labels.length}`}</button>
+        ) : null}
         <button type="button" onClick={() => window.print()} style={{ ...btn(true), background: "#7c3aed", borderColor: "#7c3aed" }}>🖨️ Imprimir {labels.length}</button>
         {missing ? <span style={{ width: "100%", textAlign: "center", fontSize: 12, color: "#b45309" }}>⚠️ {missing} etiqueta(s) sin código de barras ni referencia: salen solo con nombre y precio.</span> : null}
       </div>
@@ -168,7 +191,7 @@ function Labels() {
           {labels.map((l) => (
             <div key={l.key} className="lbl" style={size === "rollo" ? { boxShadow: "0 1px 3px rgba(0,0,0,.15)" } : undefined}>
               {showName ? <div className="nm">{l.name}</div> : null}
-              {l.code ? <Barcode value={l.code} /> : null}
+              {l.code ? (codeKind === "qr" ? <QrCode value={l.code} /> : <Barcode value={l.code} />) : null}
               <div className="pr">{money(l.price)}</div>
             </div>
           ))}
@@ -176,6 +199,18 @@ function Labels() {
       </div>
     </div>
   );
+}
+
+/** QR con el código del producto (lo leen los lectores 2D y la cámara del celular). */
+function QrCode({ value }: { value: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void import("qrcode").then((m) => m.default.toDataURL(value, { errorCorrectionLevel: "M", margin: 0, width: 160 })).then((u) => { if (alive) setSrc(u); }, () => undefined);
+    return () => { alive = false; };
+  }, [value]);
+  // eslint-disable-next-line @next/next/no-img-element
+  return <div className="qr">{src ? <img src={src} alt="" /> : null}<span>{value}</span></div>;
 }
 
 function Barcode({ value }: { value: string }) {

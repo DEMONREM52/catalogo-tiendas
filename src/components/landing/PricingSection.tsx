@@ -92,6 +92,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
                 </div>
                 <ul className="mt-4 flex-1 space-y-2 text-sm">
                   {(p.features ?? []).map((b) => <li key={b} className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /> {b}</li>)}
+                  {p.extra_point_price ? <li className="text-xs" style={{ color: "var(--t-muted)" }}>Punto o caja adicional: {COP(p.extra_point_price)}/mes</li> : null}
                 </ul>
                 {/* Registro en la web; el plan pagado se contrata después desde «Mi plan» (con Wompi de RemHub). */}
                 <Link

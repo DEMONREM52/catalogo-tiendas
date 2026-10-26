@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Btn, errorMessage, toast } from "./shared";
 import { MAX_PDF_BYTES, compressImage, formatBytes } from "./attachments";
@@ -134,7 +135,8 @@ export async function uploadStaged(storeId: string, purchaseId: string, staged: 
 }
 
 export function Viewer({ url, name, mime, onClose }: { url: string; name: string; mime: string; onClose: () => void }) {
-  const isPdf = mime === "application/pdf";
+  // PDF y XML de la factura electrónica se muestran en un marco; lo demás es imagen.
+  const isPdf = mime === "application/pdf" || /xml/.test(mime);
   function print() {
     const w = window.open("", "_blank");
     if (!w) return;
@@ -143,7 +145,8 @@ export function Viewer({ url, name, mime, onClose }: { url: string; name: string
       : `<img src="${url}" style="max-width:100%" onload="window.print()">`);
     w.document.close();
   }
-  return (
+  // Al <body>, para que no quede pegado a una sección animada y salga fuera de la vista.
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" onClick={onClose}>
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl" style={{ background: "var(--t-card, #fff)", color: "var(--t-text)" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-wrap items-center gap-2 border-b p-2" style={{ borderColor: "var(--t-card-border)" }}>
@@ -159,7 +162,8 @@ export function Viewer({ url, name, mime, onClose }: { url: string; name: string
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -194,7 +198,7 @@ export function PurchaseFilesButton({ purchaseId }: { purchaseId: string }) {
   return (
     <>
       <Btn variant="ghost" onClick={() => setOpen((v) => !v)}>📎 Archivos</Btn>
-      {open ? (
+      {open ? createPortal(
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-3" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border p-4" style={{ background: "var(--t-card, #fff)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }} onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between"><b>Archivos del ingreso</b><button type="button" onClick={() => setOpen(false)}>✕</button></div>
@@ -211,7 +215,8 @@ export function PurchaseFilesButton({ purchaseId }: { purchaseId: string }) {
               </ul>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
       {view ? <Viewer {...view} onClose={() => setView(null)} /> : null}
     </>

@@ -147,6 +147,15 @@ export class EscPos {
       .raw([GS, 0x28, 0x6b, len & 0xff, (len >> 8) & 0xff, 0x31, 0x50, 0x30, ...payload]) // guarda los datos
       .raw([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]); // imprime
   }
+  /** Código de barras CODE128 con el texto debajo (alto en puntos; 1 mm ≈ 8 puntos). */
+  barcode(data: string, height = 60) {
+    const payload = [0x7b, 0x42, ...encodeText(data, "ascii").slice(0, 60)]; // {B = juego B (letras y números)
+    return this.raw([GS, 0x68, Math.max(16, Math.min(255, height))]) // alto
+      .raw([GS, 0x77, 2]) // ancho del módulo
+      .raw([GS, 0x48, 2]) // texto debajo
+      .raw([GS, 0x6b, 73, payload.length, ...payload])
+      .raw([0x0a]);
+  }
   /** Corte parcial con avance (las que no tienen cortador lo ignoran). */
   cut() {
     return this.raw([GS, 0x56, 0x42, 0x03]);

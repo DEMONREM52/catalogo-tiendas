@@ -20,6 +20,7 @@ import { MarkupToolbar } from "./MarkupToolbar";
 import { QuickProductModal } from "./QuickProductModal";
 import { lineFromHit } from "./LineEditor";
 import { usePurchasePricing } from "./purchase-pricing";
+import { XmlImportButton } from "./XmlImport";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
@@ -153,7 +154,7 @@ const formHasWork = (f: PurchaseForm) => Boolean(f.lines.length || f.invoiceRef.
 
 export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   const active = warehouses.filter((w) => w.active);
-  const { suppliers } = useSuppliers(ctx.storeId);
+  const { suppliers, reload: reloadSuppliers } = useSuppliers(ctx.storeId);
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [form, setForm] = useState<PurchaseForm>(emptyForm);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -539,6 +540,17 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <span className="rounded-full border px-3 py-1 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }} title="Se guarda solo en este equipo mientras escribes">
                     💾 {draftLabel}
                   </span>
+                ) : null}
+                {!editing ? (
+                  <XmlImportButton storeId={ctx.storeId} warehouseId={defaultWh} canCreateProducts={canCreateProducts} onSuppliersChanged={reloadSuppliers}
+                    onApply={(x) => {
+                      // Lo que ya estaba en la lista se conserva; lo de la factura se agrega (o reemplaza ese producto).
+                      setForm((cur) => ({
+                        ...cur, supplier: x.supplier, invoiceRef: x.invoiceRef, invoiceDate: x.invoiceDate, paymentType: x.paymentType, dueDate: x.dueDate,
+                        lines: [...cur.lines.filter((l) => !x.lines.some((n) => n.product_id === l.product_id)), ...x.lines],
+                      }));
+                      setStaged((cur) => [...cur, x.file]);
+                    }} />
                 ) : null}
                 {editing ? <Btn variant="ghost" onClick={() => void cancelEdit()}>Salir de la edición</Btn> : null}
               </div>

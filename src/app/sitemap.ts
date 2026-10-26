@@ -67,6 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const out: MetadataRoute.Sitemap = [
     { url: `${PRODUCTION_ORIGIN}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${PRODUCTION_ORIGIN}/registro`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${PRODUCTION_ORIGIN}/instalar`, changeFrequency: "monthly", priority: 0.5 },
   ];
   if (!client) return out;
