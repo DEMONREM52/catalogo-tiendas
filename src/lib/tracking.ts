@@ -15,6 +15,8 @@ export type StorePixelConfig = {
   meta_pixel_id: string;
   order_event: "Purchase" | "Lead" | "none";
   events: { view_content: boolean; add_to_cart: boolean; checkout: boolean; search: boolean; contact: boolean };
+  /** Solo en las landing pages (/oferta/…): el catálogo y las fichas no envían nada a Meta. */
+  landing_only?: boolean;
 };
 
 type Fbq = (...args: unknown[]) => void;

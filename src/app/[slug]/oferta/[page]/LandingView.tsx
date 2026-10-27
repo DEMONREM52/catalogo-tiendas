@@ -193,11 +193,15 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
     return () => window.removeEventListener("message", onMsg);
   }, [preview]);
 
+  const sentCart = useRef(false);
   function openSheet() {
     metrics.current.cta += 1;
     setSheet(true);
     if (preview) return;
     ping("form");
+    // «Agregar al carrito» una vez por visita (abrir y cerrar la ventana varias veces no suma más).
+    if (sentCart.current) return;
+    sentCart.current = true;
     track.addToCart(trackItem(), data.store.slug);
     landingPixelEvent("AddToCart", { content_ids: [item?.id], content_type: "product", value: item?.price, currency: "COP" });
   }
@@ -837,34 +841,41 @@ const PAY_LABEL: Record<LandingPayment, string> = { cod: "Contraentrega (pago al
 
 /**
  * Mensaje que el cliente le manda a la tienda por WhatsApp con todo el pedido.
- * El enlace es al panel: solo lo abre alguien de la tienda con sesión y permiso de pedidos (el cliente no ve el pedido).
+ * Sin emojis: WhatsApp en computador los cambia por «�» cuando el texto llega desde un enlace.
+ * El enlace del final es del pedido para el equipo: su vista previa muestra el logo del punto o de la tienda,
+ * y al abrirlo lleva a Pedidos (solo con sesión y permiso; el cliente no ve el pedido).
  */
 function orderWhatsAppText(o: {
   page: string; receipt: string | null; items: Array<{ name: string; price: number; quantity: number }>; total: number; payment: LandingPayment; freeShipping: boolean;
   customer: { name: string; whatsapp: string; email: string; document: string; department: string; city: string; address: string; neighborhood: string; notes: string };
+  storeSlug: string; catalog: string;
 }) {
   const c = o.customer;
+  // En el subdominio de la tienda la ruta va sin el nombre; en remhub.co va con él.
+  const prefix = window.location.pathname.startsWith(`/${o.storeSlug}/`) ? `/${o.storeSlug}` : "";
+  const link = o.receipt ? `${window.location.origin}${prefix}/orden/${o.receipt}${o.catalog ? `?c=${encodeURIComponent(o.catalog)}` : ""}` : "";
   const lines = [
-    `🛍️ *Nuevo pedido${o.receipt ? ` #${o.receipt}` : ""}* · ${o.page}`,
+    `*NUEVO PEDIDO${o.receipt ? ` #${o.receipt}` : ""}*`,
+    o.page,
     "",
-    `👤 ${c.name.trim()}`,
-    `📱 ${c.whatsapp.replace(/\D/g, "")}`,
-    c.document.trim() ? `🪪 CC ${c.document.trim()}` : "",
-    c.email.trim() ? `✉️ ${c.email.trim()}` : "",
+    `*Cliente:* ${c.name.trim()}`,
+    `*WhatsApp:* ${c.whatsapp.replace(/\D/g, "")}`,
+    c.document.trim() ? `*Cédula:* ${c.document.trim()}` : "",
+    c.email.trim() ? `*Correo:* ${c.email.trim()}` : "",
     "",
-    "📦 *Pedido:*",
-    ...o.items.map((i) => `• ${i.quantity} × ${i.name} — ${money(i.price)}${i.quantity > 1 ? " c/u" : ""}`),
+    "*Pedido:*",
+    ...o.items.map((i) => `- ${i.quantity} x ${i.name} - ${money(i.price)}${i.quantity > 1 ? " c/u" : ""}`),
     "",
-    `💰 *Total: ${money(o.total)}*`,
-    `💳 ${PAY_LABEL[o.payment]}`,
-    `🚚 Envío: ${o.freeShipping ? "GRATIS" : "por confirmar"}`,
+    `*Total: ${money(o.total)}*`,
+    `*Pago:* ${PAY_LABEL[o.payment]}`,
+    `*Envío:* ${o.freeShipping ? "GRATIS" : "por confirmar"}`,
     "",
-    `📍 ${c.address.trim()}${c.neighborhood.trim() ? ` · Barrio ${c.neighborhood.trim()}` : ""}`,
-    `🏙️ ${c.city.trim()}, ${c.department}`,
-    c.notes.trim() ? `📝 ${c.notes.trim()}` : "",
+    `*Dirección:* ${c.address.trim()}${c.neighborhood.trim() ? `, barrio ${c.neighborhood.trim()}` : ""}`,
+    `*Ciudad:* ${c.city.trim()}, ${c.department}`,
+    c.notes.trim() ? `*Indicaciones:* ${c.notes.trim()}` : "",
     "",
-    "Quiero confirmar mi pedido ✅",
-    o.receipt ? `\n🔒 Para la tienda: ${window.location.origin}/dashboard/pedidos?pedido=${o.receipt}` : "",
+    "Quiero confirmar mi pedido.",
+    link ? `\nPara la tienda: ${link}` : "",
   ];
   return lines.filter((l, k, a) => l !== "" || (k > 0 && a[k - 1] !== "")).join("\n").trim();
 }
@@ -964,7 +975,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
       const tItems = (json.items ?? []).map((i) => ({ id: i.id, name: i.name, price: Number(i.price), quantity: Number(i.quantity) }));
       track.order(json.event_id ?? `${data.store.slug}-${json.receipt_no ?? Date.now()}`, tItems, data.store.slug);
       landingPixelEvent("Purchase", { content_ids: tItems.map((i) => i.id), content_type: "product", value: json.total, currency: "COP", num_items: tItems.reduce((s, i) => s + i.quantity, 0) }, json.event_id);
-      const waText = orderWhatsAppText({ page: data.page.name, receipt: json.receipt_no ?? null, items: tItems, total: Number(json.total) || 0, payment, freeShipping: cfg.shipping.free, customer: f });
+      const waText = orderWhatsAppText({ page: data.page.name, receipt: json.receipt_no ?? null, items: tItems, total: Number(json.total) || 0, payment, freeShipping: cfg.shipping.free, customer: f, storeSlug: data.store.slug, catalog: data.page.catalog });
       const waUrl = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : null;
       if (waUrl && waTab && !waTab.closed) waTab.location.href = waUrl;
       setDone({ receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, payment, waUrl });

@@ -6,9 +6,12 @@ import { usePathname } from "next/navigation";
 import { setStorePixel, track, type StorePixelConfig, type TrackItem } from "@/lib/tracking";
 
 /** Píxel de Meta (Facebook) de la tienda. Se monta en todas las páginas públicas de la tienda. */
-export function StorePixel({ config }: { config: StorePixelConfig | null }) {
+export function StorePixel({ config: raw }: { config: StorePixelConfig | null }) {
   const pathname = usePathname();
   const first = useRef(true);
+  // «Solo en las landing pages»: fuera de /oferta/… no se carga el píxel ni se envían eventos.
+  const onLanding = /(^|\/)oferta\//.test(pathname ?? "");
+  const config = raw && (!raw.landing_only || onLanding) ? raw : null;
   const id = config?.meta_pixel_id ?? "";
 
   useEffect(() => {

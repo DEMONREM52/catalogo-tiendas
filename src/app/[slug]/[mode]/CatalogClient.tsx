@@ -358,11 +358,17 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     };
   }, [loading, products.length > 0]);
 
-  // Medición de búsquedas (cuando la persona deja de escribir).
+  // Medición de búsquedas: cuando la persona deja de escribir, y una sola vez por cada palabra buscada en la visita.
+  const searched = useRef(new Set<string>());
   useEffect(() => {
-    const term = q.trim();
-    if (!store?.slug || term.length < 2) return;
-    const timer = window.setTimeout(() => track.search(term, store.slug), 1200);
+    const term = q.trim().toLowerCase();
+    if (!store?.slug || term.length < 3 || searched.current.has(term)) return;
+    const timer = window.setTimeout(() => {
+      // Si es el comienzo de algo ya buscado (o al revés), es la misma búsqueda escribiéndose.
+      if ([...searched.current].some((t) => t.startsWith(term) || term.startsWith(t))) { searched.current.add(term); return; }
+      searched.current.add(term);
+      track.search(term, store.slug);
+    }, 1500);
     return () => window.clearTimeout(timer);
   }, [q, store?.slug]);
 

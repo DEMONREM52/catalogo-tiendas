@@ -8,7 +8,7 @@ import type { StorePixelConfig } from "@/lib/tracking";
  * Configuración pública de medición de la tienda (Píxel de Meta). Nunca rompe la página.
  * Caché compartida de 5 minutos entre todos los servidores (antes era en memoria de cada uno: casi siempre vacía).
  */
-const loadStoreTracking = unstable_cache((slug: string) => fetchStoreTracking(slug), ["store-tracking-v1"], { revalidate: 300 });
+const loadStoreTracking = unstable_cache((slug: string) => fetchStoreTracking(slug), ["store-tracking-v2"], { revalidate: 300 });
 
 async function fetchStoreTracking(slug: string): Promise<StorePixelConfig | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,7 +19,10 @@ async function fetchStoreTracking(slug: string): Promise<StorePixelConfig | null
     const { data, error } = await sb.rpc("store_public_tracking", { p_store: decodeURIComponent(slug || "") });
     if (error || !data) return null;
     const cfg = data as StorePixelConfig;
-    return cfg.meta_pixel_id ? cfg : null;
+    if (!cfg.meta_pixel_id) return null;
+    // ¿Solo en las landing pages? (20261257; sin esa migración se mide en todas las páginas, como antes)
+    const scope = await sb.rpc("store_pixel_scope", { p_store: decodeURIComponent(slug || "") });
+    return { ...cfg, landing_only: Boolean((scope.data as { landing_only?: boolean } | null)?.landing_only) };
   } catch {
     return null;
   }

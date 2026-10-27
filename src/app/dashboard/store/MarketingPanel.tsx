@@ -14,6 +14,8 @@ type Tracking = {
   track_checkout: boolean;
   track_search: boolean;
   track_contact: boolean;
+  /** Solo en las landing pages (/oferta/…). */
+  landing_only: boolean;
 };
 
 const EMPTY: Tracking = {
@@ -25,6 +27,7 @@ const EMPTY: Tracking = {
   track_checkout: true,
   track_search: true,
   track_contact: true,
+  landing_only: false,
 };
 
 const EVENTS: Array<[keyof Tracking, string, string]> = [
@@ -36,6 +39,8 @@ const EVENTS: Array<[keyof Tracking, string, string]> = [
 ];
 
 const COLUMNS = "meta_pixel_id,meta_enabled,order_event,track_view_content,track_add_to_cart,track_checkout,track_search,track_contact";
+// Columna de 20261257 (si aún no se corrió, se lee y se guarda sin ella).
+const SCOPE_COLUMN = "landing_only";
 
 function isMissingTable(message: string) {
   return /store_tracking|does not exist|schema cache|PGRST205|42P01/i.test(message);
@@ -48,11 +53,17 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [noScope, setNoScope] = useState(false);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const { data, error } = await supabaseBrowser().from("store_tracking").select(COLUMNS).eq("store_id", storeId).maybeSingle();
+      const sb = supabaseBrowser();
+      let { data, error } = await sb.from("store_tracking").select(`${COLUMNS},${SCOPE_COLUMN}`).eq("store_id", storeId).maybeSingle();
+      if (error && error.message.includes(SCOPE_COLUMN)) {
+        setNoScope(true);
+        ({ data, error } = await sb.from("store_tracking").select(COLUMNS).eq("store_id", storeId).maybeSingle());
+      }
       if (!alive) return;
       setLoading(false);
       if (error) {
@@ -80,7 +91,8 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
       return;
     }
     setSaving(true);
-    const payload = { store_id: storeId, ...form, meta_pixel_id: pixel || null };
+    const { landing_only, ...rest } = form;
+    const payload = { store_id: storeId, ...rest, ...(noScope ? {} : { landing_only }), meta_pixel_id: pixel || null };
     const { error } = await supabaseBrowser().from("store_tracking").upsert(payload, { onConflict: "store_id" });
     setSaving(false);
     if (error) {
@@ -160,6 +172,19 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
               <input type="checkbox" className="h-4 w-4 accent-fuchsia-600" checked={form.meta_enabled} onChange={(e) => setForm({ ...form, meta_enabled: e.target.checked })} />
               <span className="text-sm font-semibold">Píxel encendido</span>
             </label>
+          </div>
+
+          <div className="rounded-2xl border p-3" style={{ borderColor: form.landing_only ? "color-mix(in oklab, #a855f7 55%, transparent)" : "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
+            <p className="text-sm font-semibold">¿Dónde se mide?</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {([[true, "🚀 Solo en las landing pages", "El catálogo y las fichas de producto no envían nada a Meta. Ideal si la pauta va a tus landings."], [false, "🛍️ En todas las páginas de la tienda", "Catálogos, fichas de producto y landings."]] as const).map(([v, title, hint]) => (
+                <label key={String(v)} className="flex cursor-pointer items-start gap-3 rounded-xl border p-3" style={{ borderColor: form.landing_only === v ? "#a855f7" : "var(--t-card-border)" }}>
+                  <input type="radio" name="pixel-scope" className="mt-1 h-4 w-4 accent-fuchsia-600" checked={form.landing_only === v} disabled={noScope} onChange={() => setForm({ ...form, landing_only: v })} />
+                  <span><b className="block text-sm">{title}</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>{hint}</span></span>
+                </label>
+              ))}
+            </div>
+            {noScope ? <p className="mt-2 text-xs font-semibold text-amber-600">Para elegir «Solo en las landing pages», corre en Supabase la migración 20261257_pixel_solo_landing.sql.</p> : null}
           </div>
 
           <div>

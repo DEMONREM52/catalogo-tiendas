@@ -421,3 +421,137 @@ export function MetaConnect({ storeId }: { storeId: string }) {
     </Section>
   );
 }
+
+// ------------------------------------------------------------ pedidos que entran por las landings
+
+type LandingOrderRow = {
+  order_id: string; receipt_no: number | null; created_at: string; status: string; payment_status: string | null; total: number;
+  customer_name: string | null; customer_whatsapp: string | null; note: string | null;
+  landing: { id: string; name: string; slug: string }; units: number; payment: string; upsell: boolean;
+  city: string | null; department: string | null; source: string | null; campaign: string | null;
+  items: Array<{ name: string | null; quantity: number; price: number }>;
+};
+
+const ORDER_STATUS: Record<string, [string, string]> = {
+  draft: ["🕓 Por confirmar", "#f59e0b"], sent: ["🕓 Por confirmar", "#f59e0b"], confirmed: ["✅ Confirmado", "#16a34a"],
+  completed: ["📦 Entregado", "#2563eb"], cancelled: ["✖ Anulado", "#ef4444"],
+};
+const PAY: Record<string, string> = { cod: "💵 Contraentrega", online: "💳 En línea", addi: "🗓️ Addi" };
+const ago = (iso: string) => {
+  const m = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
+  return m < 1 ? "hace un momento" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h` : new Date(iso).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
+
+/** Panel de los pedidos de las landings: ver, escribirle al cliente, confirmar y abrir en Pedidos. */
+export function LandingOrders({ storeId, storeName, landings }: { storeId: string; storeName: string; landings: Array<{ id: string; name: string }> }) {
+  const [days, setDays] = useState(30);
+  const [page, setPage] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "confirmed" | "completed" | "cancelled">("all");
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<LandingOrderRow[] | null>(null);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function load() {
+    const { data, error: err } = await supabaseBrowser().rpc("erp_landing_orders_list", { p_store: storeId, p_days: days, p_page: page || null });
+    if (err) { setError(/Could not find the function|schema cache/i.test(err.message) ? "Falta ejecutar la migración 20261258_landing_pedidos.sql en Supabase." : err.message); return; }
+    const r = data as { ok: boolean; items?: LandingOrderRow[]; message?: string };
+    if (!r.ok) { setError(r.message ?? "Sin permiso."); return; }
+    setError("");
+    setRows(r.items ?? []);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [days, page]);
+
+  async function setStatus(o: LandingOrderRow, next: "confirmed" | "completed") {
+    const ok = await Swal.fire({ icon: "question", title: next === "confirmed" ? `¿Confirmar el pedido #${o.receipt_no}?` : `¿Marcar el pedido #${o.receipt_no} como entregado?`, text: next === "confirmed" ? "Confírmalo cuando ya hablaste con el cliente por WhatsApp." : "", showCancelButton: true, confirmButtonText: "Sí", cancelButtonText: "No", ...swalTheme });
+    if (!ok.isConfirmed) return;
+    setBusy(o.order_id);
+    const { error: err } = await supabaseBrowser().rpc("store_team_set_order_status", { p_order_id: o.order_id, p_status: next });
+    setBusy(null);
+    if (err) { void Swal.fire({ icon: "error", title: "No se pudo cambiar", text: err.message, ...swalTheme }); return; }
+    setRows((rs) => (rs ?? []).map((x) => (x.order_id === o.order_id ? { ...x, status: next } : x)));
+  }
+
+  const pending = (s: string) => s === "draft" || s === "sent";
+  const all = rows ?? [];
+  const list = all.filter((o) =>
+    (filter === "all" || (filter === "pending" ? pending(o.status) : o.status === filter))
+    && (!q.trim() || `${o.receipt_no ?? ""} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.city ?? ""}`.toLowerCase().includes(q.trim().toLowerCase())));
+  const toConfirm = all.filter((o) => pending(o.status)).length;
+  const counts = { all: all.length, pending: toConfirm, confirmed: all.filter((o) => o.status === "confirmed").length, completed: all.filter((o) => o.status === "completed").length, cancelled: all.filter((o) => o.status === "cancelled").length };
+  const FILTERS: Array<[keyof typeof counts, string]> = [["all", "Todos"], ["pending", "🕓 Por confirmar"], ["confirmed", "✅ Confirmados"], ["completed", "📦 Entregados"], ["cancelled", "✖ Anulados"]];
+
+  return (
+    <Section title="Pedidos de tus landings" hint="Los que llegan por el botón «Comprar» de las landings: escríbele al cliente, confírmalo y despáchalo" icon={<span>🛍️</span>}
+      actions={toConfirm ? <span className="animate-pulse rounded-full px-3 py-1 text-xs font-black text-white" style={{ background: "#f59e0b" }}>🕓 {toConfirm} por confirmar</span> : null}>
+      {error ? <p className="rounded-xl border p-3 text-sm" style={softBox}>⚠️ {error}</p> : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={`${inputCls} w-auto`} style={inputStyle}>{[7, 30, 90, 365].map((d) => <option key={d} value={d}>Últimos {d} días</option>)}</select>
+            {landings.length > 1 ? (
+              <select value={page} onChange={(e) => setPage(e.target.value)} className={`${inputCls} w-auto`} style={inputStyle}>
+                <option value="">Todas las landings</option>
+                {landings.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            ) : null}
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar: nombre, WhatsApp, ciudad o #" className={`${inputCls} min-w-52 flex-1`} style={inputStyle} />
+            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Actualizar"><RefreshCw size={15} /></button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {FILTERS.map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setFilter(k)} className="rounded-full px-3 py-1 text-xs font-bold" style={filter === k ? { background: "var(--t-cta)", color: "#fff" } : { ...softBox, border: "1px solid var(--t-card-border)" }}>{l} ({counts[k]})</button>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {rows === null ? <p className="py-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando pedidos…</p> : null}
+            {rows && !list.length ? <p className="py-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>{rows.length ? "Ningún pedido con ese filtro." : "Aún no hay pedidos de las landings en este periodo."}</p> : null}
+            {list.map((o) => {
+              const [label, color] = ORDER_STATUS[o.status] ?? [o.status, "#64748b"];
+              const first = (o.customer_name ?? "").trim().split(/\s+/)[0] || "";
+              const wa = (o.customer_whatsapp ?? "").replace(/\D/g, "").replace(/^57(?=\d{10}$)/, "");
+              const product = o.items.map((i) => `${i.quantity} × ${i.name ?? "producto"}`).join(", ");
+              const msg = `Hola${first ? ` ${first}` : ""} 👋 Te escribimos de ${storeName} por tu pedido #${o.receipt_no ?? ""} (${product}) por ${money(o.total)}. ¿Confirmamos la entrega? 🚚`;
+              const isOpen = open === o.order_id;
+              return (
+                <article key={o.order_id} className="rounded-2xl border p-3" style={{ ...softBox, borderColor: pending(o.status) ? "rgba(245,158,11,.55)" : "var(--t-card-border)" }}>
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-sm font-black">#{o.receipt_no ?? "—"}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `color-mix(in oklab, ${color} 18%, transparent)`, color }}>{label}</span>
+                        <Pill>{PAY[o.payment] ?? o.payment}</Pill>
+                        {o.payment_status === "paid" ? <Pill tone="good">Pagado</Pill> : null}
+                        {o.source ? <Pill>📣 {o.source}{o.campaign ? ` · ${o.campaign}` : ""}</Pill> : null}
+                        {o.upsell ? <Pill tone="accent">➕ Adicional</Pill> : null}
+                        <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>{ago(o.created_at)}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-bold">
+                        {o.customer_name ?? "Cliente"}
+                        {wa ? <span className="font-medium" style={{ color: "var(--t-muted)" }}> · 📱 {wa}</span> : null}
+                        {o.city ? <span className="font-medium" style={{ color: "var(--t-muted)" }}> · 📍 {o.city}{o.department ? `, ${o.department}` : ""}</span> : null}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--t-muted)" }}>🚀 {o.landing.name} · {product}</p>
+                    </div>
+                    <p className="text-lg font-black">{money(o.total)}</p>
+                  </div>
+                  {isOpen && o.note ? <p className="mt-2 whitespace-pre-line rounded-xl border p-3 text-xs leading-5" style={softBox}>{o.note}</p> : null}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {wa ? <a href={`https://wa.me/57${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><MessageCircle size={13} /> Escribirle</a> : null}
+                    {pending(o.status) ? <button type="button" disabled={busy === o.order_id} onClick={() => void setStatus(o, "confirmed")} className="rounded-xl px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>✅ Confirmar</button> : null}
+                    {o.status === "confirmed" ? <button type="button" disabled={busy === o.order_id} onClick={() => void setStatus(o, "completed")} className="rounded-xl px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50" style={{ background: "#2563eb" }}>📦 Marcar entregado</button> : null}
+                    <button type="button" onClick={() => setOpen(isOpen ? null : o.order_id)} className="rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}>{isOpen ? "Ocultar datos" : "📍 Datos de entrega"}</button>
+                    <button type="button" onClick={() => void copy(`Pedido #${o.receipt_no}\n${o.customer_name ?? ""} · ${wa}\n${product}\nTotal: ${money(o.total)}\n${o.note ?? ""}`)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><Copy size={12} /> Copiar</button>
+                    <a href={`/dashboard/pedidos?pedido=${o.receipt_no ?? ""}`} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><ExternalLink size={12} /> Abrir en Pedidos</a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}

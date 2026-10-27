@@ -63,7 +63,9 @@ export function metaCookies() {
 
 /** Carga los píxeles propios de la landing (si los tiene). */
 export function loadLandingPixels(metaId: string, tiktokId: string) {
-  const w = window as W;
+  const w = window as W & { __remhubPixel?: { meta_pixel_id?: string } | null };
+  // Si el píxel propio es el mismo de la tienda, no se carga otra vez (cada evento llegaría doble).
+  if (metaId && w.__remhubPixel?.meta_pixel_id === metaId) metaId = "";
   w.__landingPixels = { meta: metaId, tiktok: tiktokId };
   if (metaId) {
     if (!w.fbq) {

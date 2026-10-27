@@ -264,5 +264,26 @@ await cfgWith({ viewers_window: "month" });
 const sMonth = (await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).social;
 ok(sWeek.live === sToday.live + 1 && sMonth.live === sToday.live + 2 && sMonth.live_window === "month", "Semana y mes cuentan las visitas reales de esos días (la de hace 40 días no)", [sToday.live, sWeek.live, sMonth.live]);
 
+console.log("13. Píxel solo en las landing pages");
+await db.exec("create table if not exists public.store_tracking (store_id uuid primary key, meta_pixel_id text)");
+const M6 = fs.readFileSync(path.join(MIG, "20261257_pixel_solo_landing.sql"), "utf8");
+await db.exec(M6);
+await db.exec(M6);
+ok((await anon("select public.store_pixel_scope('vitrina') r")).landing_only === false, "Por defecto se mide en toda la tienda");
+await raw("insert into store_tracking (store_id, meta_pixel_id, landing_only) values ($1, '123456789', true)", [A]);
+ok((await anon("select public.store_pixel_scope('vitrina') r")).landing_only === true, "Con «solo landing pages» la página pública lo sabe");
+
+console.log("14. Panel de pedidos de las landings");
+const M7 = fs.readFileSync(path.join(MIG, "20261258_landing_pedidos.sql"), "utf8");
+await db.exec(M7);
+await db.exec(M7);
+await raw("insert into store_users (store_id, user_id, role, permissions, username) values ($1, $2, 'seller', '{orders}', 'pedidos')", [A, U(6)]);
+const lo = await one(U(6), "select public.erp_landing_orders_list($1, 30, null) r", [A]);
+const firstOrder = lo.items.find((x) => x.source === "facebook");
+ok(lo.ok && lo.items.length >= 3 && firstOrder && firstOrder.landing.slug === "enterizo-relax" && firstOrder.items.length > 0 && String(firstOrder.customer_whatsapp).length === 10, "Quien atiende pedidos ve los pedidos de las landings con cliente, productos y landing", firstOrder);
+ok(firstOrder.note.includes("Pereira") && firstOrder.source === "facebook", "Con la nota (dirección) y de qué red llegó");
+ok(!(await one(MKT, "select public.erp_landing_orders_list($1, 30, null) r", [A])).ok, "Sin permiso de pedidos no ve los datos de los clientes");
+ok((await one(U(6), "select public.erp_landing_orders_list($1, 30, $2) r", [A, "00000000-0000-4000-8000-000000000000"])).items.length === 0, "Se puede filtrar por landing");
+
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

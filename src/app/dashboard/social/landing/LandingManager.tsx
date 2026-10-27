@@ -11,7 +11,7 @@ import { QrDialog } from "@/components/pwa/QrDialog";
 import { normalizeLanding } from "@/lib/landing/config";
 import { Pill, errorText, money, softBox, swalTheme } from "../catalogs/ui";
 import { LandingEditor, type CatalogOption, type LandingRow, type StoreInfo } from "./LandingEditor";
-import { AdKit, LandingStats, LandingSummary, MetaConnect } from "./LandingTools";
+import { AdKit, LandingOrders, LandingStats, LandingSummary, MetaConnect } from "./LandingTools";
 
 type ListItem = {
   id: string; slug: string; name: string; status: LandingRow["status"]; catalog_id: string; catalog_slug: string | null; product_ids: string[]; image: string | null;
@@ -24,6 +24,7 @@ const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
 export default function LandingManager() {
   const [store, setStore] = useState<StoreInfo | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  const [canOrders, setCanOrders] = useState(false);
   const [catalogs, setCatalogs] = useState<CatalogOption[]>([]);
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,7 @@ export default function LandingManager() {
       const s = access.store;
       setStore({ id: s.id, slug: s.slug, name: s.name, logo_url: s.logo_url, whatsapp: s.whatsapp });
       setCanEdit(hasStorePermission(access, "products"));
+      setCanOrders(hasStorePermission(access, "orders"));
       const sb = supabaseBrowser();
       const [cats, list] = await Promise.all([
         sb.from("store_catalogs").select("id,slug,name,access_key,active,point_id").eq("store_id", s.id).order("sort_order").order("created_at"),
@@ -131,6 +133,8 @@ export default function LandingManager() {
         </div>
         <div className="pointer-events-none absolute -right-10 -top-10 text-[160px] opacity-15">🛍️</div>
       </section>
+
+      {items.length && canOrders ? <LandingOrders storeId={store.id} storeName={store.name} landings={items.filter((i) => i.status !== "archived").map((i) => ({ id: i.id, name: i.name }))} /> : null}
 
       {items.length ? <LandingSummary storeId={store.id} onOpen={async (id) => { if (await getRow(id)) setView({ kind: "stats", id }); }} /> : null}
 
