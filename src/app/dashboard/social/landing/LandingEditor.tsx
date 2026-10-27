@@ -40,8 +40,8 @@ async function uploadImage(file: File): Promise<string> {
 /** Sección del editor que se abre y se cierra: título grande, color al abrirla y botón claro de «Abrir / Cerrar». */
 function Block({ id, title, emoji, hint, children, open = false }: { id?: string; title: string; emoji: string; hint?: string; children: ReactNode; open?: boolean }) {
   return (
-    <details data-block data-key={id} open={open} className="lp-block group overflow-hidden rounded-3xl border-2 transition-shadow open:shadow-lg" style={softBox}>
-      <summary className="lp-block-head relative flex cursor-pointer select-none list-none items-center gap-3 p-4 pl-5 transition sm:gap-4">
+    <details data-block data-key={id} open={open} className="lp-block group rounded-3xl border-2 transition-shadow open:shadow-lg" style={softBox}>
+      <summary className="lp-block-head relative flex cursor-pointer overflow-hidden rounded-[22px] group-open:rounded-b-none select-none list-none items-center gap-3 p-4 pl-5 transition sm:gap-4">
         <span className="lp-block-bar absolute inset-y-0 left-0 w-1.5" />
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-2xl shadow-sm transition group-open:scale-105" style={{ background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 30%, transparent), color-mix(in oklab, var(--t-accent) 8%, transparent))" }}>{emoji}</span>
         <span className="min-w-0 flex-1">

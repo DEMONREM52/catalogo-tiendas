@@ -213,6 +213,14 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
     root.setProperty("--lp-accent-soft", `${accent}14`);
   }, [accent]);
 
+  if (!items.length && preview) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-white px-6 text-center text-slate-900">
+        <div><p className="text-5xl">🛍️</p><h1 className="mt-3 text-xl font-black">Elige el producto</h1>
+          <p className="mt-2 text-sm text-slate-500">En «Producto y opciones», busca el producto por nombre o código (o crea la landing desde un enlace). Si ya lo elegiste y sigue así, ese catálogo no le da precio o no tiene existencias.</p></div>
+      </main>
+    );
+  }
   if (!items.length) {
     return (
       <main className="grid min-h-screen place-items-center bg-white px-4 text-center text-slate-900">
