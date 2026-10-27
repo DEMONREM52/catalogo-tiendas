@@ -109,6 +109,24 @@ function ImageInput({ value, onChange, label = "Foto" }: { value: string; onChan
   );
 }
 
+/** Textos que se pueden editar directo en la vista previa. */
+const INLINE_FIELD = /^(headline|subheadline|badge|promo_text|cta_text|topbar_text|sticky_text|cta_block\.(title|text|button)|(benefits|stories)\.\d{1,2}\.(title|text)|testimonials\.\d{1,2}\.text|faqs\.\d{1,2}\.(q|a))$/;
+
+/** Copia la configuración cambiando un valor por su ruta (ej. ["benefits", "2", "title"]). */
+function setPath(cfg: LandingConfig, path: string[], value: string): LandingConfig {
+  const set = (obj: unknown, keys: string[]): unknown => {
+    const [k, ...rest] = keys;
+    if (Array.isArray(obj)) {
+      const i = Number(k);
+      if (!Number.isInteger(i) || i < 0 || i >= obj.length) return obj;
+      return obj.map((x, j) => (j === i ? (rest.length ? set(x, rest) : value) : x));
+    }
+    const o = (obj && typeof obj === "object" ? obj : {}) as Record<string, unknown>;
+    return { ...o, [k]: rest.length ? set(o[k], rest) : value };
+  };
+  return set(cfg, path) as LandingConfig;
+}
+
 /** Íconos para beneficios, agrupados por lo que comunican. */
 const ICON_GROUPS: Array<[string, string[]]> = [
   ["Envío y entrega", ["🚚", "📦", "🛵", "✈️", "📍", "⏱️", "🏠", "🗺️"]],
@@ -371,6 +389,31 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     if (ok.isConfirmed) apply();
   }
 
+  // Al abrir o escribir en una sección, la vista previa baja sola a esa parte.
+  const lastFocus = useRef("");
+  useEffect(() => {
+    const box = blocksBox.current;
+    if (!box) return;
+    const tell = (ev: Event, force = false) => {
+      const d = (ev.target instanceof Element ? ev.target.closest<HTMLDetailsElement>("details[data-key]") : null);
+      const k = d?.dataset.key;
+      if (!k || (!force && k === lastFocus.current)) return;
+      if (ev.type === "toggle" && !d.open) return;
+      lastFocus.current = k;
+      frame.current?.contentWindow?.postMessage({ type: "remhub-landing-focus", target: k }, window.location.origin);
+    };
+    const onToggle = (ev: Event) => tell(ev, true);
+    const onFocus = (ev: Event) => tell(ev);
+    box.addEventListener("toggle", onToggle, true);
+    box.addEventListener("focusin", onFocus, true);
+    box.addEventListener("input", onFocus, true);
+    return () => {
+      box.removeEventListener("toggle", onToggle, true);
+      box.removeEventListener("focusin", onFocus, true);
+      box.removeEventListener("input", onFocus, true);
+    };
+  }, []);
+
   // Modo editar: la vista previa dice qué parte se tocó y aquí se abre su sección.
   const sendCmd = (cmd: string) => frame.current?.contentWindow?.postMessage({ type: "remhub-landing-cmd", cmd }, window.location.origin);
   useEffect(() => {
@@ -379,7 +422,14 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
-      const m = e.data as { type?: string; target?: string } | null;
+      const m = e.data as { type?: string; target?: string; field?: string; value?: string } | null;
+      // Texto editado directo en la vista previa: se guarda en su lugar de la configuración.
+      if (m?.type === "remhub-landing-set" && typeof m.field === "string" && typeof m.value === "string" && INLINE_FIELD.test(m.field)) {
+        const path = m.field.split(".");
+        const value = m.value.slice(0, 1500);
+        setRow((r) => ({ ...r, config: setPath(r.config, path, value) }));
+        return;
+      }
       if (m?.type !== "remhub-landing-edit" || !m.target) return;
       setFull(false);
       setShowPreview(false);

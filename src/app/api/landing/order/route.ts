@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { decryptSecret, secretAad } from "@/lib/fiscal/crypto";
 import { jsonError, jsonOk, readJson, requestMeta, serviceClient, FiscalApiError } from "@/lib/fiscal/server";
 import { buildOrderEvent, sendCapi, type CapiCustomer } from "@/lib/landing/meta-capi";
+import { sendToUsers, type PushPayload } from "@/lib/push/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,37 @@ export async function POST(request: Request) {
     if (error) throw new FiscalApiError(/Could not find the function|schema cache/i.test(error.message) ? "Falta ejecutar la migración 20261252_landing_pages.sql en Supabase." : "No se pudo crear el pedido. Intenta de nuevo.", 500, "DB_ERROR");
     const result = data as OrderResult;
     if (!result.ok) return Response.json({ ok: false, code: result.code, field: result.field, error: result.message }, { status: 422 });
+
+    // Aviso al celular para quien atiende pedidos (dueño, administradores y permiso «Pedidos»).
+    after(async () => {
+      try {
+        const admin = serviceClient(meta);
+        const storeId = String(result.store_id);
+        const [{ data: store }, { data: members }] = await Promise.all([
+          admin.from("stores").select("owner_id").eq("id", storeId).maybeSingle(),
+          admin.from("store_users").select("user_id,role,permissions,active").eq("store_id", storeId),
+        ]);
+        const users = new Set<string>();
+        const owner = (store as { owner_id?: string } | null)?.owner_id;
+        if (owner) users.add(owner);
+        for (const m of (members ?? []) as Array<{ user_id: string; role: string | null; permissions: string[] | null; active: boolean | null }>) {
+          if (m.active !== false && (m.role === "store_admin" || m.permissions?.includes("orders"))) users.add(m.user_id);
+        }
+        const first = (body.customer?.name ?? "").trim().split(/\s+/)[0] || "Un cliente";
+        const city = (body.customer?.city ?? "").trim();
+        const units = (result.items ?? []).reduce((s, i) => s + Number(i.quantity || 0), 0);
+        const payload: PushPayload = {
+          title: `🛍️ Nuevo pedido${result.receipt_no ? ` #${result.receipt_no}` : ""} desde la landing`,
+          body: `${first}${city ? ` de ${city}` : ""} pidió ${units} ${units === 1 ? "unidad" : "unidades"} · $${Math.round(Number(result.total) || 0).toLocaleString("es-CO")}. Te va a escribir por WhatsApp: atiéndelo.`,
+          url: result.receipt_no ? `/dashboard/pedidos?pedido=${result.receipt_no}` : "/dashboard/pedidos",
+          tag: `landing-order-${result.order_id}`,
+          urgent: true,
+        };
+        if (users.size) await sendToUsers(admin, storeId, new Map([...users].map((u) => [u, payload])));
+      } catch (e) {
+        console.error("[landing] aviso de pedido:", e instanceof Error ? e.message : e);
+      }
+    });
 
     after(async () => {
       try {
@@ -64,7 +96,8 @@ export async function POST(request: Request) {
       }
     });
 
-    return jsonOk({ token: result.token, receipt_no: result.receipt_no, total: result.total, event_id: result.event_id, items: result.items });
+    // Sin el token del comprobante: el cliente no puede abrir el pedido; la tienda lo ve en su panel.
+    return jsonOk({ receipt_no: result.receipt_no, total: result.total, event_id: result.event_id, items: result.items });
   } catch (error) {
     return jsonError(error);
   }

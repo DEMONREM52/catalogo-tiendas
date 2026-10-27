@@ -236,6 +236,9 @@ export function CustomerOrders() {
 
   useEffect(() => {
     load();
+    // Enlace del WhatsApp de una landing (?pedido=123): abre la lista buscando ese pedido.
+    const wanted = new URLSearchParams(window.location.search).get("pedido");
+    if (wanted && /^\d{1,12}$/.test(wanted)) setQ(wanted);
   }, []);
 
   const filtered = useMemo(() => {

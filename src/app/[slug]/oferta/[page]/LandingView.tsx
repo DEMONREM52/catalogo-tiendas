@@ -223,6 +223,8 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
   }
 
   // Bloque «¿Listo para pedir el tuyo?»: se puede repetir entre secciones y llamar la atención con animación.
+  // Texto que se edita directo en la vista previa (solo en modo editar).
+  const Fd = (path: string) => (editMode ? { "data-field": path } : {});
   const cb = cfg.cta_block;
   const dark = cb.background === "accent" || cb.background === "dark";
   const share = () => {
@@ -236,9 +238,9 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
     <section key={k} {...E("cta", "Llamado a comprar")} className={`lp-ctab lp-ctab-${cb.background} px-4 py-10 text-center ${dark ? "text-white" : "text-slate-900"}`}>
       <div className="mx-auto max-w-3xl">
         {cb.badge ? <span className={`inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest ${dark ? "bg-white/20 text-white" : "lp-chip"}`}>{cb.badge}</span> : null}
-        <h2 className="mt-3 text-2xl font-black leading-tight sm:text-4xl">{lowStock ? `⚠️ ¡Solo quedan ${stock} unidades!` : cb.title}</h2>
+        <h2 className="mt-3 text-2xl font-black leading-tight sm:text-4xl">{lowStock ? `⚠️ ¡Solo quedan ${stock} unidades!` : <span {...Fd("cta_block.title")}>{cb.title}</span>}</h2>
         <p className={`mx-auto mt-2 max-w-xl ${dark ? "text-white/85" : "text-slate-600"}`}>
-          {cb.text || `${cfg.shipping.text}. ${data.payments.cod && cfg.payments.cod ? "Pagas cuando lo recibes." : "Pago 100 % seguro."}`}
+          <span {...Fd("cta_block.text")}>{cb.text || `${cfg.shipping.text}. ${data.payments.cod && cfg.payments.cod ? "Pagas cuando lo recibes." : "Pago 100 % seguro."}`}</span>
         </p>
         <p className="mt-3 flex flex-wrap items-end justify-center gap-x-3 gap-y-1">
           {compare ? <span className={`text-lg font-bold line-through ${dark ? "text-white/60" : "text-slate-400"}`}>{money(compare)}</span> : null}
@@ -253,7 +255,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
         {cb.arrow ? <div className="lp-arrow mt-3 text-3xl" aria-hidden>👇</div> : null}
         <button type="button" onClick={openSheet} disabled={soldOut}
           className={`lp-cta lp-anim-${cb.style} ${dark ? "lp-cta-inv" : ""} mt-3 w-full max-w-md rounded-2xl px-6 py-4 text-[17px] font-black uppercase text-white disabled:opacity-50`}>
-          {soldOut ? "Agotado" : cb.button || cfg.cta_text}
+          {soldOut ? "Agotado" : <span {...Fd("cta_block.button")}>{cb.button || cfg.cta_text}</span>}
         </button>
         {cfg.share_button ? <button type="button" className={`mt-3 block w-full text-sm font-bold underline ${dark ? "text-white/80" : "text-slate-500"}`} onClick={share}>💌 Recomiéndalo a una amiga o amigo</button> : null}
       </div>
@@ -267,13 +269,13 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
       <section className="mx-auto grid max-w-6xl gap-6 px-4 pb-8 lg:grid-cols-[1.05fr_.95fr] lg:gap-10">
         <div {...E("media", "Fotos")}><Gallery images={images} name={productName} badge={offPct >= 5 ? `-${offPct}%` : cfg.badge} /></div>
         <div className="min-w-0">
-          {cfg.badge ? <span {...E("texts", "Etiqueta")} className="lp-chip inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest">{cfg.badge}</span> : null}
-          <h1 {...E("texts", "Titular")} className="mt-3 text-[28px] font-black leading-[1.08] tracking-tight sm:text-4xl">{headline}</h1>
+          {cfg.badge ? <span {...E("texts", "Etiqueta")} {...Fd("badge")} className="lp-chip inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest">{cfg.badge}</span> : null}
+          <h1 {...E("texts", "Titular")} {...Fd("headline")} className="mt-3 text-[28px] font-black leading-[1.08] tracking-tight sm:text-4xl">{headline}</h1>
           {stars ? <p className="mt-2 flex items-center gap-2 text-sm"><span className="text-amber-400">{"★".repeat(Math.round(stars))}{"☆".repeat(5 - Math.round(stars))}</span><span className="font-semibold text-slate-500">{stars.toFixed(1)} · {cfg.testimonials.length} {cfg.testimonials.length === 1 ? "opinión" : "opiniones"}</span></p> : null}
-          {cfg.subheadline ? <p {...E("texts", "Subtítulo")} className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.subheadline}</p> : null}
+          {cfg.subheadline ? <p {...E("texts", "Subtítulo")} {...Fd("subheadline")} className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.subheadline}</p> : null}
 
           <div {...E("price", "Precio y promo")} className="lp-price-box mt-5 rounded-3xl p-4">
-            {cfg.promo_text ? <p className="text-[13px] font-extrabold" style={{ color: accent }}>{cfg.promo_text}</p> : null}
+            {cfg.promo_text ? <p {...Fd("promo_text")} className="text-[13px] font-extrabold" style={{ color: accent }}>{cfg.promo_text}</p> : null}
             <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
               {compare ? <span className="text-lg font-bold text-slate-400 line-through">ANTES {money(compare)}</span> : null}
               <span className="text-4xl font-black tracking-tight" style={{ color: accent }}>{compare ? "AHORA " : ""}{priceText}</span>
@@ -338,7 +340,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
           {exitOn ? <p className="mt-4 rounded-2xl bg-emerald-50 p-3 text-center text-sm font-black text-emerald-700">🎁 Tienes {cfg.exit_offer.pct}% de descuento adicional en esta visita</p> : null}
 
           <button ref={heroCta} {...E("texts", "Botón de compra")} type="button" onClick={openSheet} disabled={soldOut} className="lp-cta lp-pulse mt-6 w-full rounded-2xl px-5 py-4 text-[17px] font-black uppercase text-white shadow-xl disabled:opacity-50">
-            {soldOut ? "Agotado" : cfg.cta_text}
+            {soldOut ? "Agotado" : <span {...Fd("cta_text")}>{cfg.cta_text}</span>}
           </button>
           <div {...E("payments", "Formas de pago")}><PayBadges cfg={cfg} payments={data.payments} /></div>
           <div {...E("shipping", "Envío y entrega")}><Timeline delivery={delivery} /></div>
@@ -354,7 +356,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
             {cfg.benefits.map((b, i) => (
               <div key={i} className="lp-card rounded-3xl bg-white p-5 shadow-sm">
                 <div className="lp-icon-bubble grid h-14 w-14 place-items-center rounded-2xl text-3xl"><span className="lp-float" style={{ animationDelay: `${i * 0.35}s` }}>{b.icon}</span></div>
-                <h3 className="mt-3 font-black">{b.title}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{b.text}</p>
+                <h3 {...Fd(`benefits.${i}.title`)} className="mt-3 font-black">{b.title}</h3><p {...Fd(`benefits.${i}.text`)} className="mt-1 text-sm leading-6 text-slate-600">{b.text}</p>
               </div>
             ))}
           </div>
@@ -373,8 +375,8 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
         <section key={i} className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:grid-cols-2">
           {s.image ? <img src={s.image} alt={s.title} className={`w-full rounded-3xl object-cover shadow-lg ${i % 2 ? "md:order-2" : ""}`} loading="lazy" /> : null}
           <div className={s.image ? "" : "md:col-span-2 mx-auto max-w-2xl text-center"}>
-            {s.title ? <h2 className="text-2xl font-black leading-tight sm:text-3xl">{s.title}</h2> : null}
-            {s.text ? <p className="mt-3 whitespace-pre-line leading-7 text-slate-600">{s.text}</p> : null}
+            {s.title ? <h2 {...Fd(`stories.${i}.title`)} className="text-2xl font-black leading-tight sm:text-3xl">{s.title}</h2> : null}
+            {s.text ? <p {...Fd(`stories.${i}.text`)} className="mt-3 whitespace-pre-line leading-7 text-slate-600">{s.text}</p> : null}
             <button type="button" onClick={openSheet} className="lp-cta mt-5 rounded-2xl px-6 py-3.5 font-black uppercase text-white">{cfg.cta_text}</button>
           </div>
         </section>
@@ -440,7 +442,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
                   ) : null}
                   <div className="p-5">
                     <div className="text-lg text-amber-400">{"★".repeat(t.stars)}<span className="text-slate-200">{"★".repeat(5 - t.stars)}</span></div>
-                    <blockquote className="mt-2 text-[15px] leading-6">“{t.text}”</blockquote>
+                    <blockquote className="mt-2 text-[15px] leading-6">“<span {...Fd(`testimonials.${i}.text`)}>{t.text}</span>”</blockquote>
                     <figcaption className="mt-4 flex items-center gap-3 text-sm font-bold">
                       {t.image ? <img src={t.image} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow" loading="lazy" /> : <span className="lp-chip grid h-12 w-12 place-items-center rounded-full text-lg">{(t.name || "C").slice(0, 1)}</span>}
                       <span className="leading-5">{t.name || "Cliente"}{t.city ? <span className="block text-xs font-medium text-slate-400">📍 {t.city}</span> : null}</span>
@@ -479,8 +481,8 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
           <div className="mt-5 space-y-2">
             {cfg.faqs.map((f, i) => (
               <details key={i} className="lp-faq group rounded-2xl border border-slate-200 p-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold">{f.q}<span className="text-xl transition group-open:rotate-45" style={{ color: accent }}>+</span></summary>
-                <p className="mt-2 whitespace-pre-line text-[15px] leading-6 text-slate-600">{f.a}</p>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold"><span {...Fd(`faqs.${i}.q`)}>{f.q}</span><span className="text-xl transition group-open:rotate-45" style={{ color: accent }}>+</span></summary>
+                <p {...Fd(`faqs.${i}.a`)} className="mt-2 whitespace-pre-line text-[15px] leading-6 text-slate-600">{f.a}</p>
               </details>
             ))}
           </div>
@@ -513,7 +515,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
       {/* Barra superior */}
       <div {...E("design", "Barra de arriba")} className="lp-topbar sticky top-0 z-30 px-4 py-2 text-center text-[12px] font-extrabold uppercase tracking-wide text-white sm:text-[13px]">
         {countdown ? <>⏰ {cfg.promo_text.length < 50 ? cfg.promo_text : "La promo termina en"} · {countdown.d > 0 ? `${countdown.d}d ` : ""}{String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}</>
-          : cfg.topbar_text ? <>{cfg.topbar_text}</> : <>🚚 {cfg.shipping.text || "Envíos a toda Colombia"}{cfg.payments.cod && data.payments.cod ? " · 💵 Paga al recibir" : ""}</>}
+          : cfg.topbar_text ? <span {...Fd("topbar_text")}>{cfg.topbar_text}</span> : <>🚚 {cfg.shipping.text || "Envíos a toda Colombia"}{cfg.payments.cod && data.payments.cod ? " · 💵 Paga al recibir" : ""}</>}
       </div>
 
       <header className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-3">
@@ -559,7 +561,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
               {compare ? <span className="text-xs font-semibold text-slate-400 line-through">{money(compare)}</span> : null}
             </p>
           </div>
-          <button type="button" onClick={openSheet} disabled={soldOut} className="lp-cta rounded-2xl px-5 py-3 text-sm font-black uppercase text-white">{cfg.sticky_text}</button>
+          <button type="button" onClick={openSheet} disabled={soldOut} className="lp-cta rounded-2xl px-5 py-3 text-sm font-black uppercase text-white"><span {...Fd("sticky_text")}>{cfg.sticky_text}</span></button>
         </div>
       </div>
 
@@ -821,7 +823,43 @@ function Overlay({ title, onClose, children, wide = false }: { title: string; on
   );
 }
 
-type Done = { token: string; receipt_no: string | null; total: number; payment: LandingPayment };
+type Done = { receipt_no: string | null; total: number; payment: LandingPayment; waUrl: string | null };
+
+const PAY_LABEL: Record<LandingPayment, string> = { cod: "Contraentrega (pago al recibir)", online: "En línea (tarjeta, PSE o Nequi)", addi: "A cuotas con Addi" };
+
+/**
+ * Mensaje que el cliente le manda a la tienda por WhatsApp con todo el pedido.
+ * El enlace es al panel: solo lo abre alguien de la tienda con sesión y permiso de pedidos (el cliente no ve el pedido).
+ */
+function orderWhatsAppText(o: {
+  page: string; receipt: string | null; items: Array<{ name: string; price: number; quantity: number }>; total: number; payment: LandingPayment; freeShipping: boolean;
+  customer: { name: string; whatsapp: string; email: string; document: string; department: string; city: string; address: string; neighborhood: string; notes: string };
+}) {
+  const c = o.customer;
+  const lines = [
+    `🛍️ *Nuevo pedido${o.receipt ? ` #${o.receipt}` : ""}* · ${o.page}`,
+    "",
+    `👤 ${c.name.trim()}`,
+    `📱 ${c.whatsapp.replace(/\D/g, "")}`,
+    c.document.trim() ? `🪪 CC ${c.document.trim()}` : "",
+    c.email.trim() ? `✉️ ${c.email.trim()}` : "",
+    "",
+    "📦 *Pedido:*",
+    ...o.items.map((i) => `• ${i.quantity} × ${i.name} — ${money(i.price)}${i.quantity > 1 ? " c/u" : ""}`),
+    "",
+    `💰 *Total: ${money(o.total)}*`,
+    `💳 ${PAY_LABEL[o.payment]}`,
+    `🚚 Envío: ${o.freeShipping ? "GRATIS" : "por confirmar"}`,
+    "",
+    `📍 ${c.address.trim()}${c.neighborhood.trim() ? ` · Barrio ${c.neighborhood.trim()}` : ""}`,
+    `🏙️ ${c.city.trim()}, ${c.department}`,
+    c.notes.trim() ? `📝 ${c.notes.trim()}` : "",
+    "",
+    "Quiero confirmar mi pedido ✅",
+    o.receipt ? `\n🔒 Para la tienda: ${window.location.origin}/dashboard/pedidos?pedido=${o.receipt}` : "",
+  ];
+  return lines.filter((l, k, a) => l !== "" || (k > 0 && a[k - 1] !== "")).join("\n").trim();
+}
 
 function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refInfo, metrics, ping }: {
   data: LandingData; cfg: ReturnType<typeof normalizeLanding>; startIdx: number; preview: boolean; exit: boolean; onClose: () => void;
@@ -901,6 +939,10 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
     if (preview) { setErr({ message: "Vista previa: aquí se crearía el pedido. Publica la landing para recibir pedidos reales." }); return; }
     setBusy(true);
     setErr(null);
+    // WhatsApp se abre ya, con el toque (los navegadores bloquean ventanas abiertas después de esperar); el mensaje se pone al terminar.
+    const waNum = waNumber(cfg.whatsapp_number || data.store.whatsapp);
+    let waTab: Window | null = null;
+    try { waTab = waNum ? window.open("", "_blank") : null; } catch { waTab = null; }
     try {
       const res = await fetch("/api/landing/order", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -910,12 +952,16 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
         }),
       });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; field?: string; token?: string; receipt_no?: string; total?: number; event_id?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }> } | null;
-      if (!res.ok || !json?.ok || !json.token) { setErr({ field: json?.field, message: json?.error ?? "No se pudo enviar el pedido. Intenta de nuevo." }); return; }
+      if (!res.ok || !json?.ok) { waTab?.close(); setErr({ field: json?.field, message: json?.error ?? "No se pudo enviar el pedido. Intenta de nuevo." }); return; }
       const tItems = (json.items ?? []).map((i) => ({ id: i.id, name: i.name, price: Number(i.price), quantity: Number(i.quantity) }));
-      track.order(json.event_id ?? json.token.slice(0, 12), tItems, data.store.slug);
+      track.order(json.event_id ?? `${data.store.slug}-${json.receipt_no ?? Date.now()}`, tItems, data.store.slug);
       landingPixelEvent("Purchase", { content_ids: tItems.map((i) => i.id), content_type: "product", value: json.total, currency: "COP", num_items: tItems.reduce((s, i) => s + i.quantity, 0) }, json.event_id);
-      setDone({ token: json.token, receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, payment });
+      const waText = orderWhatsAppText({ page: data.page.name, receipt: json.receipt_no ?? null, items: tItems, total: Number(json.total) || 0, payment, freeShipping: cfg.shipping.free, customer: f });
+      const waUrl = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : null;
+      if (waUrl && waTab && !waTab.closed) waTab.location.href = waUrl;
+      setDone({ receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, payment, waUrl });
     } catch {
+      waTab?.close();
       setErr({ message: "Sin conexión. Revisa tu internet e intenta de nuevo." });
     } finally {
       setBusy(false);
@@ -1106,11 +1152,8 @@ function Confetti() {
   );
 }
 
-function ThankYou({ data, cfg, done, name, onClose }: { data: LandingData; cfg: ReturnType<typeof normalizeLanding>; done: Done; name: string; onClose: () => void }) {
-  const wa = waNumber(cfg.whatsapp_number || data.store.whatsapp);
+function ThankYou({ cfg, done, name, onClose }: { data: LandingData; cfg: ReturnType<typeof normalizeLanding>; done: Done; name: string; onClose: () => void }) {
   const first = name.trim().split(/\s+/)[0] ?? "";
-  const link = `${window.location.origin}/pedido/${done.token}`;
-  const msg = `Hola, soy ${name.trim()}. Acabo de hacer el pedido${done.receipt_no ? ` #${done.receipt_no}` : ""} por ${money(done.total)} y quiero confirmarlo ✅\n${link}`;
   return (
     <Overlay title="¡Pedido recibido!" onClose={onClose}>
       <div className="text-center">
@@ -1119,13 +1162,16 @@ function ThankYou({ data, cfg, done, name, onClose }: { data: LandingData; cfg: 
         <h3 className="mt-4 text-2xl font-black">¡Gracias{first ? `, ${first}` : ""}! 🎉</h3>
         {done.receipt_no ? <p className="mt-1 text-sm font-bold text-slate-500">Pedido #{done.receipt_no} · {money(done.total)}</p> : null}
         <p className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.thank_you}</p>
-        {done.payment !== "cod" ? <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">💳 Cuando confirmemos tu pedido podrás pagarlo {done.payment === "addi" ? "a cuotas con Addi" : "en línea"} desde el enlace de tu pedido.</p> : null}
-        {wa ? (
-          <a href={`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-4 py-4 font-black text-white">
-            ✅ Confirmar mi pedido por WhatsApp
-          </a>
+        {done.payment !== "cod" ? <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">💳 Cuando confirmemos tu pedido te enviamos por WhatsApp el enlace para pagar {done.payment === "addi" ? "a cuotas con Addi" : "en línea"}.</p> : null}
+        {done.waUrl ? (
+          <>
+            <p className="mt-4 text-sm font-bold text-slate-700">📲 Envíanos el mensaje que se abrió en WhatsApp para confirmar tu pedido.</p>
+            <a href={done.waUrl} target="_blank" rel="noopener noreferrer" className="lp-anim-bounce mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-4 py-4 font-black text-white shadow-lg">
+              ✅ Enviar mi pedido por WhatsApp
+            </a>
+            <p className="mt-2 text-xs text-slate-400">Si no se abrió WhatsApp, toca el botón verde.</p>
+          </>
         ) : null}
-        <a href={link} className="mt-2 block w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-bold">{done.payment === "cod" ? "Ver mi pedido" : "Ver mi pedido y pagar"}</a>
       </div>
     </Overlay>
   );
