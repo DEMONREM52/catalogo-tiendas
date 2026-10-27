@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Ban, Download, FileMinus, FilePlus, RefreshCw, Send } from "lucide-react";
 import { errorText, fiscalApi, fiscalDownload, fiscalRpc, newIdempotencyKey } from "@/lib/fiscal/client";
-import { CREDIT_NOTE_CONCEPTS, DEBIT_NOTE_CONCEPTS, docLabel, statusLabel } from "@/lib/fiscal/types";
+import { CREDIT_NOTE_CONCEPTS, DEBIT_NOTE_CONCEPTS, SUPPORT_ADJUSTMENT_CONCEPTS, docLabel, statusLabel } from "@/lib/fiscal/types";
 import type { FiscalAccess } from "./useFiscal";
 import { Badge, Button, Card, Drawer, EnvBadge, ErrorBox, Field, Notice, Skeleton, StatusBadge, askReasonDialog, confirmDialog, fmtDateTime, fmtMoney, inputCls, inputStyle, notify } from "./ui";
 import { ddmmyyyy } from "@/components/forms/Fields";
@@ -51,7 +51,7 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
   const [loaded, setLoaded] = useState<{ id: string; data: Detail } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<null | { kind: "credit_note" | "debit_note"; concept: string; reason: string; qty: Record<number, number>; debit: Array<{ description: string; qty: number; unit_price: number; tax_rate: number }> }>(null);
+  const [note, setNote] = useState<null | { kind: "credit_note" | "debit_note" | "support_adjustment"; concept: string; reason: string; qty: Record<number, number>; debit: Array<{ description: string; qty: number; unit_price: number; tax_rate: number }> }>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -105,18 +105,22 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
   async function createNote() {
     if (!doc || !note) return;
     if (note.reason.trim().length < 5) return void notify("Escribe el motivo de la nota", "warning");
-    const lines = note.kind === "credit_note"
+    const lines = note.kind !== "debit_note"
       ? Object.entries(note.qty).filter(([, q]) => q > 0).map(([line_no, qty]) => ({ line_no: Number(line_no), qty }))
       : note.debit.filter((l) => l.description.trim() && l.unit_price > 0);
     if (note.kind === "debit_note" && !lines.length) return void notify("Agrega al menos una línea con valor", "warning");
-    const ok = await confirmDialog(note.kind === "credit_note" ? "Crear nota crédito" : "Crear nota débito", `Se numerará con la resolución de notas del punto y se enviará al proveedor.`, "Crear y enviar");
+    const ok = await confirmDialog(note.kind === "credit_note" ? "Crear nota crédito" : note.kind === "support_adjustment" ? "Crear nota de ajuste" : "Crear nota débito", `Se numerará con la resolución de notas del punto y se enviará al proveedor.`, "Crear y enviar");
     if (!ok) return;
     setBusy("note");
     try {
-      const res = await fiscalRpc<{ document_id: string; full_number: string }>("fiscal_create_note", {
-        p_document: doc.id, p_kind: note.kind, p_concept: note.concept, p_reason: note.reason.trim(),
-        p_lines: lines.length ? lines : null, p_idempotency_key: newIdempotencyKey("nota"),
-      });
+      const res = note.kind === "support_adjustment"
+        ? await fiscalRpc<{ document_id: string; full_number: string }>("fiscal_create_support_adjustment", {
+          p_document: doc.id, p_concept: note.concept, p_reason: note.reason.trim(), p_lines: lines.length ? lines : null, p_idempotency_key: newIdempotencyKey("ajds"),
+        })
+        : await fiscalRpc<{ document_id: string; full_number: string }>("fiscal_create_note", {
+          p_document: doc.id, p_kind: note.kind, p_concept: note.concept, p_reason: note.reason.trim(),
+          p_lines: lines.length ? lines : null, p_idempotency_key: newIdempotencyKey("nota"),
+        });
       const sent = await fiscalApi<{ result: { ok: boolean; message: string } }>("/api/fiscal/documents/send", { document_id: res.document_id }).catch((e) => ({ result: { ok: false, message: errorText(e) } }));
       await notify(`Nota ${res.full_number} creada`, sent.result.ok ? "success" : "warning", sent.result.message);
       setNote(null);
@@ -150,6 +154,9 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
             </>
           ) : null}
           {data.can.void ? <Button variant="danger" icon={<Ban size={15} />} busy={busy === "void"} onClick={() => void voidDoc()}>Anular sin transmitir</Button> : null}
+          {doc?.document_type === "support_document" && doc.status === "ACCEPTED" ? (
+            <Button icon={<FileMinus size={15} />} onClick={() => setNote({ kind: "support_adjustment", concept: "1", reason: "", qty: {}, debit: [] })}>Nota de ajuste</Button>
+          ) : null}
           {data.can.notes ? (
             <>
               <Button icon={<FileMinus size={15} />} onClick={() => setNote({ kind: "credit_note", concept: "1", reason: "", qty: {}, debit: [] })}>Nota crédito</Button>
@@ -231,15 +238,15 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
 
           {note ? (
             <Card className="space-y-3" style={{ borderColor: "var(--t-accent)" }}>
-              <p className="text-sm font-black">{note.kind === "credit_note" ? "Nueva nota crédito" : "Nueva nota débito"}</p>
+              <p className="text-sm font-black">{note.kind === "credit_note" ? "Nueva nota crédito" : note.kind === "support_adjustment" ? "Nueva nota de ajuste al documento soporte" : "Nueva nota débito"}</p>
               <Notice tone="info">Los conceptos son configurables y deben validarse con el proveedor tecnológico y la contadora.</Notice>
               <Field label="Concepto">
                 <select className={inputCls} style={inputStyle} value={note.concept} onChange={(e) => setNote({ ...note, concept: e.target.value })}>
-                  {(note.kind === "credit_note" ? CREDIT_NOTE_CONCEPTS : DEBIT_NOTE_CONCEPTS).map(([v, l]) => <option key={v} value={v}>{v} · {l}</option>)}
+                  {(note.kind === "credit_note" ? CREDIT_NOTE_CONCEPTS : note.kind === "support_adjustment" ? SUPPORT_ADJUSTMENT_CONCEPTS : DEBIT_NOTE_CONCEPTS).map(([v, l]) => <option key={v} value={v}>{v} · {l}</option>)}
                 </select>
               </Field>
               <Field label="Motivo" required><input className={inputCls} style={inputStyle} value={note.reason} onChange={(e) => setNote({ ...note, reason: e.target.value })} placeholder="Ej: el cliente devolvió una unidad" /></Field>
-              {note.kind === "credit_note" ? (
+              {note.kind !== "debit_note" ? (
                 <div className="space-y-1.5">
                   <p className="text-xs" style={{ color: "var(--t-muted)" }}>Deja todo en 0 para acreditar el saldo pendiente completo.</p>
                   {data.lines.map((l) => (

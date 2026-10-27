@@ -87,6 +87,7 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   payroll: "Nómina",
   payroll_approve: "Aprobar nómina",
   payroll_pay: "Pagar nómina",
+  payroll_electronic: "Nómina electrónica (DIAN)",
   purchases: "Compras",
   suppliers: "Proveedores",
   payables: "Cuentas por pagar",

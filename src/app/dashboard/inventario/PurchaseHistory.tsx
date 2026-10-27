@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import { PurchaseFilesButton } from "./AttachmentsUI";
+import { SupportDocumentButton } from "./SupportDocument";
 import { Btn, Empty, Panel, StatusPill, dateTime, inputClass, inputStyle, money, tableWrap, td, th } from "./shared";
 import { emptyFilters, filtersActive, quickRange, type PurchaseFilters, type PurchaseRow, type usePurchaseSearch } from "./purchase-search";
 
@@ -15,8 +16,11 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /** Historial de ingresos de factura con buscador, filtros, totales y vista rápida de los productos. */
 export function PurchaseHistory({
-  search, suppliers, editingId, loadingEdit, canBuy, canVoid, onEdit, onCancel,
+  search, suppliers, editingId, loadingEdit, canBuy, canVoid, onEdit, onCancel, storeId, canSupport = false,
 }: {
+  storeId?: string;
+  /** Puede emitir el documento soporte electrónico (permiso fiscal_send). */
+  canSupport?: boolean;
   search: Search;
   suppliers: Array<{ id: string; name: string; nit: string | null }>;
   editingId: string | null;
@@ -169,6 +173,7 @@ export function PurchaseHistory({
                           <Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn>
                           <Btn variant="ghost" onClick={() => window.open(`/documento/etiquetas?ingreso=${r.id}`, "_blank")}><span title="Etiquetas con código de barras y precio">🏷️ Etiquetas</span></Btn>
                           <PurchaseFilesButton purchaseId={r.id} />
+                          {canSupport && storeId && r.status === "received" ? <SupportDocumentButton storeId={storeId} purchaseId={r.id} purchaseNumber={Number(r.number)} /> : null}
                           {canVoid && r.status === "received" ? <Btn variant="danger" onClick={() => onCancel(r)}>Anular</Btn> : null}
                         </div>
                       </td>

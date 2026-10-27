@@ -56,6 +56,7 @@ export const STORE_MENU_PERMISSIONS = [
   "payroll",
   "payroll_approve",
   "payroll_pay",
+  "payroll_electronic",
 ] as const;
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];

@@ -113,6 +113,15 @@ export const CREDIT_NOTE_CONCEPTS: Array<[string, string]> = [
   ["6", "Descuento comercial por volumen de ventas"],
 ];
 
+// Nota de ajuste al documento soporte (tabla DIAN, códigos 1 a 5).
+export const SUPPORT_ADJUSTMENT_CONCEPTS: Array<[string, string]> = [
+  ["1", "Devolución parcial de los bienes o no aceptación parcial del servicio"],
+  ["2", "Anulación del documento soporte"],
+  ["3", "Rebaja o descuento parcial o total"],
+  ["4", "Ajuste de precio"],
+  ["5", "Otros"],
+];
+
 export const DEBIT_NOTE_CONCEPTS: Array<[string, string]> = [
   ["1", "Intereses"],
   ["2", "Gastos por cobrar"],

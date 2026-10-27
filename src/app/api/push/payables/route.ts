@@ -68,7 +68,34 @@ export async function GET(request: Request) {
   const { data: expired } = await admin.rpc("erp_permission_grants_cleanup");
   // Plan de RemHub: prueba por terminar, plan por vencer o en días de gracia (20261213). Sin la migración se omite.
   const plan = await sendPlanDigest(admin, day);
-  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent, whatsapp, internal, plan, expired_permissions: expired ?? null });
+  // Cumpleaños del equipo (20261251): a todos, el mismo día, el día anterior y una semana antes.
+  const birthdays = await sendBirthdayDigest(admin, day);
+  return NextResponse.json({ ok: true, people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent, whatsapp, internal, plan, birthdays, expired_permissions: expired ?? null });
+}
+
+type BirthdayDigest = { store_id: string; user_id: string; today_names: string[] | null; tomorrow_names: string[] | null; week_names: string[] | null };
+
+const list = (names: string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} y ${names.at(-1)}`);
+
+async function sendBirthdayDigest(admin: NonNullable<ReturnType<typeof pushAdminClient>>, day: string) {
+  const { data, error } = await admin.rpc("erp_birthday_push_digest");
+  if (error) return { skipped: true };
+  const byStore = new Map<string, Map<string, PushPayload>>();
+  for (const d of (data ?? []) as BirthdayDigest[]) {
+    const { error: dup } = await admin.from("erp_push_log").insert({ key: `birthday:${d.store_id}:${d.user_id}:${day}` });
+    if (dup) continue;
+    const today = d.today_names ?? [], tomorrow = d.tomorrow_names ?? [], week = d.week_names ?? [];
+    const payload: PushPayload = today.length
+      ? { title: `🎂🎉 ¡Hoy cumple${today.length > 1 ? "n" : ""} años ${list(today)}!`, body: `Entra a RemHub y déjale${today.length > 1 ? "s" : ""} tu felicitación en el muro 🥳${tomorrow.length ? ` · Mañana: ${list(tomorrow)}` : ""}`, url: "/dashboard?cumple=1", tag: `birthday-${day}`, urgent: true }
+      : tomorrow.length
+        ? { title: `🎈 Mañana cumple${tomorrow.length > 1 ? "n" : ""} ${list(tomorrow)}`, body: "¡Prepara la sorpresa! Ya puedes dejar tu felicitación en RemHub 🎁", url: "/dashboard?cumple=1", tag: `birthday-${day}` }
+        : { title: `🗓️ En una semana cumple${week.length > 1 ? "n" : ""} ${list(week)}`, body: "Faltan 7 días. ¿Organizamos algo? 🎉", url: "/dashboard?cumple=1", tag: `birthday-${day}` };
+    if (!byStore.has(d.store_id)) byStore.set(d.store_id, new Map());
+    byStore.get(d.store_id)!.set(d.user_id, payload);
+  }
+  let sent = 0;
+  for (const [storeId, payloads] of byStore) sent += (await sendToUsers(admin, storeId, payloads)).sent;
+  return { people: [...byStore.values()].reduce((s, m) => s + m.size, 0), sent };
 }
 
 type PlanDigest = { store_id: string; user_id: string; kind: "trial_ending" | "plan_due" | "grace"; days: number; plan_name: string | null };

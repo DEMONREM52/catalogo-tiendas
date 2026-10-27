@@ -5,6 +5,7 @@
 //   · Autenticación: «Authorization: Bearer <token de la cuenta de Alanube>».
 //   · Cada NIT emisor es una «compañía» en Alanube: su id va en «Identificador de la empresa en el proveedor».
 //   · Emisión: POST /invoices · /equivalent-documents/pos · /credit-notes · /debit-notes · /adjustment-note-equivalent-documents
+//              · /support-documents · /adjustment-note-support-documents (documento soporte a no obligados)
 //     Respuesta: status (REGISTERED, WAITING_RESPONSE, FAILED, SENT) + legalStatus (ACCEPTED, ACCEPTED_WITH_OBSERVATIONS, REJECTED).
 //     WAITING_RESPONSE no se reenvía: se consulta. FAILED sí se reenvía. SENT no es aceptación: manda legalStatus.
 //   · Idempotency-Key (UUID v4): el mismo intento usa la misma llave; reintentar no duplica el documento.
@@ -100,6 +101,29 @@ function customerBlock(doc: ClaimedDocument) {
   };
 }
 
+/**
+ * Proveedor del documento soporte (va en «customer» del documento). En el DS la DIAN no acepta la cédula (13):
+ * la persona natural se identifica con su NIT, que es la misma cédula con su dígito de verificación.
+ */
+function supplierBlock(doc: ClaimedDocument) {
+  const c = doc.document.customer as ClaimedDocument["document"]["customer"] & { origin?: string | null; postal_code?: string | null };
+  const idType = c.document_type === "CC" ? "31" : ID_TYPE[c.document_type] ?? "31";
+  const city = digits(c.city);
+  return {
+    name: c.name,
+    origin: c.origin === "11" ? "11" : "10",
+    organizationType: c.person_type === "juridica" ? 1 : 2,
+    identificationType: idType,
+    identificationNumber: digits(c.document_number),
+    ...(idType === "31" && c.verification_digit ? { dv: String(c.verification_digit) } : {}),
+    regimeCode: c.tax_regime || "R-99-PN",
+    taxCode: c.is_tax_responsible ? "01" : "ZZ",
+    ...(c.email ? { email: c.email } : {}),
+    ...(c.phone ? { phone: c.phone } : {}),
+    address: { address: c.address ?? "", city, department: city.slice(0, 2), ...(c.postal_code ? { postalCode: String(c.postal_code) } : {}), country: c.country || "CO" },
+  };
+}
+
 function itemsBlock(lines: ClaimedLine[]) {
   return lines.map((l) => {
     const discount = num(l.discount);
@@ -157,20 +181,25 @@ const plainNumber = (full: string | null | undefined, prefix?: string | null) =>
 
 /** Llave de idempotencia (UUID v4) estable para un mismo intento del mismo documento. */
 function idempotencyKey(doc: ClaimedDocument) {
-  const h = createHash("sha256").update(`${doc.document.id}:${doc.document.attempts}`).digest("hex");
+  return uuidFrom(`${doc.document.id}:${doc.document.attempts}`);
+}
+
+/** UUID v4 estable a partir de un texto (misma operación = misma llave). */
+export function uuidFrom(seed: string) {
+  const h = createHash("sha256").update(seed).digest("hex");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
 // ---------------------------------------------------------------- respuestas
 type AlanubeDoc = {
-  id?: string; status?: string; legalStatus?: string | null; cufe?: string | null; cude?: string | null; fullNumber?: string | null; qrCodeContent?: string | null;
+  id?: string; status?: string; legalStatus?: string | null; cufe?: string | null; cude?: string | null; cuds?: string | null; cune?: string | null; fullNumber?: string | null; qrCodeContent?: string | null;
   governmentResponse?: { code?: string; message?: string; errorMessages?: string[] } | null; errors?: Array<{ code?: string; message?: string }>;
 };
 type AlanubeResponse = { files?: { xml?: string | null; attachedDocument?: string | null; zip?: string | null } | null } & Record<string, unknown>;
 
 /** El documento dentro de la respuesta (cada recurso usa su propia llave). */
 function pickDoc(res: Record<string, unknown>): AlanubeDoc | null {
-  for (const key of ["invoice", "equivalent-document", "equivalentDocument", "equivalent-document-pos", "creditNote", "debitNote", "adjustmentNoteEquivalentdocument", "adjustmentNoteEquivalentDocument"]) {
+  for (const key of ["invoice", "emission", "payroll", "supportDocument", "adjustmentNoteSupportDocument", "equivalent-document", "equivalentDocument", "equivalent-document-pos", "creditNote", "debitNote", "adjustmentNoteEquivalentdocument", "adjustmentNoteEquivalentDocument"]) {
     const v = res[key];
     if (v && typeof v === "object") return v as AlanubeDoc;
   }
@@ -188,7 +217,7 @@ function toResult(d: AlanubeDoc | null, raw: Record<string, unknown>): ProviderR
     provider_message: gov.message ?? null,
     dian_status: d.legalStatus ?? null,
     dian_message: [gov.message, ...reasons].filter(Boolean).join(" | ").slice(0, 1500) || null,
-    cufe: d.cufe ?? d.cude ?? null,
+    cufe: d.cufe ?? d.cude ?? d.cuds ?? d.cune ?? null,
     qr_data: d.qrCodeContent ?? null,
     payload: raw,
   };
@@ -268,6 +297,8 @@ function resourceOf(doc: ClaimedDocument): { create: string; get: (id: string) =
   if (t === "credit_note" && doc.related?.document_type === "pos_equivalent") return { create: "/adjustment-note-equivalent-documents", get: (id) => `/adjustment-note-equivalent-documents/${id}` };
   if (t === "credit_note") return { create: "/credit-notes", get: (id) => `/credit-notes/${id}` };
   if (t === "debit_note") return { create: "/debit-notes", get: (id) => `/debit-notes/${id}` };
+  if (t === "support_document") return { create: "/support-documents", get: (id) => `/support-documents/${id}` };
+  if (t === "support_adjustment") return { create: "/adjustment-note-support-documents", get: (id) => `/adjustment-note-support-documents/${id}` };
   return { create: "/invoices", get: (id) => `/invoices/${id}` };
 }
 
@@ -300,6 +331,35 @@ export function alanubePayload(ctx: ProviderContext, doc: ClaimedDocument): Reco
         subtotal: String(totalAmounts.grossTotal),
       },
       ...(note ? { note } : {}),
+    };
+  }
+  // Documento soporte en adquisiciones a no obligados a facturar (el «cliente» es el proveedor).
+  if (d.document_type === "support_document") {
+    return {
+      issueDate: bogotaDate(d.issue_date),
+      number,
+      resolution: resolutionBlock(doc, ctx, false),
+      company,
+      supplier: supplierBlock(doc),
+      items: items.map(({ code, ...it }) => ({ standardCode: code, ...it })),
+      payments, totalAmounts,
+      ...(note ? { notes: note } : {}),
+    };
+  }
+  if (d.document_type === "support_adjustment") {
+    const r = doc.related;
+    if (!r) throw new ProviderError("La nota de ajuste necesita el documento soporte original.", { code: "VALIDATION" });
+    return {
+      number,
+      ...(doc.range?.prefix ? { prefix: doc.range.prefix } : {}),
+      invoiceDocumentReference: r.provider_document_id
+        ? { id: r.provider_document_id, date: bogotaDate(r.issue_date) }
+        : { fullNumber: r.full_number, cuds: r.cufe, date: bogotaDate(r.issue_date) },
+      discrepancies: [{ responseCode: Math.min(5, Math.max(1, Number(d.note_concept ?? 1))), description: (d.note_reason ?? "Ajuste").slice(0, 500) }],
+      company,
+      supplier: supplierBlock(doc),
+      items, payments, totalAmounts,
+      ...(note ? { note: note.join(" ") } : {}),
     };
   }
   if (d.document_type === "credit_note" && doc.related?.document_type === "pos_equivalent") {
@@ -454,6 +514,24 @@ export class AlegraProvider extends BaseInvoicingProvider {
     if (!doc.document.provider_document_id) return null;
     const res = await api(ctx, "GET", resourceOf(doc).get(doc.document.provider_document_id));
     return (await downloadZip((res as AlanubeResponse).files?.zip)).pdf;
+  }
+
+  /**
+   * Nómina electrónica (módulo aparte): emitir, reemplazar, anular o consultar en /payrolls.
+   * Mismas reglas de respuesta que los demás documentos (status + legalStatus; FAILED se reintenta).
+   */
+  async payroll(ctx: ProviderContext, op: "create" | "replace" | "cancel" | "status", input: { body?: unknown; id?: string | null; relatedId?: string | null; idempotencyKey?: string }): Promise<ProviderResult> {
+    let res: Record<string, unknown>;
+    if (op === "status") {
+      if (!input.id) return { status: "ERROR", error_code: "NO_ID", error_message: "Aún no hay identificador de Alanube para consultar.", retryable: false };
+      res = await api(ctx, "GET", `/payrolls/${encodeURIComponent(input.id)}`);
+    } else if (op === "create") {
+      res = await api(ctx, "POST", "/payrolls", input.body, input.idempotencyKey);
+    } else {
+      if (!input.relatedId) throw new ProviderError("Falta la nómina original aceptada en Alanube.", { code: "VALIDATION" });
+      res = await api(ctx, "POST", `/payrolls/${encodeURIComponent(input.relatedId)}/${op}`, input.body, input.idempotencyKey);
+    }
+    return toResult(pickDoc(res), res);
   }
 
   /** Acciones de configuración desde el centro fiscal: set de pruebas y resoluciones. */

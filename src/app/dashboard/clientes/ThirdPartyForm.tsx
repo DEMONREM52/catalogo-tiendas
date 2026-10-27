@@ -1,5 +1,6 @@
 "use client";
 
+import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -323,7 +324,7 @@ export function ThirdPartyForm({
                 </F>
                 <F label="Número de documento">
                   <WithDv value={draft.document_type === "NIT" ? draft.document_number : null}>
-                    <input className={field} style={fieldStyle} inputMode="numeric" value={txt(draft.document_number)} onChange={(e) => patch({ document_number: e.target.value })} placeholder="Sin puntos ni guiones" />
+                    <input className={field} style={fieldStyle} inputMode="numeric" name="tercero-documento" {...NO_AUTOFILL} value={txt(draft.document_number)} onChange={(e) => patch({ document_number: e.target.value })} placeholder="Sin puntos ni guiones" />
                   </WithDv>
                   {duplicate ? <span className="mt-1 block text-[11px] text-amber-500">⚠️ Ya existe: {duplicate.name}</span> : null}
                 </F>
@@ -416,7 +417,7 @@ export function ThirdPartyForm({
               {has("supplier") || has("employee") || has("seller") || has("partner") || has("carrier") ? (
                 <Section icon={<Landmark size={15} />} title="Datos bancarios" hint="Para pagarle por transferencia.">
                   <F label="Banco">
-                    <input className={field} style={fieldStyle} value={txt(draft.bank_name)} onChange={(e) => patch({ bank_name: e.target.value })} placeholder="Ej: Bancolombia" />
+                    <BankSelect value={txt(draft.bank_name)} onChange={(v) => patch({ bank_name: v })} className={field} style={fieldStyle} />
                   </F>
                   <F label="Tipo de cuenta">
                     <select className={field} style={fieldStyle} value={txt(draft.bank_account_type)} onChange={(e) => patch({ bank_account_type: e.target.value || null })}>
@@ -427,7 +428,7 @@ export function ThirdPartyForm({
                     </select>
                   </F>
                   <F label="Número de cuenta" wide>
-                    <input className={field} style={fieldStyle} value={txt(draft.bank_account_number)} onChange={(e) => patch({ bank_account_number: e.target.value })} />
+                    <input className={field} style={fieldStyle} name="tercero-cuenta" {...NO_AUTOFILL} value={txt(draft.bank_account_number)} onChange={(e) => patch({ bank_account_number: e.target.value })} />
                   </F>
                 </Section>
               ) : null}

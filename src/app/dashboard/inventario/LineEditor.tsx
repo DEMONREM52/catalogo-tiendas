@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
 import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Warehouse } from "./shared";
-import { priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
+import { basisCost, priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 
@@ -577,20 +577,22 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
   const [priceNote, setPriceNote] = useState<string | null>(null);
   const shown = draft ?? (line.markup === null || line.markup === undefined ? "" : String(line.markup).replace(".", ","));
   const pct = line.markup ?? current;
-  const sale = pct !== null && pct !== undefined ? priceFromMarkup(line.unit_cost, pct, pricing.step, pricing.dir) : 0;
+  // El precio sale del mismo costo que usará la base al guardar (en una factura vieja puede ser el de una más nueva).
+  const { cost: base, fromOther } = basisCost(line.unit_cost, info, pricing);
+  const sale = pct !== null && pct !== undefined ? priceFromMarkup(base, pct, pricing.step, pricing.dir) : 0;
   const today = info?.prices?.[2] ?? 0;
   const changed = line.markup !== null && line.markup !== undefined;
   const fmt = (n: number) => (n > 0 ? Math.round(n).toLocaleString("es-CO") : "");
 
   function applyPrice() {
     if (priceDraft === null) return;
-    const price = Number(priceDraft.replace(/D/g, ""));
+    const price = Number(priceDraft.replace(/\D/g, ""));
     setPriceDraft(null);
-    if (!price || !(line.unit_cost > 0)) return setPriceNote(null);
-    if (price < line.unit_cost) return setPriceNote(`${money(price)} es menor que el costo (${money(line.unit_cost)}): no se cambió.`);
+    if (!price || !(base > 0)) return setPriceNote(null);
+    if (price < base) return setPriceNote(`${money(price)} es menor que el costo (${money(base)}): no se cambió.`);
     // % = (precio ÷ costo − 1) × 100, con 2 decimales.
-    const next = Math.min(1000, Math.round((price / line.unit_cost - 1) * 10000) / 100);
-    const real = priceFromMarkup(line.unit_cost, next, pricing.step, pricing.dir);
+    const next = Math.min(1000, Math.round((price / base - 1) * 10000) / 100);
+    const real = priceFromMarkup(base, next, pricing.step, pricing.dir);
     setPriceNote(real !== price ? `Queda en ${money(real)} por el redondeo de la tienda.` : null);
     setDraft(null);
     onValue(next);
@@ -629,8 +631,8 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
           placeholder={line.unit_cost > 0 ? "Precio venta" : "Falta costo"}
           disabled={!(line.unit_cost > 0)}
           aria-label={`Precio de venta de ${line.name}`}
-          onFocus={(e) => { setPriceDraft(e.currentTarget.value.replace(/D/g, "")); const el = e.currentTarget; requestAnimationFrame(() => el.select()); }}
-          onChange={(e) => setPriceDraft(e.target.value.replace(/D/g, "").slice(0, 12))}
+          onFocus={(e) => { setPriceDraft(e.currentTarget.value.replace(/\D/g, "")); const el = e.currentTarget; requestAnimationFrame(() => el.select()); }}
+          onChange={(e) => setPriceDraft(e.target.value.replace(/\D/g, "").slice(0, 12))}
           onBlur={applyPrice}
           onKeyDown={(e) => { if (e.key === "Enter") applyPrice(); onKeyDown(e); }}
         />
@@ -638,6 +640,7 @@ function MarkupCell({ line, pricing, inputRef, onKeyDown, onValue }: {
       <div className="mt-0.5 text-right text-[11px] leading-tight tabular-nums">
         {priceDraft !== null ? <span className="block" style={{ color: "var(--t-muted)" }}>Enter para calcular el %</span> : null}
         {priceNote ? <span className="block" style={{ color: "#f59e0b" }}>{priceNote}</span> : null}
+        {fromOther ? <span className="block" style={{ color: "var(--t-muted)" }} title="Con «último costo», el precio se calcula con la factura más reciente del producto">% sobre {money(base)} (factura más nueva)</span> : null}
         {sale > 0 ? (
           today > 0 && today !== sale ? (
             <span className="block" style={{ color: sale > today ? "#10b981" : "#ef4444" }}>{sale > today ? "▲" : "▼"} hoy {money(today)}</span>

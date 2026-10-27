@@ -100,6 +100,7 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
       { value: "payroll", label: "Nómina", description: "Empleados y preparar nóminas (ve salarios)", sensitive: true },
       { value: "payroll_approve", label: "Aprobar nómina", description: "Aprobar, reabrir o anular nóminas, anular pagos y configurar conceptos (nunca la que uno mismo preparó)", sensitive: true },
       { value: "payroll_pay", label: "Pagar nómina", description: "Registrar pagos totales o parciales a los empleados", sensitive: true },
+      { value: "payroll_electronic", label: "Nómina electrónica (DIAN)", description: "Preparar, transmitir, ajustar y anular la nómina electrónica ante la DIAN (aparte de la nómina interna)", sensitive: true },
     ],
   },
   {

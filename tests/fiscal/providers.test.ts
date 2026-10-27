@@ -141,3 +141,28 @@ test("las respuestas guardadas nunca incluyen secretos", () => {
   assert.equal(clean.api_key, "[oculto]");
   assert.deepEqual(clean.nested, { Authorization: "[oculto]", token: "[oculto]", value: 2 });
 });
+
+const SUPPLIER = { id: null, final_consumer: false, person_type: "natural", document_type: "CC", document_number: "71234567", verification_digit: "6",
+  name: "JUAN CAMPESINO", address: "VEREDA EL TABLAZO", city: "05615", postal_code: "054040", origin: "10", tax_regime: "R-99-PN", is_tax_responsible: false } as ClaimedDocument["document"]["customer"];
+
+test("Alanube: documento soporte con el proveedor (cédula como NIT con DV) y sin clave técnica", () => {
+  const doc = claimed({ document_type: "support_document", prefix: "DS", number: 1, full_number: "DS1", customer: SUPPLIER, issue_date: "2026-10-24T01:30:00Z" });
+  const body = alanubePayload(alanubeCtx(), doc) as Record<string, unknown> & { supplier: Record<string, unknown> & { address: Record<string, unknown> }; items: Array<Record<string, unknown>>; resolution: Record<string, unknown> };
+  assert.equal(body.issueDate, "2026-10-23");
+  assert.equal(body.supplier.identificationType, "31");
+  assert.equal(body.supplier.dv, "6");
+  assert.equal(body.supplier.origin, "10");
+  assert.deepEqual(body.supplier.address, { address: "VEREDA EL TABLAZO", city: "05615", department: "05", postalCode: "054040", country: "CO" });
+  assert.ok(body.items[0].standardCode && !("code" in body.items[0]), "los ítems usan standardCode");
+  assert.equal("technicalKey" in body.resolution, false);
+  assert.equal("customer" in body, false);
+});
+
+test("Alanube: nota de ajuste al documento soporte referencia el original", () => {
+  const related = { id: "r1", document_type: "support_document", full_number: "DS1", issue_date: "2026-10-20T15:00:00Z", cufe: "CUDS-1", provider_document_id: "alanube-1", total: 119000 };
+  const doc = claimed({ document_type: "support_adjustment", prefix: "NADS", number: 1, full_number: "NADS1", customer: SUPPLIER, note_concept: "1", note_reason: "Devolución" }, { related, range: { ...claimed().range, prefix: "NADS" } } as Partial<ClaimedDocument>);
+  const body = alanubePayload(alanubeCtx(), doc) as Record<string, unknown> & { invoiceDocumentReference: Record<string, unknown>; discrepancies: Array<Record<string, unknown>> };
+  assert.deepEqual(body.invoiceDocumentReference, { id: "alanube-1", date: "2026-10-20" });
+  assert.deepEqual(body.discrepancies, [{ responseCode: 1, description: "Devolución" }]);
+  assert.equal(body.prefix, "NADS");
+});

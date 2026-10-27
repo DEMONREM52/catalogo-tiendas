@@ -178,7 +178,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [expiryAsk, setExpiryAsk] = useState<{ purchaseId: string; number: number | null; lines: ExpiryLine[] } | null>(null);
   const [expiryOpen, setExpiryOpen] = useState(false);
   const canCreateProducts = ctx.can("products");
-  const pricing = usePurchasePricing(ctx.storeId, form.lines.map((l) => l.product_id), canBuy && canPrices);
+  const pricing = usePurchasePricing(ctx.storeId, form.lines.map((l) => l.product_id), canBuy && canPrices, editing?.id ?? null);
   const search = usePurchaseSearch(ctx.storeId, suppliers);
   const reloadHistory = search.reload;
   const defaultWh = form.warehouse || active.find((w) => w.is_default)?.id || active[0]?.id || "";
@@ -682,6 +682,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         loadingEdit={loadingEdit}
         canBuy={canBuy}
         canVoid={canVoid}
+        storeId={ctx.storeId}
+        canSupport={ctx.can("fiscal_send")}
         onEdit={(r) => void startEdit(r)}
         onCancel={(r) => void cancel(r)}
       />

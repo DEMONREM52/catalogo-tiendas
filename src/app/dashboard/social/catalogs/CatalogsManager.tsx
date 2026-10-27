@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import Swal from "sweetalert2";
-import { QrCode } from "lucide-react";
+import { FileDown, QrCode } from "lucide-react";
 import { QrDialog } from "@/components/pwa/QrDialog";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
@@ -470,6 +470,13 @@ export default function CatalogsManager() {
                       <button type="button" onClick={() => setQrFor(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Código QR del catálogo" aria-label="Código QR del catálogo">
                         <QrCode size={15} />
                       </button>
+                      <a
+                        href={store ? `/documento/catalogo?tienda=${encodeURIComponent(store.slug)}&catalogo=${encodeURIComponent(catalog.slug)}${catalog.access_key ? `&key=${encodeURIComponent(catalog.access_key)}` : ""}` : "#"}
+                        target="_blank" rel="noreferrer" className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox}
+                        title="Catálogo en PDF para WhatsApp o imprimir" aria-label="Catálogo en PDF"
+                      >
+                        <FileDown size={15} />
+                      </a>
                       {canEditCatalog(catalog) ? (
                         <>
                           <button type="button" disabled={busyId === catalog.id} onClick={() => void duplicate(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border disabled:opacity-50" style={softBox} title="Duplicar" aria-label="Duplicar">

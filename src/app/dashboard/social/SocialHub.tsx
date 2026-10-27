@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { LayoutGrid, Megaphone } from "lucide-react";
+import { LayoutGrid, Megaphone, Rocket } from "lucide-react";
 import CatalogsManager from "./catalogs/CatalogsManager";
 import SocialDashboard from "./SocialDashboard";
+import Link from "next/link";
 import { ShareCard } from "./ShareCard";
 
-type Tab = "catalogs" | "campaigns";
+type Tab = "catalogs" | "campaigns" | "landing";
 
 const TABS: Array<{ key: Tab; label: string; hint: string; icon: React.ReactNode }> = [
   { key: "catalogs", label: "Catálogos", hint: "Precios, diseño, productos y contactos", icon: <LayoutGrid size={16} /> },
   { key: "campaigns", label: "Campañas", hint: "Carrusel y promociones por catálogo", icon: <Megaphone size={16} /> },
+  { key: "landing", label: "Landing pages", hint: "Una página por producto para tus anuncios", icon: <Rocket size={16} /> },
 ];
 
 export default function SocialHub() {
@@ -20,7 +22,7 @@ export default function SocialHub() {
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("tab");
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (fromUrl === "campaigns" || fromUrl === "catalogs") setTab(fromUrl);
+    if (fromUrl === "campaigns" || fromUrl === "catalogs" || fromUrl === "landing") setTab(fromUrl);
   }, []);
 
   function choose(next: Tab) {
@@ -33,7 +35,7 @@ export default function SocialHub() {
   return (
     <div className="space-y-4">
       <ShareCard />
-      <nav className="grid gap-2 sm:grid-cols-2 lg:max-w-2xl" aria-label="RemHub Social">
+      <nav className="grid gap-2 sm:grid-cols-3 lg:max-w-4xl" aria-label="RemHub Social">
         {TABS.map((t) => {
           const active = tab === t.key;
           return (
@@ -57,7 +59,13 @@ export default function SocialHub() {
           );
         })}
       </nav>
-      {tab === "catalogs" ? <CatalogsManager /> : <SocialDashboard />}
+      {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <SocialDashboard /> : (
+        <div className="rounded-3xl p-6 text-white" style={{ background: "linear-gradient(135deg, #e11d48, #9333ea 55%, #2563eb)" }}>
+          <h2 className="text-2xl font-black">🚀 Landing pages</h2>
+          <p className="mt-1 max-w-xl text-sm opacity-90">Tienen su propia administración: cada landing con sus visitas, WhatsApp, pedidos, inversión en pauta y ganancia, aparte del resto de la tienda.</p>
+          <Link href="/dashboard/landing" className="mt-4 inline-flex rounded-2xl bg-white px-4 py-2.5 text-sm font-black text-slate-900">Abrir Landing pages →</Link>
+        </div>
+      )}
     </div>
   );
 }

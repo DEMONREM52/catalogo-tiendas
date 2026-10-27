@@ -1,5 +1,6 @@
 "use client";
 
+import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Printer, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
@@ -247,14 +248,30 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
   };
   const [f, setF] = useState(start);
   const [saving, setSaving] = useState(false);
+  // Cumpleaños (20261251): aparte de la ficha; lo ve todo el equipo (solo día y mes, y la edad si se permite).
+  const [bday, setBday] = useState({ date: "", showAge: false, loaded: !initial });
+  useEffect(() => {
+    if (!initial) return;
+    void Promise.resolve(supabaseBrowser().rpc("erp_birthday_get", { p_store: storeId, p_employee: initial.id })).then(({ data }) => {
+      const r = data as { ok: boolean; birthday: string | null; show_age: boolean } | null;
+      setBday({ date: r?.birthday ?? "", showAge: Boolean(r?.show_age), loaded: true });
+    }, () => setBday((b) => ({ ...b, loaded: true })));
+  }, [initial, storeId]);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
-  const text = (k: "full_name" | "document" | "position" | "phone" | "email" | "bank_name" | "bank_account" | "notes") => ({ value: f[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(k, e.target.value), className: field, style: inputStyle });
+  const payMode = /^efectivo$/i.test((f.bank_name ?? "").trim()) ? "cash" : /^(nequi|daviplata)$/i.test((f.bank_name ?? "").trim()) ? "wallet" : "bank";
+  // Datos del empleado, no del usuario: sin autocompletar del navegador (ni tarjetas guardadas).
+  const text = (k: "full_name" | "document" | "position" | "phone" | "email" | "bank_name" | "bank_account" | "notes") => ({ value: f[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(k, e.target.value), className: field, style: inputStyle, name: `empleado-${k}`, ...NO_AUTOFILL });
   const missing = f.full_name.trim().length < 2 ? "Escribe el nombre" : !(f.base_salary && f.base_salary > 0) ? "Escribe el salario" : null;
   async function save() {
     setSaving(true);
-    const { error } = await supabaseBrowser().rpc("erp_employee_save", { p_store: storeId, p_id: initial?.id ?? null, p_data: { ...f, base_salary: f.base_salary ?? 0 } });
+    const { data, error } = await supabaseBrowser().rpc("erp_employee_save", { p_store: storeId, p_id: initial?.id ?? null, p_data: { ...f, base_salary: f.base_salary ?? 0 } });
+    if (error) { setSaving(false); return fail(error); }
+    const id = initial?.id ?? (data as { id?: string } | null)?.id;
+    if (id && bday.loaded) {
+      const { error: be } = await supabaseBrowser().rpc("erp_birthday_set", { p_store: storeId, p_employee: id, p_birthday: bday.date || null, p_show_age: bday.showAge });
+      if (be && !/erp_birthday_set|schema cache/i.test(be.message)) fail(be);
+    }
     setSaving(false);
-    if (error) return fail(error);
     done(initial ? "Empleado actualizado" : "Empleado creado");
     onSaved();
   }
@@ -270,7 +287,7 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
         <Field label="Documento">
           <select value={f.document_type} onChange={(e) => set("document_type", e.target.value)} className={field} style={inputStyle}>{["CC", "CE", "PPT", "PEP", "TI", "PAS", "NIT"].map((d) => <option key={d}>{d}</option>)}</select>
         </Field>
-        <Field label="Número"><input inputMode="numeric" {...text("document")} /></Field>
+        <Field label="N.º de documento"><input inputMode="numeric" {...text("document")} /></Field>
       </div>
       <Field label="Cargo"><input {...text("position")} placeholder="Ej.: Vendedora" /></Field>
       <Field label="Salario mensual"><MoneyField big value={f.base_salary} onChange={(v) => set("base_salary", v)} /></Field>
@@ -286,17 +303,40 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
         <Field label="Fecha de ingreso"><DateField value={f.hired_on} onChange={(v) => set("hired_on", v)} /></Field>
         <Field label="Fecha de retiro (si ya salió)"><DateField value={f.terminated_on} min={f.hired_on || undefined} onChange={(v) => set("terminated_on", v)} /></Field>
       </div>
+      <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, #ec4899 45%, var(--t-card-border))", background: "color-mix(in oklab, #ec4899 7%, transparent)" }}>
+        <Field label="🎂 Cumpleaños"><DateField value={bday.date} onChange={(v) => setBday((b) => ({ ...b, date: v }))} ariaLabel="Fecha de cumpleaños" /></Field>
+        <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={bday.showAge} onChange={(e) => setBday((b) => ({ ...b, showAge: e.target.checked }))} className="h-4 w-4 accent-pink-500" /> Mostrar cuántos años cumple</label>
+        <p className="text-xs" style={{ color: "var(--t-muted)" }}>🎉 Todo el equipo recibe aviso una semana antes, el día anterior y el mismo día, y ese día RemHub lo celebra con confeti y un muro de felicitaciones. Solo se muestra el día y el mes.</p>
+      </div>
       {points.length > 0 || cat.can.madre ? (
         <div>
           <span className="mb-1.5 block text-xs font-bold">¿Dónde trabaja?</span>
           <ChoiceChips value={f.point_id} onChange={(v) => set("point_id", v)} options={[...(cat.can.madre ? [{ value: "", label: "Madre", icon: <span>🏬</span> }] : []), ...points.map((p) => ({ value: p.id, label: p.name, icon: <span>📍</span> }))]} />
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Teléfono"><input inputMode="tel" {...text("phone")} /></Field>
-        <Field label="Banco"><input {...text("bank_name")} placeholder="Ej.: Bancolombia" /></Field>
-        <Field label="Cuenta o Nequi"><input inputMode="numeric" {...text("bank_account")} /></Field>
+      <Field label="Teléfono"><input inputMode="tel" {...text("phone")} /></Field>
+      <div>
+        <span className="mb-1.5 block text-xs font-bold">¿Cómo se le paga?</span>
+        {/* Se guarda en el campo «banco»: «Efectivo», «Nequi»/«Daviplata» o el nombre del banco (sin cambiar la base). */}
+        <ChoiceChips value={payMode} onChange={(m) => {
+          if (m === "cash") setF((c) => ({ ...c, bank_name: "Efectivo", bank_account: "" }));
+          else if (m === "wallet") setF((c) => ({ ...c, bank_name: "Nequi", bank_account: c.bank_account || c.phone }));
+          else setF((c) => ({ ...c, bank_name: "" }));
+        }} options={[{ value: "cash", label: "Efectivo", icon: <span>💵</span> }, { value: "bank", label: "Transferencia o consignación", icon: <span>🏦</span> }, { value: "wallet", label: "Nequi / Daviplata", icon: <span>📱</span> }]} />
       </div>
+      {payMode === "bank" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Banco"><BankSelect value={f.bank_name} onChange={(v) => set("bank_name", v)} className={field} style={inputStyle} /></Field>
+          <Field label="Número de cuenta"><input inputMode="numeric" {...text("bank_account")} /></Field>
+        </div>
+      ) : payMode === "wallet" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Billetera">
+            <ChoiceChips value={/daviplata/i.test(f.bank_name) ? "Daviplata" : "Nequi"} onChange={(v) => set("bank_name", v)} options={[{ value: "Nequi", label: "Nequi" }, { value: "Daviplata", label: "Daviplata" }]} />
+          </Field>
+          <Field label="Celular de la billetera"><input inputMode="numeric" {...text("bank_account")} /></Field>
+        </div>
+      ) : null}
       <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
         <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.transport_aid} onChange={(e) => set("transport_aid", e.target.checked)} className="h-5 w-5 accent-violet-500" /> 🚌 Recibe auxilio de transporte</label>
         <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-5 w-5 accent-violet-500" /> ✅ Activo (entra en las nóminas)</label>
@@ -467,7 +507,8 @@ function RunSheet({ id, storeId, cat, onClose, onChanged }: { id: string; storeI
         </>
       ) : <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>}
       <AnimatePresence>{editLine ? <LineEditor key={editLine.id} line={editLine} concepts={cat.concepts ?? []} onClose={() => setEditLine(null)} onSaved={() => { setEditLine(null); void after(); }} /> : null}</AnimatePresence>
-      <PaymentSheet open={Boolean(paying)} title="Pago de nómina" who={paying ? `👤 ${paying.full_name}${paying.bank_account ? ` · ${paying.bank_name ?? ""} ${paying.bank_account}` : ""}` : ""} pending={paying ? n(paying.net) - n(paying.paid) : 0}
+      <PaymentSheet open={Boolean(paying)} title="Pago de nómina" who={paying ? `👤 ${paying.full_name}${/^efectivo$/i.test(paying.bank_name ?? "") ? " · se le paga en efectivo" : paying.bank_account ? ` · ${paying.bank_name ?? ""} ${paying.bank_account}` : ""}` : ""} pending={paying ? n(paying.net) - n(paying.paid) : 0}
+        defaultMethod={/^efectivo$/i.test(paying?.bank_name ?? "") ? "cash" : /^(nequi|daviplata)$/i.test(paying?.bank_name ?? "") ? "nequi" : "transfer"}
         onClose={() => setPaying(null)} onConfirm={(p) => (paying ? pay(paying, p) : Promise.resolve(false))} />
     </Sheet>
   );

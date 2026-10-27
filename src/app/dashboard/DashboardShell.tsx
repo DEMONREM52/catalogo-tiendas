@@ -15,6 +15,7 @@ import { pendingDraftCount } from "@/lib/pos/drafts";
 import { resilientUser, signOutEverywhere } from "@/lib/supabase/offline-session";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
+import { BirthdayHub } from "./BirthdayHub";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
 import { forgetStaffAccess } from "@/lib/session-resume";
@@ -220,6 +221,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/rentabilidad", icon: "📈", label: "Rentabilidad", permissions: PROFIT_PERMISSIONS },
     { href: "/dashboard/gastos", icon: "💸", label: "Gastos y nómina", short: "Gastos", permissions: FINANCE_PERMISSIONS },
     { href: "/dashboard/equipo", icon: "🏆", label: "Comisiones y metas", short: "Metas", permissions: ["pos", "payroll", "profit_view", "reports"] },
+    { href: "/dashboard/nomina-electronica", icon: "🧾", label: "Nómina electrónica", short: "N. electrónica", permissions: ["payroll_electronic"] },
     { href: "/dashboard/contador", icon: "🧮", label: "Para el contador", short: "Contador", permissions: ["exports"] },
   ],
   settings: [
@@ -652,6 +654,7 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/products") ? "products" :
       pathname.startsWith("/dashboard/lista-productos") ? "products_view" :
       pathname.startsWith("/dashboard/social") ? "products" :
+      pathname.startsWith("/dashboard/landing") ? "products" :
       pathname.startsWith("/dashboard/categories") ? "categories" :
       pathname.startsWith("/dashboard/pedidos") ? "orders" :
       pathname.startsWith("/dashboard/inventario") ? "inventory" :
@@ -799,6 +802,7 @@ export default function DashboardShell({
           { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", hint: hintOf("inventory"), show: store && anyOf("inventory"), module: "inventory" },
           { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", hint: "Clientes, proveedores, créditos", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)) },
           { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products") },
+          { href: "/dashboard/landing", emoji: "🚀", label: "Landing pages", hint: "Pauta, ventas y ganancia aparte", show: store && canOpen("products") },
         ],
       },
       {
@@ -1057,6 +1061,7 @@ export default function DashboardShell({
             {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
             {role === "store" && store?.id ? <GuidedTourHost /> : null}
             {role === "store" && store?.id ? <OfflineSync storeId={store.id} /> : null}
+            {role === "store" && store?.id ? <BirthdayHub storeId={store.id} /> : null}
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
             {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}
