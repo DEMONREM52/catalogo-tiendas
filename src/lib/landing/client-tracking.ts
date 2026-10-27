@@ -37,6 +37,7 @@ export function landingRef(): LandingRef {
     : q.get("ttclid") ? "tiktok"
     : q.get("gclid") ? "google"
     : /instagram\./i.test(ref) ? "instagram" : /facebook\.|fb\.me/i.test(ref) ? "facebook" : /tiktok\./i.test(ref) ? "tiktok"
+    : /youtube\.|youtu\.be/i.test(ref) ? "youtube"
     : /google\./i.test(ref) ? "google" : /whatsapp|wa\.me/i.test(ref) ? "whatsapp" : undefined;
   const fresh: LandingRef = {
     source: q.get("utm_source") ?? guess,

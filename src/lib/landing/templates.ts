@@ -228,9 +228,12 @@ export const AD_CHANNELS: AdChannel[] = [
   { key: "facebook", name: "Facebook (anuncio)", emoji: "📘", utm: { utm_source: "facebook", utm_medium: "paid" } },
   { key: "instagram", name: "Instagram (anuncio)", emoji: "📸", utm: { utm_source: "instagram", utm_medium: "paid" } },
   { key: "tiktok", name: "TikTok (anuncio)", emoji: "🎵", utm: { utm_source: "tiktok", utm_medium: "paid" } },
+  { key: "youtube", name: "YouTube (anuncio o descripción del video)", emoji: "▶️", utm: { utm_source: "youtube", utm_medium: "video" } },
+  { key: "google", name: "Google (anuncio)", emoji: "🔎", utm: { utm_source: "google", utm_medium: "paid" } },
   { key: "whatsapp", name: "Estados y grupos de WhatsApp", emoji: "💬", utm: { utm_source: "whatsapp", utm_medium: "social" } },
   { key: "bio", name: "Link en la biografía", emoji: "🔗", utm: { utm_source: "instagram", utm_medium: "bio" } },
   { key: "influencer", name: "Influenciador / aliado", emoji: "⭐", utm: { utm_source: "influencer", utm_medium: "referral" } },
+  { key: "mensaje", name: "Correo o mensaje de texto (SMS)", emoji: "✉️", utm: { utm_source: "mensaje", utm_medium: "directo" } },
 ];
 
 export function trackedLink(base: string, channel: AdChannel, campaign: string) {
