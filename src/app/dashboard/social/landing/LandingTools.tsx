@@ -10,6 +10,7 @@ import { normalizeLanding, type LandingConfig } from "@/lib/landing/config";
 import { AD_CHANNELS, adCopies, trackedLink } from "@/lib/landing/templates";
 import { landingInsights, type LandingTotals, type SourceRow } from "@/lib/landing/insights";
 import { DateField } from "@/components/forms/Fields";
+import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../../pos/VoidSaleDialog";
 import { Pill, Section, errorText, inputCls, inputStyle, money, softBox, swalTheme } from "../catalogs/ui";
 
 type Lead = { id: string; name: string | null; whatsapp: string; city: string | null; selection: string | null; status: string; at: string };
@@ -452,6 +453,8 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null);
+  const voidRights = useSaleVoidRights(storeId);
 
   async function load() {
     const { data, error: err } = await supabaseBrowser().rpc("erp_landing_orders_list", { p_store: storeId, p_days: days, p_page: page || null });
@@ -542,9 +545,15 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
                     {wa ? <a href={`https://wa.me/57${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><MessageCircle size={13} /> Escribirle</a> : null}
                     {pending(o.status) ? <button type="button" disabled={busy === o.order_id} onClick={() => void setStatus(o, "confirmed")} className="rounded-xl px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>✅ Confirmar</button> : null}
                     {o.status === "confirmed" ? <button type="button" disabled={busy === o.order_id} onClick={() => void setStatus(o, "completed")} className="rounded-xl px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50" style={{ background: "#2563eb" }}>📦 Marcar entregado</button> : null}
+                    {o.status !== "cancelled" && voidRights && (pending(o.status) ? voidRights.void : voidRights.return) ? (
+                      <button type="button" onClick={() => setVoidTarget({ orderId: o.order_id, label: `Pedido #${o.receipt_no ?? "—"}`, total: Number(o.total ?? 0), confirmed: !pending(o.status), customer: o.customer_name })}
+                        className="rounded-xl border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "rgba(239,68,68,.5)", background: "rgba(239,68,68,.1)", color: "#ef4444" }}>
+                        {pending(o.status) ? "⊘ Anular" : "↩ Devolución"}
+                      </button>
+                    ) : null}
                     <button type="button" onClick={() => setOpen(isOpen ? null : o.order_id)} className="rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}>{isOpen ? "Ocultar datos" : "📍 Datos de entrega"}</button>
                     <button type="button" onClick={() => void copy(`Pedido #${o.receipt_no}\n${o.customer_name ?? ""} · ${wa}\n${product}\nTotal: ${money(o.total)}\n${o.note ?? ""}`)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><Copy size={12} /> Copiar</button>
-                    <a href={`/dashboard/pedidos?pedido=${o.receipt_no ?? ""}`} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><ExternalLink size={12} /> Abrir en Pedidos</a>
+                    <a href={`/dashboard/pedidos?pedido=${o.receipt_no ?? ""}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><ExternalLink size={12} /> Abrir en Pedidos</a>
                   </div>
                 </article>
               );
@@ -552,6 +561,12 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
           </div>
         </>
       )}
+      <VoidSaleDialog target={voidTarget} onClose={() => setVoidTarget(null)} onDone={(r) => {
+        const id = voidTarget?.orderId;
+        setVoidTarget(null);
+        setRows((rs) => (rs ?? []).map((x) => (x.order_id === id ? { ...x, status: "cancelled" } : x)));
+        void Swal.fire({ icon: "success", title: r.kind === "return" ? "Devolución lista" : "Pedido anulado", text: r.units_returned ? `${r.units_returned} unidades volvieron al inventario.` : undefined, timer: 2600, showConfirmButton: false, ...swalTheme });
+      }} />
     </Section>
   );
 }

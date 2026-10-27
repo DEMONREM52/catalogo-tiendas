@@ -219,7 +219,15 @@ export function CustomerOrders() {
 
       if (ordErr) throw ordErr;
 
-      setOrders((ordData as OrderRow[]) ?? []);
+      const list = (ordData as OrderRow[]) ?? [];
+      // Enlace de una landing (?pedido=123): abre el pedido completo para atenderlo y terminar la venta.
+      const wanted = new URLSearchParams(window.location.search).get("pedido");
+      const hit = wanted ? list.find((o) => String(o.receipt_no ?? "") === wanted) : null;
+      if (hit?.token) {
+        window.location.replace(`/pedido/${hit.token}`);
+        return;
+      }
+      setOrders(list);
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -236,7 +244,7 @@ export function CustomerOrders() {
 
   useEffect(() => {
     load();
-    // Enlace del WhatsApp de una landing (?pedido=123): abre la lista buscando ese pedido.
+    // Si el pedido del enlace no aparece, queda la lista buscando ese número.
     const wanted = new URLSearchParams(window.location.search).get("pedido");
     if (wanted && /^\d{1,12}$/.test(wanted)) setQ(wanted);
   }, []);
