@@ -437,7 +437,7 @@ const ORDER_STATUS: Record<string, [string, string]> = {
   draft: ["🕓 Por confirmar", "#f59e0b"], sent: ["🕓 Por confirmar", "#f59e0b"], confirmed: ["✅ Confirmado", "#16a34a"],
   completed: ["📦 Entregado", "#2563eb"], cancelled: ["✖ Anulado", "#ef4444"],
 };
-const PAY: Record<string, string> = { cod: "💵 Contraentrega", online: "💳 En línea", addi: "🗓️ Addi" };
+const PAY: Record<string, string> = { cod: "💵 Contraentrega", online: "💳 En línea", addi: "🗓️ Addi", bold: "⚡ Bold" };
 const ago = (iso: string) => {
   const m = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
   return m < 1 ? "hace un momento" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h` : new Date(iso).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -454,6 +454,19 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null);
+
+  /** Enlace de pago con Bold para mandarle al cliente por WhatsApp (la página del pedido, con el botón de Bold). */
+  async function payLink(o: LandingOrderRow, wa: string, first: string) {
+    const tab = window.open("", "_blank");
+    const { data } = await supabaseBrowser().from("orders").select("token").eq("id", o.order_id).maybeSingle();
+    const token = (data as { token?: string } | null)?.token;
+    if (!token) { tab?.close(); void Swal.fire({ icon: "error", title: "No se encontró el pedido", ...swalTheme }); return; }
+    const link = `${window.location.origin}/pedido/${token}`;
+    const text = `Hola${first ? ` ${first}` : ""} 👋 Te escribimos de ${storeName}. Para terminar tu pedido #${o.receipt_no ?? ""} por ${money(o.total)}, paga aquí de forma segura con Bold (tarjeta, PSE, Nequi o Bancolombia):\n${link}`;
+    const url = wa ? `https://wa.me/57${wa}?text=${encodeURIComponent(text)}` : null;
+    if (url && tab) tab.location.href = url;
+    else { tab?.close(); void copy(text); }
+  }
   const voidRights = useSaleVoidRights(storeId);
 
   async function load() {
@@ -553,6 +566,9 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
                     ) : null}
                     <button type="button" onClick={() => setOpen(isOpen ? null : o.order_id)} className="rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}>{isOpen ? "Ocultar datos" : "📍 Datos de entrega"}</button>
                     <button type="button" onClick={() => void copy(`Pedido #${o.receipt_no}\n${o.customer_name ?? ""} · ${wa}\n${product}\nTotal: ${money(o.total)}\n${o.note ?? ""}`)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><Copy size={12} /> Copiar</button>
+                    {o.status !== "cancelled" && o.payment_status !== "paid" && (o.payment === "bold" || o.payment === "online") ? (
+                      <button type="button" onClick={() => void payLink(o, wa, first)} className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold text-white" style={{ background: "#10b981" }}>⚡ Mandar enlace de pago</button>
+                    ) : null}
                     <a href={`/dashboard/pedidos?pedido=${o.receipt_no ?? ""}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold" style={softBox}><ExternalLink size={12} /> Abrir en Pedidos</a>
                   </div>
                 </article>

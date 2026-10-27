@@ -16,7 +16,7 @@ fs.unlinkSync(combined);
 // Lo que en producción ya existe (catálogos de RemHub Social y métodos de pago), en versión mínima.
 await db.exec(`
 alter table public.store_catalogs add column if not exists slug text, add column if not exists access_key text, add column if not exists active boolean default true;
-alter table public.orders add column if not exists customer_note text;
+alter table public.orders add column if not exists customer_note text, add column if not exists payment_status text default 'unpaid';
 create table if not exists public.store_payment_methods (id uuid primary key default gen_random_uuid(), store_id uuid, provider text, name text, enabled boolean default true, show_on_invoice boolean default true, sort_order integer default 0);
 create or replace function public.catalog_public_stock(p_store text, p_catalog text, p_key text, p_ids uuid[])
 returns table (id uuid, name text, price numeric, stock integer) language sql stable security definer set search_path = public as $$
@@ -284,6 +284,58 @@ ok(lo.ok && lo.items.length >= 3 && firstOrder && firstOrder.landing.slug === "e
 ok(firstOrder.note.includes("Pereira") && firstOrder.source === "facebook", "Con la nota (dirección) y de qué red llegó");
 ok(!(await one(MKT, "select public.erp_landing_orders_list($1, 30, null) r", [A])).ok, "Sin permiso de pedidos no ve los datos de los clientes");
 ok((await one(U(6), "select public.erp_landing_orders_list($1, 30, $2) r", [A, "00000000-0000-4000-8000-000000000000"])).items.length === 0, "Se puede filtrar por landing");
+
+console.log("15. Bold: cuentas por punto y pago en la landing");
+const M8 = fs.readFileSync(path.join(MIG, "20261259_bold_pagos.sql"), "utf8");
+await db.exec(M8);
+await db.exec(M8);
+const [{ id: ZAM }] = await raw("insert into erp_warehouses (store_id, code, name, active, kind) values ($1, 'ZB', 'ZAMORA BOLD', true, 'point') returning id", [A]);
+await raw("update store_catalogs set point_id = $2 where id = $1", [CAT, ZAM]);
+const cfgPay = async (pp) => { const g = (await one(MKT, "select public.erp_landing_get($1, $2) r", [A, PAGE])).page; return save(MKT, PAGE, { name: g.name, slug: g.slug, status: "published", catalog_id: g.catalog_id, product_ids: g.product_ids, config: { ...g.config, payments: { ...g.config.payments, ...pp } } }); };
+await cfgPay({ bold: true, bold_pct: 10 });
+ok((await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).payments.bold === false, "Sin cuenta Bold lista no se ofrece pagar con Bold");
+const [{ id: PRIN }] = await raw("insert into erp_bold_accounts (store_id, name, mode, test_identity, test_secret_enc, is_default) values ($1, 'Bold Principal', 'test', 'idt', 'enc', true) returning id", [A]);
+const [{ id: BZ }] = await raw("insert into erp_bold_accounts (store_id, name, mode, prod_identity, prod_secret_enc) values ($1, 'Bold Zamora', 'production', 'idp', 'enc') returning id", [A]);
+let pb = await anon("select public.landing_public('vitrina', 'enterizo-relax') r");
+ok(pb.payments.bold && pb.payments.bold_test, "Con la cuenta por defecto (en pruebas) sí aparece, marcada como prueba", pb.payments);
+await raw("insert into erp_bold_points (point_id, store_id, account_id) values ($1, $2, $3)", [ZAM, A, BZ]);
+ok((await raw("select public.erp__landing_bold($1) r", [PAGE]))[0].r === BZ, "El punto del catálogo manda: cobra con «Bold Zamora»");
+await cfgPay({ bold_account: PRIN });
+ok((await raw("select public.erp__landing_bold($1) r", [PAGE]))[0].r === PRIN, "La landing puede cobrar con otra cuenta");
+await raw("update erp_bold_accounts set mode = 'test' where id = $1", [BZ]);
+await cfgPay({ bold_account: null });
+ok((await raw("select public.erp__landing_bold($1) r", [PAGE]))[0].r === PRIN, "Si la cuenta del punto no tiene llaves para su modo, usa la de por defecto");
+const ob = await order("sesion-bold0001", { units: [NEGRO], payment: "bold", customer: { ...cust, name: "Lina Paz", whatsapp: "3045556677" } });
+const fullB = Number(pb.items[0].price), wantB = Number((await raw("select public.erp__cop($1::numeric * 0.9) r", [fullB]))[0].r);
+ok(ob.ok && ob.bold_account === PRIN && Number(ob.total) === wantB && wantB < fullB, "Pedido con Bold: descuento del 10 % por pagar en línea y la cuenta que cobra", ob);
+const [{ note: obNote }] = await raw("select customer_note note from orders where id = $1", [ob.order_id]);
+ok(obNote.includes("En línea con Bold −10%"), "La nota del pedido dice que paga con Bold");
+await raw("update erp_bold_accounts set active = false where store_id = $1", [A]);
+ok((await order("sesion-bold0002", { units: [NEGRO], payment: "bold", customer: { ...cust, name: "Lina Paz", whatsapp: "3045556678" } })).field === "payment", "Con Bold apagado no deja pagar con Bold");
+await raw("update erp_bold_accounts set active = true where store_id = $1", [A]);
+
+console.log("16. Bold: lo que reporta Bold");
+await raw("insert into erp_bold_payments (store_id, account_id, order_id, reference, amount, mode, source) values ($1, $2, $3, 'rhtest000001', $4, 'test', 'landing')", [A, PRIN, ob.order_id, ob.total]);
+ok((await anon("select public.bold_payment_status('rhtest000001') r")).status === "created", "Con la referencia se ve el estado (sin datos del cliente)");
+ok((await raw("select public.erp__bold_apply('rhtest000001', 'SALE_APPROVED', 80000, '{}') r"))[0].r.status === "mismatch", "Aprobado por otro valor no se da por pagado");
+await raw("update erp_bold_payments set status = 'pending' where reference = 'rhtest000001'");
+const ap = (await raw("select public.erp__bold_apply('rhtest000001', 'SALE_APPROVED', $1, '{\"payment_method\":\"CARD\",\"approval_number\":\"A1\"}') r", [ob.total]))[0].r;
+ok(ap.changed && ap.status === "approved", "Aprobado por el valor correcto", ap);
+ok((await raw("select payment_status from orders where id = $1", [ob.order_id]))[0].payment_status === "paid", "El pedido queda pagado");
+ok(!(await raw("select public.erp__bold_apply('rhtest000001', 'SALE_APPROVED', $1, '{}') r", [ob.total]))[0].r.changed, "El mismo aviso repetido no cambia nada");
+ok((await raw("select public.erp__bold_apply('rhtest000001', 'SALE_REJECTED', $1, '{}') r", [ob.total]))[0].r.status === "approved", "Un rechazo tardío no deshace un pago aprobado");
+const tok = (await raw("select token from orders where id = $1", [ob.order_id]))[0].token;
+const bos = await anon("select public.bold_order_status($1) r", [tok]);
+ok(bos.ok && bos.available && bos.status === "approved" && bos.method === "CARD" && bos.landing, "La página del pedido sabe que se pagó con Bold", bos);
+ok((await raw("select public.erp__bold_apply('rhtest000001', 'VOID_APPROVED', null, '{}') r"))[0].r.status === "voided" && (await raw("select payment_status from orders where id = $1", [ob.order_id]))[0].payment_status === "unpaid", "Si Bold anula el pago, el pedido vuelve a sin pagar");
+let denied = false;
+try { await as(null, "select count(*) from erp_bold_accounts"); } catch { denied = true; }
+ok(denied, "Las llaves no se pueden leer sin el servidor");
+const brief = await one(MKT, "select public.erp_bold_accounts_brief($1, $2) r", [A, CAT]);
+ok(brief.ok && brief.accounts.length === 2 && brief.point === "ZAMORA BOLD" && !JSON.stringify(brief).includes("enc"), "El editor ve las cuentas por nombre (sin llaves) y el punto", brief);
+ok(!(await one(CAJA, "select public.erp_bold_accounts_brief($1, null) r", [A])).ok, "Sin permiso no ve las cuentas");
+await cfgPay({ cod: false, online: false, addi: false, bold: true });
+ok((await one(MKT, "select public.erp_landing_get($1, $2) r", [A, PAGE])).page.config.payments.bold === true, "Se puede publicar con solo Bold");
 
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

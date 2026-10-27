@@ -74,7 +74,8 @@ export type LandingConfig = {
   guarantees: string[];
   bundles: LandingBundle[];
   shipping: { free: boolean; text: string; days_min: number; days_max: number; cutoff_hour: number };
-  payments: { cod: boolean; online: boolean; online_pct: number; addi: boolean };
+  /** bold: pagar ya con Bold (cuenta del punto o bold_account), con su propio descuento bold_pct. */
+  payments: { cod: boolean; online: boolean; online_pct: number; addi: boolean; bold: boolean; bold_pct: number; bold_account: string | null; bold_badge: string };
   form: { ask_document: boolean; ask_email: boolean; ask_neighborhood: boolean; confirm_address: boolean };
   urgency: {
     live_viewers: boolean; recent_orders: boolean; stock: boolean; low_stock_at: number; sold_week: boolean; countdown: boolean;
@@ -151,7 +152,7 @@ export const DEFAULT_LANDING: LandingConfig = {
     { qty: 3, pct: 15, label: "Lleva 3", highlight: false },
   ],
   shipping: { free: true, text: "Envío gratis a toda Colombia", days_min: 2, days_max: 5, cutoff_hour: 15 },
-  payments: { cod: true, online: false, online_pct: 5, addi: false },
+  payments: { cod: true, online: false, online_pct: 5, addi: false, bold: false, bold_pct: 5, bold_account: null, bold_badge: "" },
   form: { ask_document: true, ask_email: false, ask_neighborhood: true, confirm_address: true },
   urgency: { live_viewers: true, recent_orders: true, stock: true, low_stock_at: 20, sold_week: true, countdown: true, viewers_window: "now", viewers_min: 2, sold_window: "week", recent_hours: 72, recent_every: 16, countdown_mode: "date" },
   upsell: { enabled: false, product_id: "", pct: 20, title: "¡Espera! Agrégalo a tu pedido", text: "Solo por ahora, con descuento y en el mismo envío.", seconds: 60 },
@@ -238,7 +239,10 @@ export function normalizeLanding(raw: unknown): LandingConfig {
     guarantees: Array.isArray(r.guarantees) ? r.guarantees.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.slice(0, 60)).slice(0, 6) : d.guarantees,
     bundles: uniq.length ? uniq : d.bundles,
     shipping: { free: bool(sh.free, d.shipping.free), text: str(sh.text, 140, d.shipping.text), days_min: Math.round(num(sh.days_min, 0, 30, d.shipping.days_min)), days_max: Math.round(num(sh.days_max, 0, 60, d.shipping.days_max)), cutoff_hour: Math.round(num(sh.cutoff_hour, 0, 23, d.shipping.cutoff_hour)) },
-    payments: { cod: bool(pay.cod, d.payments.cod), online: bool(pay.online, d.payments.online), online_pct: num(pay.online_pct, 0, 30, d.payments.online_pct), addi: bool(pay.addi, d.payments.addi) },
+    payments: { cod: bool(pay.cod, d.payments.cod), online: bool(pay.online, d.payments.online), online_pct: num(pay.online_pct, 0, 30, d.payments.online_pct), addi: bool(pay.addi, d.payments.addi),
+      bold: bool(pay.bold, d.payments.bold), bold_pct: num(pay.bold_pct, 0, 30, d.payments.bold_pct),
+      bold_account: typeof pay.bold_account === "string" && /^[0-9a-f-]{36}$/i.test(pay.bold_account) ? pay.bold_account : null,
+      bold_badge: typeof pay.bold_badge === "string" ? pay.bold_badge.slice(0, 60) : "" },
     form: { ask_document: bool(form.ask_document, d.form.ask_document), ask_email: bool(form.ask_email, d.form.ask_email), ask_neighborhood: bool(form.ask_neighborhood, d.form.ask_neighborhood), confirm_address: bool(form.confirm_address, d.form.confirm_address) },
     urgency: {
       live_viewers: bool(urg.live_viewers, true), recent_orders: bool(urg.recent_orders, true), stock: bool(urg.stock, true), low_stock_at: Math.round(num(urg.low_stock_at, 0, 1000, 20)), sold_week: bool(urg.sold_week, true), countdown: bool(urg.countdown, true),
@@ -304,11 +308,14 @@ export function discounted(price: number, ...pcts: number[]) {
   return v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v);
 }
 
-export type LandingPayment = "cod" | "online" | "addi";
+export type LandingPayment = "cod" | "online" | "addi" | "bold";
+
+/** Descuento por pagar en línea según la forma de pago (Wompi o Bold tienen el suyo). */
+export const payPct = (p: LandingConfig["payments"], pay: LandingPayment) => (pay === "online" ? p.online_pct : pay === "bold" ? p.bold_pct : 0);
 
 /** Totales del pedido según el paquete, el pago y el adicional. */
 export function landingTotals(input: { price: number; bundle: LandingBundle; payment: LandingPayment; onlinePct: number; upsell?: { price: number; pct: number } | null }) {
-  const online = input.payment === "online" ? input.onlinePct : 0;
+  const online = input.payment === "online" || input.payment === "bold" ? input.onlinePct : 0;
   const unit = discounted(input.price, input.bundle.pct, online);
   const full = (Number(input.price) || 0) * input.bundle.qty;
   const upsellUnit = input.upsell ? discounted(input.upsell.price, input.upsell.pct, online) : 0;

@@ -5,7 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import { decryptSecret, secretAad } from "@/lib/fiscal/crypto";
 import { jsonError, jsonOk, readJson, requestMeta, serviceClient, FiscalApiError } from "@/lib/fiscal/server";
 import { buildOrderEvent, sendCapi, type CapiCustomer } from "@/lib/landing/meta-capi";
-import { sendToUsers, type PushPayload } from "@/lib/push/server";
+import type { PushPayload } from "@/lib/push/server";
+import { notifyOrderTeam } from "@/lib/push/order-team";
+import { boldAccount, boldReturnUrl, createBoldCheckout, type BoldCheckoutConfig } from "@/lib/payments/bold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +17,7 @@ type Body = {
   customer?: CapiCustomer & { address?: string; neighborhood?: string; notes?: string };
   ref?: Record<string, string>; fbp?: string | null; fbc?: string | null; url?: string;
 };
-type OrderResult = { ok: boolean; code?: string; field?: string; message?: string; token?: string; receipt_no?: string; order_id?: string; total?: number; store_id?: string; event_id?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }> };
+type OrderResult = { ok: boolean; code?: string; field?: string; message?: string; token?: string; receipt_no?: string; order_id?: string; total?: number; store_id?: string; event_id?: string; payment?: string; bold_account?: string | null; page_name?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }> };
 
 export async function POST(request: Request) {
   try {
@@ -37,28 +39,17 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         const admin = serviceClient(meta);
-        const storeId = String(result.store_id);
-        const [{ data: store }, { data: members }] = await Promise.all([
-          admin.from("stores").select("owner_id").eq("id", storeId).maybeSingle(),
-          admin.from("store_users").select("user_id,role,permissions,active").eq("store_id", storeId),
-        ]);
-        const users = new Set<string>();
-        const owner = (store as { owner_id?: string } | null)?.owner_id;
-        if (owner) users.add(owner);
-        for (const m of (members ?? []) as Array<{ user_id: string; role: string | null; permissions: string[] | null; active: boolean | null }>) {
-          if (m.active !== false && (m.role === "store_admin" || m.permissions?.includes("orders"))) users.add(m.user_id);
-        }
         const first = (body.customer?.name ?? "").trim().split(/\s+/)[0] || "Un cliente";
         const city = (body.customer?.city ?? "").trim();
         const units = (result.items ?? []).reduce((s, i) => s + Number(i.quantity || 0), 0);
         const payload: PushPayload = {
           title: `🛍️ Nuevo pedido${result.receipt_no ? ` #${result.receipt_no}` : ""} desde la landing`,
-          body: `${first}${city ? ` de ${city}` : ""} pidió ${units} ${units === 1 ? "unidad" : "unidades"} · $${Math.round(Number(result.total) || 0).toLocaleString("es-CO")}. Te va a escribir por WhatsApp: atiéndelo.`,
+          body: `${first}${city ? ` de ${city}` : ""} pidió ${units} ${units === 1 ? "unidad" : "unidades"} · $${Math.round(Number(result.total) || 0).toLocaleString("es-CO")}. ${result.payment === "bold" ? "Está pagando en línea con Bold: te avisamos cuando se apruebe." : "Te va a escribir por WhatsApp: atiéndelo."}`,
           url: result.receipt_no ? `/dashboard/pedidos?pedido=${result.receipt_no}` : "/dashboard/pedidos",
           tag: `landing-order-${result.order_id}`,
           urgent: true,
         };
-        if (users.size) await sendToUsers(admin, storeId, new Map([...users].map((u) => [u, payload])));
+        await notifyOrderTeam(admin, String(result.store_id), payload);
       } catch (e) {
         console.error("[landing] aviso de pedido:", e instanceof Error ? e.message : e);
       }
@@ -96,8 +87,27 @@ export async function POST(request: Request) {
       }
     });
 
+    // Pago con Bold: se crea el cobro (firmado en el servidor) para abrir la pasarela ahí mismo.
+    let bold: (BoldCheckoutConfig & { reference: string }) | null = null;
+    let boldError: string | null = null;
+    if (result.payment === "bold" && result.bold_account && result.order_id) {
+      try {
+        const admin = serviceClient(meta);
+        bold = await createBoldCheckout(admin, {
+          account: await boldAccount(admin, result.bold_account), storeId: String(result.store_id), orderId: result.order_id,
+          receipt: result.receipt_no ?? null, amount: Number(result.total) || 0, source: "landing",
+          description: `Pedido ${result.receipt_no ? `#${result.receipt_no} ` : ""}· ${result.page_name ?? "Landing"}`,
+          redirectionUrl: boldReturnUrl(request, body.url, `/${encodeURIComponent(body.store)}/oferta/${encodeURIComponent(body.slug)}`),
+          customer: { name: body.customer?.name, email: body.customer?.email, phone: body.customer?.whatsapp, document: body.customer?.document },
+        });
+      } catch (e) {
+        boldError = e instanceof Error ? e.message : "No se pudo abrir el pago con Bold.";
+        console.error("[landing] Bold:", boldError);
+      }
+    }
+
     // Sin el token del comprobante: el cliente no puede abrir el pedido; la tienda lo ve en su panel.
-    return jsonOk({ receipt_no: result.receipt_no, total: result.total, event_id: result.event_id, items: result.items });
+    return jsonOk({ receipt_no: result.receipt_no, total: result.total, event_id: result.event_id, items: result.items, bold, bold_error: boldError });
   } catch (error) {
     return jsonError(error);
   }

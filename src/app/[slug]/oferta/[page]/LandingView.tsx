@@ -5,7 +5,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { track } from "@/lib/tracking";
-import { CO_DEPARTMENTS, SOLD_WINDOWS, VIEWERS_WINDOWS, deliveryWindow, discounted, normalizeLanding, optionDims, type LandingBundle, type LandingPayment, type SectionKey } from "@/lib/landing/config";
+import { CO_DEPARTMENTS, SOLD_WINDOWS, VIEWERS_WINDOWS, deliveryWindow, discounted, normalizeLanding, optionDims, payPct, type LandingBundle, type LandingPayment, type SectionKey } from "@/lib/landing/config";
+import { BOLD_LABEL, boldReturn, openBold, waitBold, type BoldCheckoutClient, type BoldStatus } from "@/lib/payments/bold-client";
 import { fillText } from "@/lib/landing/templates";
 import { getYoutubeEmbedUrl } from "@/lib/product-details";
 import { landingPixelEvent, landingRef, landingSession, loadLandingPixels, metaCookies, type LandingRef } from "@/lib/landing/client-tracking";
@@ -21,7 +22,7 @@ export type LandingData = {
   page: { id: string; slug: string; name: string; config: unknown; catalog: string };
   items: LandingItem[];
   upsell: LandingItem | null;
-  payments: { cod: boolean; online: boolean; addi: boolean };
+  payments: { cod: boolean; online: boolean; addi: boolean; bold?: boolean; bold_test?: boolean };
   social: LandingSocial;
   trust?: LandingTrust | null;
 };
@@ -588,6 +589,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
 
       {cfg.urgency.recent_orders ? <div {...E("urgency", "Avisos de pedidos")}><RecentToast recent={social.recent} hidden={sheet} preview={preview} every={cfg.urgency.recent_every} /></div> : null}
       {sheet ? <OrderSheet data={data} cfg={cfg} startIdx={sel} preview={preview} exit={exitOn} onClose={() => setSheet(false)} session={session} refInfo={ref} metrics={metrics} ping={ping} /> : null}
+      {!preview ? <BoldReturn cfg={cfg} /> : null}
       {zoom ? createPortal(
         <div className="lp-portal fixed inset-0 z-70 grid place-items-center bg-black/85 p-4" onClick={() => setZoom(null)} role="dialog" aria-modal="true" aria-label="Foto de la opinión">
           <img src={zoom} alt="Foto de la opinión" className="lp-pop max-h-[88vh] max-w-full rounded-2xl object-contain shadow-2xl" />
@@ -709,7 +711,7 @@ function TrustBlock({ trust, cfg, payments, storeName }: { trust: LandingTrust |
   if (trust && t.orders && trust.orders_done >= 20) rows.push(["📦", <><b>Más de {(Math.floor(trust.orders_done / 10) * 10).toLocaleString("es-CO")} pedidos entregados</b>{trust.since ? <span className="block text-slate-500">Vendiendo desde {trust.since}</span> : null}</>]);
   else if (trust && t.orders && trust.since) rows.push(["📅", <b key="since">Vendiendo desde {trust.since}</b>]);
   if (payments.cod && cfg.payments.cod) rows.push(["💵", <><b>Pagas cuando lo recibes</b><span className="block text-slate-500">No pagas nada por adelantado</span></>]);
-  if (payments.online || payments.addi) rows.push(["🔒", <><b>Pagos protegidos</b><span className="block text-slate-500">{[payments.online ? "Wompi (Grupo Bancolombia)" : "", payments.addi ? "Addi" : ""].filter(Boolean).join(" y ")}: nunca vemos los datos de tu tarjeta</span></>]);
+  if (payments.online || payments.addi || payments.bold) rows.push(["🔒", <><b>Pagos protegidos</b><span className="block text-slate-500">{[payments.bold ? "Bold" : "", payments.online ? "Wompi (Grupo Bancolombia)" : "", payments.addi ? "Addi" : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " y $1")}: nunca vemos los datos de tu tarjeta</span></>]);
   rows.push(["⚖️", <><b>Compra protegida por la ley</b><span className="block text-slate-500">Tienes 5 días hábiles de retracto (Ley 1480 de 2011)</span></>]);
   const links = trust && t.links ? trust.links.filter((l) => SOCIAL[l.type]) : [];
   return (
@@ -770,6 +772,7 @@ function Urgency({ social, cfg, lowStock, stock }: { social: LandingSocial; cfg:
 function PayBadges({ cfg, payments }: { cfg: ReturnType<typeof normalizeLanding>; payments: LandingData["payments"] }) {
   const list = [
     payments.cod && cfg.payments.cod ? "💵 Paga al recibir" : null,
+    payments.bold ? `💳 Paga con Bold${cfg.payments.bold_pct > 0 ? ` −${cfg.payments.bold_pct}%` : ""}` : null,
     payments.online ? `💳 En línea${cfg.payments.online_pct > 0 ? ` −${cfg.payments.online_pct}%` : ""}` : null,
     payments.addi ? "🗓️ Cuotas con Addi" : null,
     "🔒 Compra segura",
@@ -835,9 +838,9 @@ function Overlay({ title, onClose, children, wide = false }: { title: string; on
   );
 }
 
-type Done = { receipt_no: string | null; total: number; payment: LandingPayment; waUrl: string | null };
+type Done = { receipt_no: string | null; total: number; payment: LandingPayment; waUrl: string | null; bold?: BoldCheckoutClient | null; boldError?: string | null };
 
-const PAY_LABEL: Record<LandingPayment, string> = { cod: "Contraentrega (pago al recibir)", online: "En línea (tarjeta, PSE o Nequi)", addi: "A cuotas con Addi" };
+const PAY_LABEL: Record<LandingPayment, string> = { cod: "Contraentrega (pago al recibir)", online: "En línea (tarjeta, PSE o Nequi)", addi: "A cuotas con Addi", bold: "En línea con Bold" };
 
 /**
  * Mensaje que el cliente le manda a la tienda por WhatsApp con todo el pedido.
@@ -890,7 +893,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
   const bundles = cfg.bundles;
   const [tier, setTier] = useState(Math.max(0, bundles.findIndex((b) => b.highlight)));
   const [units, setUnits] = useState<string[]>(() => Array.from({ length: 10 }, () => first));
-  const payOptions = ([["cod", data.payments.cod && cfg.payments.cod], ["online", data.payments.online], ["addi", data.payments.addi]] as const).filter(([, on]) => on).map(([k]) => k as LandingPayment);
+  const payOptions = ([["cod", data.payments.cod && cfg.payments.cod], ["bold", Boolean(data.payments.bold)], ["online", data.payments.online], ["addi", data.payments.addi]] as const).filter(([, on]) => on).map(([k]) => k as LandingPayment);
   const [payment, setPayment] = useState<LandingPayment>(payOptions[0] ?? "cod");
   const [f, setF] = useState({ name: "", whatsapp: "", email: "", document: "", department: "", city: "", address: "", neighborhood: "", notes: "", confirm: !cfg.form.confirm_address });
   const [err, setErr] = useState<{ field?: string; message: string } | null>(null);
@@ -904,7 +907,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
   const b: LandingBundle = bundles[Math.min(tier, bundles.length - 1)] ?? { qty: 1, pct: 0, label: "1", highlight: false };
   const chosen = units.slice(0, b.qty);
   const priceOf = (id: string) => items.find((i) => i.id === id)?.price ?? 0;
-  const online = payment === "online" ? cfg.payments.online_pct : 0;
+  const online = payPct(cfg.payments, payment);
   const subtotal = chosen.reduce((s, id) => s + priceOf(id), 0);
   const xpct = exit && cfg.exit_offer.enabled ? cfg.exit_offer.pct : 0;
   const total = chosen.reduce((s, id) => s + discounted(priceOf(id), b.pct, xpct, online), 0);
@@ -960,8 +963,10 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
     setErr(null);
     // WhatsApp se abre ya, con el toque (los navegadores bloquean ventanas abiertas después de esperar); el mensaje se pone al terminar.
     const waNum = waNumber(cfg.whatsapp_number || data.store.whatsapp);
+    // Con Bold el cliente paga primero (la pasarela se abre aquí mismo); el WhatsApp queda para después.
+    const paysNow = payment === "bold";
     let waTab: Window | null = null;
-    try { waTab = waNum ? window.open("", "_blank") : null; } catch { waTab = null; }
+    try { waTab = waNum && !paysNow ? window.open("", "_blank") : null; } catch { waTab = null; }
     try {
       const res = await fetch("/api/landing/order", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -970,7 +975,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
           customer: { ...f, whatsapp: f.whatsapp }, ref: refInfo.current, ...metaCookies(), url: window.location.href.split("#")[0],
         }),
       });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; field?: string; token?: string; receipt_no?: string; total?: number; event_id?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }> } | null;
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; field?: string; token?: string; receipt_no?: string; total?: number; event_id?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }>; bold?: BoldCheckoutClient | null; bold_error?: string | null } | null;
       if (!res.ok || !json?.ok) { waTab?.close(); setErr({ field: json?.field, message: json?.error ?? "No se pudo enviar el pedido. Intenta de nuevo." }); return; }
       const tItems = (json.items ?? []).map((i) => ({ id: i.id, name: i.name, price: Number(i.price), quantity: Number(i.quantity) }));
       track.order(json.event_id ?? `${data.store.slug}-${json.receipt_no ?? Date.now()}`, tItems, data.store.slug);
@@ -978,7 +983,14 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
       const waText = orderWhatsAppText({ page: data.page.name, receipt: json.receipt_no ?? null, items: tItems, total: Number(json.total) || 0, payment, freeShipping: cfg.shipping.free, customer: f, storeSlug: data.store.slug, catalog: data.page.catalog });
       const waUrl = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : null;
       if (waUrl && waTab && !waTab.closed) waTab.location.href = waUrl;
-      setDone({ receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, payment, waUrl });
+      setDone({ receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, payment, waUrl, bold: json.bold ?? null, boldError: json.bold_error ?? null });
+      if (paysNow && json.bold) {
+        const bold = json.bold;
+        // Para mostrar el pedido y el botón de WhatsApp cuando Bold devuelva al cliente a esta página.
+        try { sessionStorage.setItem(`lp-bold-${bold.reference}`, JSON.stringify({ receipt_no: json.receipt_no ?? null, total: Number(json.total) || 0, waUrl, name: f.name })); } catch { /* sin almacenamiento */ }
+        landingPixelEvent("AddPaymentInfo", { content_ids: tItems.map((i) => i.id), content_type: "product", value: json.total, currency: "COP" });
+        void openBold(bold).catch((e) => setDone((d) => (d ? { ...d, boldError: e instanceof Error ? e.message : "No se pudo abrir Bold." } : d)));
+      }
     } catch {
       waTab?.close();
       setErr({ message: "Sin conexión. Revisa tu internet e intenta de nuevo." });
@@ -1062,7 +1074,9 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
         <div {...E("payments", "Formas de pago")} className="mt-5">
           <p className="mb-2 text-sm font-black">¿Cómo quieres pagar?</p>
           <div className="space-y-2">
-            {payOptions.map((p) => (
+            {payOptions.map((p) => p === "bold" ? (
+              <BoldOption key={p} cfg={cfg} on={payment === p} test={Boolean(data.payments.bold_test)} onPick={() => setPayment(p)} />
+            ) : (
               <button key={p} type="button" onClick={() => setPayment(p)} className={`flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left ${payment === p ? "lp-tier-on" : "border-slate-200"}`}>
                 <span className="text-2xl">{p === "cod" ? "💵" : p === "online" ? "💳" : "🗓️"}</span>
                 <span className="flex-1"><span className="block text-sm font-black">{p === "cod" ? "Pago contraentrega" : p === "online" ? `Pagar en línea${cfg.payments.online_pct > 0 ? ` y recibe ${cfg.payments.online_pct}% de descuento` : ""}` : "A cuotas con Addi"}</span>
@@ -1107,7 +1121,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
 
       {err && (!err.field || !["name", "whatsapp", "email", "document", "department", "city", "address"].includes(err.field)) ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{err.message}</p> : null}
       <button type="button" onClick={submit} disabled={busy} className="lp-cta mt-5 w-full rounded-2xl px-5 py-4 text-[16px] font-black uppercase text-white disabled:opacity-60">
-        {busy ? "Enviando tu pedido…" : payment === "cod" ? `${cfg.cta_text.replace(/!$/, "")} · ${money(total)}` : `Hacer mi pedido · ${money(total)}`}
+        {busy ? (payment === "bold" ? "Abriendo el pago seguro…" : "Enviando tu pedido…") : payment === "cod" ? `${cfg.cta_text.replace(/!$/, "")} · ${money(total)}` : payment === "bold" ? `🔒 Pagar ${money(total)} con Bold` : `Hacer mi pedido · ${money(total)}`}
       </button>
       <p className="mt-3 text-center text-[11px] leading-4 text-slate-400">🔒 Tus datos se usan solo para tu pedido y su entrega (Ley 1581 de 2012). Al dejar tu WhatsApp aceptas que te contactemos sobre este pedido.</p>
 
@@ -1181,16 +1195,136 @@ function ThankYou({ cfg, done, name, onClose }: { data: LandingData; cfg: Return
         <h3 className="mt-4 text-2xl font-black">¡Gracias{first ? `, ${first}` : ""}! 🎉</h3>
         {done.receipt_no ? <p className="mt-1 text-sm font-bold text-slate-500">Pedido #{done.receipt_no} · {money(done.total)}</p> : null}
         <p className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.thank_you}</p>
-        {done.payment !== "cod" ? <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">💳 Cuando confirmemos tu pedido te enviamos por WhatsApp el enlace para pagar {done.payment === "addi" ? "a cuotas con Addi" : "en línea"}.</p> : null}
+        {done.payment === "bold" ? <BoldPayNow cfg={cfg} done={done} /> : null}
+        {done.payment !== "cod" && done.payment !== "bold" ? <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">💳 Cuando confirmemos tu pedido te enviamos por WhatsApp el enlace para pagar {done.payment === "addi" ? "a cuotas con Addi" : "en línea"}.</p> : null}
         {done.waUrl ? (
           <>
-            <p className="mt-4 text-sm font-bold text-slate-700">📲 Envíanos el mensaje que se abrió en WhatsApp para confirmar tu pedido.</p>
+            <p className="mt-4 text-sm font-bold text-slate-700">{done.payment === "bold" ? "📲 ¿Quieres que te escribamos? Envíanos tu pedido por WhatsApp." : "📲 Envíanos el mensaje que se abrió en WhatsApp para confirmar tu pedido."}</p>
             <a href={done.waUrl} target="_blank" rel="noopener noreferrer" className="lp-anim-bounce mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-4 py-4 font-black text-white shadow-lg">
               ✅ Enviar mi pedido por WhatsApp
             </a>
-            <p className="mt-2 text-xs text-slate-400">Si no se abrió WhatsApp, toca el botón verde.</p>
+            {done.payment !== "bold" ? <p className="mt-2 text-xs text-slate-400">Si no se abrió WhatsApp, toca el botón verde.</p> : null}
           </>
         ) : null}
+      </div>
+    </Overlay>
+  );
+}
+
+/** Tarjeta «Paga con Bold»: descuento, medios de pago y sello de seguridad. */
+function BoldOption({ cfg, on, test, onPick }: { cfg: ReturnType<typeof normalizeLanding>; on: boolean; test: boolean; onPick: () => void }) {
+  const pct = cfg.payments.bold_pct;
+  return (
+    <button type="button" onClick={onPick} className={`lp-bold relative w-full overflow-hidden rounded-2xl border-2 p-3 text-left transition ${on ? "lp-bold-on" : "border-slate-200"}`}>
+      {pct > 0 || cfg.payments.bold_badge ? (
+        <span className="lp-bold-ribbon absolute right-0 top-0 rounded-bl-2xl px-3 py-1 text-[11px] font-black uppercase text-white">{cfg.payments.bold_badge || `Ahorra ${pct}%`}</span>
+      ) : null}
+      <span className="flex items-center gap-3">
+        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${on ? "lp-radio-on" : "border-slate-300"}`}>{on ? <span className="h-2 w-2 rounded-full bg-white" /> : null}</span>
+        <span className="min-w-0 flex-1 pr-16">
+          <span className="block text-sm font-black">Paga ahora en línea{pct > 0 ? <span className="text-emerald-600"> y ahorra {pct}%</span> : null}</span>
+          <span className="block text-xs text-slate-500">Pago seguro con Bold · tu pedido sale más rápido</span>
+        </span>
+      </span>
+      <span className="mt-2.5 flex flex-wrap gap-1.5 pl-8">
+        {["💳 Tarjeta", "🏦 PSE", "📱 Nequi", "🟡 Bancolombia"].map((m) => <span key={m} className="rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">{m}</span>)}
+      </span>
+      <span className="mt-2 flex items-center gap-1.5 pl-8 text-[11px] font-semibold text-slate-400">🔒 Nunca vemos los datos de tu tarjeta{test ? <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-black text-amber-700">🧪 Modo pruebas</span> : null}</span>
+    </button>
+  );
+}
+
+/** En «¡Pedido recibido!» con Bold: el botón para pagar (por si cerró la pasarela) y su estado. */
+function BoldPayNow({ cfg, done }: { cfg: ReturnType<typeof normalizeLanding>; done: Done }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState(done.boldError ?? "");
+  async function pay() {
+    if (!done.bold) return;
+    setOpening(true);
+    setError("");
+    try { await openBold(done.bold); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo abrir Bold."); } finally { setOpening(false); }
+  }
+  if (!done.bold) {
+    return <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">💳 Recibimos tu pedido. {error ? "No pudimos abrir el pago en este momento: " : ""}Te escribimos por WhatsApp con el enlace para pagar.</p>;
+  }
+  return (
+    <div className="mt-4 rounded-2xl border-2 border-dashed p-4" style={{ borderColor: cfg.accent }}>
+      <p className="text-sm font-black text-slate-800">💳 Último paso: paga {money(done.total)} para confirmar tu pedido</p>
+      <button type="button" onClick={() => void pay()} disabled={opening} className="lp-cta lp-pulse mt-3 w-full rounded-2xl px-4 py-4 font-black uppercase text-white disabled:opacity-60">
+        {opening ? "Abriendo…" : `🔒 Pagar ${money(done.total)} con Bold`}
+      </button>
+      <p className="mt-2 text-xs text-slate-500">Tarjeta, PSE, Nequi o botón Bancolombia{done.bold.test ? " · 🧪 modo pruebas" : ""}</p>
+      {error ? <p className="mt-2 text-xs font-bold text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+/** Cuando Bold devuelve al cliente (?bold-order-id=…): espera el resultado real y lo muestra. */
+function BoldReturn({ cfg }: { cfg: ReturnType<typeof normalizeLanding> }) {
+  const [ret, setRet] = useState<{ reference: string; status: string } | null>(null);
+  const [st, setSt] = useState<BoldStatus | null>(null);
+  const [saved, setSaved] = useState<{ receipt_no: string | null; total: number; waUrl: string | null; name: string } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const r = boldReturn();
+    if (!r) return;
+    setRet(r);
+    try { setSaved(JSON.parse(sessionStorage.getItem(`lp-bold-${r.reference}`) ?? "null")); } catch { /* sin almacenamiento */ }
+    const u = new URL(window.location.href);
+    u.searchParams.delete("bold-order-id");
+    u.searchParams.delete("bold-tx-status");
+    window.history.replaceState(null, "", u.toString());
+    void waitBold(r.reference, setSt).then(setSt);
+  }, []);
+  if (!ret) return null;
+  const status = st?.status ?? "pending";
+  const waiting = status === "created" || status === "pending";
+  const ok = status === "approved";
+  const first = (saved?.name ?? "").trim().split(/\s+/)[0] ?? "";
+  async function retry() {
+    if (!ret) return;
+    setRetrying(true);
+    setError("");
+    try {
+      const res = await fetch("/api/payments/bold/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference: ret.reference, url: window.location.href.split("#")[0] }) });
+      const j = (await res.json()) as { ok?: boolean; error?: string; bold?: BoldCheckoutClient };
+      if (!res.ok || !j.bold) throw new Error(j.error ?? "No se pudo abrir el pago.");
+      try { if (saved) sessionStorage.setItem(`lp-bold-${j.bold.reference}`, JSON.stringify(saved)); } catch { /* sin almacenamiento */ }
+      await openBold(j.bold);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo abrir el pago.");
+    } finally {
+      setRetrying(false);
+    }
+  }
+  return (
+    <Overlay title={ok ? "¡Pago aprobado!" : waiting ? "Confirmando tu pago" : "Tu pago no se completó"} onClose={() => setRet(null)}>
+      <div className="text-center">
+        {ok ? <Confetti /> : null}
+        <div className={`lp-pop mx-auto grid h-20 w-20 place-items-center rounded-full text-4xl text-white ${ok ? "bg-emerald-500" : waiting ? "bg-slate-300" : "bg-rose-500"}`}>
+          {ok ? "✓" : waiting ? <span className="lp-spin block h-9 w-9 rounded-full border-4 border-white border-t-transparent" /> : "!"}
+        </div>
+        <h3 className="mt-4 text-2xl font-black">{ok ? `¡Listo${first ? `, ${first}` : ""}! 🎉` : waiting ? "Un momento…" : BOLD_LABEL[status] ?? "Pago sin completar"}</h3>
+        {saved?.receipt_no ? <p className="mt-1 text-sm font-bold text-slate-500">Pedido #{saved.receipt_no}{st?.amount ? ` · ${money(st.amount)}` : ""}</p> : null}
+        <p className="mt-3 text-[15px] leading-6 text-slate-600">
+          {ok ? "Recibimos tu pago. Ya estamos preparando tu pedido y te escribimos por WhatsApp con la guía de envío."
+            : waiting ? "Estamos confirmando tu pago con Bold. No cierres esta página."
+            : "No te cobramos nada. Puedes intentarlo otra vez con otro medio de pago."}
+        </p>
+        {!ok && !waiting ? (
+          <button type="button" onClick={() => void retry()} disabled={retrying} className="lp-cta lp-pulse mt-4 w-full rounded-2xl px-4 py-4 font-black uppercase text-white disabled:opacity-60">
+            {retrying ? "Abriendo…" : "🔁 Intentar pagar de nuevo"}
+          </button>
+        ) : null}
+        {error ? <p className="mt-2 text-xs font-bold text-red-600">{error}</p> : null}
+        {saved?.waUrl && !waiting ? (
+          <a href={saved.waUrl} target="_blank" rel="noopener noreferrer" className={`mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-4 py-4 font-black text-white shadow-lg ${ok ? "lp-anim-bounce" : ""}`}>
+            {ok ? "✅ Avisar por WhatsApp que ya pagué" : "💬 Prefiero hablar por WhatsApp"}
+          </a>
+        ) : null}
+        {st?.mode === "test" ? <p className="mt-3 text-xs font-bold text-amber-600">🧪 Pago de prueba: no se cobró dinero real.</p> : null}
+        {ok ? <p className="mt-3 text-xs" style={{ color: cfg.accent }}>🔒 Pago procesado de forma segura por Bold</p> : null}
       </div>
     </Overlay>
   );
@@ -1219,6 +1353,11 @@ const LP_CSS = `
 .lp-opt-on{border-color:var(--lp-accent);background:var(--lp-accent-soft);color:var(--lp-accent)}
 .lp-thumb-on{border-color:var(--lp-accent)}
 .lp-tier-on{border-color:var(--lp-accent);background:var(--lp-accent-soft)}
+.lp-bold{background:#fff}
+.lp-bold-on{border-color:var(--lp-accent);background:linear-gradient(135deg,var(--lp-accent-soft),#fff 70%);box-shadow:0 10px 28px -14px var(--lp-accent)}
+.lp-bold-ribbon{background:linear-gradient(90deg,#059669,#10b981)}
+.lp-spin{animation:lpSpin .9s linear infinite}
+@keyframes lpSpin{to{transform:rotate(360deg)}}
 .lp-input:focus{border-color:var(--lp-accent)}
 .lp-dot{animation:lpBlink 1.2s ease-in-out infinite}
 .lp-toast{animation:lpIn .45s cubic-bezier(.2,.9,.3,1.3)}

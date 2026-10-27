@@ -106,6 +106,8 @@ export function OrderScreen(props: {
   paymentStatus: string;
   paymentMethodType: string | null;
   paymentMethods: PaymentMethodLite[];
+  /** Pedido de landing que eligió pagar ya con Bold: se paga sin esperar la confirmación. */
+  payEarly?: boolean;
   startingAddi: boolean;
   onQty: (productId: string, qty: number) => void;
   onSave: () => void;
@@ -302,7 +304,7 @@ export function OrderScreen(props: {
           ) : null}
 
           {/* Pago en línea (solo con pasarela activa y pedido confirmado) */}
-          {confirmed && p.paymentMethods.length ? (
+          {(confirmed || p.payEarly) && p.status !== "cancelled" && p.paymentMethods.length ? (
             <section className="rounded-3xl border p-5" style={card}>
               <p className="text-sm font-black">💳 Pago en línea</p>
               <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>La tienda recibe la confirmación cuando la pasarela aprueba el pago.</p>
@@ -314,11 +316,11 @@ export function OrderScreen(props: {
                 <p className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm">❌ El último intento no fue aprobado. Puedes intentarlo otra vez.</p>
               ) : null}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {p.paymentMethods.map((m) => (
+                {(confirmed ? p.paymentMethods : p.paymentMethods.filter((m) => m.provider === "bold")).map((m) => (
                   <button key={m.id} type="button" onClick={() => p.onPay(m)} disabled={p.paymentStatus === "pending" || paid || p.startingAddi}
                     className="rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 disabled:opacity-50" style={{ borderColor: "var(--t-card-border)" }}>
-                    <span className="block text-sm font-black">{m.provider === "addi" ? "🗓️" : "💳"} Pagar con {m.name}</span>
-                    <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>{m.provider === "addi" ? "A cuotas, sujeto a aprobación de Addi" : "Tarjeta, PSE, Nequi y más"}</span>
+                    <span className="block text-sm font-black">{m.provider === "addi" ? "🗓️" : m.provider === "bold" ? "⚡" : "💳"} Pagar con {m.name}</span>
+                    <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>{m.provider === "addi" ? "A cuotas, sujeto a aprobación de Addi" : m.provider === "bold" ? "Tarjeta, PSE, Nequi o botón Bancolombia" : "Tarjeta, PSE, Nequi y más"}</span>
                   </button>
                 ))}
               </div>

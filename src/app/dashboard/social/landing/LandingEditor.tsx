@@ -80,6 +80,58 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint?: stri
   );
 }
 
+type BoldBrief = { accounts: Array<{ id: string; name: string; mode: "test" | "production"; ready: boolean; is_default: boolean }>; resolved: string | null; point: string | null; missing?: boolean };
+
+/** Bold en la landing: el cliente paga ahí mismo con la cuenta Bold del punto (u otra), con su propio descuento. */
+function BoldBlock({ cfg, bold, charger, onChange }: {
+  cfg: LandingConfig; bold: BoldBrief | null; charger: BoldBrief["accounts"][number] | null;
+  onChange: (p: Partial<LandingConfig["payments"]>) => void;
+}) {
+  const p = cfg.payments;
+  const none = bold && !bold.accounts.length;
+  const auto = bold?.accounts.find((a) => a.id === bold.resolved) ?? null;
+  return (
+    <div className="rounded-2xl border p-3" style={{ borderColor: p.bold ? "color-mix(in oklab, #10b981 55%, var(--t-card-border))" : "var(--t-card-border)", background: p.bold ? "color-mix(in oklab, #10b981 7%, transparent)" : "transparent" }}>
+      <Toggle label="⚡ Paga ya con Bold" hint="Tarjeta, PSE, Nequi o Bancolombia ahí mismo en la landing. El dinero llega a la cuenta Bold del punto." checked={p.bold} onChange={(v) => onChange({ bold: v })} />
+      {p.bold ? (
+        <div className="mt-3 space-y-3">
+          {bold?.missing ? <p className="rounded-xl border p-2 text-xs" style={softBox}>⚠️ Falta ejecutar la migración 20261259_bold_pagos.sql en Supabase.</p> : null}
+          {none ? (
+            <p className="rounded-xl border p-3 text-xs leading-5" style={softBox}>
+              🔌 Aún no hay cuentas Bold. Conéctala en <a href="/dashboard/store/billing#bold" target="_blank" rel="noopener noreferrer" className="font-bold underline">Mi tienda → Facturación → Bold</a> (solo el dueño) y vuelve aquí.
+            </p>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Descuento por pagar con Bold"><Num value={p.bold_pct} max={30} suffix="%" onChange={(bold_pct) => onChange({ bold_pct })} /></Field>
+            <Field label="Etiqueta llamativa (opcional)">
+              <input value={p.bold_badge} maxLength={60} onChange={(e) => onChange({ bold_badge: e.target.value })} placeholder={p.bold_pct > 0 ? `Ahorra ${p.bold_pct}%` : "Ej. Envío prioritario"} className={inputCls} style={inputStyle} />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {["Envío prioritario", "Sale hoy mismo", "Pago 100 % seguro", "Recomendado"].map((t) => (
+              <button key={t} type="button" onClick={() => onChange({ bold_badge: p.bold_badge === t ? "" : t })} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={p.bold_badge === t ? { background: "#10b981", color: "#fff", borderColor: "#10b981" } : softBox}>{t}</button>
+            ))}
+          </div>
+          {bold?.accounts.length ? (
+            <Field label="¿Con qué Bold cobra esta landing?">
+              <select value={p.bold_account ?? ""} onChange={(e) => onChange({ bold_account: e.target.value || null })} className={inputCls} style={inputStyle}>
+                <option value="">{auto ? `Automático: ${auto.name}${bold.point ? ` (la del punto ${bold.point})` : " (la de por defecto)"}` : "Automático: la del punto o la de por defecto"}</option>
+                {bold.accounts.map((a) => <option key={a.id} value={a.id} disabled={!a.ready}>{a.name}{a.mode === "test" ? " · 🧪 pruebas" : " · 🚀 producción"}{a.ready ? "" : " (sin llaves)"}</option>)}
+              </select>
+            </Field>
+          ) : null}
+          {charger ? (
+            <p className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--t-muted)" }}>
+              Cobra: <b style={{ color: "var(--t-text)" }}>{charger.name}</b>
+              {charger.mode === "test" ? <Pill>🧪 Modo pruebas: no cobra dinero real</Pill> : <Pill tone="good">🚀 Producción: cobra de verdad</Pill>}
+            </p>
+          ) : bold && bold.accounts.length ? <p className="text-xs font-bold text-amber-500">⚠️ Ninguna cuenta Bold está lista para esta landing (revisa las llaves o el punto).</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Num({ value, onChange, min = 0, max = 100, suffix }: { value: number; onChange: (v: number) => void; min?: number; max?: number; suffix?: string }) {
   return (
     <div className="flex items-center gap-2">
@@ -277,6 +329,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   const [items, setItems] = useState<LandingItem[]>([]);
   const [upsellItem, setUpsellItem] = useState<LandingItem | null>(null);
   const [pay, setPay] = useState({ wompi: false, addi: false });
+  const [bold, setBold] = useState<BoldBrief | null>(null);
   const [trust, setTrust] = useState<LandingData["trust"]>(null);
   const [saving, setSaving] = useState(false);
   const [device, setDevice] = useState<Device>("phone");
@@ -313,6 +366,14 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
       setPay({ wompi: rows.some((r) => r.provider === "wompi" && r.enabled && r.show_on_invoice !== false), addi: rows.some((r) => r.provider === "addi" && r.enabled && r.show_on_invoice !== false) });
     });
   }, [store.id]);
+
+  // Cuentas Bold de la tienda (sin llaves) y cuál cobraría según el punto del catálogo de la landing.
+  useEffect(() => {
+    void supabaseBrowser().rpc("erp_bold_accounts_brief", { p_store: store.id, p_catalog: row.catalog_id || null }).then(({ data, error }) => {
+      const r = data as (BoldBrief & { ok: boolean }) | null;
+      setBold(error || !r?.ok ? { accounts: [], resolved: null, point: null, missing: Boolean(error && /Could not find the function|schema cache/i.test(error.message)) } : r);
+    });
+  }, [store.id, row.catalog_id]);
 
   // Datos de confianza reales (los mismos que verá el cliente; los pedidos entregados se cuentan en la página real).
   useEffect(() => {
@@ -371,15 +432,21 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     ...cfg.images,
   ].filter((u): u is string => typeof u === "string" && /^https:\/\//.test(u)))], [items, cfg.images]);
 
+  const boldCharger = useMemo(() => {
+    const list = bold?.accounts ?? [];
+    const picked = list.find((a) => a.id === cfg.payments.bold_account && a.ready);
+    return picked ?? list.find((a) => a.id === bold?.resolved) ?? null;
+  }, [bold, cfg.payments.bold_account]);
+
   const previewData: LandingData = useMemo(() => ({
     store: { id: store.id, slug: store.slug, name: store.name, logo_url: store.logo_url, whatsapp: store.whatsapp },
     page: { id: row.id ?? "nuevo", slug: row.slug || "vista-previa", name: row.name || "Tu producto", config: cfg, catalog: catalog?.slug ?? "" },
     items: items.map((i) => ({ ...i, option: cfg.option_names[i.id] || i.name, price: cfg.option_prices[i.id] || cfg.sale_price || i.price })),
     upsell: upsellItem,
-    payments: { cod: cfg.payments.cod, online: cfg.payments.online && pay.wompi, addi: cfg.payments.addi && pay.addi },
+    payments: { cod: cfg.payments.cod, online: cfg.payments.online && pay.wompi, addi: cfg.payments.addi && pay.addi, bold: cfg.payments.bold && Boolean(boldCharger), bold_test: boldCharger?.mode === "test" },
     trust,
     social: sample ? { live: 7, sold_week: 23, recent: [{ name: "Ejemplo", city: "Pereira", units: 2, minutes: 4 }, { name: "Ejemplo", city: "Medellín", units: 1, minutes: 18 }] } : { live: 0, sold_week: 0, recent: [] },
-  }), [store, row.id, row.slug, row.name, cfg, catalog, items, upsellItem, pay, sample, trust]);
+  }), [store, row.id, row.slug, row.name, cfg, catalog, items, upsellItem, pay, boldCharger, sample, trust]);
 
   const post = useCallback((reset = false) => {
     frame.current?.contentWindow?.postMessage({ type: "remhub-landing-preview", data: previewData, reset, mode }, window.location.origin);
@@ -618,7 +685,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     }
   }
 
-  const missingPay = (cfg.payments.online && !pay.wompi) || (cfg.payments.addi && !pay.addi);
+  const missingPay = (cfg.payments.online && !pay.wompi) || (cfg.payments.addi && !pay.addi) || (cfg.payments.bold && !boldCharger);
 
   return (
     <div className="space-y-4">
@@ -843,8 +910,9 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block id="payments" title="Formas de pago" emoji="💳" hint="Contraentrega, en línea con Wompi y cuotas con Addi">
+          <Block id="payments" title="Formas de pago" emoji="💳" hint="Contraentrega, paga ya con Bold, Wompi y cuotas con Addi">
             <Toggle label="💵 Contraentrega (paga al recibir)" hint="La que más vende en Colombia" checked={cfg.payments.cod} onChange={(v) => setCfg({ payments: { ...cfg.payments, cod: v } })} />
+            <BoldBlock cfg={cfg} bold={bold} charger={boldCharger} onChange={(p) => setCfg({ payments: { ...cfg.payments, ...p } })} />
             <Toggle label="💳 Pagar en línea (Wompi)" hint={pay.wompi ? "Tarjeta, PSE, Nequi, Bancolombia" : "Primero actívalo en Mi tienda → Facturación → Métodos de pago"} checked={cfg.payments.online} onChange={(v) => setCfg({ payments: { ...cfg.payments, online: v } })} />
             {cfg.payments.online ? <Field label="Descuento por pagar en línea"><Num value={cfg.payments.online_pct} max={30} suffix="%" onChange={(online_pct) => setCfg({ payments: { ...cfg.payments, online_pct } })} /></Field> : null}
             <Toggle label="🗓️ A cuotas con Addi" hint={pay.addi ? "Sujeto a aprobación de Addi" : "Primero conéctalo en Mi tienda → Facturación → Métodos de pago"} checked={cfg.payments.addi} onChange={(v) => setCfg({ payments: { ...cfg.payments, addi: v } })} />

@@ -5,6 +5,7 @@ import { WithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import PointBillingPanel from "./PointBillingPanel";
+import BoldPanel from "./BoldPanel";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 
@@ -1119,6 +1120,8 @@ export default function BillingSettingsPage() {
             </p>
           </div>
         </div>
+
+        <BoldPanel storeId={store?.id ?? null} isOwner={isStoreOwner} />
       </div>
     </main>
   );

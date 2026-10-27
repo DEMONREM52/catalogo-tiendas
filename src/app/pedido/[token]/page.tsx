@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AddiCustomerForm, type AddiCustomerInfo } from "@/lib/payments/AddiCustomerForm";
+import { boldReturn, openBold, waitBold, type BoldCheckoutClient } from "@/lib/payments/bold-client";
 import { PRINT_FORMAT_KEY, PrintReceipt, PrintStyles, parsePrintFormat, type PrintFormat } from "./PrintReceipt";
 import { PrintFormatPicker } from "./PrintFormatPicker";
 import { OrderScreen, type HistoryRow } from "./OrderScreen";
@@ -110,6 +111,8 @@ export default function PedidoPage() {
   const [paymentMethodType, setPaymentMethodType] = useState<string | null>(null);
   const [showAddiForm, setShowAddiForm] = useState(false);
   const [startingAddi, setStartingAddi] = useState(false);
+  // Bold del punto del pedido: si está disponible y si el pedido es de una landing que elige pagar ya.
+  const [bold, setBold] = useState<{ available: boolean; landing: boolean; mode: string | null } | null>(null);
 
   // ✅ control de impresión (sin abrir otra pestaña)
   const [printMode, setPrintMode] = useState(false);
@@ -167,14 +170,16 @@ export default function PedidoPage() {
   );
 
   const availablePaymentMethods = useMemo(
-    () =>
-      (paymentMethods ?? []).filter(
+    () => [
+      ...(bold?.available ? [{ id: "bold", name: bold.mode === "test" ? "Bold (pruebas)" : "Bold", provider: "bold", enabled: true, show_on_invoice: true }] : []),
+      ...(paymentMethods ?? []).filter(
         (method) =>
           (method.provider === "wompi" || method.provider === "addi") &&
           method.enabled &&
           method.show_on_invoice,
       ),
-    [paymentMethods],
+    ],
+    [paymentMethods, bold],
   );
 
   const receiptNumber = useMemo(() => {
@@ -287,6 +292,15 @@ export default function PedidoPage() {
       setPaymentStatus(wompiPaymentStatus);
       setPaymentMethodType(paymentData?.payment_method_type ?? null);
 
+      // Bold: disponible según el punto del pedido; su último pago manda si quedó aprobado o en curso.
+      const { data: boldData } = await sb.rpc("bold_order_status", { p_token: token });
+      const b = boldData as { ok?: boolean; available?: boolean; landing?: boolean; mode?: string | null; status?: string | null } | null;
+      if (b?.ok) {
+        setBold({ available: Boolean(b.available), landing: Boolean(b.landing), mode: b.mode ?? null });
+        if (b.status === "approved" && wompiPaymentStatus !== "paid") { setPaymentStatus("paid"); setPaymentMethodType("Bold"); }
+        else if (b.status === "rejected" || b.status === "failed") { if (wompiPaymentStatus === "unpaid") { setPaymentStatus("failed"); setPaymentMethodType("Bold"); } }
+      }
+
       // 2) storeId seguro
       const storeId = orderRpc?.store_id ?? storeRpc?.id ?? null;
       if (!storeId) throw new Error("No se encontró store_id del pedido.");
@@ -396,10 +410,37 @@ export default function PedidoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  useEffect(() => {
+    const r = boldReturn();
+    if (!r) return;
+    const u = new URL(window.location.href);
+    u.searchParams.delete("bold-order-id");
+    u.searchParams.delete("bold-tx-status");
+    window.history.replaceState(null, "", u.toString());
+    setPaymentStatus("pending");
+    setPaymentMethodType("Bold");
+    void waitBold(r.reference).then((st) => {
+      setPaymentStatus(st.status === "approved" ? "paid" : st.status === "created" || st.status === "pending" ? "pending" : "failed");
+      if (st.status === "approved") void Swal.fire({ icon: "success", title: "¡Pago aprobado!", text: "Recibimos tu pago con Bold. La tienda ya fue avisada.", background: "color-mix(in oklab, var(--t-card-bg) 92%, black)", color: "var(--t-text)", confirmButtonColor: "#10b981" });
+    });
+  }, []);
+
   async function handlePayment(pm: StorePaymentMethod) {
     if (!order) return;
 
     try {
+      if (pm.provider === "bold") {
+        if (paymentStatus === "paid") throw new Error("Este pedido ya tiene un pago aprobado.");
+        const res = await fetch("/api/payments/bold/checkout", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_token: token, url: window.location.href.split("#")[0] }),
+        });
+        const result = (await res.json()) as { ok?: boolean; error?: string; bold?: BoldCheckoutClient };
+        if (!res.ok || !result.bold) throw new Error(result.error ?? "No se pudo abrir el pago con Bold.");
+        setPaymentMethodType("Bold");
+        await openBold(result.bold);
+        return;
+      }
       if (pm.provider === "addi") {
         if (order.status !== "confirmed" && order.status !== "completed") {
           throw new Error("Confirma el pedido antes de iniciar el pago.");
@@ -503,7 +544,8 @@ export default function PedidoPage() {
   }
 
   useEffect(() => {
-    if (paymentStatus !== "pending") return;
+    // Los pagos con Bold se esperan aparte (waitBold), con su propia consulta.
+    if (paymentStatus !== "pending" || paymentMethodType === "Bold") return;
 
     const timer = window.setInterval(async () => {
       try {
@@ -541,7 +583,7 @@ export default function PedidoPage() {
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [paymentMethods, paymentStatus, token]);
+  }, [paymentMethods, paymentStatus, paymentMethodType, token]);
   /* -------------------------
      Print on demand (MISMA pestaña)
   ------------------------- */
@@ -933,6 +975,7 @@ export default function PedidoPage() {
           paymentStatus={paymentStatus}
           paymentMethodType={paymentMethodType}
           paymentMethods={availablePaymentMethods}
+          payEarly={Boolean(bold?.landing)}
           startingAddi={startingAddi}
           onQty={setQty}
           onSave={() => void saveChanges()}
