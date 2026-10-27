@@ -48,6 +48,9 @@ await db.exec(M);
 const M2 = fs.readFileSync(path.join(MIG, "20261253_landing_contadores.sql"), "utf8");
 await db.exec(M2);
 await db.exec(M2);
+const M3 = fs.readFileSync(path.join(MIG, "20261254_landing_precio_propio.sql"), "utf8");
+await db.exec(M3);
+await db.exec(M3);
 
 let pass = 0, fail = 0;
 const ok = (c, l, x) => { if (c) { pass++; console.log("  ✔ " + l); } else { fail++; console.log("  ✘ " + l + (x !== undefined ? " → " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -213,6 +216,21 @@ ok((await one(MKT, "select public.erp_landing_reset_counters($1, $2) r", [A, PAG
 const sReset = (await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).social;
 ok(sReset.live === 0 && sReset.sold_week === 0 && sReset.recent.length === 0, "Después de reiniciar, lo público arranca en cero", sReset);
 ok((await one(MKT, "select public.erp_landing_stats($1, $2, 30) r", [A, PAGE])).totals.orders >= 2, "Las estadísticas y la ganancia no se borran al reiniciar");
+
+console.log("10. Precio propio de la landing");
+const g10 = (await one(MKT, "select public.erp_landing_get($1, $2) r", [A, PAGE])).page;
+const cfg10 = { ...g10.config, sale_price: 129900, option_prices: { [BLANCO]: 139900 }, exit_offer: { enabled: false } };
+ok((await save(MKT, PAGE, { name: g10.name, slug: g10.slug, status: "published", catalog_id: g10.catalog_id, product_ids: g10.product_ids, config: cfg10 })).ok, "Se guarda el precio de la landing");
+const pub10 = await anon("select public.landing_public('vitrina', 'enterizo-relax') r");
+const negro10 = pub10.items.find((i) => i.id === NEGRO), blanco10 = pub10.items.find((i) => i.id === BLANCO);
+ok(Number(negro10.price) === 129900 && Number(negro10.catalog_price) === 99900, "La página muestra el precio de la landing (más caro que el catálogo)", negro10);
+ok(Number(blanco10.price) === 139900, "Una opción puede tener su propio precio", blanco10);
+ok(Number(pub10.upsell.price) === 30000, "El adicional sigue con su precio del catálogo", pub10.upsell);
+await raw("update products set stock = 10 where id = $1", [BLANCO]);
+const o10 = await order("sesion-precio001", { units: [NEGRO, BLANCO], payment: "cod", customer: { ...cust, name: "Paula Mesa", whatsapp: "3014445566" } });
+// Lleva 2 (−8 %): 129.900 → 119.500 y 139.900 → 128.700.
+ok(o10.ok && Number(o10.total) === 119500 + 128700, "El pedido cobra el precio de la landing con el descuento del paquete encima", o10);
+ok(Number((await raw("select price_3 from products where id = $1", [NEGRO]))[0].price_3) === 99900, "El precio del producto en la tienda no cambia");
 
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

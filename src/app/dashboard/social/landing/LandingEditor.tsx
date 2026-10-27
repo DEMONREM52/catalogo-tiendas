@@ -37,18 +37,37 @@ async function uploadImage(file: File): Promise<string> {
   return sb.storage.from("product-images").getPublicUrl(path).data.publicUrl;
 }
 
+/** Sección del editor que se abre y se cierra: título grande, color al abrirla y botón claro de «Abrir / Cerrar». */
 function Block({ title, emoji, hint, children, open = false }: { title: string; emoji: string; hint?: string; children: ReactNode; open?: boolean }) {
   return (
-    <details open={open} className="group rounded-3xl border" style={softBox}>
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)" }}>{emoji}</span>
-        <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{title}</span>{hint ? <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{hint}</span> : null}</span>
-        <span className="text-lg transition group-open:rotate-180" style={{ color: "var(--t-muted)" }}>⌄</span>
+    <details data-block open={open} className="lp-block group overflow-hidden rounded-3xl border-2 transition-shadow open:shadow-lg" style={softBox}>
+      <summary className="lp-block-head relative flex cursor-pointer select-none list-none items-center gap-3 p-4 pl-5 transition sm:gap-4">
+        <span className="lp-block-bar absolute inset-y-0 left-0 w-1.5" />
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-2xl shadow-sm transition group-open:scale-105" style={{ background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 30%, transparent), color-mix(in oklab, var(--t-accent) 8%, transparent))" }}>{emoji}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-black leading-tight sm:text-lg">{title}</span>
+          {hint ? <span className="mt-0.5 block text-xs leading-4" style={{ color: "var(--t-muted)" }}>{hint}</span> : null}
+        </span>
+        <span className="lp-block-toggle flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition" style={{ borderColor: "var(--t-card-border)" }}>
+          <span className="group-open:hidden">Abrir</span><span className="hidden group-open:inline">Cerrar</span>
+          <span className="inline-block text-sm leading-none transition-transform duration-200 group-open:rotate-180">▾</span>
+        </span>
       </summary>
-      <div className="space-y-3 px-4 pb-4">{children}</div>
+      <div className="space-y-3 border-t px-4 py-4 sm:px-5" style={{ borderColor: "var(--t-card-border)" }}>{children}</div>
     </details>
   );
 }
+
+const BLOCK_CSS = `
+.lp-block summary::-webkit-details-marker{display:none}
+.lp-block .lp-block-bar{background:transparent;transition:background .2s}
+.lp-block[open]{border-color:color-mix(in oklab,var(--t-accent) 55%,var(--t-card-border))!important}
+.lp-block[open] .lp-block-bar{background:var(--t-accent)}
+.lp-block[open] .lp-block-head{background:color-mix(in oklab,var(--t-accent) 10%,transparent)}
+.lp-block .lp-block-head:hover{background:color-mix(in oklab,var(--t-accent) 7%,transparent)}
+.lp-block .lp-block-head:hover .lp-block-bar{background:color-mix(in oklab,var(--t-accent) 50%,transparent)}
+.lp-block[open] .lp-block-toggle{background:var(--t-accent);border-color:transparent!important;color:#fff}
+`;
 
 function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -84,6 +103,64 @@ function ImageInput({ value, onChange, label = "Foto" }: { value: string; onChan
       }} />
       <button type="button" onClick={() => file.current?.click()} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={softBox} title="Subir foto">{busy ? "…" : <ImagePlus size={16} />}</button>
       {value ? <button type="button" onClick={() => onChange("")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={softBox} title="Quitar"><X size={16} /></button> : null}
+    </div>
+  );
+}
+
+/** Íconos para beneficios, agrupados por lo que comunican. */
+const ICON_GROUPS: Array<[string, string[]]> = [
+  ["Envío y entrega", ["🚚", "📦", "🛵", "✈️", "📍", "⏱️", "🏠", "🗺️"]],
+  ["Pago y precio", ["💵", "💳", "💰", "🏷️", "🤑", "🧾", "📱", "🪙"]],
+  ["Confianza y garantía", ["🛡️", "🔒", "✅", "🤝", "🏅", "⭐", "🔁", "💯"]],
+  ["Calidad y beneficios", ["✨", "💎", "🔥", "🌟", "👍", "💪", "🎯", "🚀"]],
+  ["Moda y calzado", ["👗", "👕", "👖", "👟", "👠", "👜", "🧢", "💍"]],
+  ["Belleza y bienestar", ["💄", "🧴", "🌿", "💆", "🧖", "🌸", "💧", "🍃"]],
+  ["Tecnología", ["🎧", "📱", "🔋", "⚡", "🔊", "⌚", "💻", "📷"]],
+  ["Hogar y cocina", ["🏡", "🍳", "🧼", "🛋️", "🧺", "🪴", "🧹", "☕"]],
+  ["Atención", ["💬", "📞", "🙋", "❤️", "😍", "🎁", "🎉", "👌"]],
+];
+
+/** Elegir el ícono: toca el botón y escoge de la cuadrícula (o escribe uno propio). */
+function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    window.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); window.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex h-full min-h-22 w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed transition hover:-translate-y-0.5" style={{ ...inputStyle, borderColor: open ? "var(--t-accent)" : "var(--t-card-border)" }} aria-label="Elegir ícono" aria-expanded={open}>
+        <span className="text-3xl leading-none">{value || "✨"}</span>
+        <span className="text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>Cambiar</span>
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-2 w-[min(320px,calc(100vw-48px))] rounded-2xl border p-3 shadow-2xl" style={{ ...softBox, background: "var(--t-bg-base)" }}>
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {ICON_GROUPS.map(([group, icons]) => (
+              <div key={group}>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{group}</p>
+                <div className="grid grid-cols-8 gap-1">
+                  {icons.map((ic) => (
+                    <button key={group + ic} type="button" onClick={() => { onChange(ic); setOpen(false); }} className="grid aspect-square place-items-center rounded-lg text-xl transition hover:scale-110"
+                      style={{ background: value === ic ? "color-mix(in oklab, var(--t-accent) 25%, transparent)" : "transparent", outline: value === ic ? "2px solid var(--t-accent)" : undefined }} title={ic}>
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="mt-2 flex items-center gap-2 border-t pt-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+            Otro:
+            <input value={value} onChange={(e) => onChange(e.target.value.slice(0, 8))} placeholder="Pega un emoji" className={`${inputCls} py-1.5 text-center text-lg`} style={inputStyle} />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -159,6 +236,10 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   const [full, setFull] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
+  const blocksBox = useRef<HTMLDivElement>(null);
+  const toggleAll = (open: boolean) => blocksBox.current?.querySelectorAll<HTMLDetailsElement>("details[data-block]").forEach((d) => { d.open = open; });
+  const [pasteHtml, setPasteHtml] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
   const [imported, setImported] = useState<ImportedProduct | null>(null);
   const [newPrice, setNewPrice] = useState("");
   const [mine, setMine] = useState<Array<{ id: string; name: string; emoji: string; config: Partial<LandingConfig> }>>([]);
@@ -239,7 +320,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   const previewData: LandingData = useMemo(() => ({
     store: { id: store.id, slug: store.slug, name: store.name, logo_url: store.logo_url, whatsapp: store.whatsapp },
     page: { id: row.id ?? "nuevo", slug: row.slug || "vista-previa", name: row.name || "Tu producto", config: cfg, catalog: catalog?.slug ?? "" },
-    items: items.map((i) => ({ ...i, option: cfg.option_names[i.id] || i.name })),
+    items: items.map((i) => ({ ...i, option: cfg.option_names[i.id] || i.name, price: cfg.option_prices[i.id] || cfg.sale_price || i.price })),
     upsell: upsellItem,
     payments: { cod: cfg.payments.cod, online: cfg.payments.online && pay.wompi, addi: cfg.payments.addi && pay.addi },
     trust,
@@ -301,6 +382,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
       config: normalizeLanding({
         ...t.config,
         images: r.config.images, option_names: r.config.option_names, compare_at_price: r.config.compare_at_price, promo_ends_at: r.config.promo_ends_at,
+        sale_price: r.config.sale_price, option_prices: r.config.option_prices,
         upsell: r.config.upsell, meta_pixel_id: r.config.meta_pixel_id, tiktok_pixel_id: r.config.tiktok_pixel_id,
         poster_images: t.config.poster_images?.length ? t.config.poster_images : r.config.poster_images,
         template: `mine:${t.id}`,
@@ -311,7 +393,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   async function saveMine() {
     const res = await Swal.fire({ title: "Guardar como plantilla", input: "text", inputLabel: "Nombre de la plantilla", inputValue: row.name ? `Estilo ${row.name}` : "", showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar", ...swalTheme, inputValidator: (v) => (v.trim() ? null : "Escribe un nombre") });
     if (!res.isConfirmed) return;
-    const { data, error } = await supabaseBrowser().rpc("erp_landing_template_save", { p_store: store.id, p_name: String(res.value), p_emoji: "⭐", p_config: normalizeLanding(cfg) });
+    const { data, error } = await supabaseBrowser().rpc("erp_landing_template_save", { p_store: store.id, p_name: String(res.value), p_emoji: "⭐", p_config: { ...normalizeLanding(cfg), sale_price: null, option_prices: {} } });
     if (error || !(data as { ok?: boolean })?.ok) { void Swal.fire({ icon: "error", title: "No se pudo", text: error?.message ?? (data as { message?: string })?.message, ...swalTheme }); return; }
     void Swal.fire({ icon: "success", title: "Plantilla guardada", text: "La encuentras en «Plantilla» al crear otra landing.", timer: 1800, showConfirmButton: false, ...swalTheme });
     void loadMine();
@@ -323,11 +405,19 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   }
 
   /** Crear desde el enlace de otra tienda: trae título, descripción, fotos y características. */
-  async function importLink() {
-    if (!importUrl.trim()) return;
+  async function importLink(fromHtml = false) {
+    if (!fromHtml && !importUrl.trim()) return;
+    if (fromHtml && pasteHtml.trim().length < 200) {
+      void Swal.fire({ icon: "info", title: "Pega el código completo", text: "En la página del producto presiona Ctrl+U, luego Ctrl+A y Ctrl+C, y pégalo aquí.", ...swalTheme });
+      return;
+    }
     setImporting(true);
     try {
-      const { product } = await fiscalApi<{ product: ImportedProduct }>("/api/landing/import", { store_id: store.id, url: importUrl.trim() });
+      // Con el código pegado, la dirección sale del propio código si no se escribió el enlace.
+      const canonical = /<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)/i.exec(pasteHtml)?.[1] ?? "";
+      const pageUrl = importUrl.trim() || (canonical.startsWith("//") ? `https:${canonical}` : canonical) || "https://tienda.com/";
+      const { product } = await fiscalApi<{ product: ImportedProduct }>("/api/landing/import", { store_id: store.id, url: pageUrl, ...(fromHtml ? { html: pasteHtml } : {}) });
+      if (fromHtml) { setPasteHtml(""); setShowPaste(false); }
       setImported(product);
       const text = product.description.trim();
       const firstLine = text.split(/\n|(?<=\.)\s/)[0]?.slice(0, 300) ?? "";
@@ -346,6 +436,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
       }));
     } catch (e) {
       void Swal.fire({ icon: "error", title: "No se pudo leer el enlace", text: errorText(e), ...swalTheme });
+      if (!fromHtml) setShowPaste(true);
     } finally {
       setImporting(false);
     }
@@ -390,7 +481,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     const clean = normalizeLanding(cfg);
     const payload = { ...row, status, config: clean, slug: row.slug.trim().toLowerCase() };
     if (!LANDING_SLUG.test(payload.slug)) { void Swal.fire({ icon: "warning", title: "Revisa el enlace", text: "Solo letras minúsculas, números y guiones (mínimo 2).", ...swalTheme }); return; }
-    if (status === "published" && clean.compare_at_price && items[0] && clean.compare_at_price <= items[0].price) {
+    if (status === "published" && clean.compare_at_price && items[0] && clean.compare_at_price <= (clean.option_prices[items[0].id] || clean.sale_price || items[0].price)) {
       void Swal.fire({ icon: "warning", title: "El precio «antes» debe ser mayor", text: "Si no tuviste un precio anterior real, déjalo vacío.", ...swalTheme });
       return;
     }
@@ -429,12 +520,34 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div className={`space-y-3 ${showPreview ? "hidden lg:block" : ""}`}>
+        <div ref={blocksBox} className={`space-y-3 ${showPreview ? "hidden lg:block" : ""}`}>
+          <style>{BLOCK_CSS}</style>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Toca cada sección para abrirla o cerrarla</p>
+            <div className="flex gap-1.5">
+              <button type="button" onClick={() => toggleAll(true)} className="rounded-full border px-3 py-1 text-xs font-bold" style={softBox}>Abrir todo</button>
+              <button type="button" onClick={() => toggleAll(false)} className="rounded-full border px-3 py-1 text-xs font-bold" style={softBox}>Cerrar todo</button>
+            </div>
+          </div>
           <Block title="Crear desde un enlace" emoji="🔗" hint="Pega el enlace de AliExpress, Amazon, Shopify, Mercado Libre u otra tienda: traemos título, fotos, descripción y características" open={!row.id}>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void importLink(); }} placeholder="https://es.aliexpress.com/item/…" className={inputCls} style={inputStyle} inputMode="url" />
-              <button type="button" disabled={importing || !importUrl.trim()} onClick={() => void importLink()} className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{importing ? "Leyendo…" : "Traer información"}</button>
+              <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void importLink(false); }} placeholder="https://es.aliexpress.com/item/…" className={inputCls} style={inputStyle} inputMode="url" />
+              <button type="button" disabled={importing || !importUrl.trim()} onClick={() => void importLink(false)} className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{importing ? "Leyendo…" : "Traer información"}</button>
             </div>
+            <button type="button" onClick={() => setShowPaste((v) => !v)} className="text-left text-xs font-semibold underline" style={{ color: "var(--t-muted)" }}>¿No funcionó? Pegar el código de la página</button>
+            {showPaste ? (
+              <div className="space-y-2 rounded-2xl border p-3" style={softBox}>
+                <p className="text-xs font-bold">Plan B, siempre funciona (algunas tiendas como AliExpress o Amazon no dejan leer sus páginas desde un servidor):</p>
+                <ol className="list-decimal space-y-0.5 pl-5 text-xs" style={{ color: "var(--t-muted)" }}>
+                  <li>Abre la página del producto en tu computador (Chrome o Edge).</li>
+                  <li>Presiona <b>Ctrl + U</b>: se abre una pestaña con el código de la página.</li>
+                  <li>En esa pestaña presiona <b>Ctrl + A</b> y luego <b>Ctrl + C</b>.</li>
+                  <li>Vuelve aquí, pega con <b>Ctrl + V</b> y toca «Traer desde el código».</li>
+                </ol>
+                <textarea value={pasteHtml} onChange={(e) => setPasteHtml(e.target.value)} rows={4} placeholder="<!DOCTYPE html>…" className={`${inputCls} font-mono text-[11px]`} style={inputStyle} />
+                <button type="button" disabled={importing || pasteHtml.trim().length < 200} onClick={() => void importLink(true)} className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{importing ? "Leyendo…" : "Traer desde el código"}</button>
+              </div>
+            ) : null}
             {imported ? (
               <div className="rounded-2xl border p-3 text-sm" style={softBox}>
                 <p className="font-bold">✅ Traído de {imported.source}: {imported.images.length} fotos{imported.bullets.length ? `, ${imported.bullets.length} características` : ""}{imported.video ? ", video" : ""}.</p>
@@ -515,6 +628,11 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
                           <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{p?.name ?? "…"}{it ? ` · $${Math.round(it.price).toLocaleString("es-CO")} · ${it.stock === null ? "sin control" : `${it.stock} disp.`}` : ""}</p>
                           <input value={cfg.option_names[id] ?? ""} onChange={(e) => setCfg({ option_names: { ...cfg.option_names, [id]: e.target.value } })} placeholder={`Nombre corto (ej. Negro)`} className="w-full bg-transparent text-sm font-semibold outline-none" />
                         </div>
+                        {row.product_ids.length > 1 ? (
+                          <input inputMode="numeric" title="Precio solo de esta opción (vacío = el precio de la landing)" value={cfg.option_prices[id] ? cfg.option_prices[id].toLocaleString("es-CO") : ""}
+                            onChange={(e) => { const n = Number(e.target.value.replace(/\D/g, "")); const next = { ...cfg.option_prices }; if (n > 0) next[id] = n; else delete next[id]; setCfg({ option_prices: next }); }}
+                            placeholder="$ precio" className="w-24 rounded-lg border bg-transparent px-2 py-1.5 text-right text-xs font-bold outline-none" style={{ borderColor: "var(--t-card-border)" }} />
+                        ) : null}
                         <button type="button" disabled={!i} onClick={() => setRow((r) => { const n = [...r.product_ids]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return { ...r, product_ids: n }; })} className="p-1 disabled:opacity-30"><ArrowUp size={14} /></button>
                         <button type="button" onClick={() => setRow((r) => ({ ...r, product_ids: r.product_ids.filter((x) => x !== id) }))} className="p-1 text-red-500"><Trash2 size={14} /></button>
                       </div>
@@ -578,7 +696,11 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </Field>
           </Block>
 
-          <Block title="Precio, promo y cuenta regresiva" emoji="⏰" hint="Solo datos reales: es la ley y Meta lo revisa">
+          <Block title="Precio, promo y cuenta regresiva" emoji="💲" hint="Tu precio de venta en esta landing, el «antes» y hasta cuándo va la promo">
+            <Field label="Precio de venta en esta landing" hint={items[0] ? `En el catálogo vale $${Math.round(items[0].price).toLocaleString("es-CO")}. Vacío = ese precio. Puedes ponerlo más alto o más bajo; el precio de tu tienda no cambia. Los paquetes y descuentos se aplican sobre este.` : "Vacío = el precio del catálogo."}>
+              <input inputMode="numeric" value={cfg.sale_price ? cfg.sale_price.toLocaleString("es-CO") : ""} onChange={(e) => { const n = Number(e.target.value.replace(/\D/g, "")); setCfg({ sale_price: n > 0 ? n : null }); }} placeholder={items[0] ? `$ ${Math.round(items[0].price).toLocaleString("es-CO")}` : "$ precio"} className={`${inputCls} text-lg font-black`} style={inputStyle} />
+            </Field>
+            {row.product_ids.length > 1 ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Si una opción vale distinto, ponle su precio en «Producto y opciones» (casilla «$ precio» de cada una).</p> : null}
             <Field label="Precio «antes» (opcional)" hint="Solo si de verdad lo vendías a ese precio. Si no, déjalo vacío y no sale «Antes».">
               <input inputMode="numeric" value={cfg.compare_at_price ?? ""} onChange={(e) => { const n = Number(e.target.value.replace(/\D/g, "")); setCfg({ compare_at_price: n > 0 ? n : null }); }} placeholder="Ej. 199800" className={inputCls} style={inputStyle} />
             </Field>
@@ -723,7 +845,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             <ListEditor items={cfg.benefits} max={8} onChange={(benefits) => setCfg({ benefits })} make={() => ({ icon: "✨", title: "", text: "" })} addLabel="Agregar beneficio"
               render={(b, set) => (
                 <div className="grid gap-2 sm:grid-cols-[70px_1fr]">
-                  <input value={b.icon} onChange={(e) => set({ ...b, icon: e.target.value })} className={`${inputCls} text-center text-xl`} style={inputStyle} aria-label="Emoji" />
+                  <IconPicker value={b.icon} onChange={(icon) => set({ ...b, icon })} />
                   <div className="space-y-2"><input value={b.title} onChange={(e) => set({ ...b, title: e.target.value })} placeholder="Título" className={inputCls} style={inputStyle} /><input value={b.text} onChange={(e) => set({ ...b, text: e.target.value })} placeholder="Texto corto" className={inputCls} style={inputStyle} /></div>
                 </div>
               )} />
@@ -789,7 +911,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
         </div>
 
         <div className={`${showPreview ? "" : "hidden lg:block"}`}>
-          <div className={full ? "fixed inset-0 z-[90] flex flex-col gap-3 bg-slate-950/95 p-4" : "sticky top-4 space-y-2"}>
+          <div className={full ? "fixed inset-0 z-90 flex flex-col gap-3 bg-slate-950/95 p-4" : "sticky top-4 space-y-2"}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-1 rounded-xl border p-1" style={full ? { borderColor: "rgba(255,255,255,.2)", color: "#fff" } : softBox}>
                 {DEVICES.map((d) => (
@@ -846,7 +968,7 @@ function DeviceFrame({ device, full, children }: { device: Device; full: boolean
       <div style={{ width: outerW * scale, height: outerH * scale }}>
         <div style={{ width: outerW, height: outerH, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
           <div className="overflow-hidden bg-slate-900 shadow-2xl" style={{ padding: bezel, borderRadius: device === "phone" ? 48 : device === "tablet" ? 32 : 14 }}>
-            {device === "laptop" || device === "desktop" ? <div className="mb-[8px] flex h-[10px] items-center gap-1.5 pl-1"><span className="h-2 w-2 rounded-full bg-red-400" /><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="h-2 w-2 rounded-full bg-emerald-400" /></div> : null}
+            {device === "laptop" || device === "desktop" ? <div className="mb-2 flex h-2.5 items-center gap-1.5 pl-1"><span className="h-2 w-2 rounded-full bg-red-400" /><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="h-2 w-2 rounded-full bg-emerald-400" /></div> : null}
             <div className="overflow-hidden bg-white" style={{ width: d.w, height: d.h, borderRadius: device === "phone" ? 36 : device === "tablet" ? 18 : 6 }}>{children}</div>
           </div>
         </div>

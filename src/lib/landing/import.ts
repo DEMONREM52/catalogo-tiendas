@@ -130,11 +130,38 @@ export function parseProductPage(html: string, url: string, shopify?: Record<str
     }
   }
 
+  // Descripciones genéricas de la tienda (no del producto): se descartan.
+  if (/smarter shopping|better living|aliexpress\.com|compra (online|en línea) en|amazon\.com:|^precio y opiniones/i.test(out.description)) out.description = "";
   out.title = out.title.replace(/\s*[|–-]\s*(AliExpress|Amazon\.?[a-z.]*|Mercado Libre|Shein|Temu).*$/i, "").replace(/\s+/g, " ").trim().slice(0, 140);
   out.description = out.description.slice(0, 3000);
   out.bullets = [...new Set(out.bullets)].slice(0, 8).map((b) => b.slice(0, 160));
   out.images = out.images.slice(0, 15);
   return out;
+}
+
+/** ¿La tienda nos mostró una página de verificación (robot) en vez del producto? */
+export function looksBlocked(html: string) {
+  return /punish|x5sec|_____tmd_____|captcha|slide to verify|verify you are human|robot check|are you a robot|access denied|baxia-dialog/i.test(html.slice(0, 200_000));
+}
+
+/** Direcciones a probar para un enlace (AliExpress: versión de Colombia en español, sin parámetros de búsqueda). */
+export function candidateUrls(raw: string): Array<{ url: string; headers: Record<string, string> }> {
+  const u = new URL(raw);
+  const host = u.hostname.toLowerCase();
+  if (/(^|\.)aliexpress\.(com|us)$/.test(host)) {
+    const id = /\/item\/(\d+)\.html/.exec(u.pathname)?.[1] ?? /(\d{10,})/.exec(u.pathname)?.[1];
+    const headers = {
+      Cookie: "aep_usuc_f=site=esp&c_tp=COP&region=CO&b_locale=es_ES; intl_locale=es_ES; xman_us_f=x_locale=es_ES&x_l=0",
+      Referer: "https://es.aliexpress.com/",
+    };
+    const list = id
+      ? [`https://es.aliexpress.com/item/${id}.html`, `https://www.aliexpress.com/item/${id}.html`, `https://m.es.aliexpress.com/item/${id}.html`]
+      : [`${u.origin}${u.pathname}`];
+    return list.map((url) => ({ url, headers }));
+  }
+  // Otras tiendas: el enlace tal cual y, si tiene parámetros, también sin ellos.
+  const clean = `${u.origin}${u.pathname}`;
+  return [{ url: raw, headers: {} }, ...(clean !== raw ? [{ url: clean, headers: {} }] : [])];
 }
 
 /** Bloquea direcciones internas (para que nadie use el lector para entrar a redes privadas). */

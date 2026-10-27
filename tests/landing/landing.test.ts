@@ -114,3 +114,26 @@ test("contadores configurables: periodos válidos y valores por defecto", () => 
   assert.equal(c.urgency.countdown_mode, "midnight");
   assert.equal(normalizeLanding({}).urgency.viewers_window, "now");
 });
+
+test("AliExpress: versión de Colombia, sin parámetros, páginas de robot y descripción genérica", async () => {
+  const { candidateUrls, looksBlocked, parseProductPage } = await import("../../src/lib/landing/import");
+  const c = candidateUrls("https://es.aliexpress.com/item/1005009418876730.html?spm=a2g0o&algo_pvid=x&pdp_npi=6%40dis");
+  assert.equal(c[0].url, "https://es.aliexpress.com/item/1005009418876730.html");
+  assert.match(c[0].headers.Cookie, /region=CO/);
+  assert.equal(c.length, 3);
+  assert.deepEqual(candidateUrls("https://tienda.com/products/x?variant=1").map((x) => x.url), ["https://tienda.com/products/x?variant=1", "https://tienda.com/products/x"]);
+  assert.ok(looksBlocked("<html><script src='/_____tmd_____/punish'></script></html>"));
+  assert.ok(!looksBlocked("<html><title>Funda</title></html>"));
+  const p = parseProductPage(`<meta property="og:title" content="Funda transparente"><meta property="og:description" content="Smarter Shopping, Better Living! Aliexpress.com"><script>{"imagePathList":["https://ae-pic-a1.aliexpress-media.com/kf/A1.jpg","https://ae-pic-a1.aliexpress-media.com/kf/A2.jpg"]}</script>`, "https://es.aliexpress.com/item/1.html");
+  assert.equal(p.description, "");
+  assert.equal(p.images.length, 2);
+});
+
+test("precio propio de la landing: general y por opción", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const c = normalizeLanding({ sale_price: "129900", option_prices: { [id]: 139900, malo: 5, "22222222-2222-4222-8222-222222222222": 0 } });
+  assert.equal(c.sale_price, 129900);
+  assert.deepEqual(c.option_prices, { [id]: 139900 });
+  assert.equal(normalizeLanding({ sale_price: -1 }).sale_price, null);
+  assert.equal(applyTemplate({ ...DEFAULT_LANDING, sale_price: 59900 }, "moda").sale_price, 59900);
+});

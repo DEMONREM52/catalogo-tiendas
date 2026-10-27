@@ -2,7 +2,7 @@
 // y copia las fotos al almacenamiento de la tienda (así no dependen de la otra página).
 import { lookup } from "node:dns/promises";
 import { isUuid, jsonError, jsonOk, readJson, requirePermission, requireUser, FiscalApiError } from "@/lib/fiscal/server";
-import { isPrivateHost, parseProductPage } from "@/lib/landing/import";
+import { candidateUrls, isPrivateHost, looksBlocked, parseProductPage, type ImportedProduct } from "@/lib/landing/import";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,14 +21,14 @@ async function assertPublic(url: URL) {
 }
 
 /** Descarga con redirecciones revisadas una por una, tiempo límite y tamaño máximo. */
-async function safeFetch(raw: string, max: number, accept: string) {
+async function safeFetch(raw: string, max: number, accept: string, extra: Record<string, string> = {}) {
   let url = new URL(raw);
   for (let hop = 0; hop < 4; hop++) {
     await assertPublic(url);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
     try {
-      const res = await fetch(url, { redirect: "manual", signal: controller.signal, headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "es-CO,es;q=0.9,en;q=0.7" } });
+      const res = await fetch(url, { redirect: "manual", signal: controller.signal, headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "es-CO,es;q=0.9,en;q=0.7", ...extra } });
       if (res.status >= 300 && res.status < 400 && res.headers.get("location")) { url = new URL(res.headers.get("location")!, url); continue; }
       if (!res.ok || !res.body) return { url, res: null as Response | null, body: null as Buffer | null };
       const reader = res.body.getReader();
@@ -52,25 +52,40 @@ async function safeFetch(raw: string, max: number, accept: string) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireUser(request);
-    const body = await readJson<{ store_id?: string; url?: string; copy_images?: boolean }>(request, 5_000);
+    // `html`: el código de la página pegado a mano (plan B cuando la tienda no deja leerla desde el servidor).
+    const body = await readJson<{ store_id?: string; url?: string; html?: string; copy_images?: boolean }>(request, 4_500_000);
     if (!isUuid(body.store_id)) throw new FiscalApiError("Falta la tienda.", 400, "INVALID");
     await requirePermission(ctx, body.store_id, ["products"]);
     let target: URL;
     try { target = new URL(String(body.url ?? "").trim()); } catch { throw new FiscalApiError("Pega el enlace completo del producto (https://…).", 422, "INVALID"); }
 
-    const page = await safeFetch(target.toString(), MAX_HTML, "text/html,application/xhtml+xml");
-    if (!page.res || !page.body) throw new FiscalApiError("Esa página no nos dejó leerla (algunas tiendas bloquean a los robots). Prueba con otro enlace o copia los datos a mano.", 422, "BLOCKED");
-    const html = page.body.toString("utf8");
-
-    // Tiendas Shopify: el producto completo está en /products/<nombre>.js
-    let shopify: Record<string, unknown> | null = null;
-    const m = /^(.*\/products\/[^/?#]+)/.exec(page.url.pathname);
-    if (m && /shopify|cdn\.shopify\.com/i.test(html)) {
-      const js = await safeFetch(`${page.url.origin}${m[1]}.js`, MAX_HTML, "application/json").catch(() => null);
-      try { shopify = js?.body ? (JSON.parse(js.body.toString("utf8")) as Record<string, unknown>) : null; } catch { shopify = null; }
+    let product: ImportedProduct | null = null;
+    let blocked = false;
+    if (typeof body.html === "string" && body.html.trim().length > 200) {
+      product = parseProductPage(body.html.slice(0, MAX_HTML), target.toString());
+    } else {
+      // Se prueban varias direcciones del mismo producto hasta encontrar sus datos.
+      for (const c of candidateUrls(target.toString())) {
+        const page = await safeFetch(c.url, MAX_HTML, "text/html,application/xhtml+xml", c.headers).catch(() => null);
+        if (!page?.res || !page.body) continue;
+        const html = page.body.toString("utf8");
+        if (looksBlocked(html)) { blocked = true; continue; }
+        // Tiendas Shopify: el producto completo está en /products/<nombre>.js
+        let shopify: Record<string, unknown> | null = null;
+        const m = /^(.*\/products\/[^/?#]+)/.exec(page.url.pathname);
+        if (m && /shopify|cdn\.shopify\.com/i.test(html)) {
+          const js = await safeFetch(`${page.url.origin}${m[1]}.js`, MAX_HTML, "application/json").catch(() => null);
+          try { shopify = js?.body ? (JSON.parse(js.body.toString("utf8")) as Record<string, unknown>) : null; } catch { shopify = null; }
+        }
+        const p = parseProductPage(html, page.url.toString(), shopify);
+        if (p.title || p.images.length) { product = p; break; }
+      }
     }
-    const product = parseProductPage(html, page.url.toString(), shopify);
-    if (!product.title && !product.images.length) throw new FiscalApiError("No encontramos datos de producto en esa página. Prueba con el enlace directo del producto.", 422, "EMPTY");
+    if (!product || (!product.title && !product.images.length)) {
+      throw new FiscalApiError(blocked
+        ? "Esa tienda no deja leer la página desde nuestro servidor (pide verificar que no es un robot). Usa «Pegar el código de la página», que siempre funciona."
+        : "No encontramos datos de producto en esa página. Prueba con el enlace directo del producto o usa «Pegar el código de la página».", 422, blocked ? "BLOCKED" : "EMPTY");
+    }
 
     // Copia de las fotos al almacenamiento de la tienda (las que se puedan; si alguna falla, queda el enlace original).
     if (body.copy_images !== false && product.images.length) {

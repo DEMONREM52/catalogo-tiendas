@@ -69,6 +69,7 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
   const [sheet, setSheet] = useState(false);
   const [policy, setPolicy] = useState(false);
   const [sizeGuide, setSizeGuide] = useState(false);
+  const [zoom, setZoom] = useState<string | null>(null);
   const [exitAsk, setExitAsk] = useState(false);
   const [exitOn, setExitOn] = useState(false);
   const exitDone = useRef(false);
@@ -342,13 +343,22 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
             <h2 className="text-center text-2xl font-black sm:text-3xl">Lo que dicen nuestros clientes</h2>
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               {cfg.testimonials.map((t, i) => (
-                <figure key={i} className="rounded-3xl bg-white p-5 shadow-sm">
-                  <div className="text-amber-400">{"★".repeat(t.stars)}<span className="text-slate-200">{"★".repeat(5 - t.stars)}</span></div>
-                  <blockquote className="mt-2 text-[15px] leading-6">“{t.text}”</blockquote>
-                  <figcaption className="mt-3 flex items-center gap-2 text-sm font-bold">
-                    {t.image ? <img src={t.image} alt="" className="h-9 w-9 rounded-full object-cover" loading="lazy" /> : <span className="lp-chip grid h-9 w-9 place-items-center rounded-full">{(t.name || "C").slice(0, 1)}</span>}
-                    <span>{t.name || "Cliente"}{t.city ? <span className="font-medium text-slate-400"> · {t.city}</span> : null}</span>
-                  </figcaption>
+                <figure key={i} className="overflow-hidden rounded-3xl bg-white shadow-sm">
+                  {/* Foto de la opinión, grande: se toca para verla completa. */}
+                  {t.image ? (
+                    <button type="button" onClick={() => setZoom(t.image)} className="group relative block w-full overflow-hidden bg-slate-100" style={{ aspectRatio: "4 / 3" }} aria-label={`Ver foto de ${t.name || "cliente"}`}>
+                      <img src={t.image} alt={`Foto de ${t.name || "cliente"}`} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
+                      <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">🔍 Ver</span>
+                    </button>
+                  ) : null}
+                  <div className="p-5">
+                    <div className="text-lg text-amber-400">{"★".repeat(t.stars)}<span className="text-slate-200">{"★".repeat(5 - t.stars)}</span></div>
+                    <blockquote className="mt-2 text-[15px] leading-6">“{t.text}”</blockquote>
+                    <figcaption className="mt-4 flex items-center gap-3 text-sm font-bold">
+                      {t.image ? <img src={t.image} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow" loading="lazy" /> : <span className="lp-chip grid h-12 w-12 place-items-center rounded-full text-lg">{(t.name || "C").slice(0, 1)}</span>}
+                      <span className="leading-5">{t.name || "Cliente"}{t.city ? <span className="block text-xs font-medium text-slate-400">📍 {t.city}</span> : null}</span>
+                    </figcaption>
+                  </div>
                 </figure>
               ))}
             </div>
@@ -467,6 +477,11 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
 
       {cfg.urgency.recent_orders ? <RecentToast recent={social.recent} hidden={sheet} preview={preview} every={cfg.urgency.recent_every} /> : null}
       {sheet ? <OrderSheet data={data} cfg={cfg} startIdx={sel} preview={preview} exit={exitOn} onClose={() => setSheet(false)} session={session} refInfo={ref} metrics={metrics} ping={ping} /> : null}
+      {zoom ? createPortal(
+        <div className="lp-portal fixed inset-0 z-70 grid place-items-center bg-black/85 p-4" onClick={() => setZoom(null)} role="dialog" aria-modal="true" aria-label="Foto de la opinión">
+          <img src={zoom} alt="Foto de la opinión" className="lp-pop max-h-[88vh] max-w-full rounded-2xl object-contain shadow-2xl" />
+          <button type="button" onClick={() => setZoom(null)} className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold text-slate-900" aria-label="Cerrar">×</button>
+        </div>, document.body) : null}
       {sizeGuide ? (
         <Overlay onClose={() => setSizeGuide(false)} title="Guía de tallas">
           <img src={cfg.size_guide_image} alt="Guía de tallas" className="w-full rounded-2xl" />

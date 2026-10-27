@@ -42,6 +42,10 @@ export type LandingConfig = {
   accent: string;
   /** Precio real anterior. Si no lo hubo, se deja vacío y no se muestra «Antes». */
   compare_at_price: number | null;
+  /** Precio de venta de esta landing (todas las opciones). Vacío = el del catálogo. Puede ser más alto o más bajo. */
+  sale_price: number | null;
+  /** Precio por opción (manda sobre sale_price). */
+  option_prices: Record<string, number>;
   /** Fecha y hora real en que termina la promoción (ISO). Sin fecha, no hay cuenta regresiva. */
   promo_ends_at: string | null;
   promo_text: string;
@@ -100,6 +104,8 @@ export const DEFAULT_LANDING: LandingConfig = {
   badge: "OFERTA",
   accent: "#e11d48",
   compare_at_price: null,
+  sale_price: null,
+  option_prices: {},
   promo_ends_at: null,
   promo_text: "¡Aprovecha la promo y llévalo a un precio increíble!",
   images: [],
@@ -185,6 +191,14 @@ export function normalizeLanding(raw: unknown): LandingConfig {
     badge: str(r.badge, 24, d.badge),
     accent: typeof r.accent === "string" && HEX.test(r.accent) ? r.accent : d.accent,
     compare_at_price: Number.isFinite(compare) && compare > 0 ? Math.round(compare) : null,
+    sale_price: Number(r.sale_price) > 0 ? Math.round(Number(r.sale_price)) : null,
+    option_prices: (() => {
+      const out: Record<string, number> = {};
+      if (r.option_prices && typeof r.option_prices === "object") {
+        for (const [k, v] of Object.entries(r.option_prices as Record<string, unknown>)) if (UUID.test(k) && Number(v) > 0) out[k] = Math.round(Number(v));
+      }
+      return out;
+    })(),
     promo_ends_at: ends,
     promo_text: str(r.promo_text, 140, d.promo_text),
     images: Array.isArray(r.images) ? r.images.filter((x): x is string => typeof x === "string" && /^https:\/\//.test(x)).slice(0, 20) : [],

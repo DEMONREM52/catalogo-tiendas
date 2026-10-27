@@ -203,6 +203,8 @@ export function applyTemplate(current: LandingConfig, key: string): LandingConfi
     video_url: current.video_url,
     option_names: current.option_names,
     compare_at_price: current.compare_at_price,
+    sale_price: current.sale_price,
+    option_prices: current.option_prices,
     promo_ends_at: current.promo_ends_at,
     testimonials: current.testimonials,
     stories: current.stories,
