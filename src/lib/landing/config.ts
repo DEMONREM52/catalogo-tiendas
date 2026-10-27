@@ -35,6 +35,18 @@ export const SOLD_WINDOWS: Record<SoldWindow, { label: string; text: string }> =
   all: { label: "Desde siempre", text: "vendidos" },
 };
 
+export const CTA_STYLES = { pulse: "Late", bounce: "Salta", shake: "Se sacude", glow: "Brilla", shine: "Destello", none: "Quieto" } as const;
+export type CtaStyle = keyof typeof CTA_STYLES;
+export const CTA_BACKGROUNDS = { light: "Claro", soft: "Color suave", accent: "Color fuerte", dark: "Oscuro" } as const;
+export type CtaBackground = keyof typeof CTA_BACKGROUNDS;
+export type CtaBlockConfig = {
+  title: string; text: string; button: string;
+  style: CtaStyle; background: CtaBackground;
+  /** «end» = solo donde está en el orden; «every» = cada N secciones; «after» = después de las secciones elegidas. */
+  repeat: "end" | "every" | "after"; every: number; after: SectionKey[];
+  arrow: boolean; urgency: boolean; badge: string;
+};
+
 export type LandingConfig = {
   headline: string;
   subheadline: string;
@@ -87,6 +99,12 @@ export type LandingConfig = {
   share_button: boolean;
   /** «Compra con confianza»: datos reales de la tienda (empresa, NIT, tiendas físicas, pedidos entregados, redes). */
   trust: { enabled: boolean; business: boolean; points: boolean; orders: boolean; links: boolean };
+  /** WhatsApp propio de esta landing (botón flotante, confirmación del pedido). Vacío = el de la tienda. */
+  whatsapp_number: string;
+  /** Animaciones de toda la página: «show» espectáculo, «soft» suaves, «off» sin animación. */
+  effects: "show" | "soft" | "off";
+  /** Bloque «¿Listo para pedir el tuyo?»: textos, animación, fondo y si se repite entre secciones. */
+  cta_block: CtaBlockConfig;
   /** Orden y visibilidad de las secciones. */
   sections: Array<{ key: SectionKey; on: boolean }>;
   /** Afiche: imágenes largas (ej. hechas en Canva) una tras otra, con botón cada N imágenes. */
@@ -148,6 +166,12 @@ export const DEFAULT_LANDING: LandingConfig = {
   compare_rows: [],
   share_button: true,
   trust: { enabled: true, business: true, points: true, orders: true, links: true },
+  whatsapp_number: "",
+  effects: "show",
+  cta_block: {
+    title: "¿Listo para pedir el tuyo?", text: "", button: "", style: "bounce", background: "soft",
+    repeat: "end", every: 2, after: [], arrow: true, urgency: true, badge: "🔥 OFERTA POR TIEMPO LIMITADO",
+  },
   sections: SECTION_KEYS.map((key) => ({ key, on: true })),
   poster_images: [],
   poster_cta_every: 2,
@@ -236,6 +260,24 @@ export function normalizeLanding(raw: unknown): LandingConfig {
     size_guide_image: /^https:\/\//.test(str(r.size_guide_image)) ? str(r.size_guide_image) : "",
     compare_rows: arr(r.compare_rows, 8, (x) => (str(x.label, 60) ? { label: str(x.label, 60), us: str(x.us, 60), them: str(x.them, 60) } : null)),
     share_button: bool(r.share_button, true),
+    whatsapp_number: (() => { const d2 = String(r.whatsapp_number ?? "").replace(/\D/g, ""); return /^\d{10,13}$/.test(d2) ? d2 : ""; })(),
+    effects: r.effects === "soft" || r.effects === "off" ? r.effects : "show",
+    cta_block: (() => {
+      const x = obj("cta_block"), dc = d.cta_block;
+      return {
+        title: str(x.title, 120, dc.title),
+        text: str(x.text, 300),
+        button: str(x.button, 60),
+        style: typeof x.style === "string" && x.style in CTA_STYLES ? (x.style as CtaStyle) : dc.style,
+        background: typeof x.background === "string" && x.background in CTA_BACKGROUNDS ? (x.background as CtaBackground) : dc.background,
+        repeat: x.repeat === "every" || x.repeat === "after" ? x.repeat : "end",
+        every: Math.round(num(x.every, 1, 6, dc.every)),
+        after: Array.isArray(x.after) ? [...new Set(x.after.filter((k): k is SectionKey => SECTION_KEYS.includes(k as SectionKey) && k !== "final_cta"))] : [],
+        arrow: bool(x.arrow, dc.arrow),
+        urgency: bool(x.urgency, dc.urgency),
+        badge: str(x.badge, 60, dc.badge),
+      };
+    })(),
     sections: (() => {
       const seen = new Set<string>();
       const list = arr(r.sections, 20, (x) => (SECTION_KEYS.includes(x.key as SectionKey) && !seen.has(String(x.key)) && seen.add(String(x.key)) ? { key: x.key as SectionKey, on: bool(x.on, true) } : null));

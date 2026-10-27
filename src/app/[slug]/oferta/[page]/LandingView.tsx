@@ -60,7 +60,16 @@ function useCountdown(endsAt: string | null) {
   return { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600), m: Math.floor((s % 3600) / 60), s: s % 60 };
 }
 
-export function LandingView({ data, preview = false }: { data: LandingData; preview?: boolean }) {
+/** Marca de «modo editar» en la vista previa: al tocar la parte, el editor abre su sección. */
+const E = (key: string, label: string) => ({ "data-edit": key, "data-edit-label": label });
+const SECTION_EDIT: Record<SectionKey, [string, string]> = {
+  hero: ["texts", "Textos"], poster: ["poster", "Afiche"], benefits: ["benefits", "Beneficios"], video: ["media", "Video"],
+  stories: ["stories", "Bloques de historia"], details: ["product", "Detalles del producto"], compare: ["compare", "Comparación"],
+  testimonials: ["testimonials", "Opiniones"], trust: ["trust", "Compra con confianza"], final_cta: ["cta", "Llamado a comprar"],
+  guarantees: ["faq", "Garantías"], faq: ["faq", "Preguntas frecuentes"],
+};
+
+export function LandingView({ data, preview = false, editMode = false }: { data: LandingData; preview?: boolean; editMode?: boolean }) {
   const cfg = useMemo(() => normalizeLanding(data.page.config), [data.page.config]);
   const items = data.items;
   const [sel, setSel] = useState(0);
@@ -88,11 +97,16 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
     const own = [item?.image, ...(item?.gallery ?? [])].filter((u): u is string => typeof u === "string" && /^https?:\/\//.test(u));
     return [...new Set(cfg.images.length ? [...cfg.images, ...own] : own)];
   }, [cfg.images, item]);
+  // Fotos del producto mismo (la principal primero): las de la barra fija de abajo.
+  const productPhotos = useMemo(() => {
+    const own = [item?.image, ...(item?.gallery ?? [])].filter((u): u is string => typeof u === "string" && /^https?:\/\//.test(u));
+    return own.length ? [...new Set(own)].slice(0, 8) : images.slice(0, 8);
+  }, [item, images]);
   const compare = cfg.compare_at_price && item && cfg.compare_at_price > item.price ? cfg.compare_at_price : null;
   const offPct = compare && item ? Math.round((1 - item.price / compare) * 100) : 0;
   const stars = cfg.testimonials.length ? cfg.testimonials.reduce((s, t) => s + t.stars, 0) / cfg.testimonials.length : 0;
   const delivery = useMemo(() => deliveryWindow(new Date(), cfg.shipping), [cfg.shipping]);
-  const wa = waNumber(data.store.whatsapp);
+  const wa = waNumber(cfg.whatsapp_number || data.store.whatsapp);
   const trackItem = useCallback((qty = 1) => ({ id: item?.id ?? "", name: productName, price: item?.price ?? 0, quantity: qty }), [item, productName]);
 
   const ping = useCallback((event: string) => {
@@ -154,6 +168,31 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
     return () => { document.removeEventListener("mouseout", onOut); if (t) window.clearTimeout(t); };
   }, [preview, cfg.exit_offer.enabled]);
 
+  // Las secciones entran deslizándose al bajar (y quedan visibles si el navegador no soporta el observador).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const els = rootRef.current?.querySelectorAll<HTMLElement>("[data-reveal]:not(.lp-in)") ?? [];
+    if (!("IntersectionObserver" in window) || cfg.effects === "off") { els.forEach((el) => el.classList.add("lp-in")); return; }
+    const io = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("lp-in"); io.unobserve(en.target); } }), { rootMargin: "0px 0px -8% 0px" });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  });
+
+  // Modo probar (vista previa del editor): botones para abrir el pedido o la oferta de salida sin esperar.
+  useEffect(() => {
+    if (!preview) return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const m = e.data as { type?: string; cmd?: string } | null;
+      if (m?.type !== "remhub-landing-cmd") return;
+      if (m.cmd === "sheet") { setExitAsk(false); setSheet(true); }
+      if (m.cmd === "exit") { setSheet(false); setExitAsk(true); }
+      if (m.cmd === "top") window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [preview]);
+
   function openSheet() {
     metrics.current.cta += 1;
     setSheet(true);
@@ -183,40 +222,85 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
     );
   }
 
+  // Bloque «¿Listo para pedir el tuyo?»: se puede repetir entre secciones y llamar la atención con animación.
+  const cb = cfg.cta_block;
+  const dark = cb.background === "accent" || cb.background === "dark";
+  const share = () => {
+    ping("share");
+    const url = window.location.href.split("?")[0];
+    const text = `Mira esto 😍 ${productName} a ${priceText}`;
+    if (navigator.share) void navigator.share({ title: productName, text, url }).catch(() => undefined);
+    else window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank", "noopener");
+  };
+  const renderCta = (k: string) => (
+    <section key={k} {...E("cta", "Llamado a comprar")} className={`lp-ctab lp-ctab-${cb.background} px-4 py-10 text-center ${dark ? "text-white" : "text-slate-900"}`}>
+      <div className="mx-auto max-w-3xl">
+        {cb.badge ? <span className={`inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest ${dark ? "bg-white/20 text-white" : "lp-chip"}`}>{cb.badge}</span> : null}
+        <h2 className="mt-3 text-2xl font-black leading-tight sm:text-4xl">{lowStock ? `⚠️ ¡Solo quedan ${stock} unidades!` : cb.title}</h2>
+        <p className={`mx-auto mt-2 max-w-xl ${dark ? "text-white/85" : "text-slate-600"}`}>
+          {cb.text || `${cfg.shipping.text}. ${data.payments.cod && cfg.payments.cod ? "Pagas cuando lo recibes." : "Pago 100 % seguro."}`}
+        </p>
+        <p className="mt-3 flex flex-wrap items-end justify-center gap-x-3 gap-y-1">
+          {compare ? <span className={`text-lg font-bold line-through ${dark ? "text-white/60" : "text-slate-400"}`}>{money(compare)}</span> : null}
+          <span className="text-3xl font-black sm:text-4xl" style={dark ? undefined : { color: accent }}>{priceText}</span>
+        </p>
+        {cb.urgency && (countdown || (cfg.urgency.live_viewers && social.live >= Math.max(1, cfg.urgency.viewers_min))) ? (
+          <p className={`mt-2 text-sm font-extrabold ${dark ? "text-white" : "text-red-600"}`}>
+            {countdown ? <>⏰ Termina en {countdown.d > 0 ? `${countdown.d}d ` : ""}{String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}</>
+              : <>👁️ {social.live.toLocaleString("es-CO")} {VIEWERS_WINDOWS[cfg.urgency.viewers_window].text}</>}
+          </p>
+        ) : null}
+        {cb.arrow ? <div className="lp-arrow mt-3 text-3xl" aria-hidden>👇</div> : null}
+        <button type="button" onClick={openSheet} disabled={soldOut}
+          className={`lp-cta lp-anim-${cb.style} ${dark ? "lp-cta-inv" : ""} mt-3 w-full max-w-md rounded-2xl px-6 py-4 text-[17px] font-black uppercase text-white disabled:opacity-50`}>
+          {soldOut ? "Agotado" : cb.button || cfg.cta_text}
+        </button>
+        {cfg.share_button ? <button type="button" className={`mt-3 block w-full text-sm font-bold underline ${dark ? "text-white/80" : "text-slate-500"}`} onClick={share}>💌 Recomiéndalo a una amiga o amigo</button> : null}
+      </div>
+    </section>
+  );
+
   const blocks: Record<SectionKey, ReactNode> = {
     hero: (
       <>
       {/* Héroe */}
       <section className="mx-auto grid max-w-6xl gap-6 px-4 pb-8 lg:grid-cols-[1.05fr_.95fr] lg:gap-10">
-        <Gallery images={images} name={productName} badge={offPct >= 5 ? `-${offPct}%` : cfg.badge} />
+        <div {...E("media", "Fotos")}><Gallery images={images} name={productName} badge={offPct >= 5 ? `-${offPct}%` : cfg.badge} /></div>
         <div className="min-w-0">
-          {cfg.badge ? <span className="lp-chip inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest">{cfg.badge}</span> : null}
-          <h1 className="mt-3 text-[28px] font-black leading-[1.08] tracking-tight sm:text-4xl">{headline}</h1>
+          {cfg.badge ? <span {...E("texts", "Etiqueta")} className="lp-chip inline-block rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest">{cfg.badge}</span> : null}
+          <h1 {...E("texts", "Titular")} className="mt-3 text-[28px] font-black leading-[1.08] tracking-tight sm:text-4xl">{headline}</h1>
           {stars ? <p className="mt-2 flex items-center gap-2 text-sm"><span className="text-amber-400">{"★".repeat(Math.round(stars))}{"☆".repeat(5 - Math.round(stars))}</span><span className="font-semibold text-slate-500">{stars.toFixed(1)} · {cfg.testimonials.length} {cfg.testimonials.length === 1 ? "opinión" : "opiniones"}</span></p> : null}
-          {cfg.subheadline ? <p className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.subheadline}</p> : null}
+          {cfg.subheadline ? <p {...E("texts", "Subtítulo")} className="mt-3 text-[15px] leading-6 text-slate-600">{cfg.subheadline}</p> : null}
 
-          <div className="lp-price-box mt-5 rounded-3xl p-4">
+          <div {...E("price", "Precio y promo")} className="lp-price-box mt-5 rounded-3xl p-4">
             {cfg.promo_text ? <p className="text-[13px] font-extrabold" style={{ color: accent }}>{cfg.promo_text}</p> : null}
             <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
               {compare ? <span className="text-lg font-bold text-slate-400 line-through">ANTES {money(compare)}</span> : null}
               <span className="text-4xl font-black tracking-tight" style={{ color: accent }}>{compare ? "AHORA " : ""}{priceText}</span>
-              {compare ? <span className="mb-1 rounded-lg bg-emerald-500 px-2 py-0.5 text-xs font-black text-white">AHORRAS {money(compare - item.price)}</span> : null}
+              {compare ? <span className="lp-shimmer mb-1 rounded-lg bg-emerald-500 px-2 py-0.5 text-xs font-black text-white">💸 AHORRAS {money(compare - item.price)}</span> : null}
             </div>
             {data.payments.addi ? <p className="mt-1 text-xs font-semibold text-slate-500">o hasta en cuotas con Addi</p> : null}
           </div>
 
-          <Urgency social={social} cfg={cfg} lowStock={lowStock} stock={stock} />
+          <div {...E("urgency", "Urgencia y prueba social")}><Urgency social={social} cfg={cfg} lowStock={lowStock} stock={stock} /></div>
 
           {countdown ? (
-            <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-              {([[countdown.d, "Días"], [countdown.h, "Horas"], [countdown.m, "Minutos"], [countdown.s, "Segundos"]] as const).map(([v, l]) => (
-                <div key={l} className="rounded-2xl bg-slate-900 py-2 text-white"><div className="text-2xl font-black tabular-nums">{String(v).padStart(2, "0")}</div><div className="text-[10px] font-bold uppercase opacity-70">{l}</div></div>
-              ))}
+            <div {...E("price", "Cuenta regresiva")} className="mt-4">
+              <p className="mb-2 flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest text-red-600"><span className="lp-bell text-base" aria-hidden>⏰</span>¡La oferta termina en!<span className="lp-bell text-base" aria-hidden>⏰</span></p>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {([[countdown.d, "Días"], [countdown.h, "Horas"], [countdown.m, "Minutos"], [countdown.s, "Segundos"]] as const).map(([v, l], k) => (
+                  <div key={l} className={`lp-cd relative overflow-hidden rounded-2xl py-2.5 text-white ${k === 3 ? "lp-cd-sec" : ""}`}>
+                    {/* key con el valor: cada vez que cambia el número, entra girando. */}
+                    <div key={v} className="lp-flip text-3xl font-black tabular-nums leading-none">{String(v).padStart(2, "0")}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wide opacity-80">{l}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
           {dims ? (
-            <div className="mt-5 space-y-3">
+            <div {...E("product", "Opciones")} className="mt-5 space-y-3">
               {[0, 1].map((d) => (
                 <div key={d}>
                   <p className="text-sm font-extrabold">{dims.labels[d]}: <span className="font-semibold text-slate-500">{dims.parts[sel]?.[d]}</span></p>
@@ -234,7 +318,7 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
               ))}
             </div>
           ) : items.length > 1 ? (
-            <div className="mt-5">
+            <div {...E("product", "Opciones")} className="mt-5">
               <p className="text-sm font-extrabold">{cfg.option_label}: <span className="font-semibold text-slate-500">{item.option}</span></p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {items.map((it, i) => {
@@ -253,11 +337,11 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
           {cfg.size_guide_image ? <button type="button" onClick={() => setSizeGuide(true)} className="mt-3 text-sm font-bold underline" style={{ color: accent }}>📏 Ver guía de tallas</button> : null}
           {exitOn ? <p className="mt-4 rounded-2xl bg-emerald-50 p-3 text-center text-sm font-black text-emerald-700">🎁 Tienes {cfg.exit_offer.pct}% de descuento adicional en esta visita</p> : null}
 
-          <button ref={heroCta} type="button" onClick={openSheet} disabled={soldOut} className="lp-cta lp-pulse mt-6 w-full rounded-2xl px-5 py-4 text-[17px] font-black uppercase text-white shadow-xl disabled:opacity-50">
+          <button ref={heroCta} {...E("texts", "Botón de compra")} type="button" onClick={openSheet} disabled={soldOut} className="lp-cta lp-pulse mt-6 w-full rounded-2xl px-5 py-4 text-[17px] font-black uppercase text-white shadow-xl disabled:opacity-50">
             {soldOut ? "Agotado" : cfg.cta_text}
           </button>
-          <PayBadges cfg={cfg} payments={data.payments} />
-          <Timeline delivery={delivery} />
+          <div {...E("payments", "Formas de pago")}><PayBadges cfg={cfg} payments={data.payments} /></div>
+          <div {...E("shipping", "Envío y entrega")}><Timeline delivery={delivery} /></div>
         </div>
       </section>
       </>
@@ -268,7 +352,10 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
         <section className="lp-soft py-10">
           <div className="mx-auto grid max-w-6xl gap-3 px-4 sm:grid-cols-2 lg:grid-cols-4">
             {cfg.benefits.map((b, i) => (
-              <div key={i} className="rounded-3xl bg-white p-5 shadow-sm"><div className="text-3xl">{b.icon}</div><h3 className="mt-2 font-black">{b.title}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{b.text}</p></div>
+              <div key={i} className="lp-card rounded-3xl bg-white p-5 shadow-sm">
+                <div className="lp-icon-bubble grid h-14 w-14 place-items-center rounded-2xl text-3xl"><span className="lp-float" style={{ animationDelay: `${i * 0.35}s` }}>{b.icon}</span></div>
+                <h3 className="mt-3 font-black">{b.title}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{b.text}</p>
+              </div>
             ))}
           </div>
         </section>
@@ -367,25 +454,7 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
       ) : null}
       </>
     ),
-    final_cta: (
-      <>
-      {/* ¿Te lo vas a perder? */}
-      <section className="mx-auto max-w-3xl px-4 py-10 text-center">
-        <h2 className="text-2xl font-black sm:text-3xl">{lowStock ? "⚠️ ¡Quedan pocas unidades!" : "¿Listo para pedir el tuyo?"}</h2>
-        <p className="mt-2 text-slate-600">{cfg.shipping.text}. {data.payments.cod && cfg.payments.cod ? "Pagas cuando lo recibes." : "Pago 100 % seguro."}</p>
-        <button type="button" onClick={openSheet} disabled={soldOut} className="lp-cta lp-pulse mt-5 w-full max-w-md rounded-2xl px-6 py-4 text-[17px] font-black uppercase text-white">{cfg.cta_text}</button>
-        {cfg.share_button ? (
-          <button type="button" className="mt-3 block w-full text-sm font-bold text-slate-500 underline" onClick={() => {
-            ping("share");
-            const url = window.location.href.split("?")[0];
-            const text = `Mira esto 😍 ${productName} a ${priceText}`;
-            if (navigator.share) void navigator.share({ title: productName, text, url }).catch(() => undefined);
-            else window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank", "noopener");
-          }}>💌 Recomiéndalo a una amiga o amigo</button>
-        ) : null}
-      </section>
-      </>
-    ),
+    final_cta: renderCta("final"),
     trust: (
       <>
       {cfg.trust.enabled ? <TrustBlock trust={data.trust ?? null} cfg={cfg} payments={data.payments} storeName={data.store.name} /> : null}
@@ -396,7 +465,7 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
       {cfg.guarantees.length ? (
         <section className="bg-slate-900 py-8 text-white">
           <div className="mx-auto grid max-w-6xl gap-4 px-4 text-center sm:grid-cols-3">
-            {cfg.guarantees.map((g, i) => <div key={i}><div className="text-2xl">{["🏅", "🔒", "🚚", "🔁", "💬", "⭐"][i % 6]}</div><p className="mt-1 text-sm font-black uppercase tracking-wide">{g}</p></div>)}
+            {cfg.guarantees.map((g, i) => <div key={i}><div className="lp-float text-3xl" style={{ animationDelay: `${i * 0.4}s` }}>{["🏅", "🔒", "🚚", "🔁", "💬", "⭐"][i % 6]}</div><p className="mt-1 text-sm font-black uppercase tracking-wide">{g}</p></div>)}
           </div>
         </section>
       ) : null}
@@ -439,10 +508,10 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
   };
 
   return (
-    <div className={`lp-root lp-font-${cfg.font} min-h-screen bg-white text-slate-900`} style={vars}>
+    <div ref={rootRef} className={`lp-root lp-font-${cfg.font} lp-fx-${cfg.effects} ${editMode ? "lp-edit" : ""} min-h-screen bg-white text-slate-900`} style={vars}>
       <style>{LP_CSS}</style>
       {/* Barra superior */}
-      <div className="lp-topbar sticky top-0 z-30 px-4 py-2 text-center text-[12px] font-extrabold uppercase tracking-wide text-white sm:text-[13px]">
+      <div {...E("design", "Barra de arriba")} className="lp-topbar sticky top-0 z-30 px-4 py-2 text-center text-[12px] font-extrabold uppercase tracking-wide text-white sm:text-[13px]">
         {countdown ? <>⏰ {cfg.promo_text.length < 50 ? cfg.promo_text : "La promo termina en"} · {countdown.d > 0 ? `${countdown.d}d ` : ""}{String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}</>
           : cfg.topbar_text ? <>{cfg.topbar_text}</> : <>🚚 {cfg.shipping.text || "Envíos a toda Colombia"}{cfg.payments.cod && data.payments.cod ? " · 💵 Paga al recibir" : ""}</>}
       </div>
@@ -451,18 +520,45 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
         {data.store.logo_url ? <img src={data.store.logo_url} alt={data.store.name} className="h-9 w-auto max-w-40 object-contain" /> : <span className="text-lg font-black tracking-tight">{data.store.name}</span>}
       </header>
 
-      {cfg.sections.filter((x) => x.on).map((x) => <Fragment key={x.key}>{blocks[x.key]}</Fragment>)}
+      {(() => {
+        // Solo las secciones que de verdad muestran algo (para no repetir el llamado entre secciones vacías).
+        const has: Record<SectionKey, boolean> = {
+          hero: true, poster: cfg.poster_images.length > 0, benefits: cfg.benefits.length > 0, video: Boolean(cfg.video_url || item.video_url),
+          stories: cfg.stories.length > 0, details: Boolean(item.highlights?.length || item.description), compare: cfg.compare_rows.length > 0,
+          testimonials: cfg.testimonials.length > 0, trust: cfg.trust.enabled, final_cta: true, guarantees: cfg.guarantees.length > 0, faq: cfg.faqs.length > 0,
+        };
+        const visible = cfg.sections.filter((x) => x.on && has[x.key]);
+        let content = 0;
+        return visible.map((x, i) => {
+          const isContent = x.key !== "hero" && x.key !== "final_cta";
+          if (isContent) content++;
+          const next = visible[i + 1]?.key;
+          const repeat = isContent && next && next !== "final_cta"
+            && (cb.repeat === "every" ? content % cb.every === 0 : cb.repeat === "after" ? cb.after.includes(x.key) : false);
+          // El héroe ya marca cada parte por dentro; las demás secciones se marcan completas.
+          const body = x.key === "hero" ? blocks[x.key] : <div data-reveal {...E(SECTION_EDIT[x.key][0], SECTION_EDIT[x.key][1])}>{blocks[x.key]}</div>;
+          return <Fragment key={x.key}>{body}{repeat ? renderCta(`cta-${x.key}`) : null}</Fragment>;
+        });
+      })()}
 
-      <footer className="border-t border-slate-100 px-4 pb-28 pt-6 text-center text-xs text-slate-400">
+      <footer {...E("whatsapp", "Políticas")} className="border-t border-slate-100 px-4 pb-28 pt-6 text-center text-xs text-slate-400">
         <p className="font-bold text-slate-500">{data.store.name}</p>
         <button type="button" onClick={() => setPolicy(true)} className="mt-2 underline">Términos, cambios, retracto y datos personales</button>
       </footer>
 
       {/* Barra fija para comprar (celular) */}
-      <div className={`lp-sticky fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur transition-transform ${showSticky && !sheet ? "translate-y-0" : "translate-y-full"}`}
+      <div {...E("design", "Barra fija de abajo")} className={`lp-sticky fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur transition-transform ${showSticky && !sheet ? "translate-y-0" : "translate-y-full"}`}
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
         <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-slate-500">{productName}</p><p className="text-lg font-black" style={{ color: accent }}>{priceText}</p></div>
+          {/* Foto real del producto (la de la opción elegida), pequeña, para que sepa qué está comprando. */}
+          <StickyThumb images={productPhotos} name={productName} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-bold text-slate-500">{items.length > 1 ? `${data.page.name} · ${item.option}` : productName}</p>
+            <p className="flex items-baseline gap-2">
+              <span className="text-lg font-black" style={{ color: accent }}>{priceText}</span>
+              {compare ? <span className="text-xs font-semibold text-slate-400 line-through">{money(compare)}</span> : null}
+            </p>
+          </div>
           <button type="button" onClick={openSheet} disabled={soldOut} className="lp-cta rounded-2xl px-5 py-3 text-sm font-black uppercase text-white">{cfg.sticky_text}</button>
         </div>
       </div>
@@ -470,12 +566,13 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
       {cfg.whatsapp_button && wa ? (
         <a href={`https://wa.me/${wa}?text=${encodeURIComponent(`${cfg.whatsapp_text} ${productName}`.trim())}`} target="_blank" rel="noopener noreferrer"
           onClick={() => { if (!preview) { ping("whatsapp"); track.contact("whatsapp", data.store.slug); landingPixelEvent("Contact", {}); } }}
+          {...E("whatsapp", "Botón de WhatsApp")}
           className={`fixed right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-3xl text-white shadow-2xl transition-all ${showSticky ? "bottom-24" : "bottom-5"}`} aria-label="Escribir por WhatsApp">
           <svg viewBox="0 0 32 32" width="30" height="30" fill="currentColor" aria-hidden><path d="M16 3C9 3 3.3 8.6 3.3 15.6c0 2.5.7 4.8 1.9 6.8L3 29l6.8-2.1c1.9 1 4 1.6 6.2 1.6 7 0 12.7-5.6 12.7-12.6S23 3 16 3zm0 23.1c-2 0-3.9-.6-5.5-1.6l-.4-.2-4 1.2 1.3-3.9-.3-.4c-1.1-1.7-1.7-3.6-1.7-5.6C5.4 9.8 10.2 5.1 16 5.1s10.6 4.7 10.6 10.5S21.8 26.1 16 26.1zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.5-.6c.2-.2.2-.3.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.8s1.2 3.2 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.9 1.1 3.4.9 4.1.8.6-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z" /></svg>
         </a>
       ) : null}
 
-      {cfg.urgency.recent_orders ? <RecentToast recent={social.recent} hidden={sheet} preview={preview} every={cfg.urgency.recent_every} /> : null}
+      {cfg.urgency.recent_orders ? <div {...E("urgency", "Avisos de pedidos")}><RecentToast recent={social.recent} hidden={sheet} preview={preview} every={cfg.urgency.recent_every} /></div> : null}
       {sheet ? <OrderSheet data={data} cfg={cfg} startIdx={sel} preview={preview} exit={exitOn} onClose={() => setSheet(false)} session={session} refInfo={ref} metrics={metrics} ping={ping} /> : null}
       {zoom ? createPortal(
         <div className="lp-portal fixed inset-0 z-70 grid place-items-center bg-black/85 p-4" onClick={() => setZoom(null)} role="dialog" aria-modal="true" aria-label="Foto de la opinión">
@@ -489,7 +586,7 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
       ) : null}
       {exitAsk && !sheet ? createPortal(
         <div className="lp-portal fixed inset-0 z-70 grid place-items-center bg-black/70 p-4" onClick={() => setExitAsk(false)}>
-          <div className="lp-pop w-full max-w-sm overflow-hidden rounded-3xl bg-white text-center text-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div {...E("exit", "Oferta de salida")} className="lp-pop w-full max-w-sm overflow-hidden rounded-3xl bg-white text-center text-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="lp-topbar px-4 py-3 text-sm font-black uppercase text-white">{cfg.exit_offer.title}</div>
             <div className="p-6">
               {images[0] ? <img src={images[0]} alt={productName} className="mx-auto h-36 w-36 rounded-2xl object-cover" /> : null}
@@ -507,6 +604,32 @@ export function LandingView({ data, preview = false }: { data: LandingData; prev
         </Overlay>
       ) : null}
     </div>
+  );
+}
+
+/** Foto pequeña de la barra fija: la principal del producto y, si hay varias, van pasando solas. */
+function StickyThumb({ images, name }: { images: string[]; name: string }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setI(0);
+    if (images.length < 2 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setInterval(() => setI((x) => (x + 1) % images.length), 2500);
+    return () => window.clearInterval(t);
+  }, [images]);
+  if (!images.length) return null;
+  return (
+    <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
+      {images.map((src, k) => (
+        <img key={src} src={src} alt={k === i ? name : ""} loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700" style={{ opacity: k === i ? 1 : 0 }} />
+      ))}
+      {images.length > 1 ? (
+        <span className="absolute inset-x-0 bottom-0.5 flex justify-center gap-0.5">
+          {images.map((src, k) => <span key={src} className="h-1 w-1 rounded-full" style={{ background: k === i ? "#fff" : "rgba(255,255,255,.5)" }} />)}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -539,7 +662,7 @@ function Gallery({ images, name, badge }: { images: string[]; name: string; badg
         onTouchStart={(e) => { touch.current = e.touches[0].clientX; }}
         onTouchEnd={(e) => { if (touch.current === null) return; const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); touch.current = null; }}>
         {images[idx] ? <img src={images[idx]} alt={name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-6xl">🛍️</div>}
-        {badge ? <span className="lp-badge absolute left-3 top-3 rounded-full px-3 py-1 text-sm font-black text-white shadow-lg">{badge}</span> : null}
+        {badge ? <span className="lp-badge lp-wobble absolute left-3 top-3 rounded-full px-3 py-1 text-sm font-black text-white shadow-lg">{badge}</span> : null}
         {images.length > 1 ? (
           <>
             <button type="button" onClick={() => go(-1)} className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-xl font-black shadow" aria-label="Foto anterior">‹</button>
@@ -597,20 +720,37 @@ function TrustBlock({ trust, cfg, payments, storeName }: { trust: LandingTrust |
 
 function Urgency({ social, cfg, lowStock, stock }: { social: LandingSocial; cfg: ReturnType<typeof normalizeLanding>; lowStock: boolean; stock: number | null }) {
   const rows: ReactNode[] = [];
-  if (lowStock) rows.push(<span key="s" className="text-red-600">🔥 ¡Solo quedan {stock} unidades!</span>);
+  // Existencias: barra que se va vaciando (real: cuánto queda frente al tope de «quedan pocas»).
+  if (lowStock && stock !== null) {
+    const pct = Math.max(6, Math.min(100, (stock / Math.max(1, cfg.urgency.low_stock_at)) * 100));
+    rows.push(
+      <div key="s" className="lp-urg rounded-2xl bg-red-50 px-3 py-2 text-red-700 ring-1 ring-red-200">
+        <div className="flex items-center gap-2"><span className="lp-flame text-lg" aria-hidden>🔥</span>¡Solo quedan <span key={stock} className="lp-num text-base">{stock}</span> unidades!</div>
+        <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-red-100"><div className="lp-stockbar h-full rounded-full" style={{ width: `${pct}%` }} /></div>
+      </div>,
+    );
+  }
   const vw = VIEWERS_WINDOWS[cfg.urgency.viewers_window];
   if (cfg.urgency.live_viewers && social.live >= Math.max(1, cfg.urgency.viewers_min)) {
     rows.push(
-      <span key="l" className="inline-flex items-center gap-1.5">
-        <span className="lp-eye" aria-hidden>👁️</span>
-        <span key={social.live} className="lp-num tabular-nums">{social.live.toLocaleString("es-CO")}</span> {vw.text}
-        {cfg.urgency.viewers_window === "now" ? <span className="lp-dot ml-0.5 inline-block h-2 w-2 rounded-full bg-red-500" /> : null}
-      </span>,
+      <div key="l" className="lp-urg inline-flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+        <span className="lp-eye text-lg" aria-hidden>👁️</span>
+        <span key={social.live} className="lp-num tabular-nums text-base" style={{ color: "var(--lp-accent)" }}>{social.live.toLocaleString("es-CO")}</span> {vw.text}
+        {cfg.urgency.viewers_window === "now" ? <span className="lp-dot ml-auto inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> : null}
+      </div>,
     );
   }
-  if (cfg.urgency.sold_week && social.sold_week >= 3) rows.push(<span key="w">🛍️ <span key={social.sold_week} className="lp-num tabular-nums">{social.sold_week.toLocaleString("es-CO")}</span> {SOLD_WINDOWS[cfg.urgency.sold_window].text}</span>);
+  if (cfg.urgency.sold_week && social.sold_week >= 3) {
+    rows.push(
+      <div key="w" className="lp-urg inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-800 ring-1 ring-emerald-200">
+        <span className="lp-hop text-lg" aria-hidden>🛍️</span>
+        <span key={social.sold_week} className="lp-num tabular-nums text-base">{social.sold_week.toLocaleString("es-CO")}</span> {SOLD_WINDOWS[cfg.urgency.sold_window].text}
+        <span className="lp-spark ml-auto" aria-hidden>📈</span>
+      </div>,
+    );
+  }
   if (!rows.length) return null;
-  return <div className="mt-4 flex flex-col gap-1.5 text-sm font-extrabold">{rows}</div>;
+  return <div className="mt-4 flex flex-col gap-2 text-sm font-extrabold">{rows}</div>;
 }
 
 function PayBadges({ cfg, payments }: { cfg: ReturnType<typeof normalizeLanding>; payments: LandingData["payments"] }) {
@@ -630,7 +770,7 @@ function Timeline({ delivery }: { delivery: ReturnType<typeof deliveryWindow> })
       {steps.map(([icon, label, date], k) => (
         <div key={label} className="relative">
           {k ? <span className="absolute -left-1 top-4 h-0.5 w-3 bg-slate-200" /> : null}
-          <div className="lp-chip mx-auto grid h-9 w-9 place-items-center rounded-full text-lg">{icon}</div>
+          <div className="lp-chip mx-auto grid h-10 w-10 place-items-center rounded-full text-lg"><span className="lp-hop" style={{ animationDelay: `${k * 0.5}s` }}>{icon}</span></div>
           <p className="mt-1 text-[11px] font-black uppercase">{label}</p>
           <p className="text-[11px] capitalize text-slate-500">{date}</p>
         </div>
@@ -699,6 +839,8 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
   const [err, setErr] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [upsellAsk, setUpsellAsk] = useState(false);
+  // Si tocan afuera, la X o Esc: se pregunta antes de cerrar (que no pierdan el pedido por un toque sin querer).
+  const [askLeave, setAskLeave] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
   const leadSent = useRef("");
   const dimsSheet = optionDims(items.map((i) => i.option), cfg.option_label);
@@ -791,8 +933,8 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
   );
 
   return (
-    <Overlay title="Elige y completa tu pedido" onClose={onClose} wide>
-      <div className="space-y-2">
+    <Overlay title="Elige y completa tu pedido" onClose={() => setAskLeave(true)} wide>
+      <div {...E("bundles", "Paquetes")} className="space-y-2">
         {bundles.map((bb, k) => {
           const on = k === tier;
           const now = Array.from({ length: bb.qty }, (_, j) => discounted(priceOf(units[j] ?? first), bb.pct, xpct, online)).reduce((s, v) => s + v, 0);
@@ -852,7 +994,7 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
       </div>
 
       {payOptions.length > 1 || payOptions[0] !== "cod" ? (
-        <div className="mt-5">
+        <div {...E("payments", "Formas de pago")} className="mt-5">
           <p className="mb-2 text-sm font-black">¿Cómo quieres pagar?</p>
           <div className="space-y-2">
             {payOptions.map((p) => (
@@ -866,14 +1008,14 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
         </div>
       ) : null}
 
-      <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm">
+      <div {...E("shipping", "Envío y total")} className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm">
         <div className="flex justify-between"><span>Subtotal</span><span>{money(subtotal)}</span></div>
         {subtotal > total ? <div className="flex justify-between font-bold text-emerald-600"><span>Ahorro</span><span>−{money(subtotal - total)}</span></div> : null}
         <div className="flex justify-between"><span>Envío</span><span className="font-bold">{cfg.shipping.free ? "GRATIS" : "Te lo confirmamos"}</span></div>
         <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-lg font-black"><span>Total a pagar</span><span style={{ color: cfg.accent }}>{money(total)}</span></div>
       </div>
 
-      <div className="mt-5 space-y-3">
+      <div {...E("form", "Formulario")} className="mt-5 space-y-3">
         {input("name", "Nombre y apellido", { autoComplete: "name", placeholder: "Ej. María López" })}
         {input("whatsapp", "WhatsApp para contactarte", { inputMode: "tel", autoComplete: "tel-national", placeholder: "300 123 4567" })}
         {cfg.form.ask_email ? input("email", "Correo electrónico", { type: "email", autoComplete: "email" }) : null}
@@ -904,6 +1046,19 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
       </button>
       <p className="mt-3 text-center text-[11px] leading-4 text-slate-400">🔒 Tus datos se usan solo para tu pedido y su entrega (Ley 1581 de 2012). Al dejar tu WhatsApp aceptas que te contactemos sobre este pedido.</p>
 
+      {askLeave ? createPortal(
+        <div className="lp-portal fixed inset-0 z-80 grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="¿Seguir con tu compra?">
+          <div className="lp-pop w-full max-w-sm overflow-hidden rounded-3xl bg-white text-center text-slate-900 shadow-2xl">
+            <div className="lp-topbar px-4 py-3 text-sm font-black uppercase text-white">¿Ya te vas? 😮</div>
+            <div className="p-6">
+              <p className="text-4xl">🛒</p>
+              <h3 className="mt-2 text-xl font-black">¡Tu pedido está casi listo!</h3>
+              <p className="mt-1 text-sm text-slate-600">{total ? `Son ${money(total)}` : "Ya casi terminas"}{data.payments.cod && cfg.payments.cod ? " y pagas cuando lo recibes." : "."} Solo te falta llenar tus datos.</p>
+              <button type="button" autoFocus onClick={() => setAskLeave(false)} className="lp-cta lp-anim-bounce mt-5 w-full rounded-2xl px-4 py-3.5 font-black uppercase text-white">👉 Seguir con mi compra</button>
+              <button type="button" onClick={() => { setAskLeave(false); onClose(); }} className="mt-2 w-full py-2 text-sm font-semibold text-slate-400 underline">Salir de todas formas</button>
+            </div>
+          </div>
+        </div>, document.body) : null}
       {upsellAsk && upsell ? <UpsellModal cfg={cfg} item={upsell} price={upsellPrice} onYes={() => void send(true)} onNo={() => void send(false)} /> : null}
     </Overlay>
   );
@@ -919,7 +1074,7 @@ function UpsellModal({ cfg, item, price, onYes, onNo }: { cfg: ReturnType<typeof
   useEffect(() => { if (cfg.upsell.seconds && left <= 0) onNo(); }, [left, cfg.upsell.seconds, onNo]);
   return createPortal(
     <div className="lp-portal fixed inset-0 z-70 grid place-items-center bg-black/70 p-4">
-      <div className="lp-pop w-full max-w-sm overflow-hidden rounded-3xl bg-white text-center text-slate-900 shadow-2xl">
+      <div {...E("upsell", "Adicional")} className="lp-pop w-full max-w-sm overflow-hidden rounded-3xl bg-white text-center text-slate-900 shadow-2xl">
         <div className="lp-topbar px-4 py-3 text-sm font-black uppercase text-white">{cfg.upsell.title}</div>
         <div className="p-5">
           {item.image ? <img src={item.image} alt={item.name} className="mx-auto h-44 w-44 rounded-2xl object-cover" /> : null}
@@ -935,14 +1090,31 @@ function UpsellModal({ cfg, item, price, onYes, onNo }: { cfg: ReturnType<typeof
   );
 }
 
+/** Lluvia de confeti al confirmar el pedido (puro CSS, se va sola). */
+function Confetti() {
+  const pieces = useMemo(() => Array.from({ length: 36 }, (_, i) => ({
+    left: (i * 37) % 100, delay: (i % 9) * 0.12, dur: 1.8 + ((i * 7) % 10) / 10, rot: (i * 53) % 360,
+    color: ["#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899"][i % 6], size: 6 + (i % 4) * 2,
+  })), []);
+  return createPortal(
+    <div className="lp-confetti pointer-events-none fixed inset-0 z-80 overflow-hidden" aria-hidden>
+      {pieces.map((p, i) => (
+        <span key={i} style={{ left: `${p.left}%`, width: p.size, height: p.size * 1.6, background: p.color, animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s`, transform: `rotate(${p.rot}deg)` }} />
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 function ThankYou({ data, cfg, done, name, onClose }: { data: LandingData; cfg: ReturnType<typeof normalizeLanding>; done: Done; name: string; onClose: () => void }) {
-  const wa = waNumber(data.store.whatsapp);
+  const wa = waNumber(cfg.whatsapp_number || data.store.whatsapp);
   const first = name.trim().split(/\s+/)[0] ?? "";
   const link = `${window.location.origin}/pedido/${done.token}`;
   const msg = `Hola, soy ${name.trim()}. Acabo de hacer el pedido${done.receipt_no ? ` #${done.receipt_no}` : ""} por ${money(done.total)} y quiero confirmarlo ✅\n${link}`;
   return (
     <Overlay title="¡Pedido recibido!" onClose={onClose}>
       <div className="text-center">
+        <Confetti />
         <div className="lp-pop mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-500 text-4xl text-white">✓</div>
         <h3 className="mt-4 text-2xl font-black">¡Gracias{first ? `, ${first}` : ""}! 🎉</h3>
         {done.receipt_no ? <p className="mt-1 text-sm font-bold text-slate-500">Pedido #{done.receipt_no} · {money(done.total)}</p> : null}
@@ -986,16 +1158,67 @@ const LP_CSS = `
 .lp-faq summary::-webkit-details-marker{display:none}
 /* La landing es solo del producto: sin el botón de tema de RemHub. */
 .theme-control{display:none!important}
+.lp-portal .lp-input{border:2px solid #e2e8f0!important;border-radius:12px}
+.lp-portal .lp-input.border-red-500{border-color:#ef4444!important}
+.lp-portal .lp-input:focus{border-color:var(--lp-accent)!important;box-shadow:0 0 0 3px var(--lp-accent-soft)}
 .lp-root select,.lp-portal select,.lp-root input:not([type=checkbox]),.lp-portal input:not([type=checkbox]),.lp-portal textarea{background-color:#fff!important;color:#0f172a!important;-webkit-text-fill-color:#0f172a}
 .lp-eye{display:inline-block;animation:lpBlinkEye 4s ease-in-out infinite}
 .lp-num{display:inline-block;font-weight:900;animation:lpNum .5s cubic-bezier(.2,.9,.3,1.4)}
 @keyframes lpBlinkEye{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
 @keyframes lpNum{from{transform:translateY(-6px) scale(1.25);opacity:.3}}
+.lp-ctab-light{background:#fff}
+.lp-ctab-soft{background:color-mix(in oklab,var(--lp-accent) 9%,#fff)}
+.lp-ctab-accent{background:linear-gradient(135deg,var(--lp-accent),var(--lp-dark))}
+.lp-ctab-dark{background:#0f172a}
+.lp-cta-inv{background:#fff!important;color:var(--lp-accent)!important;box-shadow:0 12px 30px -10px rgba(0,0,0,.45)!important}
+.lp-anim-pulse{animation:lpPulse 2.2s ease-in-out infinite}
+.lp-anim-bounce{animation:lpBounce 1.6s ease-in-out infinite}
+.lp-anim-shake{animation:lpShake 3.2s ease-in-out infinite}
+.lp-anim-glow{animation:lpGlow 1.8s ease-out infinite}
+.lp-anim-shine{position:relative;overflow:hidden}
+.lp-anim-shine::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.55) 50%,transparent 65%);transform:translateX(-120%);animation:lpSweep 2.6s ease-in-out infinite}
+.lp-arrow{display:inline-block;animation:lpBounce 1.1s ease-in-out infinite}
+@keyframes lpBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes lpShake{0%,84%,100%{transform:rotate(0)}87%{transform:rotate(-3deg)}90%{transform:rotate(3deg)}93%{transform:rotate(-2deg)}96%{transform:rotate(2deg)}}
+@keyframes lpGlow{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--lp-accent) 70%,transparent)}100%{box-shadow:0 0 0 18px transparent}}
+@keyframes lpSweep{0%,55%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+.lp-cd{background:linear-gradient(160deg,var(--lp-accent),var(--lp-dark));box-shadow:0 10px 22px -12px var(--lp-accent);perspective:300px}
+.lp-cd::after{content:'';position:absolute;left:0;right:0;top:0;height:50%;background:rgba(255,255,255,.12);pointer-events:none}
+.lp-cd-sec{animation:lpPulse 1s ease-in-out infinite}
+.lp-flip{animation:lpFlip .45s cubic-bezier(.2,.9,.3,1.3)}
+.lp-bell{display:inline-block;transform-origin:50% 10%;animation:lpRing 2.4s ease-in-out infinite}
+.lp-flame{display:inline-block;transform-origin:50% 100%;animation:lpFlame .8s ease-in-out infinite alternate}
+.lp-stockbar{background:repeating-linear-gradient(45deg,#ef4444 0 10px,#fb7185 10px 20px);background-size:28px 28px;animation:lpStripes 1s linear infinite;transition:width .8s ease}
+.lp-hop{display:inline-block;animation:lpHop 2.2s ease-in-out infinite}
+.lp-spark{display:inline-block;animation:lpPulse 1.6s ease-in-out infinite}
+.lp-float{display:inline-block;animation:lpFloat 3s ease-in-out infinite}
+.lp-icon-bubble{background:var(--lp-accent-soft)}
+.lp-card{transition:transform .25s ease,box-shadow .25s ease}
+.lp-card:hover{transform:translateY(-4px);box-shadow:0 18px 40px -18px rgba(0,0,0,.28)}
+.lp-shimmer{position:relative;overflow:hidden}
+.lp-shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.6) 50%,transparent 65%);transform:translateX(-120%);animation:lpSweep 2.8s ease-in-out infinite}
+.lp-wobble{animation:lpWobble 3.2s ease-in-out infinite}
+.lp-urg{animation:lpIn .5s both}
+.lp-root [data-reveal]{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.lp-root [data-reveal].lp-in{opacity:1;transform:none}
+.lp-confetti span{position:absolute;top:-24px;border-radius:2px;animation-name:lpFall;animation-timing-function:ease-in;animation-fill-mode:forwards}
+@keyframes lpFlip{from{transform:rotateX(90deg) translateY(-6px);opacity:.2}}
+@keyframes lpRing{0%,70%,100%{transform:rotate(0)}75%{transform:rotate(14deg)}80%{transform:rotate(-12deg)}85%{transform:rotate(8deg)}90%{transform:rotate(-6deg)}}
+@keyframes lpFlame{from{transform:scale(1) rotate(-5deg)}to{transform:scale(1.2) rotate(5deg)}}
+@keyframes lpStripes{to{background-position:28px 0}}
+@keyframes lpHop{0%,60%,100%{transform:translateY(0)}70%{transform:translateY(-6px)}80%{transform:translateY(0)}88%{transform:translateY(-2px)}}
+@keyframes lpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes lpWobble{0%,80%,100%{transform:rotate(0) scale(1)}85%{transform:rotate(-7deg) scale(1.1)}90%{transform:rotate(7deg) scale(1.1)}95%{transform:rotate(-3deg)}}
+@keyframes lpFall{to{transform:translateY(112vh) rotate(760deg)}}
+/* Animaciones suaves: sin lo que flota o salta; sin animación: nada se mueve. */
+.lp-fx-soft .lp-float,.lp-fx-soft .lp-hop,.lp-fx-soft .lp-wobble,.lp-fx-soft .lp-bell,.lp-fx-soft .lp-flame,.lp-fx-soft .lp-spark,.lp-fx-soft .lp-cd-sec{animation:none}
+.lp-fx-off *,.lp-fx-off *::after{animation:none!important}
+.lp-fx-off [data-reveal]{opacity:1;transform:none;transition:none}
 @keyframes lpPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
 @keyframes lpShine{to{background-position:200% 0}}
 @keyframes lpBlink{50%{opacity:.25}}
 @keyframes lpIn{from{opacity:0;transform:translateY(20px) scale(.9)}}
 @keyframes lpPop{from{opacity:0;transform:scale(.6)}}
 @keyframes lpUp{from{transform:translateY(40px);opacity:.4}}
-@media (prefers-reduced-motion:reduce){.lp-eye,.lp-num,.lp-pulse,.lp-topbar,.lp-dot,.lp-toast,.lp-pop,.lp-sheet{animation:none}}
+@media (prefers-reduced-motion:reduce){.lp-root [data-reveal]{opacity:1;transform:none;transition:none}.lp-confetti{display:none}.lp-cd-sec,.lp-flip,.lp-bell,.lp-flame,.lp-stockbar,.lp-hop,.lp-spark,.lp-float,.lp-shimmer::after,.lp-wobble,.lp-urg,.lp-anim-pulse,.lp-anim-bounce,.lp-anim-shake,.lp-anim-glow,.lp-anim-shine::after,.lp-arrow,.lp-eye,.lp-num,.lp-pulse,.lp-topbar,.lp-dot,.lp-toast,.lp-pop,.lp-sheet{animation:none}}
 `;

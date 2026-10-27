@@ -11,7 +11,7 @@ import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
 import { DateField } from "@/components/forms/Fields";
 import { EMPTY_PRODUCT_DETAILS } from "@/lib/product-details";
 import { catalogSlug } from "@/lib/catalogs";
-import { SOLD_WINDOWS, VIEWERS_WINDOWS, type SoldWindow, type ViewersWindow, DEFAULT_LANDING, LANDING_FONTS, LANDING_SLUG, SECTION_NAMES, normalizeLanding, optionDims, type LandingConfig, type LandingFont } from "@/lib/landing/config";
+import { CTA_BACKGROUNDS, CTA_STYLES, SECTION_KEYS, SOLD_WINDOWS, VIEWERS_WINDOWS, type CtaBackground, type CtaStyle, type SectionKey, type SoldWindow, type ViewersWindow, DEFAULT_LANDING, LANDING_FONTS, LANDING_SLUG, SECTION_NAMES, normalizeLanding, optionDims, type LandingConfig, type LandingFont } from "@/lib/landing/config";
 import { LANDING_TEMPLATES, applyTemplate } from "@/lib/landing/templates";
 import type { LandingData, LandingItem } from "@/app/[slug]/oferta/[page]/LandingView";
 import { Field, Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "../catalogs/ui";
@@ -38,9 +38,9 @@ async function uploadImage(file: File): Promise<string> {
 }
 
 /** Sección del editor que se abre y se cierra: título grande, color al abrirla y botón claro de «Abrir / Cerrar». */
-function Block({ title, emoji, hint, children, open = false }: { title: string; emoji: string; hint?: string; children: ReactNode; open?: boolean }) {
+function Block({ id, title, emoji, hint, children, open = false }: { id?: string; title: string; emoji: string; hint?: string; children: ReactNode; open?: boolean }) {
   return (
-    <details data-block open={open} className="lp-block group overflow-hidden rounded-3xl border-2 transition-shadow open:shadow-lg" style={softBox}>
+    <details data-block data-key={id} open={open} className="lp-block group overflow-hidden rounded-3xl border-2 transition-shadow open:shadow-lg" style={softBox}>
       <summary className="lp-block-head relative flex cursor-pointer select-none list-none items-center gap-3 p-4 pl-5 transition sm:gap-4">
         <span className="lp-block-bar absolute inset-y-0 left-0 w-1.5" />
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-2xl shadow-sm transition group-open:scale-105" style={{ background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 30%, transparent), color-mix(in oklab, var(--t-accent) 8%, transparent))" }}>{emoji}</span>
@@ -66,6 +66,8 @@ const BLOCK_CSS = `
 .lp-block[open] .lp-block-head{background:color-mix(in oklab,var(--t-accent) 10%,transparent)}
 .lp-block .lp-block-head:hover{background:color-mix(in oklab,var(--t-accent) 7%,transparent)}
 .lp-block .lp-block-head:hover .lp-block-bar{background:color-mix(in oklab,var(--t-accent) 50%,transparent)}
+.lp-block.lp-flash{animation:lpFlash 1.6s ease-out}
+@keyframes lpFlash{0%,40%{box-shadow:0 0 0 4px var(--t-accent)}100%{box-shadow:0 0 0 0 transparent}}
 .lp-block[open] .lp-block-toggle{background:var(--t-accent);border-color:transparent!important;color:#fff}
 `;
 
@@ -234,6 +236,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   const [saving, setSaving] = useState(false);
   const [device, setDevice] = useState<Device>("phone");
   const [full, setFull] = useState(false);
+  const [mode, setMode] = useState<"edit" | "test">("edit");
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const blocksBox = useRef<HTMLDivElement>(null);
@@ -328,8 +331,8 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
   }), [store, row.id, row.slug, row.name, cfg, catalog, items, upsellItem, pay, sample, trust]);
 
   const post = useCallback((reset = false) => {
-    frame.current?.contentWindow?.postMessage({ type: "remhub-landing-preview", data: previewData, reset }, window.location.origin);
-  }, [previewData]);
+    frame.current?.contentWindow?.postMessage({ type: "remhub-landing-preview", data: previewData, reset, mode }, window.location.origin);
+  }, [previewData, mode]);
   useEffect(() => { const t = window.setTimeout(() => post(), 150); return () => window.clearTimeout(t); }, [post]);
   useEffect(() => {
     const onMsg = (e: MessageEvent) => { if (e.origin === window.location.origin && (e.data as { type?: string })?.type === "remhub-landing-preview-ready") post(true); };
@@ -367,6 +370,32 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     const ok = await Swal.fire({ icon: "question", title: "¿Traer la información del producto?", text: "Se copian las fotos, el video, la descripción, las características y las especificaciones. Reemplaza las fotos, beneficios e historia de la landing; después puedes cambiar todo.", showCancelButton: true, confirmButtonText: "Sí, traer", cancelButtonText: "Cancelar", ...swalTheme });
     if (ok.isConfirmed) apply();
   }
+
+  // Modo editar: la vista previa dice qué parte se tocó y aquí se abre su sección.
+  const sendCmd = (cmd: string) => frame.current?.contentWindow?.postMessage({ type: "remhub-landing-cmd", cmd }, window.location.origin);
+  useEffect(() => {
+    frame.current?.contentWindow?.postMessage({ type: "remhub-landing-mode", mode }, window.location.origin);
+  }, [mode]);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const m = e.data as { type?: string; target?: string } | null;
+      if (m?.type !== "remhub-landing-edit" || !m.target) return;
+      setFull(false);
+      setShowPreview(false);
+      window.setTimeout(() => {
+        const el = blocksBox.current?.querySelector<HTMLDetailsElement>(`details[data-key="${m.target}"]`);
+        if (!el) return;
+        el.open = true;
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.remove("lp-flash");
+        void el.offsetWidth;
+        el.classList.add("lp-flash");
+      }, 60);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
 
   // Plantillas propias de la tienda.
   const loadMine = useCallback(async () => {
@@ -529,7 +558,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               <button type="button" onClick={() => toggleAll(false)} className="rounded-full border px-3 py-1 text-xs font-bold" style={softBox}>Cerrar todo</button>
             </div>
           </div>
-          <Block title="Crear desde un enlace" emoji="🔗" hint="Pega el enlace de AliExpress, Amazon, Shopify, Mercado Libre u otra tienda: traemos título, fotos, descripción y características" open={!row.id}>
+          <Block id="link" title="Crear desde un enlace" emoji="🔗" hint="Pega el enlace de AliExpress, Amazon, Shopify, Mercado Libre u otra tienda: traemos título, fotos, descripción y características" open={!row.id}>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void importLink(false); }} placeholder="https://es.aliexpress.com/item/…" className={inputCls} style={inputStyle} inputMode="url" />
               <button type="button" disabled={importing || !importUrl.trim()} onClick={() => void importLink(false)} className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>{importing ? "Leyendo…" : "Traer información"}</button>
@@ -564,7 +593,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Plantilla" emoji="🎨" hint="Empieza con textos, beneficios y preguntas pensados para tu tipo de producto" open={!row.id}>
+          <Block id="template" title="Plantilla" emoji="🎨" hint="Empieza con textos, beneficios y preguntas pensados para tu tipo de producto" open={!row.id}>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {LANDING_TEMPLATES.map((t) => (
                 <button key={t.key} type="button" onClick={() => setRow((r) => ({ ...r, config: applyTemplate(r.config, t.key) }))}
@@ -600,7 +629,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
 
           </Block>
 
-          <Block title="Producto y opciones" emoji="🛍️" hint="El catálogo pone el precio y las existencias reales" open>
+          <Block id="product" title="Producto y opciones" emoji="🛍️" hint="El catálogo pone el precio y las existencias reales" open>
             <Field label="Catálogo (precio y existencias)">
               <select value={row.catalog_id} onChange={(e) => setRow((r) => ({ ...r, catalog_id: e.target.value }))} className={inputCls} style={inputStyle}>
                 {catalogs.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active ? "" : " (inactivo)"}</option>)}
@@ -645,7 +674,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Diseño: orden de las secciones, letra y barras" emoji="🧩" hint="Sube, baja u oculta cada parte. Personaliza todo">
+          <Block id="design" title="Diseño: orden de las secciones, letra y barras" emoji="🧩" hint="Sube, baja u oculta cada parte. Personaliza todo">
             <div className="space-y-1.5">
               {cfg.sections.map((sec, i) => (
                 <div key={sec.key} className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ ...softBox, opacity: sec.on ? 1 : 0.55 }}>
@@ -657,6 +686,13 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
                 </div>
               ))}
             </div>
+            <Field label="Animaciones de la página" hint="Contadores que giran, íconos que flotan, fuego, barra de existencias, secciones que aparecen al bajar y confeti al pedir">
+              <div className="grid grid-cols-3 gap-2">
+                {([["show", "🎆 Espectáculo"], ["soft", "✨ Suaves"], ["off", "⏸️ Sin animación"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setCfg({ effects: k })} className="rounded-xl border-2 px-2 py-2 text-xs font-bold" style={{ ...softBox, borderColor: cfg.effects === k ? "var(--t-accent)" : "var(--t-card-border)" }}>{l}</button>
+                ))}
+              </div>
+            </Field>
             <Field label="Tipo de letra">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {(Object.keys(LANDING_FONTS) as LandingFont[]).map((k) => (
@@ -670,14 +706,14 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </div>
           </Block>
 
-          <Block title="Afiche (imágenes largas)" emoji="🖼️" hint="Como las landings tipo combo: diseña en Canva y súbelas en orden">
+          <Block id="poster" title="Afiche (imágenes largas)" emoji="🖼️" hint="Como las landings tipo combo: diseña en Canva y súbelas en orden">
             <Field label="Título antes de las imágenes (opcional)"><input value={cfg.poster_title} onChange={(e) => setCfg({ poster_title: e.target.value })} className={inputCls} style={inputStyle} /></Field>
             <ListEditor items={cfg.poster_images} max={30} onChange={(poster_images) => setCfg({ poster_images })} make={() => ""} addLabel="Agregar imagen" render={(src, set) => <ImageInput value={src} onChange={set} label="Imagen" />} />
             <Field label="Botón de compra cada" hint="0 = solo al final"><Num value={cfg.poster_cta_every} max={10} suffix="imágenes" onChange={(poster_cta_every) => setCfg({ poster_cta_every })} /></Field>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consejo: imágenes de 1080 px de ancho, livianas (menos de 400 KB). Al subirlas aquí se optimizan solas.</p>
           </Block>
 
-          <Block title="Nombre, enlace y textos" emoji="✍️" hint="Lo primero que ve el cliente">
+          <Block id="texts" title="Nombre, enlace y textos" emoji="✍️" hint="Lo primero que ve el cliente">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Nombre del producto en la landing"><input value={row.name} onChange={(e) => setRow((r) => ({ ...r, name: e.target.value, slug: slugTouched ? r.slug : catalogSlug(e.target.value).slice(0, 60) }))} className={inputCls} style={inputStyle} /></Field>
               <Field label="Enlace" hint={publicUrl(row.slug || "…")}><input value={row.slug} onChange={(e) => { setSlugTouched(true); setRow((r) => ({ ...r, slug: catalogSlug(e.target.value).slice(0, 60) })); }} className={inputCls} style={inputStyle} /></Field>
@@ -696,7 +732,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </Field>
           </Block>
 
-          <Block title="Precio, promo y cuenta regresiva" emoji="💲" hint="Tu precio de venta en esta landing, el «antes» y hasta cuándo va la promo">
+          <Block id="price" title="Precio, promo y cuenta regresiva" emoji="💲" hint="Tu precio de venta en esta landing, el «antes» y hasta cuándo va la promo">
             <Field label="Precio de venta en esta landing" hint={items[0] ? `En el catálogo vale $${Math.round(items[0].price).toLocaleString("es-CO")}. Vacío = ese precio. Puedes ponerlo más alto o más bajo; el precio de tu tienda no cambia. Los paquetes y descuentos se aplican sobre este.` : "Vacío = el precio del catálogo."}>
               <input inputMode="numeric" value={cfg.sale_price ? cfg.sale_price.toLocaleString("es-CO") : ""} onChange={(e) => { const n = Number(e.target.value.replace(/\D/g, "")); setCfg({ sale_price: n > 0 ? n : null }); }} placeholder={items[0] ? `$ ${Math.round(items[0].price).toLocaleString("es-CO")}` : "$ precio"} className={`${inputCls} text-lg font-black`} style={inputStyle} />
             </Field>
@@ -710,7 +746,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </Field>
           </Block>
 
-          <Block title="Paquetes: lleva más y ahorra" emoji="📦" hint="El paquete 2x sube mucho el valor de cada venta">
+          <Block id="bundles" title="Paquetes: lleva más y ahorra" emoji="📦" hint="El paquete 2x sube mucho el valor de cada venta">
             <ListEditor items={cfg.bundles} max={4} onChange={(bundles) => setCfg({ bundles })} addLabel="Agregar paquete"
               make={() => ({ qty: (cfg.bundles.at(-1)?.qty ?? 0) + 1, pct: 10, label: `Lleva ${(cfg.bundles.at(-1)?.qty ?? 0) + 1}`, highlight: false })}
               render={(b, set) => (
@@ -723,7 +759,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block title="Formas de pago" emoji="💳" hint="Contraentrega, en línea con Wompi y cuotas con Addi">
+          <Block id="payments" title="Formas de pago" emoji="💳" hint="Contraentrega, en línea con Wompi y cuotas con Addi">
             <Toggle label="💵 Contraentrega (paga al recibir)" hint="La que más vende en Colombia" checked={cfg.payments.cod} onChange={(v) => setCfg({ payments: { ...cfg.payments, cod: v } })} />
             <Toggle label="💳 Pagar en línea (Wompi)" hint={pay.wompi ? "Tarjeta, PSE, Nequi, Bancolombia" : "Primero actívalo en Mi tienda → Facturación → Métodos de pago"} checked={cfg.payments.online} onChange={(v) => setCfg({ payments: { ...cfg.payments, online: v } })} />
             {cfg.payments.online ? <Field label="Descuento por pagar en línea"><Num value={cfg.payments.online_pct} max={30} suffix="%" onChange={(online_pct) => setCfg({ payments: { ...cfg.payments, online_pct } })} /></Field> : null}
@@ -732,7 +768,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>El pago en línea y con Addi se hace desde el enlace del pedido, cuando lo confirmas (así nunca cobras algo que no tienes).</p>
           </Block>
 
-          <Block title="Envío y entrega" emoji="🚚">
+          <Block id="shipping" title="Envío y entrega" emoji="🚚">
             <Toggle label="Envío gratis" checked={cfg.shipping.free} onChange={(v) => setCfg({ shipping: { ...cfg.shipping, free: v } })} />
             <Field label="Texto del envío"><input value={cfg.shipping.text} onChange={(e) => setCfg({ shipping: { ...cfg.shipping, text: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
             <div className="grid grid-cols-3 gap-2">
@@ -742,14 +778,14 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </div>
           </Block>
 
-          <Block title="Formulario del pedido" emoji="📝" hint="Menos campos = más ventas">
+          <Block id="form" title="Formulario del pedido" emoji="📝" hint="Menos campos = más ventas">
             <Toggle label="Pedir cédula" hint="Útil para la guía de la transportadora" checked={cfg.form.ask_document} onChange={(v) => setCfg({ form: { ...cfg.form, ask_document: v } })} />
             <Toggle label="Pedir correo (obligatorio)" checked={cfg.form.ask_email} onChange={(v) => setCfg({ form: { ...cfg.form, ask_email: v } })} />
             <Toggle label="Pedir barrio" checked={cfg.form.ask_neighborhood} onChange={(v) => setCfg({ form: { ...cfg.form, ask_neighborhood: v } })} />
             <Toggle label="«Confirmo la dirección de entrega»" hint="Baja las devoluciones en contraentrega" checked={cfg.form.confirm_address} onChange={(v) => setCfg({ form: { ...cfg.form, confirm_address: v } })} />
           </Block>
 
-          <Block title="Urgencia y prueba social (real)" emoji="🔥" hint="Todo sale de la base: nada inventado">
+          <Block id="urgency" title="Urgencia y prueba social (real)" emoji="🔥" hint="Todo sale de la base: nada inventado">
             <Toggle label="👁️ Personas viendo" hint="El número se mueve solo a medida que entra la gente (se actualiza cada 25 s)" checked={cfg.urgency.live_viewers} onChange={(v) => setCfg({ urgency: { ...cfg.urgency, live_viewers: v } })} />
             {cfg.urgency.live_viewers ? (
               <div className="grid gap-2 sm:grid-cols-2">
@@ -796,7 +832,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Compra con confianza" emoji="🤝" hint="Credibilidad con datos reales de tu tienda: lo que más convence a comprar">
+          <Block id="trust" title="Compra con confianza" emoji="🤝" hint="Credibilidad con datos reales de tu tienda: lo que más convence a comprar">
             <Toggle label="Mostrar «Compra con confianza»" hint="Siempre incluye el derecho de retracto y cómo se paga" checked={cfg.trust.enabled} onChange={(v) => setCfg({ trust: { ...cfg.trust, enabled: v } })} />
             {cfg.trust.enabled ? (
               <>
@@ -808,7 +844,54 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Adicional de último momento" emoji="➕" hint="«¡Espera! Agrégalo con descuento» antes de enviar el pedido">
+          <Block id="cta" title="Llamado a comprar («¿Listo para pedir el tuyo?»)" emoji="📣" hint="Textos, animación, fondo y cada cuánto se repite entre las secciones">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Título"><input value={cfg.cta_block.title} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, title: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
+              <Field label="Etiqueta de arriba" hint="Vacío = sin etiqueta"><input value={cfg.cta_block.badge} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, badge: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
+            </div>
+            <Field label="Texto" hint="Vacío = el envío y la forma de pago"><input value={cfg.cta_block.text} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, text: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
+            <Field label="Texto del botón" hint={`Vacío = «${cfg.cta_text}»`}><input value={cfg.cta_block.button} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, button: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
+            <Field label="¿Cómo llama la atención el botón?">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                {(Object.keys(CTA_STYLES) as CtaStyle[]).map((k) => (
+                  <button key={k} type="button" onClick={() => setCfg({ cta_block: { ...cfg.cta_block, style: k } })} className="rounded-xl border-2 px-2 py-2 text-xs font-bold" style={{ ...softBox, borderColor: cfg.cta_block.style === k ? "var(--t-accent)" : "var(--t-card-border)" }}>
+                    {k === "pulse" ? "💓" : k === "bounce" ? "⬆️" : k === "shake" ? "📳" : k === "glow" ? "✨" : k === "shine" ? "⚡" : "⏸️"} {CTA_STYLES[k]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Fondo">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(Object.keys(CTA_BACKGROUNDS) as CtaBackground[]).map((k) => (
+                  <button key={k} type="button" onClick={() => setCfg({ cta_block: { ...cfg.cta_block, background: k } })} className="flex items-center gap-2 rounded-xl border-2 px-2 py-2 text-xs font-bold" style={{ ...softBox, borderColor: cfg.cta_block.background === k ? "var(--t-accent)" : "var(--t-card-border)" }}>
+                    <span className="h-4 w-4 rounded-full border" style={{ background: k === "light" ? "#fff" : k === "soft" ? `color-mix(in oklab, ${cfg.accent} 15%, #fff)` : k === "accent" ? cfg.accent : "#0f172a" }} />{CTA_BACKGROUNDS[k]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="¿Dónde aparece?">
+              <select value={cfg.cta_block.repeat} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, repeat: e.target.value as "end" | "every" | "after" } })} className={inputCls} style={inputStyle}>
+                <option value="end">Solo una vez (donde está en el orden de secciones)</option>
+                <option value="every">Se repite cada cierto número de secciones</option>
+                <option value="after">Después de las secciones que yo elija</option>
+              </select>
+            </Field>
+            {cfg.cta_block.repeat === "every" ? <Field label="Repetir cada"><Num value={cfg.cta_block.every} min={1} max={6} suffix="secciones" onChange={(every) => setCfg({ cta_block: { ...cfg.cta_block, every } })} /></Field> : null}
+            {cfg.cta_block.repeat === "after" ? (
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {(SECTION_KEYS.filter((k) => k !== "hero" && k !== "final_cta") as SectionKey[]).map((k) => (
+                  <label key={k} className="flex items-center gap-2 rounded-xl border px-2 py-1.5 text-xs font-semibold" style={softBox}>
+                    <input type="checkbox" checked={cfg.cta_block.after.includes(k)} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, after: e.target.checked ? [...cfg.cta_block.after, k] : cfg.cta_block.after.filter((x) => x !== k) } })} />
+                    {SECTION_NAMES[k]}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            <Toggle label="👇 Flecha que salta encima del botón" checked={cfg.cta_block.arrow} onChange={(v) => setCfg({ cta_block: { ...cfg.cta_block, arrow: v } })} />
+            <Toggle label="⏰ Mostrar la cuenta regresiva o las personas viendo" hint="Lo que tengas activo en urgencia" checked={cfg.cta_block.urgency} onChange={(v) => setCfg({ cta_block: { ...cfg.cta_block, urgency: v } })} />
+          </Block>
+
+          <Block id="upsell" title="Adicional de último momento" emoji="➕" hint="«¡Espera! Agrégalo con descuento» antes de enviar el pedido">
             <Toggle label="Ofrecer un adicional" checked={cfg.upsell.enabled} onChange={(v) => setCfg({ upsell: { ...cfg.upsell, enabled: v } })} />
             {cfg.upsell.enabled ? (
               <>
@@ -824,7 +907,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Oferta de salida" emoji="🎁" hint="Si alguien se va a ir sin comprar, le ofreces un descuento extra (real)">
+          <Block id="exit" title="Oferta de salida" emoji="🎁" hint="Si alguien se va a ir sin comprar, le ofreces un descuento extra (real)">
             <Toggle label="Activar oferta de salida" hint="Computador: al mover el mouse para cerrar. Celular: tras 45 s sin abrir el pedido. Una vez por visita." checked={cfg.exit_offer.enabled} onChange={(v) => setCfg({ exit_offer: { ...cfg.exit_offer, enabled: v } })} />
             {cfg.exit_offer.enabled ? (
               <>
@@ -835,13 +918,13 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             ) : null}
           </Block>
 
-          <Block title="Fotos, video y guía de tallas" emoji="📸" hint="Si no pones fotos, se usan las del producto">
+          <Block id="media" title="Fotos, video y guía de tallas" emoji="📸" hint="Si no pones fotos, se usan las del producto">
             <ListEditor items={cfg.images} max={20} onChange={(images) => setCfg({ images })} make={() => ""} addLabel="Agregar foto" render={(src, set) => <ImageInput value={src} onChange={set} />} />
             <Field label="Video (YouTube, TikTok descargado en .mp4 o enlace .mp4)" hint="Un video de 15 s con el producto en uso vende muchísimo"><input value={cfg.video_url} onChange={(e) => setCfg({ video_url: e.target.value.trim() })} placeholder="https://…" className={inputCls} style={inputStyle} /></Field>
             <Field label="Guía de tallas (imagen)"><ImageInput value={cfg.size_guide_image} onChange={(size_guide_image) => setCfg({ size_guide_image })} label="Guía" /></Field>
           </Block>
 
-          <Block title="Beneficios" emoji="✨">
+          <Block id="benefits" title="Beneficios" emoji="✨">
             <ListEditor items={cfg.benefits} max={8} onChange={(benefits) => setCfg({ benefits })} make={() => ({ icon: "✨", title: "", text: "" })} addLabel="Agregar beneficio"
               render={(b, set) => (
                 <div className="grid gap-2 sm:grid-cols-[70px_1fr]">
@@ -851,7 +934,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block title="Bloques de historia (foto + texto)" emoji="📖" hint="Cuenta por qué lo necesitan; cada bloque trae su botón de compra">
+          <Block id="stories" title="Bloques de historia (foto + texto)" emoji="📖" hint="Cuenta por qué lo necesitan; cada bloque trae su botón de compra">
             <ListEditor items={cfg.stories} max={8} onChange={(stories) => setCfg({ stories })} make={() => ({ title: "", text: "", image: "" })} addLabel="Agregar bloque"
               render={(s, set) => (
                 <div className="space-y-2">
@@ -862,7 +945,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block title="Comparación «Nosotros vs. otros»" emoji="🆚">
+          <Block id="compare" title="Comparación «Nosotros vs. otros»" emoji="🆚">
             <ListEditor items={cfg.compare_rows} max={8} onChange={(compare_rows) => setCfg({ compare_rows })} make={() => ({ label: "", us: "✅", them: "❌" })} addLabel="Agregar fila"
               render={(r, set) => (
                 <div className="grid grid-cols-3 gap-2">
@@ -873,7 +956,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block title="Opiniones de clientes" emoji="⭐" hint="Solo opiniones reales, con permiso de la persona">
+          <Block id="testimonials" title="Opiniones de clientes" emoji="⭐" hint="Solo opiniones reales, con permiso de la persona">
             <ListEditor items={cfg.testimonials} max={12} onChange={(testimonials) => setCfg({ testimonials })} make={() => ({ name: "", city: "", text: "", stars: 5, image: "" })} addLabel="Agregar opinión"
               render={(t, set) => (
                 <div className="space-y-2">
@@ -888,7 +971,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
               )} />
           </Block>
 
-          <Block title="Preguntas frecuentes y garantías" emoji="❓">
+          <Block id="faq" title="Preguntas frecuentes y garantías" emoji="❓">
             <ListEditor items={cfg.faqs} max={15} onChange={(faqs) => setCfg({ faqs })} make={() => ({ q: "", a: "" })} addLabel="Agregar pregunta"
               render={(f, set) => <div className="space-y-2"><input value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} placeholder="Pregunta" className={inputCls} style={inputStyle} /><textarea value={f.a} onChange={(e) => set({ ...f, a: e.target.value })} rows={2} placeholder="Respuesta" className={inputCls} style={inputStyle} /></div>} />
             <Field label="Garantías (franja oscura)" hint="Una por línea, máximo 6">
@@ -896,15 +979,19 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             </Field>
           </Block>
 
-          <Block title="WhatsApp, compartir, políticas y gracias" emoji="💬">
-            <Toggle label="Botón flotante de WhatsApp" hint={store.whatsapp ? `Al ${store.whatsapp}` : "La tienda no tiene WhatsApp en Mi tienda"} checked={cfg.whatsapp_button} onChange={(v) => setCfg({ whatsapp_button: v })} />
+          <Block id="whatsapp" title="WhatsApp, compartir, políticas y gracias" emoji="💬">
+            <Field label="WhatsApp de esta landing" hint={`Vacío = el de la tienda${store.whatsapp ? ` (${store.whatsapp})` : ""}. Úsalo si los pedidos de esta pauta los atiende otra persona o línea. Es el del botón flotante y el de «Confirmar mi pedido».`}>
+              <input inputMode="tel" value={cfg.whatsapp_number} onChange={(e) => setCfg({ whatsapp_number: e.target.value.replace(/\D/g, "").slice(0, 13) })} placeholder={store.whatsapp || "300 123 4567"} className={inputCls} style={inputStyle} autoComplete="off" />
+            </Field>
+            {cfg.whatsapp_number && !/^\d{10,13}$/.test(cfg.whatsapp_number) ? <p className="text-xs font-semibold text-red-500">Escribe el número completo (10 dígitos, ej. 3001234567).</p> : null}
+            <Toggle label="Botón flotante de WhatsApp" hint={(cfg.whatsapp_number || store.whatsapp) ? `Al ${cfg.whatsapp_number || store.whatsapp}` : "Escribe un número arriba o ponlo en Mi tienda"} checked={cfg.whatsapp_button} onChange={(v) => setCfg({ whatsapp_button: v })} />
             <Field label="Mensaje que llega por WhatsApp"><input value={cfg.whatsapp_text} onChange={(e) => setCfg({ whatsapp_text: e.target.value })} className={inputCls} style={inputStyle} /></Field>
             <Toggle label="«Recomiéndalo a un amigo»" hint="Lo comparten por WhatsApp: ventas gratis" checked={cfg.share_button} onChange={(v) => setCfg({ share_button: v })} />
             <Field label="Políticas propias (cambios, garantía)" hint="Siempre se agregan el derecho de retracto y la reversión del pago que exige la ley"><textarea value={cfg.policies} onChange={(e) => setCfg({ policies: e.target.value })} rows={3} className={inputCls} style={inputStyle} /></Field>
             <Field label="Mensaje de gracias"><textarea value={cfg.thank_you} onChange={(e) => setCfg({ thank_you: e.target.value })} rows={2} className={inputCls} style={inputStyle} /></Field>
           </Block>
 
-          <Block title="Píxeles propios de esta landing" emoji="📊" hint="Opcional: el píxel de la tienda (Mi tienda → Marketing) ya mide todo">
+          <Block id="pixels" title="Píxeles propios de esta landing" emoji="📊" hint="Opcional: el píxel de la tienda (Mi tienda → Marketing) ya mide todo">
             <Field label="ID de otro píxel de Meta" hint="Si esta campaña usa una cuenta publicitaria distinta"><input inputMode="numeric" value={cfg.meta_pixel_id} onChange={(e) => setCfg({ meta_pixel_id: e.target.value.replace(/\D/g, "") })} className={inputCls} style={inputStyle} /></Field>
             <Field label="ID del píxel de TikTok" hint="TikTok Ads → Herramientas → Eventos → Píxel (ej. C1ABC2DEF3GHI4JK)"><input value={cfg.tiktok_pixel_id} onChange={(e) => setCfg({ tiktok_pixel_id: e.target.value.trim().toUpperCase() })} className={inputCls} style={inputStyle} /></Field>
           </Block>
@@ -926,6 +1013,23 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
                 <button type="button" onClick={() => setFull((v) => !v)} className="grid h-8 w-8 place-items-center rounded-lg border" style={full ? { borderColor: "rgba(255,255,255,.3)" } : softBox} title={full ? "Salir de pantalla completa" : "Pantalla completa"}>{full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button>
               </div>
             </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex gap-1 rounded-xl border p-1" style={full ? { borderColor: "rgba(255,255,255,.2)", color: "#fff" } : softBox}>
+                <button type="button" onClick={() => setMode("edit")} className="rounded-lg px-3 py-1.5 text-xs font-bold" style={{ background: mode === "edit" ? "var(--t-cta)" : undefined, color: mode === "edit" ? "#fff" : undefined }}>✏️ Editar</button>
+                <button type="button" onClick={() => setMode("test")} className="rounded-lg px-3 py-1.5 text-xs font-bold" style={{ background: mode === "test" ? "var(--t-cta)" : undefined, color: mode === "test" ? "#fff" : undefined }}>▶️ Probar</button>
+              </div>
+              {mode === "test" ? (
+                <div className="flex flex-wrap gap-1.5" style={full ? { color: "#fff" } : undefined}>
+                  <button type="button" onClick={() => sendCmd("sheet")} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold" style={full ? { borderColor: "rgba(255,255,255,.3)" } : softBox}>🛒 Abrir pedido</button>
+                  {cfg.exit_offer.enabled ? <button type="button" onClick={() => sendCmd("exit")} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold" style={full ? { borderColor: "rgba(255,255,255,.3)" } : softBox}>🎁 Oferta de salida</button> : null}
+                  <button type="button" onClick={() => post(true)} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold" style={full ? { borderColor: "rgba(255,255,255,.3)" } : softBox}>🔄 Reiniciar</button>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-center text-[11px] font-semibold" style={{ color: full ? "rgba(255,255,255,.75)" : "var(--t-muted)" }}>
+              {mode === "edit" ? "✏️ Toca cualquier parte de la página y te llevo a donde se edita" : "▶️ Úsala como el cliente: toca, baja, abre el pedido (no se crean pedidos reales)"}
+            </p>
+
             <DeviceFrame device={device} full={full}>
               <iframe ref={frame} src="/documento/landing-vista" title="Vista previa de la landing" className="h-full w-full border-0 bg-white" />
             </DeviceFrame>

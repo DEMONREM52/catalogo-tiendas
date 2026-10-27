@@ -51,6 +51,9 @@ await db.exec(M2);
 const M3 = fs.readFileSync(path.join(MIG, "20261254_landing_precio_propio.sql"), "utf8");
 await db.exec(M3);
 await db.exec(M3);
+const M4 = fs.readFileSync(path.join(MIG, "20261255_landing_precios_catalogo.sql"), "utf8");
+await db.exec(M4);
+await db.exec(M4);
 
 let pass = 0, fail = 0;
 const ok = (c, l, x) => { if (c) { pass++; console.log("  ✔ " + l); } else { fail++; console.log("  ✘ " + l + (x !== undefined ? " → " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -231,6 +234,21 @@ const o10 = await order("sesion-precio001", { units: [NEGRO, BLANCO], payment: "
 // Lleva 2 (−8 %): 129.900 → 119.500 y 139.900 → 128.700.
 ok(o10.ok && Number(o10.total) === 119500 + 128700, "El pedido cobra el precio de la landing con el descuento del paquete encima", o10);
 ok(Number((await raw("select price_3 from products where id = $1", [NEGRO]))[0].price_3) === 99900, "El precio del producto en la tienda no cambia");
+
+console.log("11. El catálogo de producción devuelve una lista JSON (no filas)");
+await db.exec(`drop function public.catalog_public_stock(text, text, text, uuid[]);
+create function public.catalog_public_stock(p_store text, p_catalog text, p_key text, p_ids uuid[])
+returns jsonb language sql stable security definer set search_path = public as $q$
+  select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'price', case when p.price_3 > 0 then p.price_3 end, 'stock', p.stock)), '[]'::jsonb)
+  from public.products p join public.stores s on s.id = p.store_id and s.slug = p_store
+  join public.store_catalogs c on c.store_id = s.id and c.slug = p_catalog and (c.access_key is null or c.access_key = p_key)
+  where p.id = any(p_ids) and p.active
+$q$;
+grant execute on function public.catalog_public_stock(text, text, text, uuid[]) to anon, authenticated;`);
+const pub11 = await anon("select public.landing_public('vitrina', 'enterizo-relax') r");
+ok(pub11.items.length === 2 && Number(pub11.items[0].catalog_price) === 99900, "Con la lista JSON la landing sí trae los productos (antes decía «se agotó»)", pub11.items);
+const o11 = await order("sesion-json0001", { units: [NEGRO], payment: "cod", customer: { ...cust, name: "Sara Lema", whatsapp: "3023334455" } });
+ok(o11.ok, "Y el pedido se crea con esa forma", o11);
 
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);
