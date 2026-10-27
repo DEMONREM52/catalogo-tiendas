@@ -54,6 +54,9 @@ await db.exec(M3);
 const M4 = fs.readFileSync(path.join(MIG, "20261255_landing_precios_catalogo.sql"), "utf8");
 await db.exec(M4);
 await db.exec(M4);
+const M5 = fs.readFileSync(path.join(MIG, "20261256_landing_vistas_mes.sql"), "utf8");
+await db.exec(M5);
+await db.exec(M5);
 
 let pass = 0, fail = 0;
 const ok = (c, l, x) => { if (c) { pass++; console.log("  ✔ " + l); } else { fail++; console.log("  ✘ " + l + (x !== undefined ? " → " + JSON.stringify(x).slice(0, 600) : "")); } };
@@ -249,6 +252,17 @@ const pub11 = await anon("select public.landing_public('vitrina', 'enterizo-rela
 ok(pub11.items.length === 2 && Number(pub11.items[0].catalog_price) === 99900, "Con la lista JSON la landing sí trae los productos (antes decía «se agotó»)", pub11.items);
 const o11 = await order("sesion-json0001", { units: [NEGRO], payment: "cod", customer: { ...cust, name: "Sara Lema", whatsapp: "3023334455" } });
 ok(o11.ok, "Y el pedido se crea con esa forma", o11);
+
+console.log("12. Personas que vieron en los últimos 7 y 30 días");
+await raw("update erp_landing_pages set counters_from = null where id = $1", [PAGE]);
+await raw("insert into erp_landing_visits (page_id, store_id, session_id, first_seen, last_seen) values ($1, $2, 'sesion-vieja0001', now() - interval '20 days', now() - interval '20 days'), ($1, $2, 'sesion-vieja0002', now() - interval '5 days', now() - interval '5 days'), ($1, $2, 'sesion-vieja0003', now() - interval '40 days', now() - interval '40 days')", [PAGE, A]);
+await cfgWith({ viewers_window: "today" });
+const sToday = (await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).social;
+await cfgWith({ viewers_window: "week" });
+const sWeek = (await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).social;
+await cfgWith({ viewers_window: "month" });
+const sMonth = (await anon("select public.landing_public('vitrina', 'enterizo-relax') r")).social;
+ok(sWeek.live === sToday.live + 1 && sMonth.live === sToday.live + 2 && sMonth.live_window === "month", "Semana y mes cuentan las visitas reales de esos días (la de hace 40 días no)", [sToday.live, sWeek.live, sMonth.live]);
 
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

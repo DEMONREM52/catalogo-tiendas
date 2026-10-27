@@ -1187,6 +1187,7 @@ function ThankYou({ cfg, done, name, onClose }: { data: LandingData; cfg: Return
 
 const LP_CSS = `
 :root{--lp-dark:color-mix(in oklab,var(--lp-accent) 80%,#000)}
+.lp-root{overflow-x:clip}
 .lp-root,.lp-portal{--lp-dark:color-mix(in oklab,var(--lp-accent) 80%,#000);font-family:inherit;color-scheme:light}
 .lp-font-elegante h1,.lp-font-elegante h2,.lp-font-elegante h3{font-family:"Playfair Display",Georgia,"Times New Roman",serif;letter-spacing:-.01em}
 .lp-font-fuerte h1,.lp-font-fuerte h2,.lp-font-fuerte h3,.lp-font-fuerte .lp-cta{font-family:Impact,"Arial Black","Helvetica Neue",sans-serif;letter-spacing:.01em;text-transform:uppercase}
@@ -1195,7 +1196,10 @@ const LP_CSS = `
 .lp-topbar{background:linear-gradient(90deg,var(--lp-dark),var(--lp-accent),var(--lp-dark));background-size:200% 100%;animation:lpShine 6s linear infinite}
 .lp-cta{background:linear-gradient(180deg,var(--lp-accent),var(--lp-dark));box-shadow:0 10px 30px -10px var(--lp-accent)}
 .lp-cta:active{transform:scale(.98)}
-.lp-pulse{animation:lpPulse 2.2s ease-in-out infinite}
+/* «¡Ey, aquí estoy!»: el botón crece mucho con rebote y lanza una onda de color. */
+.lp-pulse,.lp-anim-boom{animation:lpBoom 2.4s cubic-bezier(.3,1.6,.5,1) infinite,lpWave 2.4s ease-out infinite;font-weight:900;letter-spacing:.02em}
+@keyframes lpBoom{0%,40%,100%{transform:scale(1) rotate(0)}8%{transform:scale(1.14) rotate(-1.5deg)}14%{transform:scale(.95) rotate(1deg)}20%{transform:scale(1.09) rotate(-.5deg)}27%{transform:scale(.99)}33%{transform:scale(1.03)}}
+@keyframes lpWave{0%{box-shadow:0 10px 30px -10px var(--lp-accent),0 0 0 0 color-mix(in oklab,var(--lp-accent) 65%,transparent)}35%{box-shadow:0 14px 34px -10px var(--lp-accent),0 0 0 20px transparent}100%{box-shadow:0 10px 30px -10px var(--lp-accent),0 0 0 20px transparent}}
 .lp-chip{background:var(--lp-accent-soft);color:var(--lp-accent)}
 .lp-badge,.lp-check,.lp-radio-on{background:var(--lp-accent);border-color:var(--lp-accent)}
 .lp-price-box{background:var(--lp-accent-soft);border:2px dashed color-mix(in oklab,var(--lp-accent) 40%,transparent)}
@@ -1274,5 +1278,5 @@ const LP_CSS = `
 @keyframes lpIn{from{opacity:0;transform:translateY(20px) scale(.9)}}
 @keyframes lpPop{from{opacity:0;transform:scale(.6)}}
 @keyframes lpUp{from{transform:translateY(40px);opacity:.4}}
-@media (prefers-reduced-motion:reduce){.lp-root [data-reveal]{opacity:1;transform:none;transition:none}.lp-confetti{display:none}.lp-cd-sec,.lp-flip,.lp-bell,.lp-flame,.lp-stockbar,.lp-hop,.lp-spark,.lp-float,.lp-shimmer::after,.lp-wobble,.lp-urg,.lp-anim-pulse,.lp-anim-bounce,.lp-anim-shake,.lp-anim-glow,.lp-anim-shine::after,.lp-arrow,.lp-eye,.lp-num,.lp-pulse,.lp-topbar,.lp-dot,.lp-toast,.lp-pop,.lp-sheet{animation:none}}
+@media (prefers-reduced-motion:reduce){.lp-anim-boom,.lp-root [data-reveal]{opacity:1;transform:none;transition:none}.lp-confetti{display:none}.lp-cd-sec,.lp-flip,.lp-bell,.lp-flame,.lp-stockbar,.lp-hop,.lp-spark,.lp-float,.lp-shimmer::after,.lp-wobble,.lp-urg,.lp-anim-pulse,.lp-anim-bounce,.lp-anim-shake,.lp-anim-glow,.lp-anim-shine::after,.lp-arrow,.lp-eye,.lp-num,.lp-pulse,.lp-topbar,.lp-dot,.lp-toast,.lp-pop,.lp-sheet{animation:none}}
 `;

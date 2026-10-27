@@ -185,6 +185,33 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+/** Fotos del producto para elegir con un toque (se agregan al final, en el orden en que se tocan). */
+function PhotoPicker({ photos, selected, max, onChange }: { photos: string[]; selected: string[]; max: number; onChange: (v: string[]) => void }) {
+  if (!photos.length) return <p className="text-xs" style={{ color: "var(--t-muted)" }}>Elige el producto en «Producto y opciones» para usar sus fotos aquí.</p>;
+  const missing = photos.filter((p) => !selected.includes(p));
+  return (
+    <div className="rounded-2xl border p-3" style={softBox}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-bold">📸 Fotos del producto · toca para agregar o quitar</p>
+        {missing.length ? <button type="button" onClick={() => onChange([...selected, ...missing].slice(0, max))} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={softBox}>+ Agregar todas ({missing.length})</button> : null}
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {photos.map((src) => {
+          const pos = selected.indexOf(src);
+          const on = pos >= 0;
+          return (
+            <button key={src} type="button" onClick={() => onChange(on ? selected.filter((x) => x !== src) : [...selected, src].slice(0, max))}
+              className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition hover:-translate-y-0.5" style={{ borderColor: on ? "var(--t-accent)" : "var(--t-card-border)" }} title={on ? "Quitar" : "Agregar"}>
+              <img src={src} alt="" className={`h-full w-full object-cover ${on ? "" : "opacity-70"}`} loading="lazy" />
+              <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full text-[10px] font-black text-white shadow" style={{ background: on ? "var(--t-accent)" : "rgba(0,0,0,.45)" }}>{on ? pos + 1 : "+"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Lista editable (agregar, quitar, subir, bajar). */
 function ListEditor<T>({ items, onChange, make, render, addLabel, max = 12 }: { items: T[]; onChange: (v: T[]) => void; make: () => T; render: (item: T, set: (v: T) => void, i: number) => ReactNode; addLabel: string; max?: number }) {
   const move = (i: number, d: number) => { const n = [...items]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); onChange(n); };
@@ -337,6 +364,12 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey, catalog?.id, store.slug]);
+
+  // Fotos del producto (todas sus opciones y su galería) y las de la landing, para elegirlas en el afiche o en las fotos.
+  const productPhotos = useMemo(() => [...new Set([
+    ...items.flatMap((i) => [i.image, ...(i.gallery ?? [])]),
+    ...cfg.images,
+  ].filter((u): u is string => typeof u === "string" && /^https:\/\//.test(u)))], [items, cfg.images]);
 
   const previewData: LandingData = useMemo(() => ({
     store: { id: store.id, slug: store.slug, name: store.name, logo_url: store.logo_url, whatsapp: store.whatsapp },
@@ -758,6 +791,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
 
           <Block id="poster" title="Afiche (imágenes largas)" emoji="🖼️" hint="Como las landings tipo combo: diseña en Canva y súbelas en orden">
             <Field label="Título antes de las imágenes (opcional)"><input value={cfg.poster_title} onChange={(e) => setCfg({ poster_title: e.target.value })} className={inputCls} style={inputStyle} /></Field>
+            <PhotoPicker photos={productPhotos} selected={cfg.poster_images} max={30} onChange={(poster_images) => setCfg({ poster_images })} />
             <ListEditor items={cfg.poster_images} max={30} onChange={(poster_images) => setCfg({ poster_images })} make={() => ""} addLabel="Agregar imagen" render={(src, set) => <ImageInput value={src} onChange={set} label="Imagen" />} />
             <Field label="Botón de compra cada" hint="0 = solo al final"><Num value={cfg.poster_cta_every} max={10} suffix="imágenes" onChange={(poster_cta_every) => setCfg({ poster_cta_every })} /></Field>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consejo: imágenes de 1080 px de ancho, livianas (menos de 400 KB). Al subirlas aquí se optimizan solas.</p>
@@ -902,10 +936,10 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
             <Field label="Texto" hint="Vacío = el envío y la forma de pago"><input value={cfg.cta_block.text} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, text: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
             <Field label="Texto del botón" hint={`Vacío = «${cfg.cta_text}»`}><input value={cfg.cta_block.button} onChange={(e) => setCfg({ cta_block: { ...cfg.cta_block, button: e.target.value } })} className={inputCls} style={inputStyle} /></Field>
             <Field label="¿Cómo llama la atención el botón?">
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                 {(Object.keys(CTA_STYLES) as CtaStyle[]).map((k) => (
                   <button key={k} type="button" onClick={() => setCfg({ cta_block: { ...cfg.cta_block, style: k } })} className="rounded-xl border-2 px-2 py-2 text-xs font-bold" style={{ ...softBox, borderColor: cfg.cta_block.style === k ? "var(--t-accent)" : "var(--t-card-border)" }}>
-                    {k === "pulse" ? "💓" : k === "bounce" ? "⬆️" : k === "shake" ? "📳" : k === "glow" ? "✨" : k === "shine" ? "⚡" : "⏸️"} {CTA_STYLES[k]}
+                    {k === "boom" ? "💥" : k === "pulse" ? "💓" : k === "bounce" ? "⬆️" : k === "shake" ? "📳" : k === "glow" ? "✨" : k === "shine" ? "⚡" : "⏸️"} {CTA_STYLES[k]}
                   </button>
                 ))}
               </div>
@@ -969,6 +1003,7 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
           </Block>
 
           <Block id="media" title="Fotos, video y guía de tallas" emoji="📸" hint="Si no pones fotos, se usan las del producto">
+            <PhotoPicker photos={productPhotos} selected={cfg.images} max={20} onChange={(images) => setCfg({ images })} />
             <ListEditor items={cfg.images} max={20} onChange={(images) => setCfg({ images })} make={() => ""} addLabel="Agregar foto" render={(src, set) => <ImageInput value={src} onChange={set} />} />
             <Field label="Video (YouTube, TikTok descargado en .mp4 o enlace .mp4)" hint="Un video de 15 s con el producto en uso vende muchísimo"><input value={cfg.video_url} onChange={(e) => setCfg({ video_url: e.target.value.trim() })} placeholder="https://…" className={inputCls} style={inputStyle} /></Field>
             <Field label="Guía de tallas (imagen)"><ImageInput value={cfg.size_guide_image} onChange={(size_guide_image) => setCfg({ size_guide_image })} label="Guía" /></Field>

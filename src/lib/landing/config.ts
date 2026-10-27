@@ -20,13 +20,15 @@ export const SECTION_NAMES: Record<SectionKey, string> = {
 export const LANDING_FONTS = { moderna: "Moderna", elegante: "Elegante", fuerte: "Fuerte", amable: "Amable" } as const;
 export type LandingFont = keyof typeof LANDING_FONTS;
 
-export type ViewersWindow = "now" | "15m" | "1h" | "today";
+export type ViewersWindow = "now" | "15m" | "1h" | "today" | "week" | "month";
 export type SoldWindow = "today" | "week" | "month" | "all";
 export const VIEWERS_WINDOWS: Record<ViewersWindow, { label: string; text: string }> = {
   now: { label: "Ahora mismo", text: "personas viendo esto ahora" },
   "15m": { label: "Últimos 15 minutos", text: "personas vieron esto en los últimos 15 minutos" },
   "1h": { label: "Última hora", text: "personas vieron esto en la última hora" },
   today: { label: "Hoy", text: "personas vieron esta oferta hoy" },
+  week: { label: "Últimos 7 días", text: "personas vieron esta oferta esta semana" },
+  month: { label: "Últimos 30 días", text: "personas vieron esta oferta este mes" },
 };
 export const SOLD_WINDOWS: Record<SoldWindow, { label: string; text: string }> = {
   today: { label: "Hoy", text: "vendidos hoy" },
@@ -35,7 +37,7 @@ export const SOLD_WINDOWS: Record<SoldWindow, { label: string; text: string }> =
   all: { label: "Desde siempre", text: "vendidos" },
 };
 
-export const CTA_STYLES = { pulse: "Late", bounce: "Salta", shake: "Se sacude", glow: "Brilla", shine: "Destello", none: "Quieto" } as const;
+export const CTA_STYLES = { boom: "¡Crece!", pulse: "Late", bounce: "Salta", shake: "Se sacude", glow: "Brilla", shine: "Destello", none: "Quieto" } as const;
 export type CtaStyle = keyof typeof CTA_STYLES;
 export const CTA_BACKGROUNDS = { light: "Claro", soft: "Color suave", accent: "Color fuerte", dark: "Oscuro" } as const;
 export type CtaBackground = keyof typeof CTA_BACKGROUNDS;
@@ -169,7 +171,7 @@ export const DEFAULT_LANDING: LandingConfig = {
   whatsapp_number: "",
   effects: "show",
   cta_block: {
-    title: "¿Listo para pedir el tuyo?", text: "", button: "", style: "bounce", background: "soft",
+    title: "¿Listo para pedir el tuyo?", text: "", button: "", style: "boom", background: "soft",
     repeat: "end", every: 2, after: [], arrow: true, urgency: true, badge: "🔥 OFERTA POR TIEMPO LIMITADO",
   },
   sections: SECTION_KEYS.map((key) => ({ key, on: true })),

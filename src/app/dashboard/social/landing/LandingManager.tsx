@@ -194,8 +194,12 @@ function Btn({ onClick, icon, children, danger }: { onClick: () => void; icon: R
 
 /** El kit necesita el precio real del catálogo para los textos. */
 function KitLoader({ store, row, url, onBack }: { store: StoreInfo; row: LandingRow; url: string; onBack: () => void }) {
-  const [price, setPrice] = useState<number | null>(null);
+  // El precio de los textos es el mismo de la página: el propio de la landing y, si no tiene, el del catálogo.
+  const own = (row.product_ids[0] && row.config.option_prices[row.product_ids[0]]) || row.config.sale_price || null;
+  const [catalogPrice, setPrice] = useState<number | null>(null);
+  const price = own ?? catalogPrice;
   useEffect(() => {
+    if (own) return;
     void (async () => {
       const sb = supabaseBrowser();
       const { data: cat } = await sb.from("store_catalogs").select("slug,access_key").eq("id", row.catalog_id).maybeSingle();
@@ -204,6 +208,6 @@ function KitLoader({ store, row, url, onBack }: { store: StoreInfo; row: Landing
       const p = Number((data as Array<{ price: number | null }> | null)?.[0]?.price);
       if (p > 0) setPrice(p);
     })();
-  }, [store.slug, row.catalog_id, row.product_ids]);
+  }, [store.slug, row.catalog_id, row.product_ids, own]);
   return <AdKit page={{ name: row.name, slug: row.slug }} config={row.config} url={url} price={price} onBack={onBack} />;
 }
