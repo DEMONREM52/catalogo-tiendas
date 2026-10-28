@@ -5,6 +5,7 @@ import Image from "next/image";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { ImplementationPackages, TraditionalComparison } from "@/components/landing/ImplementationPackages";
 import { Showcase } from "@/components/landing/Showcase";
+import { Caret, CodeWindow, DevFxStyles, FloatingCode, TerminalTyper } from "@/components/landing/DevFx";
 import { captureReferral } from "@/lib/saas/referral";
 
 // Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
@@ -368,7 +369,9 @@ export default function HomePage() {
         </nav>
       </header>
 
-      <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[1.05fr_.95fr] lg:pt-16">
+      <section className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[1.05fr_.95fr] lg:pt-16">
+        <DevFxStyles />
+        <FloatingCode />
         <div>
           <Reveal>
             <a href="#landings" className="inline-flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
@@ -383,6 +386,7 @@ export default function HomePage() {
               <h1 className="min-w-0 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
                 Tu tienda, tus sedes y tus catálogos{" "}
                 <span style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>en un solo lugar.</span>
+                <Caret />
               </h1>
             </div>
           </Reveal>
@@ -390,6 +394,9 @@ export default function HomePage() {
             <p className="mt-5 max-w-xl text-base sm:text-lg" style={{ color: "var(--t-muted)" }}>
               Vende por WhatsApp con un catálogo para cada público, lanza landing pages para tus anuncios, factura en cada punto, controla el inventario de cada bodega y mira tus números al instante.
             </p>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <TerminalTyper />
           </Reveal>
           <Reveal delay={0.15}>
             <div className="mt-7 flex flex-wrap gap-3">
@@ -416,7 +423,10 @@ export default function HomePage() {
             </div>
           </Reveal>
         </div>
-        <HeroMock />
+        <div className="min-w-0 space-y-12">
+          <HeroMock />
+          <CodeWindow className="mx-auto max-w-md lg:ml-10" />
+        </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-5">
