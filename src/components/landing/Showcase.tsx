@@ -23,7 +23,7 @@ export function Showcase() {
       <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
         {shops.map((s) => (
           <a key={s.slug} href={`${storeSpaceOrigin(s.slug) ?? `${PRODUCTION_ORIGIN}/${s.slug}`}/`} target="_blank" rel="noopener"
-            className="group flex items-center gap-2.5 rounded-2xl border px-3 py-2 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            className="rh-glow group flex items-center gap-2.5 rounded-2xl border px-3 py-2 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             {s.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={s.logo_url} alt="" loading="lazy" className="h-9 w-9 rounded-xl object-cover" />

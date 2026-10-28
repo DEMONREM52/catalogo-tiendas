@@ -25,14 +25,41 @@ const HERO_CSS = `
 .dh-shine { background-size: 200% 100%; animation: dh-shine 4s linear infinite; }
 .dh-dot { animation: dh-dots 1.2s infinite; }
 .dh-glow { animation: dh-glow 1.8s ease-out infinite; }
-@media (prefers-reduced-motion: reduce) { .dh-orbit, .dh-orbit-rev, .dh-grid, .dh-marquee, .dh-shine, .dh-dot, .dh-glow { animation: none !important; } }
+@property --rh-a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes rh-angle { to { --rh-a: 360deg; } }
+@keyframes rh-drop { from { top: -10px; } to { top: 100%; } }
+@keyframes rh-beam { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@keyframes rh-shift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes rh-sweep { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(320%) skewX(-20deg); } }
+@keyframes rh-ping { 0% { transform: scale(1); opacity: .7; } 80%, 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes rh-row-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+/* Borde y brillo que siguen al mouse en cada tarjeta (las variables las pone PageBackdrop). */
+.rh-glow { position: relative; }
+.rh-glow::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 2;
+  background: radial-gradient(260px circle at var(--gx, -999px) var(--gy, -999px), rgba(168,85,247,.95), rgba(236,72,153,.55) 35%, transparent 65%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.rh-glow::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
+  background: radial-gradient(380px circle at var(--gx, -999px) var(--gy, -999px), rgba(168,85,247,.09), transparent 55%); }
+/* Borde de colores que gira (planes «Más elegido»). */
+.rh-ring { background: conic-gradient(from var(--rh-a), #a855f7, #ec4899, #22d3ee, #a855f7) !important; animation: rh-angle 4s linear infinite; }
+/* Datos que bajan por las líneas del diagrama. */
+.rh-pipe { position: relative; overflow: hidden; background: color-mix(in oklab, var(--t-accent) 30%, transparent); }
+.rh-pipe > i { position: absolute; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 9999px; background: #22d3ee; box-shadow: 0 0 10px #22d3ee; animation: rh-drop 1.4s linear infinite; }
+.rh-beam { background: linear-gradient(90deg, transparent, #a855f7, #ec4899, #22d3ee, transparent) no-repeat; background-size: 35% 100%; animation: rh-beam 3.2s linear infinite; }
+.rh-shift { background-size: 300% 300% !important; animation: rh-shift 9s ease infinite; }
+.rh-sweep { position: relative; overflow: hidden; }
+.rh-sweep::after { content: ""; position: absolute; inset: 0; width: 35%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); animation: rh-sweep 2.8s ease-in-out infinite; pointer-events: none; }
+.rh-ping { animation: rh-ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
+.rh-row { animation: rh-row-in linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+@supports not (animation-timeline: view()) { .rh-row { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dh-orbit, .dh-orbit-rev, .dh-grid, .dh-marquee, .dh-shine, .dh-dot, .dh-glow, .rh-ring, .rh-pipe > i, .rh-beam, .rh-shift, .rh-sweep::after, .rh-ping, .rh-row { animation: none !important; } }
 `;
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
 
 /* ------------------------------------------------------------------ fondo: red neuronal + lluvia de código */
 
-function NeuralCanvas() {
+function NeuralCanvas({ className = "pointer-events-none absolute inset-0 -z-10 h-full w-full", dim = 1 }: { className?: string; dim?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -113,7 +140,7 @@ function NeuralCanvas() {
     if (still) draw(); else raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); };
   }, []);
-  return <canvas ref={ref} aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full" />;
+  return <canvas ref={ref} aria-hidden className={className} style={{ opacity: dim }} />;
 }
 
 /* ------------------------------------------------------------------ título que se decodifica */
@@ -163,29 +190,66 @@ export function CommitMarquee() {
 
 /* ------------------------------------------------------------------ fondo completo */
 
-/** Envuelve la portada: pinta el fondo animado detrás y la luz que sigue al mouse. */
+/** Envuelve la portada: cuadrícula en perspectiva y símbolos flotando (la red y la luz del mouse van en PageBackdrop). */
 export function DevBackground({ children }: { children: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null);
-  const onMove = (e: React.PointerEvent) => {
-    const el = box.current;
-    if (!el || e.pointerType !== "mouse") return;
-    const r = el.getBoundingClientRect();
-    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    el.style.setProperty("--my", `${e.clientY - r.top}px`);
-  };
   return (
-    <div ref={box} onPointerMove={onMove} className="relative isolate overflow-hidden" style={{ ["--mx" as string]: "50%", ["--my" as string]: "30%" }}>
-      <style>{HERO_CSS}</style>
-      <NeuralCanvas />
+    <div className="relative isolate overflow-hidden">
       {/* piso de cuadrícula en perspectiva */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[40%] overflow-hidden [perspective:420px]" style={{ maskImage: "linear-gradient(to top, #000 5%, transparent)", WebkitMaskImage: "linear-gradient(to top, #000 5%, transparent)" }}>
         <div className="dh-grid absolute inset-x-[-50%] bottom-[-30%] h-[160%] [transform:rotateX(62deg)]"
           style={{ backgroundImage: "linear-gradient(rgba(168,85,247,.32) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,.32) 1px, transparent 1px)", backgroundSize: "64px 64px" }} />
       </div>
-      {/* luz del mouse */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-[1]" style={{ background: "radial-gradient(600px circle at var(--mx) var(--my), rgba(168,85,247,.24), rgba(236,72,153,.08) 30%, transparent 55%)" }} />
       <FloatingCode />
       {children}
     </div>
   );
+}
+
+/**
+ * Fondo fijo de toda la página: red neuronal y lluvia de código (un solo canvas), la luz que sigue al mouse
+ * y el borde que se ilumina en las tarjetas con «rh-glow» cerca del puntero. También trae el CSS compartido.
+ */
+export function PageBackdrop() {
+  const light = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    let raf = 0, x = -999, y = -999;
+    const paint = () => {
+      raf = 0;
+      light.current?.style.setProperty("--mx", `${x}px`);
+      light.current?.style.setProperty("--my", `${y}px`);
+      document.querySelectorAll<HTMLElement>(".rh-glow").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom < -300 || r.top > innerHeight + 300) return;
+        el.style.setProperty("--gx", `${x - r.left}px`);
+        el.style.setProperty("--gy", `${y - r.top}px`);
+      });
+    };
+    const onMove = (e: PointerEvent) => { x = e.clientX; y = e.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
+  }, []);
+  return (
+    <>
+      <style>{HERO_CSS}</style>
+      <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.75} />
+      <div ref={light} aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ background: "radial-gradient(600px circle at var(--mx, -999px) var(--my, -999px), rgba(168,85,247,.22), rgba(236,72,153,.07) 30%, transparent 55%)" }} />
+    </>
+  );
+}
+
+/** Texto que se decodifica cuando aparece en pantalla (los títulos pequeños de cada sección). */
+export function ScrambleOnView({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setSeen(true); io.disconnect(); } }, { rootMargin: "-40px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return <span ref={ref}>{seen ? <Scramble text={text} /> : text}</span>;
 }

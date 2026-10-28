@@ -6,7 +6,7 @@ import { PricingSection } from "@/components/landing/PricingSection";
 import { ImplementationPackages, TraditionalComparison } from "@/components/landing/ImplementationPackages";
 import { Showcase } from "@/components/landing/Showcase";
 import { Caret, CodeWindow, DevFxStyles, TerminalTyper } from "@/components/landing/DevFx";
-import { CommitMarquee, DevBackground, Scramble } from "@/components/landing/DevBackground";
+import { CommitMarquee, DevBackground, PageBackdrop, Scramble, ScrambleOnView } from "@/components/landing/DevBackground";
 import { SalesMock } from "@/components/landing/SalesMock";
 import { FeatureDemo } from "@/components/landing/FeatureDemos";
 import { captureReferral } from "@/lib/saas/referral";
@@ -263,10 +263,12 @@ function Reveal({ children, delay = 0, className }: { children: ReactNode; delay
   );
 }
 
-function Kicker({ children }: { children: ReactNode }) {
+function Kicker({ children }: { children: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", color: "var(--t-text)" }}>
-      <Sparkles size={13} style={{ color: "var(--t-accent)" }} /> {children}
+    <span className="rh-glow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", color: "var(--t-text)" }}>
+      <span className="font-mono text-[11px] normal-case" style={{ color: "var(--t-accent)" }}>{"</>"}</span>
+      <ScrambleOnView text={children} />
+      <span aria-hidden className="dfx-caret inline-block h-3 w-1.5 rounded-sm" style={{ background: "var(--t-accent)" }} />
     </span>
   );
 }
@@ -298,6 +300,7 @@ export default function HomePage() {
         <div className="absolute inset-0" style={{ backgroundImage: "var(--t-bg)" }} />
         <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "radial-gradient(color-mix(in oklab, var(--t-text) 60%, transparent) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
       </div>
+      <PageBackdrop />
 
       <header className="sticky top-0 z-50 transition" style={{ background: scrolled ? "color-mix(in oklab, var(--t-bg-base) 82%, transparent)" : "transparent", backdropFilter: scrolled ? "blur(14px)" : undefined, borderBottom: scrolled ? "1px solid var(--t-card-border)" : "1px solid transparent" }}>
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
@@ -389,7 +392,7 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-5 pb-16 pt-8">
         <Reveal>
-          <div className="grid grid-cols-2 gap-3 rounded-[2rem] border p-5 sm:grid-cols-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <div className="rh-glow grid grid-cols-2 gap-3 rounded-[2rem] border p-5 sm:grid-cols-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             {[["∞", "Catálogos"], ["5", "Listas de precios"], ["4", "Firmas por traslado"], ["24/7", "Pedidos por WhatsApp"]].map(([v, l]) => (
               <div key={l} className="text-center">
                 <p className="text-3xl font-black" style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{v}</p>
@@ -410,14 +413,14 @@ export default function HomePage() {
           </p>
         </Reveal>
         <Reveal>
-          <div className="mt-8 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+          <div className="rh-glow mt-8 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
             <LandingAdsPreview />
           </div>
         </Reveal>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {LANDING_FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={(i % 3) * 0.05}>
-              <div className="flex h-full gap-3 rounded-3xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <div className="rh-glow flex h-full gap-3 rounded-3xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={19} /></span>
                 <div>
                   <h3 className="font-bold">{f.title}</h3>
@@ -466,7 +469,7 @@ export default function HomePage() {
             </button>
           ))}
         </div>
-        <div className="mt-6 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+        <div className="rh-glow mt-6 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
           <AnimatePresence mode="wait">
             <motion.div key={current.key} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
               <div className="mb-6 max-w-2xl">
@@ -492,12 +495,18 @@ export default function HomePage() {
           <Kicker>Así de simple</Kicker>
           <h2 className="mt-4 text-3xl font-black sm:text-4xl">Empieza a vender en 4 pasos</h2>
         </Reveal>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="relative grid gap-4 md:grid-cols-4 md:gap-6">
+          <div aria-hidden className="pointer-events-none absolute inset-x-6 top-[42px] hidden h-0.5 rounded md:block" style={{ background: "var(--t-card-border)" }}>
+            <div className="rh-beam h-full w-full rounded" />
+          </div>
           {STEPS.map((s, i) => (
             <Reveal key={s.title} delay={i * 0.08}>
-              <div className="relative h-full rounded-3xl border p-5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                <span className="absolute right-4 top-4 text-4xl font-black opacity-10">{i + 1}</span>
-                <span className="grid h-11 w-11 place-items-center rounded-2xl text-white" style={{ background: "var(--t-cta)" }}><s.icon size={20} /></span>
+              <div className="rh-glow relative h-full rounded-3xl border p-5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                <span className="absolute right-4 top-4 font-mono text-3xl font-black opacity-20" style={{ color: "var(--t-accent)" }}>{String(i + 1).padStart(2, "0")}</span>
+                <span className="relative grid h-11 w-11 place-items-center">
+                  <span aria-hidden className="rh-ping absolute inset-0 rounded-2xl" style={{ background: "var(--t-cta)", animationDelay: `${i * 0.55}s` }} />
+                  <span className="relative grid h-11 w-11 place-items-center rounded-2xl text-white" style={{ background: "var(--t-cta)" }}><s.icon size={20} /></span>
+                </span>
                 <h3 className="mt-4 font-bold">{s.title}</h3>
                 <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{s.text}</p>
               </div>
@@ -514,7 +523,7 @@ export default function HomePage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={(i % 4) * 0.05}>
-              <motion.div whileHover={{ y: -4 }} className="flex h-full flex-col rounded-3xl border p-5 transition-shadow hover:shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <motion.div whileHover={{ y: -4 }} className="rh-glow flex h-full flex-col rounded-3xl border p-5 transition-shadow hover:shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={19} /></span>
                 <h3 className="mt-3 font-bold">{f.title}</h3>
                 <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{f.text}</p>
@@ -591,9 +600,9 @@ export default function HomePage() {
         </Reveal>
         <div className="space-y-2">
           {FAQ.map((f, i) => (
-            <div key={f.q} className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            <div key={f.q} className="rh-glow overflow-hidden rounded-2xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
               <button type="button" onClick={() => setOpenFaq(openFaq === i ? null : i)} className="flex w-full items-center justify-between gap-3 p-4 text-left font-semibold" aria-expanded={openFaq === i}>
-                {f.q}
+                <span className="flex items-start gap-2.5"><span className="mt-0.5 font-mono text-xs" style={{ color: "var(--t-accent)" }}>{String(i + 1).padStart(2, "0")}</span>{f.q}</span>
                 <motion.span animate={{ rotate: openFaq === i ? 180 : 0 }}><ChevronDown size={18} /></motion.span>
               </button>
               <AnimatePresence initial={false}>
@@ -610,12 +619,16 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-5 pb-20">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[2.5rem] p-8 text-center text-white shadow-2xl sm:p-12" style={{ background: "var(--t-cta)" }}>
+          <div className="rh-shift relative overflow-hidden rounded-[2.5rem] p-8 text-center text-white shadow-2xl sm:p-12" style={{ backgroundImage: "linear-gradient(120deg, #ec4899, #a855f7, #6366f1, #22d3ee, #a855f7, #ec4899)" }}>
+            <div aria-hidden className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)", backgroundSize: "32px 32px", maskImage: "radial-gradient(circle at 50% 50%, #000, transparent 75%)", WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000, transparent 75%)" }} />
+            <p aria-hidden className="relative mx-auto mb-4 inline-flex items-center gap-2 rounded-full bg-black/25 px-3 py-1 font-mono text-xs">
+              <span className="text-emerald-300">~/tu-negocio</span><span className="text-pink-200">$</span> remhub crear --tienda<span className="dfx-caret inline-block h-3.5 w-1.5 bg-white" />
+            </p>
             <div className="pointer-events-none absolute -left-10 -top-10 h-48 w-48 rounded-full bg-white/20 blur-3xl" />
             <h2 className="relative text-3xl font-black sm:text-4xl">¿Listo para ordenar y vender más?</h2>
             <p className="relative mx-auto mt-3 max-w-xl opacity-90">Crea tu cuenta gratis en un minuto, sin tarjeta. Si necesitas ayuda, te acompañamos por WhatsApp.</p>
             <div className="relative mt-6 flex flex-wrap justify-center gap-3">
-              <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-lg transition hover:-translate-y-0.5">
+              <Link href="/registro" className="rh-sweep inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-lg transition hover:-translate-y-0.5">
                 <Sparkles size={17} /> Crear mi cuenta gratis
               </Link>
               <a href={msgDemo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-white/50 px-6 py-3.5 text-sm font-bold transition hover:bg-white/10">

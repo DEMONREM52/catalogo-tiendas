@@ -344,22 +344,23 @@ export function StructureDiagram() {
   const points = ["Bodega principal", "Sede San Roque", "Sede Centro"];
   const catalogs = ["Detal · P3", "Mayor · P2", "Domicilios · P5", "San Roque · P4"];
   return (
-    <div className="relative rounded-[2rem] border p-5 sm:p-8" style={frame}>
-      <div className="flex flex-col items-center gap-6">
+    <div className="rh-glow relative rounded-[2rem] border p-5 sm:p-8" style={frame}>
+      <div className="flex flex-col items-center gap-4">
         <motion.div initial={{ scale: 0.9, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} className="flex items-center gap-3 rounded-2xl px-5 py-3 text-white shadow-xl" style={{ background: "var(--t-cta)" }}>
           <Store size={20} /> <span><b className="block">Tienda madre</b><span className="text-xs opacity-85">Productos, usuarios, informes de todo</span></span>
         </motion.div>
-        <div className="h-6 w-px" style={{ background: "var(--t-card-border)" }} />
+        <div aria-hidden className="rh-pipe h-12 w-0.5 rounded"><i /><i style={{ animationDelay: ".7s" }} /></div>
         <div className="grid w-full gap-3 sm:grid-cols-3">
           {points.map((p, i) => (
-            <motion.div key={p} initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 * i }} className="rounded-2xl border p-3 text-center" style={frame}>
+            <motion.div key={p} initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 * i }} className="rh-glow rounded-2xl border p-3 text-center" style={frame}>
               {i === 0 ? <Warehouse size={18} className="mx-auto" /> : <MapPin size={18} className="mx-auto" />}
               <p className="mt-1 text-sm font-bold">{p}</p>
               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Su inventario, su numeración y su logo</p>
+              <p className="mt-1 inline-flex items-center gap-1.5 font-mono text-[10px] text-emerald-500"><span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> sincronizado</p>
             </motion.div>
           ))}
         </div>
-        <div className="h-6 w-px" style={{ background: "var(--t-card-border)" }} />
+        <div aria-hidden className="rh-pipe h-12 w-0.5 rounded"><i /><i style={{ animationDelay: ".7s" }} /></div>
         <div className="flex flex-wrap justify-center gap-2">
           {catalogs.map((c, i) => (
             <motion.span key={c} initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.25 + 0.08 * i }} className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={frame}>

@@ -78,7 +78,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
           const price = period === "year" ? p.yearly_price : p.monthly_price;
           const free = !p.monthly_price;
           return (
-            <div key={p.id} className="relative h-full rounded-[2rem] p-[1.5px] transition duration-300 hover:-translate-y-1" style={{ background: p.highlight ? "var(--t-cta)" : "var(--t-card-border)" }}>
+            <div key={p.id} className={`${p.highlight ? "rh-ring" : "rh-glow"} relative h-full rounded-[2rem] p-[1.5px] transition duration-300 hover:-translate-y-1`} style={{ background: p.highlight ? "var(--t-cta)" : "var(--t-card-border)" }}>
               {p.highlight ? <span className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold text-white shadow" style={{ background: "var(--t-cta)" }}>Más elegido</span> : null}
               <div className="flex h-full flex-col rounded-[calc(2rem-1.5px)] p-6" style={{ background: "var(--t-bg-base)" }}>
                 <p className="text-lg font-black">{p.name}</p>
@@ -121,7 +121,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
       </p>
 
       {addons.length ? (
-        <div className="mt-10 rounded-[2rem] border p-6" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+        <div className="rh-glow mt-10 rounded-[2rem] border p-6" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
           <div className="text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-muted)" }}>Adicional para cualquier plan</p>
             <h3 className="mt-1 text-2xl font-black">🧾 Facturación electrónica DIAN</h3>
@@ -131,7 +131,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
             {addons.map((a) => {
               const price = period === "year" ? a.yearly_price : a.monthly_price;
               return (
-                <div key={a.id} className="relative flex flex-col rounded-2xl border p-5" style={{ borderColor: a.highlight ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+                <div key={a.id} className="rh-glow relative flex flex-col rounded-2xl border p-5" style={{ borderColor: a.highlight ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-bg-base)" }}>
                   {a.highlight ? <span className="absolute -top-3 left-5 rounded-full px-3 py-1 text-[11px] font-bold text-white" style={{ background: "var(--t-cta)" }}>Más elegido</span> : null}
                   <p className="font-black">{a.name}</p>
                   <p className="text-xs" style={{ color: "var(--t-muted)" }}>{a.tagline}</p>
@@ -156,7 +156,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
         </button>
       </div>
       {showTable ? (
-        <div className="mt-4 overflow-x-auto rounded-3xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+        <div className="rh-glow mt-4 overflow-x-auto rounded-3xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
           <table className="w-full min-w-[640px] text-sm">
             <thead><tr><th className="p-3 text-left" />{plans.map((p) => <th key={p.id} className="p-3 text-center font-black">{p.name}</th>)}</tr></thead>
             <tbody>

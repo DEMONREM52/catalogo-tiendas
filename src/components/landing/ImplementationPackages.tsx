@@ -8,7 +8,7 @@ export function ImplementationPackages({ contactHref }: { contactHref: (text: st
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-3">
         {IMPLEMENTATION_PACKAGES.map((p) => (
-          <div key={p.id} className="flex flex-col rounded-3xl border p-5" style={{ borderColor: p.highlight ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <div key={p.id} className="rh-glow flex flex-col rounded-3xl border p-5" style={{ borderColor: p.highlight ? "color-mix(in oklab, var(--t-accent) 60%, transparent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             <p className="text-lg font-black">{p.name}</p>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>{p.tagline}</p>
             <p className="mt-3 text-2xl font-black">{p.price ? <>{p.from ? <span className="text-sm font-semibold">desde </span> : null}{cop(p.price)}</> : "Gratis"}</p>
@@ -34,7 +34,7 @@ export function ImplementationPackages({ contactHref }: { contactHref: (text: st
 /** «RemHub vs. sistemas tradicionales», sin nombrar a ninguna empresa. */
 export function TraditionalComparison() {
   return (
-    <div className="overflow-x-auto rounded-3xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+    <div className="rh-glow overflow-x-auto rounded-3xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
       <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="text-left">
@@ -45,10 +45,10 @@ export function TraditionalComparison() {
         </thead>
         <tbody>
           {TRADITIONAL_VS_REMHUB.map((r) => (
-            <tr key={r.topic} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
+            <tr key={r.topic} className="rh-row border-t" style={{ borderColor: "var(--t-card-border)" }}>
               <td className="px-4 py-3 font-semibold">{r.topic}</td>
               <td className="px-4 py-3" style={{ color: "var(--t-muted)" }}>{r.traditional}</td>
-              <td className="px-4 py-3 font-semibold">✓ {r.remhub}</td>
+              <td className="px-4 py-3 font-semibold"><span className="mr-1 inline-grid h-5 w-5 place-items-center rounded-full bg-emerald-500/15 text-xs text-emerald-500">✓</span>{r.remhub}</td>
             </tr>
           ))}
         </tbody>
