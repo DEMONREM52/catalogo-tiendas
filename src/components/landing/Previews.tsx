@@ -456,37 +456,155 @@ export function TeamPreview() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Tienda madre → puntos → catálogos                                          */
+/* Tienda madre → puntos → catálogos (diagrama en vivo)                       */
 /* -------------------------------------------------------------------------- */
-export function StructureDiagram() {
-  const points = ["Bodega principal", "Sede San Roque", "Sede Centro"];
-  const catalogs = ["Detal · P3", "Mayor · P2", "Domicilios · P5", "San Roque · P4"];
+const ST_POINTS = [
+  { name: "Bodega principal", x: 16.7, sales: 2840000, stock: 120 },
+  { name: "Sede San Roque", x: 50, sales: 1186000, stock: 46 },
+  { name: "Sede Centro", x: 83.3, sales: 954000, stock: 31 },
+];
+// Cada catálogo vende con el inventario de un punto. x = centro aproximado del chip (en %).
+const ST_CATALOGS = [
+  { name: "Detal · P3", point: 0, x: 33 },
+  { name: "Mayor · P2", point: 0, x: 42 },
+  { name: "Domicilios · P5", point: 2, x: 54 },
+  { name: "San Roque · P4", point: 1, x: 66 },
+];
+type StEvent = { kind: "sale"; catalog: number; amount: number } | { kind: "product"; name: string } | { kind: "transfer"; qty: number };
+const ST_EVENTS: StEvent[] = [
+  { kind: "sale", catalog: 3, amount: 86000 },
+  { kind: "sale", catalog: 1, amount: 1240000 },
+  { kind: "product", name: "Lámpara LED táctil" },
+  { kind: "sale", catalog: 2, amount: 45900 },
+  { kind: "transfer", qty: 20 },
+  { kind: "sale", catalog: 0, amount: 124200 },
+];
+
+/** Ventas por punto hasta el evento `n` (sin guardar estado: sale de la cuenta). */
+function stTotals(n: number) {
+  const sales = ST_POINTS.map((p) => p.sales);
+  for (let k = 0; k <= n; k++) {
+    const e = ST_EVENTS[k % ST_EVENTS.length];
+    if (e.kind === "sale") sales[ST_CATALOGS[e.catalog].point] += e.amount;
+  }
+  return { sales };
+}
+
+/** Punto de datos que viaja de (x1, y1) a (x2, y2), en % del recuadro. */
+function Packet({ from, to, color = "#22d3ee", delay = 0, label }: { from: [number, number]; to: [number, number]; color?: string; delay?: number; label?: string }) {
   return (
-    <div className="rh-glow relative rounded-[2rem] border p-5 sm:p-8" style={frame}>
-      <div className="flex flex-col items-center gap-4">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} className="flex items-center gap-3 rounded-2xl px-5 py-3 text-white shadow-xl" style={{ background: "var(--t-cta)" }}>
-          <Store size={20} /> <span><b className="block">Tienda madre</b><span className="text-xs opacity-85">Productos, usuarios, informes de todo</span></span>
+    <motion.span aria-hidden initial={{ left: `${from[0]}%`, top: `${from[1]}%`, opacity: 0 }} animate={{ left: `${to[0]}%`, top: `${to[1]}%`, opacity: [0, 1, 1, 0] }} transition={{ duration: 1, delay, ease: "easeInOut" }}
+      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2">
+      <span className="block h-2.5 w-2.5 rounded-full" style={{ background: color, boxShadow: `0 0 12px ${color}` }} />
+      {label ? <span className="absolute left-3 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full px-1.5 py-px font-mono text-[9px] font-bold text-white" style={{ background: color }}>{label}</span> : null}
+    </motion.span>
+  );
+}
+
+export function StructureDiagram() {
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 2200);
+  const n = demo.step;
+  const ev = demo.auto ? ST_EVENTS[n % ST_EVENTS.length] : null;
+  const { sales } = stTotals(demo.auto ? n : -1);
+  // El traslado del ciclo: las 20 unidades pasan y en el ciclo siguiente se vuelve a empezar.
+  const moved = demo.auto && n % ST_EVENTS.length >= 4 ? 20 : 0;
+  const all = sales.reduce((a, b) => a + b, 0);
+  const salePoint = ev?.kind === "sale" ? ST_CATALOGS[ev.catalog].point : -1;
+  const stock = ST_POINTS.map((p, i) => p.stock + (i === 0 ? -moved : i === 1 ? moved : 0));
+  const line = { stroke: "color-mix(in oklab, var(--t-accent) 45%, transparent)", strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
+
+  return (
+    <div ref={box} className="rh-glow relative rounded-[2rem] border p-5 sm:p-8" style={frame}>
+      {demo.auto ? <div className="mb-4 flex justify-center"><DemoTag auto /></div> : null}
+      <div className="flex flex-col items-center">
+        {/* tienda madre */}
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }}
+          animate={ev?.kind === "sale" ? { scale: [1, 1.05, 1] } : {}} transition={{ delay: ev?.kind === "sale" ? 1.4 : 0, duration: 0.4 }}
+          className="relative z-10 flex items-center gap-3 rounded-2xl px-5 py-3 text-white shadow-xl" style={{ background: "var(--t-cta)" }}>
+          <Store size={20} />
+          <span>
+            <b className="block">Tienda madre</b>
+            <span className="text-xs opacity-85">Productos, usuarios, informes de todo</span>
+            <span className="mt-1 flex items-center gap-1.5 font-mono text-[11px] font-bold">
+              <span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-300" /> hoy, todos los puntos:
+              <motion.span key={all} initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="tabular-nums">{money(all)}</motion.span>
+            </span>
+          </span>
+          <AnimatePresence>
+            {ev?.kind === "product" ? (
+              <motion.span key={`np-${n}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute -right-3 -top-3 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-amber-950 shadow">+ producto nuevo</motion.span>
+            ) : null}
+          </AnimatePresence>
         </motion.div>
-        <div aria-hidden className="rh-pipe h-12 w-0.5 rounded"><i /><i style={{ animationDelay: ".7s" }} /></div>
-        <div className="grid w-full gap-3 sm:grid-cols-3">
-          {points.map((p, i) => (
-            <motion.div key={p} initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 * i }} className="rh-glow rounded-2xl border p-3 text-center" style={frame}>
+
+        {/* conexiones madre → puntos */}
+        <div aria-hidden className="relative hidden h-16 w-full sm:block">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+            {ST_POINTS.map((p) => <line key={p.name} x1={50} y1={0} x2={p.x} y2={100} {...line} strokeDasharray="4 4" />)}
+          </svg>
+          {ev?.kind === "product" ? ST_POINTS.map((p, i) => <Packet key={`d-${n}-${i}`} from={[50, 0]} to={[p.x, 100]} color="#f59e0b" delay={0.2} />) : null}
+          {ev?.kind === "sale" ? <Packet key={`u-${n}`} from={[ST_POINTS[salePoint].x, 100]} to={[50, 0]} color="#10b981" delay={0.9} /> : null}
+        </div>
+        <div aria-hidden className="rh-pipe my-2 h-10 w-0.5 rounded sm:hidden"><i /><i style={{ animationDelay: ".7s" }} /></div>
+
+        {/* puntos */}
+        <div className="relative grid w-full gap-3 sm:grid-cols-3">
+          {ST_POINTS.map((p, i) => (
+            <motion.div key={p.name} initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 * i }}
+              className="rh-glow relative rounded-2xl border p-3 text-center" style={{ ...frame, borderColor: salePoint === i ? "#10b981" : frame.borderColor }}>
               {i === 0 ? <Warehouse size={18} className="mx-auto" /> : <MapPin size={18} className="mx-auto" />}
-              <p className="mt-1 text-sm font-bold">{p}</p>
+              <p className="mt-1 text-sm font-bold">{p.name}</p>
               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Su inventario, su numeración y su logo</p>
-              <p className="mt-1 inline-flex items-center gap-1.5 font-mono text-[10px] text-emerald-500"><span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> sincronizado</p>
+              <div className="mt-2 grid grid-cols-2 gap-1.5 font-mono text-[10px]">
+                <span className="rounded-md px-1.5 py-1" style={{ background: "var(--t-card-bg-soft)" }}>hoy <motion.b key={sales[i]} initial={{ color: "#10b981" }} animate={{ color: "var(--t-text)" }} transition={{ duration: 1.2 }} className="block text-[11px] tabular-nums">{money(sales[i])}</motion.b></span>
+                <span className="rounded-md px-1.5 py-1" style={{ background: "var(--t-card-bg-soft)" }}>stock <motion.b key={stock[i]} initial={{ scale: 1.3 }} animate={{ scale: 1 }} className="block text-[11px] tabular-nums">{stock[i]} und.</motion.b></span>
+              </div>
+              <p className="mt-1.5 inline-flex items-center gap-1.5 font-mono text-[10px] text-emerald-500"><span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> sincronizado</p>
+              <AnimatePresence>
+                {salePoint === i && ev?.kind === "sale" ? (
+                  <motion.span key={`s-${n}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: [0, 1, 1, 0], y: -26 }} transition={{ duration: 1.8, delay: 0.5 }} className="absolute right-2 top-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-black text-white shadow">+{money(ev.amount)}</motion.span>
+                ) : null}
+                {ev?.kind === "product" ? (
+                  <motion.span key={`p-${n}`} initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ delay: 1 }} className="absolute left-2 top-2 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-amber-950">+ {ev.name}</motion.span>
+                ) : null}
+              </AnimatePresence>
             </motion.div>
           ))}
+          {/* traslado bodega → San Roque */}
+          <AnimatePresence>
+            {ev?.kind === "transfer" ? (
+              <motion.div key={`t-${n}`} aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute left-[16.7%] right-[50%] top-[calc(100%+12px)] z-10 hidden h-0 sm:block">
+                <div className="absolute inset-x-0 top-0 border-t-2 border-dashed" style={{ borderColor: "var(--t-accent)" }} />
+                <motion.span initial={{ left: "0%" }} animate={{ left: "100%" }} transition={{ duration: 1.6, ease: "easeInOut" }} className="absolute -top-4 -translate-x-1/2 text-xl">🚚</motion.span>
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 font-mono text-[10px] font-bold text-white" style={{ background: "var(--t-cta)" }}>traslado · {ev.qty} und.</span>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
-        <div aria-hidden className="rh-pipe h-12 w-0.5 rounded"><i /><i style={{ animationDelay: ".7s" }} /></div>
+
+        {/* conexiones puntos → catálogos */}
+        <div aria-hidden className="relative hidden h-16 w-full sm:block">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+            {ST_CATALOGS.map((c) => <line key={c.name} x1={ST_POINTS[c.point].x} y1={0} x2={c.x} y2={100} {...line} strokeDasharray="3 5" />)}
+          </svg>
+          {ev?.kind === "sale" ? <Packet key={`c-${n}`} from={[ST_CATALOGS[ev.catalog].x, 100]} to={[ST_POINTS[salePoint].x, 0]} color="#10b981" label="pedido" /> : null}
+        </div>
+        <div aria-hidden className="rh-pipe my-2 h-10 w-0.5 rounded sm:hidden"><i /><i style={{ animationDelay: ".7s" }} /></div>
+
+        {/* catálogos */}
         <div className="flex flex-wrap justify-center gap-2">
-          {catalogs.map((c, i) => (
-            <motion.span key={c} initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.25 + 0.08 * i }} className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={frame}>
-              🛍️ {c}
-            </motion.span>
-          ))}
+          {ST_CATALOGS.map((c, i) => {
+            const hot = ev?.kind === "sale" && ev.catalog === i;
+            return (
+              <motion.span key={c.name} initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.25 + 0.08 * i }}
+                animate={hot ? { scale: [1, 1.12, 1] } : {}} className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ ...frame, borderColor: hot ? "#10b981" : frame.borderColor, boxShadow: hot ? "0 0 18px rgba(16,185,129,.45)" : "none" }}>
+                🛍️ {c.name}{hot ? <b className="ml-1 text-emerald-500">· 🛒 pedido</b> : null}
+              </motion.span>
+            );
+          })}
         </div>
-        <p className="max-w-xl text-center text-sm" style={{ color: "var(--t-muted)" }}>
+        <p className="mt-5 max-w-xl text-center text-sm" style={{ color: "var(--t-muted)" }}>
           Juntos pero no revueltos: comparten productos, pero cada punto maneja su propio inventario, documentos y clientes. Tú lo ves todo desde el panel principal.
         </p>
       </div>
