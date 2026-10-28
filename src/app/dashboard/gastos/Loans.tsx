@@ -267,7 +267,7 @@ function LoanSignSheet({ loan, state, onClose }: { loan: Loan | null; state: Sig
   if (!loan) return null;
   const phone = (link?.phone ?? "").replace(/\D/g, "").replace(/^(3\d{9})$/, "57$1");
   const first = loan.employee.split(/\s+/)[0];
-  const msg = link ? `Hola ${first} 👋 Te comparto el ${loan.kind === "product" ? "vale" : "préstamo"} #${loan.number} por ${cop(loan.total)} para que lo revises y lo firmes desde tu celular:\n${link.url}` : "";
+  const msg = link ? `Hola ${first}, te comparto el ${loan.kind === "product" ? "vale de mercancía" : "vale de préstamo"} #${loan.number} por ${cop(loan.total)}. Ábrelo, revisa lo que recibes y las cuotas, y fírmalo desde tu celular:\n${link.url}` : "";
   async function copy() {
     if (!link) return;
     try { await navigator.clipboard.writeText(link.url); done("Enlace copiado"); } catch { window.prompt("Copia el enlace:", link.url); }
