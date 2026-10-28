@@ -73,10 +73,10 @@ export const metadata: Metadata = {
     // Tarjeta con el logo de RemHub (archivo fijo, igual a /api/og). Los catálogos usan la de su tienda o punto.
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.jpg",
         width: 1200,
         height: 1200,
-        type: "image/png",
+        type: "image/jpeg",
         alt: "RemHub",
       },
     ],
@@ -87,7 +87,7 @@ export const metadata: Metadata = {
     title: "RemHub — Software para vender y administrar tu negocio",
     description:
       "Catálogo con pedidos por WhatsApp, landing pages para tus anuncios con el píxel de Meta, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
-    images: ["/og-image.png"],
+    images: ["/og-image.jpg"],
   },
 
   robots: {
