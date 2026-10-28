@@ -9,6 +9,7 @@ import { Caret, CodeWindow, DevFxStyles, TerminalTyper } from "@/components/land
 import { CommitMarquee, DevBackground, PageBackdrop, Scramble, ScrambleOnView } from "@/components/landing/DevBackground";
 import { SalesMock } from "@/components/landing/SalesMock";
 import { FeatureDemo } from "@/components/landing/FeatureDemos";
+import { FaqSection } from "@/components/landing/Faq";
 import { captureReferral } from "@/lib/saas/referral";
 
 // Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
@@ -24,7 +25,6 @@ import {
   Bell,
   Boxes,
   Check,
-  ChevronDown,
   CreditCard,
   Eye,
   FileText,
@@ -286,7 +286,6 @@ export default function HomePage() {
     const t = window.setInterval(() => setTour((x) => (x + 1) % TOUR.length), TOUR_MS);
     return () => window.clearInterval(t);
   }, [tourInView, tourAuto]);
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
 
   // Llegó desde el sello «Hecho con RemHub» de una tienda: se recuerda para «Invita y gana».
@@ -610,23 +609,7 @@ export default function HomePage() {
           <Kicker>Preguntas frecuentes</Kicker>
           <h2 className="mt-4 text-3xl font-black">¿Tienes dudas?</h2>
         </Reveal>
-        <div className="space-y-2">
-          {FAQ.map((f, i) => (
-            <div key={f.q} className="rh-glow overflow-hidden rounded-2xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-              <button type="button" onClick={() => setOpenFaq(openFaq === i ? null : i)} className="flex w-full items-center justify-between gap-3 p-4 text-left font-semibold" aria-expanded={openFaq === i}>
-                <span className="flex items-start gap-2.5"><span className="mt-0.5 font-mono text-xs" style={{ color: "var(--t-accent)" }}>{String(i + 1).padStart(2, "0")}</span>{f.q}</span>
-                <motion.span animate={{ rotate: openFaq === i ? 180 : 0 }}><ChevronDown size={18} /></motion.span>
-              </button>
-              <AnimatePresence initial={false}>
-                {openFaq === i ? (
-                  <motion.p initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 pb-4 text-sm" style={{ color: "var(--t-muted)" }}>
-                    {f.a}
-                  </motion.p>
-                ) : null}
-              </AnimatePresence>
-            </div>
-          ))}
-        </div>
+        <FaqSection items={FAQ} waHref={msgDemo} />
       </section>
 
       <section className="mx-auto max-w-6xl px-5 pb-20">
