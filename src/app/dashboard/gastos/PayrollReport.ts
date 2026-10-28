@@ -25,7 +25,7 @@ const STATUS: Record<string, string> = { draft: "Borrador (sin aprobar)", approv
 const METHOD: Record<string, string> = { cash: "Efectivo", transfer: "Transferencia", nequi: "Nequi / Daviplata", card: "Tarjeta", other: "Otro" };
 const fd = (d: string | null | undefined) => xDate(d);
 
-async function storeName(storeId: string) {
+export async function storeName(storeId: string) {
   const { data } = await supabaseBrowser().from("stores").select("name").eq("id", storeId).maybeSingle();
   return String((data as { name?: string } | null)?.name ?? "");
 }
@@ -75,7 +75,8 @@ table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border-bottom:1px s
 .slip{page-break-before:always;max-width:640px}.bar{position:sticky;top:0;background:#fff;padding:8px 0;margin-bottom:8px;border-bottom:1px solid #eee}
 @media print{.bar{display:none}body{padding:0}@page{size:letter;margin:12mm}}`;
 
-function open(title: string, body: string) {
+/** Abre el informe en otra ventana, listo para imprimir o guardar en PDF (también lo usa el informe de vales). */
+export function openPrint(title: string, body: string) {
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) return;
   w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${CSS}</style></head><body>
@@ -139,7 +140,7 @@ export async function printRunReport(storeId: string, d: PayrollDetail, slips = 
     <p class="muted">Valores calculados con los conceptos configurados en RemHub. Verifícalos con tu contador; no reemplaza la nómina electrónica de la DIAN.</p>
     <div class="sign"><div>Preparó<br/>${esc(r.created_by_name ?? "")}</div><div>Aprobó<br/>${esc(r.approved_by_name ?? "")}</div><div>Recibe para pagar<br/>&nbsp;</div></div>
     ${slips ? d.lines.map((l) => slipHtml(d, l, store)).join("") : ""}`;
-  open(`Nómina #${r.number}`, body);
+  openPrint(`Nómina #${r.number}`, body);
 }
 
 // ======================================================================== varias nóminas (periodo)
@@ -229,5 +230,5 @@ export async function periodReport(storeId: string, from: string, to: string, fo
       ${loans.map((l) => `<tr><td>${esc(l.employee)}</td><td>#${esc(l.number)} · ${esc(l.description)}${l.paused ? " (pausado)" : ""}</td><td class="r">${cop(l.balance)}</td><td class="r">${cop(l.installment)}</td></tr>`).join("")}</table>` : ""}
     <p class="muted">Valores calculados con los conceptos configurados en RemHub. Verifícalos con tu contador; no reemplaza la nómina electrónica de la DIAN.</p>
     <div class="sign"><div>Preparó</div><div>Revisó / pagó</div></div>`;
-  open(`Nómina ${fd(from)} a ${fd(to)}`, body);
+  openPrint(`Nómina ${fd(from)} a ${fd(to)}`, body);
 }

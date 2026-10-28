@@ -992,6 +992,16 @@ textarea {
   min-height: 92px;
 }
 
+/* Campos con ícono adentro (lupa, candado…): la regla de arriba no está en una capa y le gana a pl-* / pr-*,
+   así que el ícono quedaba encima del texto. Aquí se respeta el espacio que pide cada campo. */
+:is(input, select).pl-8 { padding-left: calc(var(--spacing) * 8); }
+:is(input, select).pl-9 { padding-left: calc(var(--spacing) * 9); }
+:is(input, select).pl-10 { padding-left: calc(var(--spacing) * 10); }
+:is(input, select).pl-11 { padding-left: calc(var(--spacing) * 11); }
+:is(input, select).pr-9 { padding-right: calc(var(--spacing) * 9); }
+:is(input, select).pr-11 { padding-right: calc(var(--spacing) * 11); }
+:is(input, select).pr-12 { padding-right: calc(var(--spacing) * 12); }
+
 input::placeholder,
 textarea::placeholder {
   color: color-mix(in oklab, var(--t-muted) 88%, transparent);

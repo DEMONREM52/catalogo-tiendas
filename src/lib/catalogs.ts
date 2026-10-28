@@ -58,7 +58,7 @@ export const PRICE_LEVELS: Array<{ level: PriceLevel; label: string; hint: strin
   { level: 5, label: "Precio 5", hint: "Lista 5" },
 ];
 
-export const RESERVED_CATALOG_SLUGS = ["producto", "oferta", "orden", "pedido", "acceso", "dashboard", "admin", "api", "login", "traslado", "comprobante"];
+export const RESERVED_CATALOG_SLUGS = ["producto", "oferta", "orden", "pedido", "acceso", "dashboard", "admin", "api", "login", "traslado", "firma-vale", "comprobante"];
 
 export function catalogSlug(value: string) {
   return value

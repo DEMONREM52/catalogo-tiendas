@@ -2,26 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import { Banknote, HandCoins, Pause, Play, Plus, Printer, Search, ShoppingBag, Trash2, X } from "lucide-react";
+import { Banknote, Copy, ExternalLink, FileBarChart, HandCoins, MessageCircle, Pause, Pencil, PenLine, Play, Plus, Printer, Search, ShoppingBag, Trash2, X } from "lucide-react";
+import { storeName } from "./PayrollReport";
+import { loanDeclaration, loanSignUrl, type LoanSignature, type LoanTerms } from "@/lib/loan-sign";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import {
   ChoiceChips, DateField, Field, MoneyField, NumberField, PaymentSheet, Sheet, ask, cardStyle, cop, done, esc, fail, fdate, ghostBtn, inputStyle, iso, n,
   PERIOD_LABEL, primaryBg, primaryBtn, swalTheme, type Catalog, type Employee, type Period, type Point,
 } from "./shared";
+import type { Loan, LoanPayment as Payment } from "./LoansReport";
+import { LoansReportSheet } from "./LoansReportSheet";
 
 /**
  * Vales y préstamos a empleados (20261240): productos que se lleva (salen del inventario) o dinero prestado
  * (puede salir de la caja), en cuotas que se descuentan solas en cada nómina, con interés opcional.
  */
-
-type Payment = { id: string; amount: number; source: "payroll" | "manual"; method: string | null; note: string | null; paid_at: string; by: string | null; voided: boolean; void_reason: string | null; run_number: number | null };
-type Loan = {
-  id: string; number: number; employee_id: string; employee: string; document: string | null; position: string | null; pay_frequency: Period; base_salary: number;
-  point_id: string | null; point: string | null; kind: "product" | "cash"; description: string; items: Array<{ product_id: string; name: string; sku: string | null; qty: number; price: number }>;
-  principal: number; interest_mode: "none" | "total" | "monthly"; interest_pct: number; interest: number; total: number; installments: number; installment: number;
-  start_on: string; balance: number; status: "active" | "paid" | "void"; paused: boolean; from_cash: boolean; notes: string | null; created_by_name: string | null;
-  created_at: string; void_reason: string | null; paid_count: number; payments: Payment[];
-};
 type Prod = { id: string; name: string; sku: string | null; price_1: number | null; price_3: number | null; image_url: string | null };
 
 const PER_MONTH: Record<Period, number> = { weekly: 30 / 7, biweekly: 2, monthly: 1 };
@@ -49,14 +44,24 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
   const [filter, setFilter] = useState<"active" | "all">("active");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState<Loan | null>(null);
+  const [signing, setSigning] = useState<Loan | null>(null);
+  // Firmas con enlace (20261262). Sin esa migración la lista funciona igual, sin el estado de firma.
+  const [signs, setSigns] = useState<Record<string, SignState>>({});
 
   const load = useCallback(async () => {
-    const { data, error: e } = await supabaseBrowser().rpc("erp_employee_loans_list", { p_store: storeId });
+    const sb = supabaseBrowser();
+    const [{ data, error: e }, sg] = await Promise.all([
+      sb.rpc("erp_employee_loans_list", { p_store: storeId }),
+      sb.rpc("erp_employee_loans_signs", { p_store: storeId }),
+    ]);
     if (e) return setError(/Could not find the function|schema cache/i.test(e.message) ? "Falta ejecutar en Supabase la migración 20261240_vales_empleados.sql." : e.message);
     const r = data as { ok: boolean; error?: string; loans?: Loan[] };
     if (!r.ok) return setError(r.error ?? "No se pudo cargar.");
     setError(null);
     setLoans(r.loans ?? []);
+    setSigns(((sg.data as { signs?: Record<string, SignState> } | null)?.signs) ?? {});
   }, [storeId]);
   useEffect(() => { const t = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(t); }, [load]);
   const after = async () => { await load(); onChanged(); };
@@ -100,16 +105,31 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
     done("Abono registrado");
     await after();
   }
-  function printVoucher(l: Loan) {
+  async function printVoucher(l: Loan) {
     const w = window.open("", "_blank", "width=720,height=900");
     if (!w) return;
+    w.document.write("<p style='font-family:system-ui;padding:24px'>Preparando el vale…</p>");
+    // Firmas reales (si ya firmaron por el enlace) y el nombre de la tienda para la declaración.
+    let sigs: LoanSignature[] = [];
+    if (signs[l.id]?.link) {
+      const link = await supabaseBrowser().rpc("erp_employee_loan_sign_link", { p_loan: l.id });
+      const token = (link.data as { token?: string } | null)?.token;
+      if (token) sigs = ((await supabaseBrowser().rpc("loan_sign_get", { p_token: token })).data as { signatures?: LoanSignature[] } | null)?.signatures ?? [];
+    }
+    const store = await storeName(storeId);
+    const sigBox = (role: LoanSignature["role"], title: string, fallback: string) => {
+      const s = sigs.find((x) => x.role === role);
+      return s ? `<div><img src="${s.signature}" alt="" style="height:70px;max-width:100%;object-fit:contain"/><br/>${title}<br/><b>${esc(s.name)}</b>${s.doc ? ` · Doc. ${esc(s.doc)}` : ""}<br/><small>${esc(new Date(s.at).toLocaleString("es-CO"))}</small></div>`
+        : `<div style="padding-top:70px">${title}<br/>${esc(fallback)}</div>`;
+    };
+    w.document.open();
     const dates = schedule(l.start_on, l.pay_frequency, l.installments);
     const rows = dates.map((d, i) => `<tr><td>${i + 1}</td><td>${fdate(d)}</td><td style="text-align:right">${cop(i === dates.length - 1 ? n(l.total) - n(l.installment) * (dates.length - 1) : n(l.installment))}</td></tr>`).join("");
     const items = l.kind === "product" ? `<table><tr><th>Producto</th><th>Cant.</th><th style="text-align:right">Precio</th><th style="text-align:right">Total</th></tr>${l.items.map((i) => `<tr><td>${esc(i.name)}</td><td>${i.qty}</td><td style="text-align:right">${cop(i.price)}</td><td style="text-align:right">${cop(i.qty * i.price)}</td></tr>`).join("")}</table>` : "";
     w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Vale #${l.number}</title><style>
       body{font-family:system-ui,Arial,sans-serif;color:#111;max-width:640px;margin:24px auto;padding:0 16px;font-size:13px}
       h1{font-size:20px;margin:0}table{width:100%;border-collapse:collapse;margin:10px 0}td,th{border-bottom:1px solid #ddd;padding:5px;text-align:left}
-      .big{font-size:16px;font-weight:700}.sign{display:flex;gap:30px;margin-top:60px}.sign div{flex:1;border-top:1px solid #111;padding-top:6px;text-align:center}
+      .big{font-size:16px;font-weight:700}.sign{display:flex;gap:30px;margin-top:30px;align-items:flex-end}.sign>div{flex:1;border-bottom:1px solid #111;padding-bottom:6px;text-align:center}
       @media print{button{display:none}}</style></head><body>
       <h1>${l.kind === "product" ? "Vale de mercancía" : "Préstamo"} #${l.number}</h1>
       <p>${esc(fdate(l.created_at.slice(0, 10)))} · ${esc(l.point ?? "")}</p>
@@ -118,9 +138,10 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
       <p>Valor: <b>${cop(l.principal)}</b>${n(l.interest) ? ` · Interés: <b>${cop(l.interest)}</b> (${l.interest_pct} % ${l.interest_mode === "monthly" ? "mensual" : "total"})` : ""}</p>
       <p class="big">Total a descontar: ${cop(l.total)} en ${l.installments} cuota${l.installments === 1 ? "" : "s"} de ${cop(l.installment)} (${PERIOD_LABEL[l.pay_frequency].toLowerCase()})</p>
       <table><tr><th>Cuota</th><th>Fecha aprox.</th><th style="text-align:right">Valor</th></tr>${rows}</table>
-      <p>Yo, ${esc(l.employee)}, autorizo de manera libre y voluntaria que el valor de este ${l.kind === "product" ? "vale" : "préstamo"} me sea descontado de mi salario en las cuotas indicadas. Si mi contrato termina antes de completar el pago, autorizo que el saldo pendiente se descuente de mi liquidación.</p>
+      <p>${esc(loanDeclaration(loanTerms(l), store || "la empresa"))}</p>
       ${l.notes ? `<p><b>Notas:</b> ${esc(l.notes)}</p>` : ""}
-      <div class="sign"><div>Firma del empleado<br/>${esc(l.employee)}</div><div>Firma de quien entrega<br/>${esc(l.created_by_name ?? "")}</div></div>
+      <div class="sign">${sigBox("employee", "Firma de quien recibe (empleado)", l.employee)}${sigBox("giver", "Firma de quien entrega", l.created_by_name ?? "")}</div>
+      ${signs[l.id]?.changed && sigs.length < 2 ? `<p style="color:#b45309">⚠️ El vale cambió después de firmarse: falta firmar de nuevo.</p>` : ""}
       <p style="margin-top:30px"><button onclick="window.print()">🖨️ Imprimir</button></p></body></html>`);
     w.document.close();
   }
@@ -140,6 +161,7 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar empleado o vale…" className="w-full rounded-full border py-2 pl-9 pr-3 text-sm outline-none" style={inputStyle} />
         </div>
         <ChoiceChips value={filter} onChange={setFilter} options={[{ value: "active", label: "Activos" }, { value: "all", label: "Todos" }]} />
+        {loans?.length ? <button type="button" onClick={() => setReporting(true)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><FileBarChart size={13} /> Informe</button> : null}
         {cat.can.payroll ? <button type="button" onClick={() => setCreating(true)} className={primaryBtn} style={primaryBg}><Plus size={15} /> Nuevo vale</button> : null}
       </div>
       <p className="text-xs" style={{ color: "var(--t-muted)" }}>Las cuotas se descuentan solas en cada nómina del empleado. Al <b>aprobar</b> la nómina se cobran; si la vuelves a borrador, el saldo vuelve. En la nómina en borrador puedes cambiar o saltar la cuota de esa vez.</p>
@@ -163,6 +185,7 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
                     <span className="mt-1 block h-1.5 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: l.status === "void" ? "#94a3b8" : "#22c55e" }} /></span>
                     <span className="mt-1 block text-[11px]" style={{ color: "var(--t-muted)" }}>
                       {l.status === "void" ? `🚫 Anulado: ${l.void_reason ?? ""}` : l.status === "paid" ? "✅ Pagado" : `${l.paused ? "⏸️ Pausado · " : ""}cuota ${cop(l.installment)} por ${PERIOD_ONE[l.pay_frequency]} · faltan ~${left} · desde ${fdate(l.start_on)}`}
+                      {l.status !== "void" ? <SignBadge s={signs[l.id]} /> : null}
                     </span>
                   </span>
                   <span className="shrink-0 text-right"><b className="block tabular-nums">{cop(l.balance)}</b><span className="text-[11px]" style={{ color: "var(--t-muted)" }}>de {cop(l.total)}</span></span>
@@ -186,7 +209,9 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
                       </ul>
                     ) : <p className="text-xs" style={{ color: "var(--t-muted)" }}>Sin descuentos todavía.</p>}
                     <div className="flex flex-wrap gap-2 pt-1">
-                      <button type="button" onClick={() => printVoucher(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Printer size={13} /> Vale para firmar</button>
+                      {l.status !== "void" ? <button type="button" onClick={() => setSigning(l)} className={ghostBtn} style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}><PenLine size={13} /> Firmas con enlace</button> : null}
+                      <button type="button" onClick={() => void printVoucher(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Printer size={13} /> Imprimir vale</button>
+                      {l.status === "active" && cat.can.payroll ? <button type="button" onClick={() => setEditing(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Pencil size={13} /> Editar</button> : null}
                       {l.status === "active" && (cat.can.payroll || cat.can.payroll_pay) ? <button type="button" onClick={() => setPaying(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><HandCoins size={13} /> Abonar</button> : null}
                       {l.status === "active" && cat.can.payroll ? <button type="button" onClick={() => void togglePause(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}>{l.paused ? <><Play size={13} /> Reanudar</> : <><Pause size={13} /> Pausar descuentos</>}</button> : null}
                       {l.status !== "void" && cat.can.payroll_approve && !l.paid_count ? <button type="button" onClick={() => void voidLoan(l)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)", color: "#e66767" }}><Trash2 size={13} /> Anular</button> : null}
@@ -199,7 +224,10 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
         </ul>
       )}
 
-      {creating ? <LoanForm storeId={storeId} points={points} employees={(cat.employees ?? []).filter((e) => e.active)} onClose={() => setCreating(false)} onSaved={async (l) => { setCreating(false); await after(); if (l) setOpenId(l); }} /> : null}
+      {reporting ? <LoansReportSheet storeId={storeId} onClose={() => setReporting(false)} /> : null}
+      {creating ? <LoanForm storeId={storeId} points={points} employees={(cat.employees ?? []).filter((e) => e.active)} onClose={() => setCreating(false)} onSaved={async (l) => { setCreating(false); await after(); if (l) { setOpenId(l); const made = { id: l } as Loan; setSigning(made); } }} /> : null}
+      {editing ? <LoanForm storeId={storeId} points={points} employees={cat.employees ?? []} initial={editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await after(); }} /> : null}
+      {signing ? <LoanSignSheet loan={(loans ?? []).find((x) => x.id === signing.id) ?? null} state={signs[signing.id]} onClose={() => { setSigning(null); void load(); }} /> : null}
       <PaymentSheet open={!!paying} title={paying ? `Abono al vale #${paying.number}` : ""} who={paying ? <b>{paying.employee}</b> : null} pending={n(paying?.balance)} defaultMethod="cash"
         hint="Si es en efectivo, entra a la caja abierta del punto." onClose={() => setPaying(null)}
         onConfirm={async (p) => { if (!paying) return false; const r = await pay(paying, p); if (r !== false) setPaying(null); return r; }} />
@@ -207,19 +235,111 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
   );
 }
 
-function LoanForm({ storeId, points, employees, onClose, onSaved }: { storeId: string; points: Point[]; employees: Employee[]; onClose: () => void; onSaved: (id: string | null) => void }) {
-  const [employeeId, setEmployeeId] = useState("");
-  const [kind, setKind] = useState<"product" | "cash">("product");
-  const [pointId, setPointId] = useState("");
-  const [items, setItems] = useState<Array<{ product: Prod; qty: number; price: number }>>([]);
-  const [amount, setAmount] = useState<number | null>(null);
-  const [fromCash, setFromCash] = useState(true);
-  const [installments, setInstallments] = useState<number | null>(2);
-  const [mode, setMode] = useState<"none" | "total" | "monthly">("none");
-  const [pct, setPct] = useState<number | null>(null);
-  const [start, setStart] = useState(() => iso(new Date()));
-  const [notes, setNotes] = useState("");
-  const [desc, setDesc] = useState("");
+type SignState = { link: boolean; employee: { name: string; at: string } | null; giver: { name: string; at: string } | null; changed: boolean };
+
+const loanTerms = (l: Loan): LoanTerms => ({
+  number: l.number, employee: l.employee, document: l.document, kind: l.kind, description: l.description, items: l.items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+  principal: n(l.principal), interest: n(l.interest), interest_mode: l.interest_mode, interest_pct: n(l.interest_pct), total: n(l.total), installments: l.installments,
+  installment: n(l.installment), pay_frequency: l.pay_frequency, start_on: l.start_on,
+});
+
+function SignBadge({ s }: { s: SignState | undefined }) {
+  const both = s?.employee && s?.giver;
+  const label = both ? "✍️ Firmado" : s?.employee ? "✍️ Falta firma de quien entrega" : s?.changed ? "✍️ Cambió: firmar de nuevo" : s?.link ? "✍️ Enlace enviado, sin firmar" : "✍️ Sin firmar";
+  return <span className="ml-1.5 inline-block rounded-full px-1.5 font-semibold" style={{ color: both ? "#16a34a" : "#d97706", background: both ? "#16a34a1a" : "#d977061a" }}>{label}</span>;
+}
+
+/** Firmas con enlace: el empleado firma desde su celular; quien entrega, con su sesión. */
+function LoanSignSheet({ loan, state, onClose }: { loan: Loan | null; state: SignState | undefined; onClose: () => void }) {
+  const [link, setLink] = useState<{ url: string; phone: string | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!loan) return;
+    let alive = true;
+    void supabaseBrowser().rpc("erp_employee_loan_sign_link", { p_loan: loan.id }).then(({ data, error: e }) => {
+      if (!alive) return;
+      if (e) return setError(/Could not find the function|schema cache/i.test(e.message) ? "Falta ejecutar en Supabase la migración 20261262_firma_vales.sql." : e.message);
+      const r = data as { token: string; phone: string | null };
+      setLink({ url: loanSignUrl(r.token), phone: r.phone });
+    });
+    return () => { alive = false; };
+  }, [loan]);
+  if (!loan) return null;
+  const phone = (link?.phone ?? "").replace(/\D/g, "").replace(/^(3\d{9})$/, "57$1");
+  const first = loan.employee.split(/\s+/)[0];
+  const msg = link ? `Hola ${first} 👋 Te comparto el ${loan.kind === "product" ? "vale" : "préstamo"} #${loan.number} por ${cop(loan.total)} para que lo revises y lo firmes desde tu celular:\n${link.url}` : "";
+  async function copy() {
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link.url); done("Enlace copiado"); } catch { window.prompt("Copia el enlace:", link.url); }
+  }
+  const row = (title: string, s: { name: string; at: string } | null | undefined) => (
+    <div className="flex items-center gap-3 rounded-2xl border p-3 text-sm" style={cardStyle}>
+      <span className="text-xl">{s ? "✅" : "⏳"}</span>
+      <span className="min-w-0 flex-1"><b className="block">{title}</b><span className="text-xs" style={{ color: "var(--t-muted)" }}>{s ? `${s.name} · ${new Date(s.at).toLocaleString("es-CO")}` : "Falta firmar"}</span></span>
+    </div>
+  );
+  return (
+    <Sheet title={`Firmas del vale #${loan.number}`} subtitle={`${loan.employee} · ${cop(loan.total)}`} icon={<PenLine size={18} />} onClose={onClose}>
+      <div className="space-y-3">
+        {state?.changed && !(state.employee && state.giver) ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">⚠️ El vale cambió después de firmarse: las firmas anteriores quedaron guardadas y hay que firmar de nuevo.</p> : null}
+        {row("Quien recibe (empleado)", state?.employee)}
+        {row("Quien entrega", state?.giver)}
+        {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : !link ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Preparando el enlace…</p> : (
+          <>
+            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Mándale el enlace a {first}: verá lo que recibe, la deuda y las cuotas, acepta el descuento de nómina y firma con el dedo. Tú firmas como quien entrega abriendo el mismo enlace aquí.</p>
+            <p className="break-all rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--t-card-border)" }}>{link.url}</p>
+            <div className="flex flex-wrap gap-2">
+              <a href={`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" className={primaryBtn} style={{ background: "#16a34a" }}><MessageCircle size={15} /> Enviar por WhatsApp{phone ? "" : " (escoges el chat)"}</a>
+              <button type="button" onClick={() => void copy()} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Copy size={13} /> Copiar enlace</button>
+              <a href={link.url} target="_blank" rel="noreferrer" className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><ExternalLink size={13} /> Abrir y firmar como quien entrega</a>
+            </div>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** Foto del producto; en grande se puede tocar para verla completa. */
+function Thumb({ src, big }: { src: string | null; big?: boolean }) {
+  const size = big ? "h-14 w-14" : "h-10 w-10";
+  if (!src) return <span className={`grid ${size} shrink-0 place-items-center rounded-lg text-lg`} style={{ background: "var(--t-card-bg-soft)" }}>📦</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  const img = <img src={src} alt="" loading="lazy" className={`${size} shrink-0 rounded-lg object-cover`} />;
+  return big ? (
+    <button type="button" onClick={() => void Swal.fire({ ...swalTheme, imageUrl: src, imageAlt: "", showConfirmButton: false, showCloseButton: true, width: 520 })} className="shrink-0" aria-label="Ver la foto en grande">{img}</button>
+  ) : img;
+}
+
+/** Nuevo vale, o editar uno activo (`initial`, 20261261): empleado, tipo, punto y caja no cambian. */
+function LoanForm({ storeId, points, employees, initial, onClose, onSaved }: { storeId: string; points: Point[]; employees: Employee[]; initial?: Loan; onClose: () => void; onSaved: (id: string | null) => void }) {
+  const editing = !!initial;
+  const [employeeId, setEmployeeId] = useState(initial?.employee_id ?? "");
+  const [kind, setKind] = useState<"product" | "cash">(initial?.kind ?? "product");
+  const [pointId, setPointId] = useState(initial?.point_id ?? "");
+  const [items, setItems] = useState<Array<{ product: Prod; qty: number; price: number }>>(() =>
+    (initial?.kind === "product" ? initial.items : []).map((i) => ({ product: { id: i.product_id, name: i.name, sku: i.sku, price_1: null, price_3: null, image_url: null }, qty: i.qty, price: n(i.price) })));
+  const [amount, setAmount] = useState<number | null>(initial?.kind === "cash" ? n(initial.principal) : null);
+  const [fromCash, setFromCash] = useState(initial ? initial.from_cash : true);
+  const [installments, setInstallments] = useState<number | null>(initial?.installments ?? 2);
+  const [mode, setMode] = useState<"none" | "total" | "monthly">(initial?.interest_mode ?? "none");
+  const [pct, setPct] = useState<number | null>(initial ? n(initial.interest_pct) : null);
+  const [start, setStart] = useState(() => initial?.start_on ?? iso(new Date()));
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [desc, setDesc] = useState(initial?.kind === "cash" ? initial.description : "");
+  const paidSoFar = initial ? n(initial.total) - n(initial.balance) : 0;
+
+  // Al editar, las fotos de los productos que ya tenía el vale.
+  useEffect(() => {
+    if (!initial || initial.kind !== "product" || !initial.items.length) return;
+    let alive = true;
+    void supabaseBrowser().from("products").select("id,image_url").in("id", initial.items.map((i) => i.product_id)).then(({ data }) => {
+      if (!alive || !data) return;
+      const img = new Map((data as Array<{ id: string; image_url: string | null }>).map((p) => [p.id, p.image_url]));
+      setItems((cur) => cur.map((i) => ({ ...i, product: { ...i.product, image_url: i.product.image_url ?? img.get(i.product.id) ?? null } })));
+    });
+    return () => { alive = false; };
+  }, [initial]);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Prod[]>([]);
   const [priceLevel, setPriceLevel] = useState<"price_1" | "price_3">("price_1");
@@ -261,6 +381,24 @@ function LoanForm({ storeId, points, employees, onClose, onSaved }: { storeId: s
     if (kind === "product" && !pointId) return void Swal.fire({ ...swalTheme, icon: "warning", title: "Escoge de qué punto salen los productos" });
     if (principal <= 0) return void Swal.fire({ ...swalTheme, icon: "warning", title: "El valor debe ser mayor que cero" });
     if (kind === "cash" && fromCash && !pointId) return void Swal.fire({ ...swalTheme, icon: "warning", title: "Escoge el punto de cuya caja sale el dinero" });
+    if (initial) {
+      if (total < paidSoFar) return void Swal.fire({ ...swalTheme, icon: "warning", title: "El total queda por debajo de lo pagado", text: `Ya pagó ${cop(paidSoFar)}: el total no puede quedar en ${cop(total)}.` });
+      const ok = await Swal.fire({
+        ...swalTheme, icon: "question", title: `¿Guardar los cambios del vale #${initial.number}?`,
+        html: `Total ${cop(initial.total)} → <b>${cop(total)}</b><br/>${count} cuota${count === 1 ? "" : "s"} de <b>${cop(cuota)}</b>${kind === "product" ? "<br/><small>En el inventario solo se mueve la diferencia.</small>" : initial.from_cash && principal !== n(initial.principal) ? "<br/><small>La diferencia sale o entra a la caja del punto.</small>" : ""}<br/><small>Si ya estaba firmado, hay que firmar de nuevo.</small>`,
+        showCancelButton: true, confirmButtonText: "Sí, guardar", cancelButtonText: "Revisar",
+      });
+      if (!ok.isConfirmed) return;
+      setSaving(true);
+      const { error } = await supabaseBrowser().rpc("erp_employee_loan_update", {
+        p_loan: initial.id,
+        p: { items: items.map((i) => ({ product_id: i.product.id, qty: i.qty, price: i.price })), amount: principal, installments: count, interest_mode: mode, interest_pct: n(pct), start_on: start, notes, description: desc || null },
+      });
+      setSaving(false);
+      if (error) return fail(/Could not find the function|schema cache/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261261_editar_vales.sql." : error);
+      done("Vale actualizado");
+      return onSaved(initial.id);
+    }
     const ok = await Swal.fire({
       ...swalTheme, icon: "question", title: `¿Dar el vale a ${esc(emp.full_name)}?`,
       html: `${kind === "product" ? `${items.map((i) => `${i.qty} × ${esc(i.product.name)}`).join("<br/>")}<br/><small>Salen del inventario de ${esc(points.find((p) => p.id === pointId)?.name ?? "")}.</small><br/>` : `Préstamo de <b>${cop(principal)}</b>${fromCash ? "<br/><small>Sale de la caja del punto.</small>" : ""}<br/>`}<br/>Total <b>${cop(total)}</b> en ${count} cuota${count === 1 ? "" : "s"} de <b>${cop(cuota)}</b>`,
@@ -277,25 +415,27 @@ function LoanForm({ storeId, points, employees, onClose, onSaved }: { storeId: s
     });
     setSaving(false);
     if (error) return fail(error);
-    done(`Vale #${(data as { number: number }).number} creado`, "Imprime el vale para que el empleado lo firme.");
+    done(`Vale #${(data as { number: number }).number} creado`, "Ahora mándale el enlace al empleado para que lo firme.");
     onSaved((data as { id: string }).id);
   }
 
   return (
-    <Sheet title="Nuevo vale o préstamo" icon={<HandCoins size={18} />} onClose={onClose} dirty={!!employeeId || items.length > 0 || !!amount}
-      footer={<><span className="flex-1" /><button type="button" disabled={saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}>{saving ? "Guardando…" : `Dar vale · ${cop(total)}`}</button></>}>
+    <Sheet title={initial ? `Editar vale #${initial.number}` : "Nuevo vale o préstamo"} subtitle={initial ? initial.employee : undefined} icon={initial ? <Pencil size={18} /> : <HandCoins size={18} />} onClose={onClose}
+      dirty={editing ? true : !!employeeId || items.length > 0 || !!amount}
+      footer={<><span className="flex-1" /><button type="button" disabled={saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}>{saving ? "Guardando…" : editing ? `Guardar cambios · ${cop(total)}` : `Dar vale · ${cop(total)}`}</button></>}>
       <div className="space-y-4">
+        {editing && paidSoFar > 0 ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ya pagó <b>{cop(paidSoFar)}</b> de este vale: el total nuevo no puede quedar por debajo.</p> : null}
         <Field label="Empleado">
-          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm" style={inputStyle}>
+          <select value={employeeId} disabled={editing} onChange={(e) => setEmployeeId(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm disabled:opacity-70" style={inputStyle}>
             <option value="">Escoge…</option>
             {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}{e.position ? ` · ${e.position}` : ""} · {PERIOD_LABEL[e.pay_frequency].toLowerCase()}</option>)}
           </select>
         </Field>
         <Field label="¿Qué se lleva?">
-          <ChoiceChips value={kind} onChange={setKind} options={[{ value: "product", label: "🛍️ Productos (salen del inventario)" }, { value: "cash", label: "💵 Dinero prestado" }]} />
+          <ChoiceChips value={kind} onChange={setKind} disabled={editing} options={[{ value: "product", label: "🛍️ Productos (salen del inventario)" }, { value: "cash", label: "💵 Dinero prestado" }]} />
         </Field>
         <Field label={kind === "product" ? "Punto de donde salen" : "Punto"} hint={kind === "cash" ? "Si el dinero sale de la caja, queda como salida de la caja abierta de este punto." : undefined}>
-          <select value={pointId} onChange={(e) => setPointId(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm" style={inputStyle}>
+          <select value={pointId} disabled={editing} onChange={(e) => setPointId(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm disabled:opacity-70" style={inputStyle}>
             <option value="">{kind === "product" ? "Escoge…" : "Sin punto"}</option>
             {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -311,21 +451,35 @@ function LoanForm({ storeId, points, employees, onClose, onSaved }: { storeId: s
               <ChoiceChips value={priceLevel} onChange={setPriceLevel} options={[{ value: "price_1", label: "Precio 1" }, { value: "price_3", label: "Precio detal" }]} />
             </div>
             {hits.length ? (
-              <ul className="max-h-48 overflow-auto rounded-xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
+              <ul className="max-h-72 space-y-0.5 overflow-auto rounded-xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
                 {hits.map((p) => (
-                  <li key={p.id}><button type="button" onClick={() => add(p)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/5">
-                    <span className="min-w-0 flex-1 truncate">{p.name}{p.sku ? <span className="text-xs" style={{ color: "var(--t-muted)" }}> · {p.sku}</span> : null}</span>
-                    <b className="text-xs tabular-nums">{cop(n(p[priceLevel]))}</b>
+                  <li key={p.id}><button type="button" onClick={() => add(p)} className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/5" title={p.name}>
+                    <Thumb src={p.image_url} />
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 font-semibold leading-snug [overflow-wrap:anywhere]">{p.name}</span>
+                      {p.sku ? <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>Código {p.sku}</span> : null}
+                    </span>
+                    <b className="shrink-0 text-xs tabular-nums">{cop(n(p[priceLevel]))}</b>
                   </button></li>
                 ))}
               </ul>
             ) : null}
             {items.map((i) => (
-              <div key={i.product.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-2 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
-                <span className="min-w-0 flex-1 truncate font-semibold">{i.product.name}</span>
-                <span className="w-20"><NumberField value={i.qty} decimals={0} min={1} onChange={(v) => setItems((cur) => cur.map((x) => (x.product.id === i.product.id ? { ...x, qty: Math.max(1, Math.floor(n(v) || 1)) } : x)))} ariaLabel="Cantidad" /></span>
-                <span className="w-32"><MoneyField value={i.price} onChange={(v) => setItems((cur) => cur.map((x) => (x.product.id === i.product.id ? { ...x, price: n(v) } : x)))} ariaLabel="Precio" allowEmpty={false} /></span>
-                <button type="button" onClick={() => setItems((cur) => cur.filter((x) => x.product.id !== i.product.id))} className="opacity-60 hover:opacity-100" aria-label="Quitar"><X size={15} /></button>
+              <div key={i.product.id} className="space-y-2 rounded-xl border p-2.5 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                <div className="flex items-start gap-3">
+                  <Thumb src={i.product.image_url} big />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold leading-snug [overflow-wrap:anywhere]">{i.product.name}</span>
+                    {i.product.sku ? <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>Código {i.product.sku}</span> : null}
+                  </span>
+                  <button type="button" onClick={() => setItems((cur) => cur.filter((x) => x.product.id !== i.product.id))} className="shrink-0 rounded-full p-1 opacity-60 hover:opacity-100" aria-label={`Quitar ${i.product.name}`}><X size={16} /></button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-24"><NumberField value={i.qty} decimals={0} min={1} onChange={(v) => setItems((cur) => cur.map((x) => (x.product.id === i.product.id ? { ...x, qty: Math.max(1, Math.floor(n(v) || 1)) } : x)))} ariaLabel="Cantidad" /></span>
+                  <span className="text-xs" style={{ color: "var(--t-muted)" }}>×</span>
+                  <span className="w-36"><MoneyField value={i.price} onChange={(v) => setItems((cur) => cur.map((x) => (x.product.id === i.product.id ? { ...x, price: n(v) } : x)))} ariaLabel="Precio" allowEmpty={false} /></span>
+                  <span className="ml-auto text-right"><span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>Subtotal</span><b className="tabular-nums">{cop(i.qty * i.price)}</b></span>
+                </div>
               </div>
             ))}
             {items.length ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Puedes cambiar el precio (por ejemplo, dejárselo a costo).</p> : null}
@@ -333,7 +487,7 @@ function LoanForm({ storeId, points, employees, onClose, onSaved }: { storeId: s
         ) : (
           <div className="space-y-2">
             <Field label="Valor prestado"><MoneyField value={amount} onChange={setAmount} big /></Field>
-            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={fromCash} onChange={(e) => setFromCash(e.target.checked)} className="h-5 w-5 accent-violet-500" /> 💵 Sale de la caja del punto (queda como salida de caja)</label>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={fromCash} disabled={editing} onChange={(e) => setFromCash(e.target.checked)} className="h-5 w-5 accent-violet-500" /> 💵 Sale de la caja del punto (queda como salida de caja)</label>
           </div>
         )}
 

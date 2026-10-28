@@ -5,7 +5,7 @@ import { isPermissionOrMissing, searchProductsDirect } from "@/lib/products/safe
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { storeHref } from "@/lib/share/store-path";
-import { Eye, Megaphone, Pencil, Power } from "lucide-react";
+import { Eye, Megaphone, Pencil, Power, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
@@ -15,6 +15,8 @@ import { useRouter } from "next/navigation";
 import { PhotoIndexStatus, PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
 import { DateField } from "@/components/forms/Fields";
+import { useCan } from "@/lib/permission-runtime";
+import { CleanupProductsSheet, deleteProductFlow } from "./DeleteProducts";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -185,6 +187,9 @@ export default function ProductsListPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [updatingProductStatusId, setUpdatingProductStatusId] = useState<string | null>(null);
+  // Eliminar productos sin movimientos (20261260): permiso «Productos»; la base exige además ser de la madre.
+  const canDelete = useCan("products");
+  const [cleaning, setCleaning] = useState(false);
 
   // paginación normal
   const [cursor, setCursor] = useState<Cursor>(null);
@@ -556,6 +561,12 @@ export default function ProductsListPage() {
     }
   }
 
+  async function deleteProduct(product: Product) {
+    const result = await deleteProductFlow(product);
+    if (result === "deleted") setProducts((current) => current.filter((item) => item.id !== product.id));
+    else if (result === "inactivate") await toggleProductStatus(product);
+  }
+
   // init
   useEffect(() => {
     loadFirstPage();
@@ -725,6 +736,17 @@ export default function ProductsListPage() {
                   Recargar
                 </button>
 
+                {canDelete && storeId ? (
+                  <button
+                    type="button"
+                    onClick={() => setCleaning(true)}
+                    className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
+                    style={{ borderColor: "var(--t-card-border)" }}
+                    title="Eliminar productos que nunca tuvieron movimientos"
+                  >
+                    🧹 Limpiar
+                  </button>
+                ) : null}
                 <Link
                   href="/dashboard/products/importar"
                   className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
@@ -1008,6 +1030,17 @@ export default function ProductsListPage() {
                       >
                         <Power size={17} className={updatingProductStatusId === p.id ? "animate-pulse" : ""} />
                       </button>
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => void deleteProduct(p)}
+                          className="product-row-action inline-flex items-center justify-center rounded-xl border border-red-300 bg-red-50 text-red-700 transition hover:bg-red-100 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
+                          aria-label={`Eliminar ${p.name}`}
+                          title="Eliminar (solo si nunca tuvo movimientos)"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      ) : null}
                       {storeSlug && catalogRetail && p.active && (p.stock === null || p.stock > 0) && hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url }) ? (
                         <>
                           <Link
@@ -1072,6 +1105,7 @@ export default function ProductsListPage() {
           </div>
         )}
       </div>
+      {cleaning && storeId ? <CleanupProductsSheet storeId={storeId} onClose={() => setCleaning(false)} onChanged={() => void reloadAll()} /> : null}
     </main>
   );
 }
