@@ -5,7 +5,10 @@ import Image from "next/image";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { ImplementationPackages, TraditionalComparison } from "@/components/landing/ImplementationPackages";
 import { Showcase } from "@/components/landing/Showcase";
-import { DevHero } from "@/components/landing/DevHero";
+import { Caret, CodeWindow, DevFxStyles, TerminalTyper } from "@/components/landing/DevFx";
+import { CommitMarquee, DevBackground, Scramble } from "@/components/landing/DevBackground";
+import { SalesMock } from "@/components/landing/SalesMock";
+import { FeatureDemo } from "@/components/landing/FeatureDemos";
 import { captureReferral } from "@/lib/saas/referral";
 
 // Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
@@ -13,7 +16,7 @@ const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 // Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
 const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
 import { useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   Banknote,
@@ -61,6 +64,41 @@ const BRAND = "RemHub";
 const WHATSAPP = "573218846041";
 const LOGO = "/remhub-icon-128.png";
 
+/** El logo grande junto al título, saludando: se mece, mueve la mano y dice «¡Hola!». Quieto si el equipo pide menos movimiento. */
+function WavingLogo() {
+  const still = useReducedMotion();
+  const wave = { duration: 1.6, repeat: Infinity, repeatDelay: 2.4, ease: "easeInOut" as const };
+  return (
+    <div className="relative shrink-0">
+      <motion.span
+        initial={{ opacity: 0, scale: 0.4, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ delay: 0.7, type: "spring", stiffness: 320, damping: 18 }}
+        className="absolute -right-3 -top-4 z-10 whitespace-nowrap rounded-full rounded-bl-sm px-2.5 py-1 text-xs font-black text-white shadow-lg sm:-right-6 sm:-top-5 sm:text-sm"
+        style={{ background: "var(--t-cta)" }}
+      >
+        ¡Hola!
+      </motion.span>
+      <motion.div
+        className="grid h-24 w-24 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_50px_rgba(168,85,247,.55)] ring-4 ring-fuchsia-500/40 sm:h-32 sm:w-32 lg:h-40 lg:w-40"
+        style={{ transformOrigin: "50% 90%" }}
+        animate={still ? undefined : { rotate: [0, -9, 11, -7, 9, -3, 0] }}
+        transition={wave}
+      >
+        <Image src="/remhub-icon-256.png" alt="RemHub" width={160} height={160} priority className="h-[92%] w-[92%] object-contain" />
+      </motion.div>
+      <motion.span
+        aria-hidden
+        className="absolute -bottom-1 -right-2 text-3xl sm:text-4xl lg:text-5xl"
+        style={{ transformOrigin: "70% 85%", display: "inline-block" }}
+        animate={still ? undefined : { rotate: [0, 22, -10, 22, -6, 16, 0] }}
+        transition={wave}
+      >
+        👋
+      </motion.span>
+    </div>
+  );
+}
 
 function COP(n: number) {
   return n.toLocaleString("es-CO");
@@ -287,7 +325,81 @@ export default function HomePage() {
         </nav>
       </header>
 
-      <DevHero demoUrl={DEMO_URL || undefined} />
+      <DevBackground>
+      <section className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-12 pt-10 lg:grid-cols-[1.05fr_.95fr] lg:pt-16">
+        <DevFxStyles />
+        <div>
+          <Reveal>
+            <a href="#landings" className="inline-flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ background: "var(--t-cta)" }}>Nuevo</span>
+              <span className="truncate">Landing pages para tus anuncios, con el píxel de Meta</span>
+              <ArrowRight size={13} className="shrink-0" />
+            </a>
+          </Reveal>
+          <Reveal delay={0.05}>
+            <div className="mt-6 flex items-center gap-4 sm:gap-6">
+              <WavingLogo />
+              <h1 className="min-w-0 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+                <Scramble text="Tu tienda, tus sedes y tus catálogos" />{" "}
+                <span style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}><Scramble text="en un solo lugar." delay={350} /></span>
+                <Caret />
+              </h1>
+            </div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <p className="mt-5 max-w-xl text-base sm:text-lg" style={{ color: "var(--t-muted)" }}>
+              Vende por WhatsApp con un catálogo para cada público, lanza landing pages para tus anuncios, factura en cada punto, controla el inventario de cada bodega y mira tus números al instante.
+            </p>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <TerminalTyper />
+          </Reveal>
+          <Reveal delay={0.15}>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
+                <Sparkles size={17} /> Crear mi tienda gratis
+              </Link>
+              {DEMO_URL ? (
+                <a href={DEMO_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                  <Store size={16} /> Ver una tienda de ejemplo
+                </a>
+              ) : null}
+              <a href="#producto" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                Ver cómo funciona <ArrowRight size={16} />
+              </a>
+            </div>
+          </Reveal>
+          <Reveal delay={0.2}>
+            <div className="mt-7 flex flex-wrap gap-2">
+              {["Varias sedes", "5 listas de precios", "Landing pages con píxel", "Traslados con firma", "Informes en vivo"].map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
+                  <Check size={13} className="text-emerald-500" /> {t}
+                </span>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+        <div className="min-w-0 space-y-12">
+          <SalesMock />
+          <CodeWindow className="mx-auto max-w-md lg:ml-10" />
+        </div>
+      </section>
+
+      <CommitMarquee />
+
+      <section className="mx-auto max-w-6xl px-5 pb-16 pt-8">
+        <Reveal>
+          <div className="grid grid-cols-2 gap-3 rounded-[2rem] border p-5 sm:grid-cols-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            {[["∞", "Catálogos"], ["5", "Listas de precios"], ["4", "Firmas por traslado"], ["24/7", "Pedidos por WhatsApp"]].map(([v, l]) => (
+              <div key={l} className="text-center">
+                <p className="text-3xl font-black" style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{v}</p>
+                <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{l}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+      </DevBackground>
 
       <section id="landings" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20">
         <Reveal className="text-center">
@@ -402,10 +514,11 @@ export default function HomePage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={(i % 4) * 0.05}>
-              <motion.div whileHover={{ y: -4 }} className="h-full rounded-3xl border p-5 transition-shadow hover:shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <motion.div whileHover={{ y: -4 }} className="flex h-full flex-col rounded-3xl border p-5 transition-shadow hover:shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={19} /></span>
                 <h3 className="mt-3 font-bold">{f.title}</h3>
                 <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{f.text}</p>
+                <div className="mt-auto"><FeatureDemo title={f.title} /></div>
               </motion.div>
             </Reveal>
           ))}
