@@ -116,6 +116,8 @@ export type LandingConfig = {
   poster_title: string;
   font: LandingFont;
   topbar_text: string;
+  /** Arriba de la landing: el logo de la tienda, solo su nombre o nada. */
+  header: "logo" | "name" | "none";
   sticky_text: string;
 };
 
@@ -181,6 +183,7 @@ export const DEFAULT_LANDING: LandingConfig = {
   poster_title: "",
   font: "moderna",
   topbar_text: "",
+  header: "logo",
   sticky_text: "Comprar",
 };
 
@@ -294,6 +297,7 @@ export function normalizeLanding(raw: unknown): LandingConfig {
     poster_title: str(r.poster_title, 140),
     font: typeof r.font === "string" && r.font in LANDING_FONTS ? (r.font as LandingFont) : d.font,
     topbar_text: str(r.topbar_text, 120),
+    header: r.header === "name" || r.header === "none" ? r.header : "logo",
     sticky_text: str(r.sticky_text, 30, d.sticky_text) || d.sticky_text,
     trust: (() => { const x = obj("trust"); return { enabled: bool(x.enabled, true), business: bool(x.business, true), points: bool(x.points, true), orders: bool(x.orders, true), links: bool(x.links, true) }; })(),
   };

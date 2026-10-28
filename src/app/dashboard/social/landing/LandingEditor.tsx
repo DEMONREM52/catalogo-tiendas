@@ -850,6 +850,13 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
                 ))}
               </div>
             </Field>
+            <Field label="Arriba de la landing" hint="Debajo de la barra de la promo">
+              <div className="grid grid-cols-3 gap-2">
+                {([["logo", "🖼️ Logo"], ["name", "🔤 Solo el nombre"], ["none", "🚫 Nada"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setCfg({ header: k })} className="rounded-xl border-2 px-2 py-2 text-xs font-bold" style={{ ...softBox, borderColor: cfg.header === k ? "var(--t-accent)" : "var(--t-card-border)" }}>{l}</button>
+                ))}
+              </div>
+            </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Texto de la barra de arriba" hint="Vacío = envío y «paga al recibir». Con fecha de promo sale la cuenta regresiva"><input value={cfg.topbar_text} onChange={(e) => setCfg({ topbar_text: e.target.value })} className={inputCls} style={inputStyle} /></Field>
               <Field label="Botón de la barra fija (abajo)"><input value={cfg.sticky_text} onChange={(e) => setCfg({ sticky_text: e.target.value })} className={inputCls} style={inputStyle} /></Field>

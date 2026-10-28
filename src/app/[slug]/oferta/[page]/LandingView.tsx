@@ -531,9 +531,11 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
           : cfg.topbar_text ? <span {...Fd("topbar_text")}>{cfg.topbar_text}</span> : <>🚚 {cfg.shipping.text || "Envíos a toda Colombia"}{cfg.payments.cod && data.payments.cod ? " · 💵 Paga al recibir" : ""}</>}
       </div>
 
-      <header className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-3">
-        {data.store.logo_url ? <img src={data.store.logo_url} alt={data.store.name} className="h-9 w-auto max-w-40 object-contain" /> : <span className="text-lg font-black tracking-tight">{data.store.name}</span>}
-      </header>
+      {cfg.header !== "none" ? (
+        <header className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-3">
+          {cfg.header === "logo" && data.store.logo_url ? <img src={data.store.logo_url} alt={data.store.name} className="h-9 w-auto max-w-40 object-contain" /> : <span className="text-lg font-black tracking-tight">{data.store.name}</span>}
+        </header>
+      ) : null}
 
       {(() => {
         // Solo las secciones que de verdad muestran algo (para no repetir el llamado entre secciones vacías).
