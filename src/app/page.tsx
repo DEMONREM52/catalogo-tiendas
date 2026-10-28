@@ -59,7 +59,7 @@ import {
 
 const BRAND = "RemHub";
 const WHATSAPP = "573218846041";
-const LOGO = "/remhub-icon-64.png";
+const LOGO = "/remhub-icon-128.png";
 
 function COP(n: number) {
   return n.toLocaleString("es-CO");
@@ -308,9 +308,12 @@ export default function HomePage() {
 
       <header className="sticky top-0 z-50 transition" style={{ background: scrolled ? "color-mix(in oklab, var(--t-bg-base) 82%, transparent)" : "transparent", backdropFilter: scrolled ? "blur(14px)" : undefined, borderBottom: scrolled ? "1px solid var(--t-card-border)" : "1px solid transparent" }}>
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
-          <Link href="/" className="flex items-center gap-2 font-black">
-            <Image src={LOGO} alt="" width={32} height={32} className="rounded-xl" />
-            {BRAND}
+          <Link href="/" className="group flex shrink-0 items-center gap-2 text-lg font-black tracking-tight sm:gap-3 sm:text-xl">
+            {/* Logo grande sobre un círculo oscuro: el logo es blanco y transparente, así se ve también en modo claro. */}
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_28px_rgba(168,85,247,.45)] ring-2 ring-fuchsia-500/40 transition group-hover:scale-105 sm:h-16 sm:w-16">
+              <Image src={LOGO} alt="" width={64} height={64} priority className="h-[92%] w-[92%] object-contain" />
+            </span>
+            <span className="hidden min-[380px]:inline">{BRAND}</span>
           </Link>
           <div className="hidden items-center gap-6 text-sm md:flex" style={{ color: "var(--t-muted)" }}>
             <a href="#landings" className="hover:text-[color:var(--t-text)]">Landing pages</a>
@@ -320,9 +323,9 @@ export default function HomePage() {
             <a href="#implementacion" className="hover:text-[color:var(--t-text)]">Implementación</a>
             <a href="#preguntas" className="hover:text-[color:var(--t-text)]">Preguntas</a>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>Iniciar sesión</Link>
-            <Link href="/registro" className="rounded-xl px-4 py-2 text-sm font-bold text-white shadow-lg" style={{ background: "var(--t-cta)" }}>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Link href="/login" className="whitespace-nowrap rounded-xl border px-2.5 py-2 text-[13px] font-semibold sm:px-3 sm:text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>Iniciar sesión</Link>
+            <Link href="/registro" className="whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-bold text-white shadow-lg sm:px-4 sm:text-sm" style={{ background: "var(--t-cta)" }}>
               <span className="sm:hidden">Crear cuenta</span><span className="hidden sm:inline">Crear cuenta gratis</span>
             </Link>
           </div>
@@ -620,7 +623,7 @@ export default function HomePage() {
       <footer className="border-t py-8" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 md:flex-row md:items-center md:justify-between">
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <Image src={LOGO} alt="" width={22} height={22} className="rounded-md" /> © {new Date().getFullYear()} {BRAND} · Catálogos, ventas e inventario
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-[#0b0716]"><Image src={LOGO} alt="" width={30} height={30} className="h-[92%] w-[92%] object-contain" /></span> © {new Date().getFullYear()} {BRAND} · Catálogos, ventas e inventario
           </p>
           <div className="flex flex-wrap gap-4 text-sm" style={{ color: "var(--t-muted)" }}>
             <a href="#landings">Landing pages</a>
