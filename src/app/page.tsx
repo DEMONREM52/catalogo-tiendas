@@ -5,7 +5,7 @@ import Image from "next/image";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { ImplementationPackages, TraditionalComparison } from "@/components/landing/ImplementationPackages";
 import { Showcase } from "@/components/landing/Showcase";
-import { Caret, CodeWindow, DevFxStyles, FloatingCode, TerminalTyper } from "@/components/landing/DevFx";
+import { DevHero } from "@/components/landing/DevHero";
 import { captureReferral } from "@/lib/saas/referral";
 
 // Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
@@ -13,7 +13,7 @@ const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 // Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
 const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
 import { useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   Banknote,
@@ -37,7 +37,6 @@ import {
   Receipt,
   Rocket,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
   Store,
   Target,
@@ -62,41 +61,6 @@ const BRAND = "RemHub";
 const WHATSAPP = "573218846041";
 const LOGO = "/remhub-icon-128.png";
 
-/** El logo grande junto al título, saludando: se mece, mueve la mano y dice «¡Hola!». Quieto si el equipo pide menos movimiento. */
-function WavingLogo() {
-  const still = useReducedMotion();
-  const wave = { duration: 1.6, repeat: Infinity, repeatDelay: 2.4, ease: "easeInOut" as const };
-  return (
-    <div className="relative shrink-0">
-      <motion.span
-        initial={{ opacity: 0, scale: 0.4, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ delay: 0.7, type: "spring", stiffness: 320, damping: 18 }}
-        className="absolute -right-3 -top-4 z-10 whitespace-nowrap rounded-full rounded-bl-sm px-2.5 py-1 text-xs font-black text-white shadow-lg sm:-right-6 sm:-top-5 sm:text-sm"
-        style={{ background: "var(--t-cta)" }}
-      >
-        ¡Hola!
-      </motion.span>
-      <motion.div
-        className="grid h-24 w-24 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_50px_rgba(168,85,247,.55)] ring-4 ring-fuchsia-500/40 sm:h-32 sm:w-32 lg:h-40 lg:w-40"
-        style={{ transformOrigin: "50% 90%" }}
-        animate={still ? undefined : { rotate: [0, -9, 11, -7, 9, -3, 0] }}
-        transition={wave}
-      >
-        <Image src="/remhub-icon-256.png" alt="RemHub" width={160} height={160} priority className="h-[92%] w-[92%] object-contain" />
-      </motion.div>
-      <motion.span
-        aria-hidden
-        className="absolute -bottom-1 -right-2 text-3xl sm:text-4xl lg:text-5xl"
-        style={{ transformOrigin: "70% 85%", display: "inline-block" }}
-        animate={still ? undefined : { rotate: [0, 22, -10, 22, -6, 16, 0] }}
-        transition={wave}
-      >
-        👋
-      </motion.span>
-    </div>
-  );
-}
 
 function COP(n: number) {
   return n.toLocaleString("es-CO");
@@ -269,52 +233,6 @@ function Kicker({ children }: { children: ReactNode }) {
   );
 }
 
-function HeroMock() {
-  const [sales, setSales] = useState(0);
-  useEffect(() => {
-    // Con "reducir movimiento" el número aparece de una vez.
-    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1600;
-    const start = performance.now();
-    let frame = 0;
-    const step = (now: number) => {
-      const t = duration ? Math.min(1, (now - start) / duration) : 1;
-      setSales(Math.round(18450000 * (1 - Math.pow(1 - t, 3))));
-      if (t < 1) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  const bars = [38, 52, 44, 63, 58, 76, 70, 88];
-  return (
-    <div className="relative mx-auto w-full max-w-lg">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-[2rem] border p-5 shadow-2xl backdrop-blur-xl" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Ventas · este mes</p>
-          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold">+24%</span>
-        </div>
-        <p className="mt-1 text-4xl font-black tracking-tight sm:text-5xl">${COP(sales)}</p>
-        <div className="mt-4 flex h-28 items-end gap-2">
-          {bars.map((h, i) => (
-            <motion.div key={i} initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: 0.3 + i * 0.07, duration: 0.6 }} className="flex-1 rounded-t-[4px]" style={{ background: i === bars.length - 1 ? "var(--t-accent)" : "color-mix(in oklab, var(--t-accent) 35%, transparent)" }} />
-          ))}
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-          {[["Pedidos", "412"], ["Puntos", "3"], ["Catálogos", "4"]].map(([l, v]) => (
-            <div key={l} className="rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)" }}><p style={{ color: "var(--t-muted)" }}>{l}</p><p className="text-base font-black">{v}</p></div>
-          ))}
-        </div>
-      </motion.div>
-      <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.9 }} className="absolute -right-2 -top-6 flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold shadow-xl sm:-right-8" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500 text-white"><ShoppingBag size={14} /></span>
-        Nuevo pedido · Sede San Roque
-      </motion.div>
-      <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.2 }} className="absolute -bottom-6 -left-2 flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold shadow-xl sm:-left-8" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-        <span className="grid h-7 w-7 place-items-center rounded-full text-white" style={{ background: "var(--t-accent)" }}><Truck size={14} /></span>
-        Traslado #18 recibido ✓
-      </motion.div>
-    </div>
-  );
-}
 
 export default function HomePage() {
   const [tour, setTour] = useState(0);
@@ -369,78 +287,7 @@ export default function HomePage() {
         </nav>
       </header>
 
-      <section className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[1.05fr_.95fr] lg:pt-16">
-        <DevFxStyles />
-        <FloatingCode />
-        <div>
-          <Reveal>
-            <a href="#landings" className="inline-flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-              <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ background: "var(--t-cta)" }}>Nuevo</span>
-              <span className="truncate">Landing pages para tus anuncios, con el píxel de Meta</span>
-              <ArrowRight size={13} className="shrink-0" />
-            </a>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <div className="mt-6 flex items-center gap-4 sm:gap-6">
-              <WavingLogo />
-              <h1 className="min-w-0 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-                Tu tienda, tus sedes y tus catálogos{" "}
-                <span style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>en un solo lugar.</span>
-                <Caret />
-              </h1>
-            </div>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p className="mt-5 max-w-xl text-base sm:text-lg" style={{ color: "var(--t-muted)" }}>
-              Vende por WhatsApp con un catálogo para cada público, lanza landing pages para tus anuncios, factura en cada punto, controla el inventario de cada bodega y mira tus números al instante.
-            </p>
-          </Reveal>
-          <Reveal delay={0.12}>
-            <TerminalTyper />
-          </Reveal>
-          <Reveal delay={0.15}>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
-                <Sparkles size={17} /> Crear mi tienda gratis
-              </Link>
-              {DEMO_URL ? (
-                <a href={DEMO_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                  <Store size={16} /> Ver una tienda de ejemplo
-                </a>
-              ) : null}
-              <a href="#producto" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                Ver cómo funciona <ArrowRight size={16} />
-              </a>
-            </div>
-          </Reveal>
-          <Reveal delay={0.2}>
-            <div className="mt-7 flex flex-wrap gap-2">
-              {["Varias sedes", "5 listas de precios", "Landing pages con píxel", "Traslados con firma", "Informes en vivo"].map((t) => (
-                <span key={t} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-                  <Check size={13} className="text-emerald-500" /> {t}
-                </span>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-        <div className="min-w-0 space-y-12">
-          <HeroMock />
-          <CodeWindow className="mx-auto max-w-md lg:ml-10" />
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-5">
-        <Reveal>
-          <div className="grid grid-cols-2 gap-3 rounded-[2rem] border p-5 sm:grid-cols-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-            {[["∞", "Catálogos"], ["5", "Listas de precios"], ["4", "Firmas por traslado"], ["24/7", "Pedidos por WhatsApp"]].map(([v, l]) => (
-              <div key={l} className="text-center">
-                <p className="text-3xl font-black" style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{v}</p>
-                <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{l}</p>
-              </div>
-            ))}
-          </div>
-        </Reveal>
-      </section>
+      <DevHero demoUrl={DEMO_URL || undefined} />
 
       <section id="landings" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20">
         <Reveal className="text-center">
