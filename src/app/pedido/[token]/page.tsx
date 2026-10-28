@@ -729,6 +729,47 @@ export default function PedidoPage() {
     }
   }
 
+  // Completar (entregado) desde el comprobante: solo el equipo de la tienda con permiso «Pedidos».
+  const [canComplete, setCanComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const orderStoreId: string | null = order?.store_id ?? store?.id ?? null;
+  useEffect(() => {
+    if (!isStaff || !orderStoreId) return;
+    let alive = true;
+    void supabaseBrowser().rpc("erp_can", { p_store: orderStoreId, p_perm: "orders" }).then(({ data }) => alive && setCanComplete(data === true));
+    return () => { alive = false; };
+  }, [isStaff, orderStoreId]);
+
+  async function completeOrder() {
+    const ok = await Swal.fire({
+      icon: "question",
+      title: "¿Completar el pedido?",
+      text: "Queda como entregado y finalizado.",
+      showCancelButton: true,
+      confirmButtonText: "Sí, completar",
+      cancelButtonText: "Cancelar",
+      background: "var(--t-bg-base)",
+      color: "var(--t-text)",
+      confirmButtonColor: "#22c55e",
+    });
+    if (!ok.isConfirmed) return;
+    setCompleting(true);
+    try {
+      const sb = supabaseBrowser();
+      let id: string | null = order?.id ?? null;
+      if (!id) id = ((await sb.from("orders").select("id").eq("token", token).maybeSingle()).data as { id?: string } | null)?.id ?? null;
+      if (!id) throw new Error("No encontramos el pedido.");
+      const { error } = await sb.rpc("store_team_set_order_status", { p_order_id: id, p_status: "completed" });
+      if (error) throw error;
+      await load();
+      void Swal.fire({ icon: "success", title: "Pedido completado", timer: 1400, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
+    } catch (e) {
+      void Swal.fire({ icon: "error", title: "No se pudo completar", text: e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e), background: "var(--t-bg-base)", color: "var(--t-text)" });
+    } finally {
+      setCompleting(false);
+    }
+  }
+
   async function confirmOrder() {
     if (isLocked) return;
     if (hasUnsavedChanges) {
@@ -989,6 +1030,8 @@ export default function PedidoPage() {
           onPdf={downloadPdf}
           reorderCatalog={storeExtra?.slug && order.catalog_type === "retail" && order.status !== "cancelled" ? `/${storeExtra.slug}/detal?reorder=${encodeURIComponent(token)}` : null}
           reorderPos={isStaff ? `/dashboard/pos?reorder=${encodeURIComponent(token)}` : null}
+          onComplete={canComplete ? () => void completeOrder() : null}
+          completing={completing}
         />
       </div>
       {showAddiForm ? (

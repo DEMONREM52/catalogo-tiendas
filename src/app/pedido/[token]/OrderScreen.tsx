@@ -122,6 +122,9 @@ export function OrderScreen(props: {
   /** Volver a pedir: en el catálogo (cliente) o en el POS (equipo de la tienda). */
   reorderCatalog: string | null;
   reorderPos: string | null;
+  /** Solo para el equipo de la tienda (permiso «Pedidos»): pasa el pedido confirmado a completado. */
+  onComplete?: (() => void) | null;
+  completing?: boolean;
 }) {
   const p = props;
   const st = STATUS[p.status] ?? { emoji: "📄", label: p.status, hint: "", color: "var(--t-accent)" };
@@ -332,9 +335,18 @@ export function OrderScreen(props: {
         <aside className="space-y-3 lg:sticky lg:top-4">
           <section className="rounded-3xl border p-4" style={card}>
             {p.locked ? (
-              <p className="flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
-                <Lock size={14} /> {p.status === "cancelled" ? "Documento anulado: no se puede editar." : "Confirmado: ya no se puede editar."}
-              </p>
+              <>
+                <p className="flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                  <Lock size={14} /> {p.status === "cancelled" ? "Documento anulado: no se puede editar." : p.status === "completed" ? "Completado: entregado y finalizado." : "Confirmado: ya no se puede editar."}
+                </p>
+                {p.status === "confirmed" && p.onComplete ? (
+                  <button type="button" onClick={p.onComplete} disabled={p.completing}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60"
+                    style={{ background: "linear-gradient(135deg,#22c55e,#10b981)" }}>
+                    <Check size={17} /> {p.completing ? "Completando…" : "Completar pedido (entregado)"}
+                  </button>
+                ) : null}
+              </>
             ) : (
               <>
                 <div className="hidden lg:block">{mainAction}</div>
