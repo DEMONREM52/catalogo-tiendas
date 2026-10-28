@@ -28,6 +28,23 @@ type MemberRow = {
 };
 
 type PointRow = { id: string; name: string; kind: string };
+/** Empleado de Nómina para llenar el acceso (20261266: solo nombre, cédula, cargo, teléfono y punto). */
+type EmployeeRow = { id: string; full_name: string; document: string | null; position: string | null; phone: string | null; point_id: string | null };
+
+const plain = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/ñ/g, "n").trim();
+
+/** Usuario sugerido: el primer nombre; si ya existe, nombre.apellido; si no, con número. */
+function suggestUsername(fullName: string, taken: Set<string>) {
+  const words = plain(fullName).replace(/[^a-z0-9 ]/g, "").split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const first = words[0].slice(0, 24);
+  const last = words.length > 2 ? words[2] : words[1];
+  const options = [first, last ? `${first}.${last}` : "", last ? `${first}.${last[0]}` : ""].filter((x) => x.length >= 3 && !taken.has(x));
+  if (options.length) return options[0];
+  const base = first.length >= 3 ? first : `${first}${last ?? ""}`.padEnd(3, "0");
+  for (let i = 2; i < 100; i++) if (!taken.has(`${base}${i}`)) return `${base}${i}`;
+  return base;
+}
 
 const PERMISSION_OPTIONS = PERMISSION_LIST;
 
@@ -56,6 +73,8 @@ export default function StoreUsersPage() {
   const [loginLink, setLoginLink] = useState("");
   const [points, setPoints] = useState<PointRow[]>([]);
   const [pointId, setPointId] = useState("");
+  const [employees, setEmployees] = useState<EmployeeRow[] | null>(null);
+  const [employeeId, setEmployeeId] = useState("");
   const [editingPointId, setEditingPointId] = useState("");
   const [editingExtraPoints, setEditingExtraPoints] = useState<string[]>([]);
   const [editMember, setEditMember] = useState<MemberRow | null>(null);
@@ -89,6 +108,8 @@ export default function StoreUsersPage() {
       setStore(access.store);
       await loadMembers(access.store.id);
       void loadAccess(access.store.id);
+      // Si falta la migración 20261266 o no hay empleados, simplemente no sale el selector.
+      void supabaseBrowser().rpc("erp_employees_for_users", { p_store: access.store.id }).then(({ data, error }) => setEmployees(error ? null : (data as EmployeeRow[])));
       const { data: pointData } = await supabaseBrowser()
         .from("erp_warehouses")
         .select("id,name,kind")
@@ -177,6 +198,7 @@ export default function StoreUsersPage() {
       setPassword("");
       setSelectedPermissions(["pos"]);
       setPointId("");
+      setEmployeeId("");
       await loadMembers(store.id);
     } catch (err: unknown) {
       await Swal.fire({
@@ -443,6 +465,19 @@ export default function StoreUsersPage() {
   }, [members, query, statusFilter, points]);
   const newUserClean = username.replace(/\s+/g, "");
   const newUserOk = /^[a-z0-9][a-z0-9._-]{2,31}$/.test(newUserClean.toLowerCase());
+  // Empleados que ya tienen usuario (mismo nombre visible): salen al final y marcados.
+  const memberNames = new Set(members.map((m) => plain(m.display_name ?? "")).filter(Boolean));
+  const employeeOptions = (employees ?? []).map((e) => ({ ...e, hasUser: memberNames.has(plain(e.full_name)) })).sort((a, b) => Number(a.hasUser) - Number(b.hasUser));
+
+  function pickEmployee(id: string) {
+    setEmployeeId(id);
+    const e = employees?.find((x) => x.id === id);
+    if (!e) return;
+    const taken = new Set(members.map((m) => (m.username ?? "").toLowerCase()));
+    setDisplayName(e.full_name);
+    setUsername(suggestUsername(e.full_name, taken));
+    setPointId(e.point_id && points.some((p) => p.id === e.point_id) ? e.point_id : "");
+  }
 
   return (
     <main className="space-y-5">
@@ -500,6 +535,29 @@ export default function StoreUsersPage() {
           <h2 className="flex items-center gap-2 text-lg font-black"><UserPlus size={20} style={{ color: "var(--t-accent)" }} /> Crear acceso</h2>
           <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>No necesita correo: solo usuario y contraseña.</p>
           <div className="mt-4 space-y-4">
+            {employeeOptions.length ? (
+              <label className="block rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, transparent)", background: "color-mix(in oklab, var(--t-accent) 7%, transparent)" }}>
+                <span className="flex items-center gap-1.5 text-xs font-bold"><Users size={14} style={{ color: "var(--t-accent)" }} /> Llenar con un empleado <span className="font-normal opacity-60">(opcional)</span></span>
+                <select {...inputProps()} className={`${inputProps().className} mt-1.5`} value={employeeId} onChange={(e) => pickEmployee(e.target.value)}>
+                  <option value="">Escoge de Nómina…</option>
+                  {employeeOptions.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.full_name}{e.position ? ` · ${e.position}` : ""}{e.point_id ? ` · ${points.find((p) => p.id === e.point_id)?.name ?? ""}` : ""}{e.hasUser ? " (ya tiene usuario)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  const e = employeeOptions.find((x) => x.id === employeeId);
+                  if (!e) return <span className="mt-1.5 block text-[11px]" style={{ color: "var(--t-muted)" }}>Se llenan el nombre, un usuario sugerido y su punto. Tú pones la contraseña y los permisos.</span>;
+                  return (
+                    <span className="mt-1.5 block text-[11px]" style={{ color: e.hasUser ? "#f59e0b" : "var(--t-muted)" }}>
+                      {e.hasUser ? "⚠️ Ya hay un usuario con este nombre. Revisa la lista antes de crear otro. " : ""}
+                      {[e.document ? `C.C. ${e.document}` : "", e.phone ? `📱 ${e.phone}` : ""].filter(Boolean).join(" · ")}
+                    </span>
+                  );
+                })()}
+              </label>
+            ) : null}
             <label className="block">
               <span className="text-xs font-bold">Usuario interno</span>
               <span className="relative mt-1.5 block">
