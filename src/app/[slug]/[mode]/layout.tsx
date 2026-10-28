@@ -185,6 +185,8 @@ export async function generateMetadata({
   const ogParams = new URLSearchParams({ store: store?.slug || decodeURIComponent(slug) });
   if (catalogMeta) ogParams.set("catalog", decodeURIComponent(mode));
   else ogParams.set("mode", mode);
+  // Versión de la imagen: cambia la dirección para que WhatsApp y la CDN no sirvan la vieja (con el logo de la tienda).
+  ogParams.set("v", "2");
   const ogImage = `${siteUrl}/api/og?${ogParams.toString()}`;
 
   // ✅ icon (favicon) desde logo si existe

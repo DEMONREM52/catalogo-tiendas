@@ -66,8 +66,9 @@ export async function resolveCatalogIdentity(slugRaw: string, modeRaw: string | 
   const sb = supabasePublic();
   if (!sb) return null;
 
-  // Catálogo de RemHub Social (si el modo no es detal/mayor).
-  if (mode && mode !== "detal" && mode !== "mayor") {
+  // Catálogo de RemHub Social con su propio logo. También si se llama «detal» o «mayor»: esos catálogos existen
+  // (p. ej. «Por mayor») y antes salía el logo de la tienda. Si no hay catálogo con ese nombre, la tienda.
+  if (mode) {
     const { data, error } = await sb.rpc("catalog_public_meta", { p_store: slug, p_catalog: mode });
     if (!error && data) {
       const m = data as { name: string; store_name: string; headline: string | null; logo_url: string | null; point_name?: string | null };
