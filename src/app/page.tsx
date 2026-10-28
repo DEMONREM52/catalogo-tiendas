@@ -12,7 +12,7 @@ const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 // Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
 const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
 import { useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   Banknote,
@@ -60,6 +60,42 @@ import {
 const BRAND = "RemHub";
 const WHATSAPP = "573218846041";
 const LOGO = "/remhub-icon-128.png";
+
+/** El logo grande junto al título, saludando: se mece, mueve la mano y dice «¡Hola!». Quieto si el equipo pide menos movimiento. */
+function WavingLogo() {
+  const still = useReducedMotion();
+  const wave = { duration: 1.6, repeat: Infinity, repeatDelay: 2.4, ease: "easeInOut" as const };
+  return (
+    <div className="relative shrink-0">
+      <motion.span
+        initial={{ opacity: 0, scale: 0.4, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ delay: 0.7, type: "spring", stiffness: 320, damping: 18 }}
+        className="absolute -right-3 -top-4 z-10 whitespace-nowrap rounded-full rounded-bl-sm px-2.5 py-1 text-xs font-black text-white shadow-lg sm:-right-6 sm:-top-5 sm:text-sm"
+        style={{ background: "var(--t-cta)" }}
+      >
+        ¡Hola!
+      </motion.span>
+      <motion.div
+        className="grid h-24 w-24 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_50px_rgba(168,85,247,.55)] ring-4 ring-fuchsia-500/40 sm:h-32 sm:w-32 lg:h-40 lg:w-40"
+        style={{ transformOrigin: "50% 90%" }}
+        animate={still ? undefined : { rotate: [0, -9, 11, -7, 9, -3, 0] }}
+        transition={wave}
+      >
+        <Image src="/remhub-icon-256.png" alt="RemHub" width={160} height={160} priority className="h-[92%] w-[92%] object-contain" />
+      </motion.div>
+      <motion.span
+        aria-hidden
+        className="absolute -bottom-1 -right-2 text-3xl sm:text-4xl lg:text-5xl"
+        style={{ transformOrigin: "70% 85%", display: "inline-block" }}
+        animate={still ? undefined : { rotate: [0, 22, -10, 22, -6, 16, 0] }}
+        transition={wave}
+      >
+        👋
+      </motion.span>
+    </div>
+  );
+}
 
 function COP(n: number) {
   return n.toLocaleString("es-CO");
@@ -342,10 +378,13 @@ export default function HomePage() {
             </a>
           </Reveal>
           <Reveal delay={0.05}>
-            <h1 className="mt-5 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-              Tu tienda, tus sedes y tus catálogos{" "}
-              <span style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>en un solo lugar.</span>
-            </h1>
+            <div className="mt-6 flex items-center gap-4 sm:gap-6">
+              <WavingLogo />
+              <h1 className="min-w-0 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+                Tu tienda, tus sedes y tus catálogos{" "}
+                <span style={{ background: "var(--t-cta)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>en un solo lugar.</span>
+              </h1>
+            </div>
           </Reveal>
           <Reveal delay={0.1}>
             <p className="mt-5 max-w-xl text-base sm:text-lg" style={{ color: "var(--t-muted)" }}>
