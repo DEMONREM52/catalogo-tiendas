@@ -63,6 +63,7 @@ const ACTIONS: Record<string, string> = {
   "security.audit_integrity_failed": "Falla de integridad en la auditoría", "tienda.eliminada": "Tienda eliminada",
   "price_approval.approved": "Aprobó un precio bajo el límite", "price_approval.rejected": "Rechazó un precio bajo el límite",
   "price_limit.saved": "Cambió un límite de precio",
+  "product.deleted": "Eliminó un producto", "product.deleted_with_units": "Eliminó un producto con unidades (se hizo responsable)",
 };
 export function actionLabel(e: Pick<AuditEvent, "action" | "entity">) {
   if (ACTIONS[e.action]) return ACTIONS[e.action];

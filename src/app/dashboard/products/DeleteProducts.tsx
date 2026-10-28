@@ -11,15 +11,20 @@ import { esc, swalTheme } from "../rentabilidad/shared";
 /**
  * Eliminar productos que no se han vendido (20261260 y 20261263). Bloquean las ventas, los traslados y las unidades (20261264);
  * el resto del historial (kardex, compras, ajustes…) se borra con el producto. Lo vendido se inactiva.
+ * Si solo lo bloquean las unidades, se puede eliminar haciéndose responsable (20261265, queda en la auditoría).
  */
 
-type Check = { ok: boolean; error?: string; name?: string; can_delete?: boolean; reasons?: Array<{ table: string; label: string }>; units?: number; will_delete?: Array<{ table: string; label: string }> };
+type Check = {
+  ok: boolean; error?: string; name?: string; can_delete?: boolean; reasons?: Array<{ table: string; label: string }>; units?: number; will_delete?: Array<{ table: string; label: string }>;
+  units_only?: boolean; stock?: { units: number; cost: number; value: number; points: Array<{ warehouse_id: string; name: string; qty: number }> };
+};
 type Unused = { id: string; name: string; sku: string | null; image_url: string | null; active: boolean; created_at: string; units?: number };
 
 const REASONS = ["Lo creé mal", "Está duplicado", "Ya no lo vendo", "Producto de prueba"];
 
 function dbError(e: { message?: string } | null | undefined) {
   const msg = e?.message ?? "No se pudo.";
+  if (/p_take_units/.test(msg)) return "Falta ejecutar en Supabase la migración 20261265_eliminar_productos_con_unidades.sql.";
   return /Could not find the function|schema cache/i.test(msg) ? "Falta ejecutar en Supabase la migración 20261260_eliminar_productos.sql." : msg;
 }
 
@@ -47,6 +52,7 @@ export async function deleteProductFlow(p: { id: string; name: string; active: b
     await Swal.fire({ ...swalTheme, icon: "error", title: "No se pudo revisar", text: error ? dbError(error) : c?.error });
     return null;
   }
+  if (!c.can_delete && c.units_only) return takeUnitsFlow(p, c);
   if (!c.can_delete) {
     const r = await Swal.fire({
       ...swalTheme, icon: "info", title: `«${esc(p.name)}» no se puede eliminar`,
@@ -70,6 +76,55 @@ export async function deleteProductFlow(p: { id: string; name: string; active: b
     return null;
   }
   void Swal.fire({ ...swalTheme, toast: true, position: "top", icon: "success", title: "Producto eliminado", timer: 1800, showConfirmButton: false });
+  return "deleted";
+}
+
+const money = (n: number) => n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+
+/**
+ * Solo lo bloquean sus unidades (20261265): se puede inactivar o eliminar haciéndose responsable de la pérdida.
+ * Pide motivo (10 letras) y aceptar la pérdida; queda en la auditoría como evento crítico con el nombre de quien lo hizo.
+ */
+async function takeUnitsFlow(p: { id: string; name: string; active: boolean }, c: Check): Promise<"deleted" | "inactivate" | null> {
+  const st = c.stock ?? { units: Number(c.units ?? 0), cost: 0, value: 0, points: [] };
+  const units = Number(st.units);
+  const unitsTxt = `${units.toLocaleString("es-CO")} unidad${units === 1 ? "" : "es"}`;
+  const points = `<ul style="text-align:left;margin:8px auto 0;max-width:320px;font-size:14px">${st.points.map((x) => `<li>• ${esc(x.name)}: <b>${Number(x.qty).toLocaleString("es-CO")}</b></li>`).join("")}</ul>`;
+  const value = Number(st.value) ? `<p style="font-size:13px;margin-top:8px">Valor al costo: <b>${money(Number(st.value))}</b></p>` : "";
+
+  const first = await Swal.fire({
+    ...swalTheme, icon: "warning", title: `«${esc(p.name)}» tiene ${unitsTxt}`,
+    html: `<p style="font-size:14px">No tiene ventas ni traslados, pero todavía hay unidades en inventario:</p>${points}${value}
+      <p style="font-size:13px;opacity:.8;margin-top:12px">Lo correcto es dejarlas en 0 con un ajuste o un traslado. Si ya no existen (se dañaron, se perdieron, nunca llegaron), puedes eliminarlo haciéndote responsable.</p>`,
+    showConfirmButton: true, confirmButtonText: "Eliminar y hacerme responsable", confirmButtonColor: "#ef4444",
+    showDenyButton: p.active, denyButtonText: "Mejor inactivarlo", denyButtonColor: "#7c3aed",
+    showCancelButton: true, cancelButtonText: "Cancelar",
+  });
+  if (first.isDenied) return "inactivate";
+  if (!first.isConfirmed) return null;
+
+  const r = await Swal.fire({
+    ...swalTheme, icon: "warning", title: "Hacerme responsable", confirmButtonText: "Eliminar", cancelButtonText: "Cancelar", showCancelButton: true,
+    confirmButtonColor: "#ef4444", reverseButtons: true,
+    html: `<p style="font-size:14px">Se elimina «${esc(p.name)}» y salen del inventario <b>${unitsTxt}</b>${Number(st.value) ? ` (${money(Number(st.value))} al costo)` : ""}.</p>
+      <label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:13px;margin:14px auto 0;max-width:340px;cursor:pointer">
+        <input id="rh-take" type="checkbox" style="width:18px;height:18px;min-height:0;padding:0;margin-top:2px;flex-shrink:0;accent-color:#dc2626">
+        <span>Me hago responsable de esta pérdida. Queda en la auditoría con mi nombre, la fecha, las unidades por punto y el motivo.</span>
+      </label>`,
+    input: "textarea", inputPlaceholder: "¿Qué pasó con las unidades? (mínimo 10 letras)",
+    preConfirm: (v: string) => {
+      if (String(v ?? "").trim().length < 10) return Swal.showValidationMessage("Explica qué pasó con las unidades (mínimo 10 letras)");
+      if (!(document.getElementById("rh-take") as HTMLInputElement | null)?.checked) return Swal.showValidationMessage("Marca que te haces responsable");
+      return String(v).trim();
+    },
+  });
+  if (!r.isConfirmed) return null;
+  const { error: e } = await supabaseBrowser().rpc("erp_product_delete", { p_product: p.id, p_reason: r.value, p_take_units: true });
+  if (e) {
+    await Swal.fire({ ...swalTheme, icon: "error", title: "No se eliminó", text: dbError(e) });
+    return null;
+  }
+  void Swal.fire({ ...swalTheme, toast: true, position: "top", icon: "success", title: "Producto eliminado · quedó en la auditoría", timer: 2200, showConfirmButton: false });
   return "deleted";
 }
 
