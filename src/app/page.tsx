@@ -422,9 +422,10 @@ export default function HomePage() {
             <Reveal key={f.title} delay={(i % 3) * 0.05}>
               <div className="rh-glow flex h-full gap-3 rounded-3xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={19} /></span>
-                <div>
+                <div className="flex min-w-0 flex-1 flex-col">
                   <h3 className="font-bold">{f.title}</h3>
                   <p className="mt-0.5 text-sm" style={{ color: "var(--t-muted)" }}>{f.text}</p>
+                  <div className="mt-auto"><FeatureDemo title={f.title} /></div>
                 </div>
               </div>
             </Reveal>

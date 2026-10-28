@@ -400,14 +400,23 @@ const LP_EVENTS: Record<string, string> = {
 };
 
 // Ventas − costo − pauta = ganancia; ventas ÷ pauta = retorno (como en Landing pages → Resultados).
-const LP_RESULTS: Array<[string, string, string]> = [
-  ["Visitas", "1.240", "62 % desde Facebook"],
-  ["Pedidos", "38", "conversión 3,1 %"],
-  ["Pauta", "$570.000", "$15.000 por pedido"],
-  ["Ventas", "$3.420.000", "ticket $90.000"],
-  ["Retorno", "6,0x", "por cada peso de pauta"],
-  ["Ganancia", "$1.330.000", "ya sin costo ni pauta"],
-];
+// Parte de una campaña de ejemplo y suma lo que pasa en la demostración.
+const LP_BASE = { visits: 1240, orders: 38, ads: 570000, sales: 3420000, profit: 1330000 };
+function lpResults(x: { visits: number; orders: number; sales: number }): Array<[string, string, string]> {
+  const visits = LP_BASE.visits + x.visits, orders = LP_BASE.orders + x.orders, sales = LP_BASE.sales + x.sales;
+  const profit = LP_BASE.profit + Math.round((x.sales * 0.39) / 100) * 100;
+  const pct = (n: number, d = 1) => n.toLocaleString("es-CO", { maximumFractionDigits: d, minimumFractionDigits: d });
+  return [
+    ["Visitas", visits.toLocaleString("es-CO"), "62 % desde Facebook"],
+    ["Pedidos", orders.toLocaleString("es-CO"), `conversión ${pct((orders / visits) * 100)} %`],
+    ["Pauta", money(LP_BASE.ads), `${money(Math.round(LP_BASE.ads / orders / 100) * 100)} por pedido`],
+    ["Ventas", money(sales), `ticket ${money(Math.round(sales / orders / 1000) * 1000)}`],
+    ["Retorno", `${pct(sales / LP_BASE.ads)}x`, "por cada peso de pauta"],
+    ["Ganancia", money(profit), "ya sin costo ni pauta"],
+  ];
+}
+// Dónde toca el dedo de la demostración (px dentro del celular de 560 px).
+const LP_TAP: Record<"bundle" | "buy" | "confirm", (i: number) => number> = { bundle: (i) => 300 + i * 40, buy: () => 414, confirm: () => 478 };
 
 type LpEvent = { id: number; name: string; detail: string; server: boolean };
 
@@ -420,14 +429,20 @@ export function LandingAdsPreview() {
   const [events, setEvents] = useState<LpEvent[]>([]);
   const seq = useRef(0);
   const timers = useRef<number[]>([]);
+  // Demostración automática hasta que la persona toque algo; el dedo muestra dónde «toca».
+  const [auto, setAuto] = useState(true);
+  const [tap, setTap] = useState<{ kind: "bundle" | "buy" | "confirm"; i: number } | null>(null);
+  const [extra, setExtra] = useState({ visits: 0, orders: 0, sales: 0 });
   const chosen = LP_BUNDLES[bundle];
   const total = lpTotal(chosen);
+  const results = lpResults(extra);
 
   const emit = useCallback((name: string, detail = "", server = false, delay = 0) => {
     timers.current.push(window.setTimeout(() => {
       seq.current += 1;
       const id = seq.current;
       setEvents((prev) => [{ id, name, detail, server }, ...prev].slice(0, 6));
+      if (name === "PageView") setExtra((x) => ({ ...x, visits: x.visits + 1 }));
     }, delay));
   }, []);
 
@@ -443,15 +458,18 @@ export function LandingAdsPreview() {
     emit("ViewContent", money(LP_PRICE), false, 900);
   }, [inView, emit]);
 
-  function buy() {
+  function buy(i = bundle) {
+    const b = LP_BUNDLES[i];
     setStep("form");
     emit("AddToCart", money(LP_PRICE));
-    emit("InitiateCheckout", `${chosen.label} · ${money(total)}`, false, 700);
+    emit("InitiateCheckout", `${b.label} · ${money(lpTotal(b))}`, false, 700);
   }
 
-  function confirm() {
+  function confirm(i = bundle) {
+    const t = lpTotal(LP_BUNDLES[i]);
     setStep("done");
-    emit("Purchase", money(total), true);
+    emit("Purchase", money(t), true);
+    setExtra((x) => ({ ...x, orders: x.orders + 1, sales: x.sales + t }));
   }
 
   function again() {
@@ -459,6 +477,35 @@ export function LandingAdsPreview() {
     emit("PageView");
     emit("ViewContent", money(LP_PRICE), false, 500);
   }
+
+  /** La persona tocó: se detiene la demostración y queda en sus manos. */
+  function takeOver() {
+    if (!auto) return;
+    setAuto(false);
+    setTap(null);
+  }
+
+  useEffect(() => {
+    if (!inView || !auto || still) return;
+    const ids: number[] = [];
+    const at = (ms: number, fn: () => void) => ids.push(window.setTimeout(fn, ms));
+    let round = 0;
+    const run = () => {
+      const b = [1, 2, 0][round % 3];
+      round += 1;
+      at(1800, () => setTap({ kind: "bundle", i: b }));
+      at(2300, () => setBundle(b));
+      at(3300, () => setTap({ kind: "buy", i: b }));
+      at(3800, () => { setTap(null); buy(b); });
+      at(5600, () => setTap({ kind: "confirm", i: b }));
+      at(6100, () => { setTap(null); confirm(b); });
+      at(9000, () => { again(); run(); });
+    };
+    run();
+    return () => ids.forEach((t) => window.clearTimeout(t));
+    // buy/confirm/again solo usan el índice que reciben y emit (estable).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView, auto, still]);
 
   return (
     <div ref={box} className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -486,7 +533,7 @@ export function LandingAdsPreview() {
                   <button
                     key={b.qty}
                     type="button"
-                    onClick={() => setBundle(i)}
+                    onClick={() => { takeOver(); setBundle(i); }}
                     aria-pressed={i === bundle}
                     className="flex w-full items-center justify-between rounded-xl border-2 px-2.5 py-1.5 text-left text-[11px] transition"
                     style={{ borderColor: i === bundle ? "#e11d48" : "#e2e8f0", background: i === bundle ? "#fff1f2" : "#fff" }}
@@ -501,7 +548,7 @@ export function LandingAdsPreview() {
               </div>
               <motion.button
                 type="button"
-                onClick={buy}
+                onClick={() => { takeOver(); buy(); }}
                 animate={still || step !== "view" ? { scale: 1 } : { scale: [1, 1.04, 1] }}
                 transition={still || step !== "view" ? { duration: 0 } : { duration: 1.6, repeat: Infinity }}
                 className="w-full rounded-xl bg-rose-600 py-2.5 text-[12px] font-black text-white shadow-lg"
@@ -510,7 +557,7 @@ export function LandingAdsPreview() {
               </motion.button>
               <p className="text-center text-[9px] text-slate-500">⏰ Oferta del día · termina a medianoche</p>
             </div>
-            <button type="button" onClick={() => emit("Contact", "botón de WhatsApp")} aria-label="Escribir por WhatsApp" className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-white shadow-lg">
+            <button type="button" onClick={() => { takeOver(); emit("Contact", "botón de WhatsApp"); }} aria-label="Escribir por WhatsApp" className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-white shadow-lg">
               <MessageCircle size={18} />
             </button>
             <AnimatePresence>
@@ -528,8 +575,8 @@ export function LandingAdsPreview() {
                     <span className="rounded-lg border-2 border-rose-600 bg-rose-50 px-2 py-1.5 text-center">💵 Al recibir</span>
                     <span className="rounded-lg border border-slate-200 px-2 py-1.5 text-center">💳 En línea</span>
                   </div>
-                  <button type="button" onClick={confirm} className="mt-3 w-full rounded-xl bg-rose-600 py-2.5 text-[12px] font-black text-white">Confirmar pedido · {money(total)}</button>
-                  <button type="button" onClick={() => setStep("view")} className="mt-1 w-full py-1 text-[10px] text-slate-500">Volver</button>
+                  <button type="button" onClick={() => { takeOver(); confirm(); }} className="mt-3 w-full rounded-xl bg-rose-600 py-2.5 text-[12px] font-black text-white">Confirmar pedido · {money(total)}</button>
+                  <button type="button" onClick={() => { takeOver(); setStep("view"); }} className="mt-1 w-full py-1 text-[10px] text-slate-500">Volver</button>
                 </motion.div>
               ) : null}
               {step === "done" ? (
@@ -539,9 +586,17 @@ export function LandingAdsPreview() {
                     <p className="mt-2 text-base font-black">¡Pedido recibido!</p>
                     <p className="mt-1 text-[11px] text-slate-500">Te escribimos por WhatsApp para confirmarlo y enviarte la guía.</p>
                     <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[11px] font-bold">{chosen.label} · {money(total)} · paga al recibir</p>
-                    <button type="button" onClick={again} className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-[11px] font-bold text-white">Ver otra vez</button>
+                    <button type="button" onClick={() => { takeOver(); again(); }} className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-[11px] font-bold text-white">Ver otra vez</button>
                   </div>
                 </motion.div>
+              ) : null}
+            </AnimatePresence>
+            <AnimatePresence>
+              {tap ? (
+                <motion.span key={`${tap.kind}-${tap.i}`} aria-hidden initial={{ opacity: 0, scale: 1.5, y: 18 }} animate={{ opacity: 1, scale: [1.3, 0.85, 1], y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}
+                  className="pointer-events-none absolute z-30 text-3xl drop-shadow-lg" style={{ left: "70%", top: LP_TAP[tap.kind](tap.i) }}>
+                  <span className="absolute -left-1 -top-1 h-6 w-6 animate-ping rounded-full bg-rose-500/50" />👆
+                </motion.span>
               ) : null}
             </AnimatePresence>
           </div>
@@ -552,11 +607,16 @@ export function LandingAdsPreview() {
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-3xl border p-4" style={frame}>
+        <div className="rh-glow rounded-3xl border p-4" style={frame}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-2 font-bold"><Radar size={16} /> Píxel de Meta · eventos</p>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Activo
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold" style={{ background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
+                {auto ? <>▶ demostración · tócalo para probar</> : <>✋ tú tienes el control</>}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold">
+                <span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> Activo
+              </span>
             </span>
           </div>
           <ul className="mt-3 min-h-[150px] space-y-1.5 lg:min-h-[250px]">
@@ -579,16 +639,16 @@ export function LandingAdsPreview() {
             ) : null}
           </ul>
           <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--t-muted)" }}>
-            <MousePointerClick size={14} className="shrink-0" /> Toca «Comprar» en el celular y confirma el pedido: la compra llega desde el navegador y desde el servidor con el mismo ID.
+            <MousePointerClick size={14} className="shrink-0" /> Mira la demostración o toca «Comprar» y confirma el pedido tú mismo: la compra llega desde el navegador y desde el servidor con el mismo ID.
           </p>
         </div>
-        <div className="rounded-3xl border p-4" style={frame}>
+        <div className="rh-glow rounded-3xl border p-4" style={frame}>
           <p className="flex items-center gap-2 font-bold"><TrendingUp size={16} /> Resultados de la campaña</p>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {LP_RESULTS.map(([label, value, hint]) => (
-              <div key={label} className="rounded-xl border p-2.5" style={frame}>
+            {results.map(([label, value, hint]) => (
+              <div key={label} className="rh-glow rounded-xl border p-2.5" style={frame}>
                 <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{label}</p>
-                <p className="text-lg font-black">{value}</p>
+                <motion.p key={value} initial={{ scale: 1.15, color: "#10b981" }} animate={{ scale: 1, color: "var(--t-text)" }} transition={{ duration: 0.8 }} className="origin-left text-lg font-black tabular-nums">{value}</motion.p>
                 <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>{hint}</p>
               </div>
             ))}

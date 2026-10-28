@@ -347,7 +347,215 @@ function ThemesDemo() {
   );
 }
 
+/* ---------------------------------------------------------------- landings (sección «Landing pages y píxel») */
+
+function TemplatesDemo() {
+  const { ref, step } = useStep(1500);
+  const tpls = [["Moda", "👗", "from-pink-500 to-rose-400"], ["Calzado", "👟", "from-orange-500 to-amber-400"], ["Tecnología", "🎧", "from-sky-500 to-indigo-500"], ["Belleza", "💄", "from-fuchsia-500 to-purple-500"]] as const;
+  const [name, emoji, grad] = tpls[step % tpls.length];
+  const order = step % 2 ? ["precio", "fotos", "opiniones"] : ["fotos", "precio", "opiniones"];
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex h-full gap-2.5">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div key={name} initial={{ rotateY: 90, opacity: 0 }} animate={{ rotateY: 0, opacity: 1 }} exit={{ rotateY: -90, opacity: 0 }} transition={{ duration: 0.35 }}
+            className={`grid w-16 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${grad} text-2xl`}>{emoji}</motion.div>
+        </AnimatePresence>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold">Plantilla: {name}</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {order.map((o) => (
+              <motion.span key={o} layout className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ background: "var(--t-card-bg)" }}>☰ {o}</motion.span>
+            ))}
+          </div>
+          <p className="mt-1 text-[9px]" style={muted}>cambias textos, colores y orden</p>
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+function ImportDemo() {
+  const { ref, step } = useStep(140);
+  const url = "tienda.com/p/audifonos-anc";
+  const t = step % 52;
+  const typed = url.slice(0, Math.min(url.length, t));
+  const loading = t > url.length && t < url.length + 10;
+  const done = t >= url.length + 10;
+  return (
+    <Frame frameRef={ref}>
+      <p className="flex items-center gap-1 truncate rounded-md px-2 py-1 font-mono text-[10px]" style={{ background: "var(--t-card-bg)" }}>🔗 {typed}<span className="dfx-caret inline-block h-3 w-1" style={{ background: "var(--t-accent)" }} /></p>
+      {loading ? (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
+          <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 1.3 }} className="h-full rounded-full" style={{ background: "var(--t-cta)" }} />
+        </div>
+      ) : null}
+      {done ? (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-1.5 flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-gradient-to-br from-slate-700 to-slate-500 text-base">🎧</span>
+          <span className="min-w-0"><b className="block truncate">Audífonos ANC Pro</b><span style={muted}>4 fotos · descripción ✓</span></span>
+          <b className="ml-auto text-emerald-500">{COP(89900)}</b>
+        </motion.div>
+      ) : null}
+    </Frame>
+  );
+}
+
+function UrgencyDemo() {
+  const { ref, step } = useStep(1000);
+  const viewers = 12 + ((step * 7) % 5);
+  const left = 9 - (Math.floor(step / 4) % 4);
+  const secs = 5 * 3600 + 42 * 60 + 10 - step;
+  const hh = String(Math.floor(secs / 3600)).padStart(2, "0"), mm = String(Math.floor((secs % 3600) / 60)).padStart(2, "0"), ss = String(secs % 60).padStart(2, "0");
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex h-full flex-col justify-center gap-1.5">
+        <div className="flex flex-wrap gap-1.5 font-bold">
+          <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-rose-500">👁 <motion.span key={viewers} initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="inline-block">{viewers}</motion.span> viendo ahora</span>
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-500">📦 Quedan <motion.span key={left} initial={{ scale: 1.6 }} animate={{ scale: 1 }} className="inline-block">{left}</motion.span></span>
+        </div>
+        <p className="font-mono text-base font-black tabular-nums" style={{ color: "var(--t-accent)" }}>⏰ {hh}:{mm}:{ss}</p>
+        <p className="text-[9px]" style={muted}>de visitas, pedidos y stock reales</p>
+      </div>
+    </Frame>
+  );
+}
+
+function BundlesDemo() {
+  const { ref, step } = useStep(1200);
+  const s = step % 5;
+  const opts = [["Lleva 1", 89900, 0], ["Lleva 2", 165400, 8], ["Lleva 3", 229200, 15]] as const;
+  const pick = Math.min(2, s);
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex h-full gap-2">
+        <div className="flex flex-1 flex-col justify-center gap-1">
+          {opts.map(([l, p, d], i) => (
+            <span key={l} className="flex items-center justify-between rounded-md border px-1.5 py-0.5 transition" style={{ borderColor: i === pick ? "#e11d48" : "var(--t-card-border)", background: i === pick ? "rgba(225,29,72,.1)" : "transparent" }}>
+              <b>{l}{d ? <span className="ml-1 rounded bg-rose-600 px-1 text-[8px] text-white">-{d}%</span> : null}</b><b>{COP(p)}</b>
+            </span>
+          ))}
+        </div>
+        <AnimatePresence>
+          {s >= 3 ? (
+            <motion.div key="extra" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="grid w-20 place-items-center rounded-lg border-2 border-dashed p-1 text-center text-[9px]" style={{ borderColor: "var(--t-accent)" }}>
+              <span>🔌 ¿Agregas cargador?<b className="block text-emerald-500">+{COP(19900)}</b></span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </Frame>
+  );
+}
+
+function PayModeDemo() {
+  const { ref, step } = useStep(1600);
+  const online = step % 2 === 1;
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex h-full flex-col justify-center gap-2">
+        <div className="grid grid-cols-2 gap-1.5 font-bold">
+          <span className="rounded-lg border-2 px-2 py-1 text-center transition" style={{ borderColor: !online ? "#e11d48" : "var(--t-card-border)" }}>💵 Al recibir</span>
+          <span className="rounded-lg border-2 px-2 py-1 text-center transition" style={{ borderColor: online ? "#10b981" : "var(--t-card-border)" }}>💳 En línea <b className="text-emerald-500">-5%</b></span>
+        </div>
+        <p className="flex items-baseline justify-between">
+          <span style={muted}>Total</span>
+          <motion.b key={String(online)} initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-base">{COP(online ? 157100 : 165400)}</motion.b>
+        </p>
+      </div>
+    </Frame>
+  );
+}
+
+function CapiDemo() {
+  const { ref, step } = useStep(800);
+  const s = step % 6;
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex h-full items-center gap-2">
+        <div className="flex-1 space-y-1.5">
+          {["🌐 Navegador", "🖥 Servidor"].map((l, i) => (
+            <div key={l} className="relative flex items-center gap-1.5">
+              <span className="w-[4.7rem] shrink-0 truncate font-semibold">{l}</span>
+              <div className="relative h-0.5 flex-1 rounded" style={{ background: "var(--t-card-border)" }}>
+                <motion.span animate={{ left: `${Math.min(100, (s - i) * 34)}%`, opacity: s - i > 0 && s < 4 ? 1 : 0 }} className="absolute -top-2 -translate-x-1/2 rounded bg-violet-500 px-1 font-mono text-[8px] text-white">evt_8F2A</motion.span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <motion.div animate={{ scale: s >= 4 ? [1, 1.12, 1] : 1 }} className="w-20 shrink-0 rounded-lg border p-1.5 text-center" style={{ borderColor: s >= 4 ? "#10b981" : "var(--t-card-border)" }}>
+          <b className="block">Meta</b>
+          <span className={s >= 4 ? "font-bold text-emerald-500" : ""} style={s >= 4 ? undefined : muted}>{s >= 4 ? "1 compra ✓" : "esperando…"}</span>
+        </motion.div>
+      </div>
+    </Frame>
+  );
+}
+
+function AdKitDemo() {
+  const { ref, step } = useStep(1300);
+  const nets = [["Facebook", "#1877f2"], ["Instagram", "#e1306c"], ["TikTok", "#111"], ["YouTube", "#ff0000"], ["Google", "#34a853"], ["WhatsApp", "#25d366"]] as const;
+  const i = step % nets.length;
+  return (
+    <Frame frameRef={ref}>
+      <div className="flex flex-wrap gap-0.5">{nets.map(([n, c], j) => <span key={n} className="rounded-full px-1 py-px text-[8px] font-bold transition" style={{ background: j === i ? c : "color-mix(in oklab, var(--t-text) 8%, transparent)", color: j === i ? "#fff" : "var(--t-muted)" }}>{n}</span>)}</div>
+      <motion.p key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="mt-1.5 truncate rounded-md px-2 py-1 font-mono text-[10px]" style={{ background: "var(--t-card-bg)" }}>
+        …/oferta/tenis?utm_source=<b style={{ color: "var(--t-accent)" }}>{nets[i][0].toLowerCase()}</b>
+      <span className="ml-1 font-sans font-bold text-emerald-500">✓ copiado</span></motion.p>
+    </Frame>
+  );
+}
+
+function CampaignProfitDemo() {
+  const { ref, step } = useStep(900);
+  const s = step % 6;
+  const rows = [["Ventas", 3420000, "#10b981"], ["− Costo", 1520000, "#f59e0b"], ["− Pauta", 570000, "#ef4444"]] as const;
+  return (
+    <Frame frameRef={ref}>
+      <div className="space-y-0.5">
+        {rows.map(([l, v, c], i) => (
+          <div key={l} className="flex items-center gap-1.5">
+            <span className="w-12 shrink-0" style={muted}>{l}</span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
+              <motion.div animate={{ width: s > i ? `${(v / 3420000) * 100}%` : "0%" }} transition={{ duration: 0.6 }} className="h-full rounded-full" style={{ background: c }} />
+            </div>
+            <b className="w-16 text-right tabular-nums">{s > i ? COP(v) : "…"}</b>
+          </div>
+        ))}
+        <p className="flex justify-between border-t pt-0.5 font-black" style={{ borderColor: "var(--t-card-border)" }}>
+          <span>= Ganancia</span><span className="text-emerald-500">{s >= 4 ? `${COP(1330000)} · 6,0x` : "…"}</span>
+        </p>
+      </div>
+    </Frame>
+  );
+}
+
+function RecoverDemo() {
+  const { ref, step } = useStep(1100);
+  const people = ["Laura G. · Medellín", "Andrés P. · Cali", "Sofía R. · Bogotá"];
+  const sent = step % 5;
+  return (
+    <Frame frameRef={ref}>
+      <div className="space-y-1">
+        {people.map((p, i) => (
+          <div key={p} className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5" style={{ background: "var(--t-card-bg)" }}>
+            <span className="min-w-0 flex-1 truncate">{p}</span>
+            {sent > i ? (
+              <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="font-bold text-emerald-500">✓ escrito</motion.span>
+            ) : (
+              <span className={`rounded-full bg-emerald-500 px-1.5 text-[9px] font-bold text-white ${sent === i ? "animate-pulse" : ""}`}>WhatsApp</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Frame>
+  );
+}
+
 const DEMOS: Record<string, () => ReactNode> = {
+  "Plantillas por tipo de producto": TemplatesDemo, "Importa desde un enlace": ImportDemo, "Urgencia que es verdad": UrgencyDemo,
+  "Paquetes y ventas extra": BundlesDemo, "Paga al recibir o en línea": PayModeDemo, "Píxel de Meta y API de conversiones": CapiDemo,
+  "Kit de pauta": AdKitDemo, "Ganancia por campaña": CampaignProfitDemo, "Recupera los que no terminaron": RecoverDemo,
   "Landing pages": LandingDemo, "Píxel de Meta": PixelDemo, "Catálogos ilimitados": CatalogsDemo, "Campañas y carrusel": CampaignsDemo,
   "Pedidos por WhatsApp": WhatsAppDemo, "POS por punto": PosDemo, "Inventario por bodega": InventoryDemo, "Traslados con firma": TransferDemo,
   "Ingreso de facturas": PurchaseDemo, "Cuentas por pagar": PayablesDemo, "Comprobantes PDF": PdfDemo, "Informes en vivo": ReportsDemo,
