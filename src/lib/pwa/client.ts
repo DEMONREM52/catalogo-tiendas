@@ -90,6 +90,7 @@ async function registerServiceWorker() {
   const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   // Solo en producción (https). En desarrollo no se registra para no interferir con la recarga en caliente.
   if (process.env.NODE_ENV !== "production" || (location.protocol !== "https:" && !local)) return;
+  trackLoadedChunks();
   try {
     const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     const watch = (w: ServiceWorker | null) => {
@@ -97,13 +98,14 @@ async function registerServiceWorker() {
       w.addEventListener("statechange", () => {
         if (w.state === "installed" && navigator.serviceWorker.controller) {
           waitingWorker = w;
-          set({ updateReady: true });
+          checkedPaths.clear(); // otra versión: lo revisado antes ya no vale
+          void checkPageChanged();
         }
       });
     };
     if (reg.waiting && navigator.serviceWorker.controller) {
       waitingWorker = reg.waiting;
-      set({ updateReady: true });
+      void checkPageChanged();
     }
     reg.addEventListener("updatefound", () => watch(reg.installing));
     // Revisa si hay versión nueva al volver a la app y cada hora.
@@ -121,6 +123,68 @@ async function registerServiceWorker() {
     });
   } catch {
     /* sin Service Worker la página funciona igual */
+  }
+}
+
+/*
+ * ¿La versión nueva cambia la página donde está la persona?
+ * Cada despliegue trae un Service Worker nuevo, aunque solo haya cambiado una sección. Los archivos JS de Next
+ * llevan en el nombre una huella de su contenido: si la página nueva usa un archivo que esta pestaña no ha cargado,
+ * su código cambió y se avisa «Actualizar». Si no, no se molesta; al pasar a otra sección se vuelve a revisar.
+ * No cuentan el CSS global ni el arranque de Turbopack (cambian con cualquier despliegue y no rompen nada).
+ */
+const CHUNK_RE = /\/_next\/static\/chunks\/([^"'?\s]+\.js)/g;
+const loadedChunks = new Set<string>();
+const checkedPaths = new Map<string, boolean>();
+let checking = false;
+let watchingPath = false;
+
+function rememberChunk(url: string) {
+  for (const m of url.matchAll(CHUNK_RE)) if (!m[1].startsWith("turbopack-")) loadedChunks.add(m[1]);
+}
+
+/** Anota los archivos JS que ya cargó esta pestaña (los del inicio y los de cada sección que se abre). */
+function trackLoadedChunks() {
+  try {
+    document.querySelectorAll<HTMLScriptElement>("script[src]").forEach((s) => rememberChunk(s.src));
+    new PerformanceObserver((list) => list.getEntries().forEach((e) => rememberChunk(e.name))).observe({ type: "resource", buffered: true });
+  } catch {
+    /* navegador sin PerformanceObserver: se avisa como antes */
+  }
+}
+
+async function checkPageChanged() {
+  if (!waitingWorker || state.updateReady || checking) return;
+  const path = location.pathname + location.search;
+  const known = checkedPaths.get(path);
+  if (known !== undefined) {
+    if (known) set({ updateReady: true });
+    return;
+  }
+  checking = true;
+  try {
+    if (!loadedChunks.size) { set({ updateReady: true }); return; }
+    const res = await fetch(path, { cache: "no-store", credentials: "same-origin", headers: { Accept: "text/html" } });
+    // Si redirige (sesión, permisos) o falla, no se sabe: se espera a la próxima revisión.
+    if (!res.ok || res.redirected) return;
+    const html = await res.text();
+    const fresh = [...html.matchAll(CHUNK_RE)].map((m) => m[1]).filter((f) => !f.startsWith("turbopack-"));
+    const changed = fresh.length > 0 && fresh.some((f) => !loadedChunks.has(f));
+    checkedPaths.set(path, changed);
+    if (changed) set({ updateReady: true });
+  } catch {
+    /* sin conexión: se revisa después */
+  } finally {
+    checking = false;
+  }
+  if (!watchingPath) {
+    // Navegar dentro de la app no recarga la página: se revisa cada sección nueva a la que entre.
+    watchingPath = true;
+    let last = location.pathname + location.search;
+    window.setInterval(() => {
+      const now = location.pathname + location.search;
+      if (now !== last) { last = now; void checkPageChanged(); }
+    }, 4000);
   }
 }
 
