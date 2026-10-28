@@ -9,28 +9,38 @@ import { captureReferral } from "@/lib/saas/referral";
 
 // Tienda de ejemplo (una tuya con productos bonitos) para el botón «Ver una tienda de ejemplo».
 const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
+// Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
+const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
+  Banknote,
   BarChart3,
   Bell,
   Boxes,
   Check,
   ChevronDown,
   CreditCard,
+  Eye,
   FileText,
+  Gift,
   KeyRound,
   LayoutGrid,
+  LayoutTemplate,
+  Link2,
   Megaphone,
   MessageCircle,
   Moon,
   PackagePlus,
   Receipt,
+  Rocket,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
   Store,
+  Target,
+  TrendingUp,
   Truck,
   Users,
   Wallet,
@@ -40,6 +50,7 @@ import {
   BillingPreview,
   CatalogsPreview,
   InventoryPreview,
+  LandingAdsPreview,
   PosPreview,
   ReportsPreview,
   StructureDiagram,
@@ -150,7 +161,22 @@ const TOUR: Array<{ key: string; label: string; icon: LucideIcon; title: string;
   },
 ];
 
+// Lo nuevo: landing pages para pauta (Landing pages en el panel) y el píxel de Meta.
+const LANDING_FEATURES: Array<{ icon: LucideIcon; title: string; text: string }> = [
+  { icon: LayoutTemplate, title: "Plantillas por tipo de producto", text: "Moda, calzado, belleza, tecnología, hogar, bienestar y combos tipo afiche. Cambias textos, colores y el orden de las secciones." },
+  { icon: Link2, title: "Importa desde un enlace", text: "Pega el enlace del producto y trae nombre, fotos y descripción para no empezar de cero." },
+  { icon: Eye, title: "Urgencia que es verdad", text: "Personas viendo, vendidos, unidades y cuenta regresiva salen de visitas, pedidos y stock reales. Nada inventado." },
+  { icon: Gift, title: "Paquetes y ventas extra", text: "Lleva 2 o 3 con descuento, un producto adicional después de pedir y una oferta si la persona intenta irse." },
+  { icon: Banknote, title: "Paga al recibir o en línea", text: "Contraentrega, Wompi o Addi, con un descuento propio para quien paga en línea." },
+  { icon: Target, title: "Píxel de Meta y API de conversiones", text: "Vista, carrito, inicio del pedido y compra llegan a tu píxel. La compra también sale del servidor con el mismo ID. TikTok también." },
+  { icon: Megaphone, title: "Kit de pauta", text: "Enlaces con seguimiento para Facebook, Instagram, TikTok, YouTube, Google y WhatsApp, y textos listos para tus anuncios." },
+  { icon: TrendingUp, title: "Ganancia por campaña", text: "Visitas, pedidos, conversión, pauta, costo de la mercancía, ganancia, retorno y costo por pedido." },
+  { icon: MessageCircle, title: "Recupera los que no terminaron", text: "Quien dejó su WhatsApp y no terminó el pedido queda en una lista para escribirle con un toque." },
+];
+
 const FEATURES: Array<{ icon: LucideIcon; title: string; text: string }> = [
+  { icon: Rocket, title: "Landing pages", text: "Una página de venta por producto para tus anuncios, con sus resultados y su ganancia." },
+  { icon: Target, title: "Píxel de Meta", text: "En tu catálogo y tus landings; en las landings, la compra también desde el servidor." },
   { icon: LayoutGrid, title: "Catálogos ilimitados", text: "Cada uno con su enlace, precio, diseño y productos." },
   { icon: Megaphone, title: "Campañas y carrusel", text: "Promociones con portada para los catálogos que elijas." },
   { icon: MessageCircle, title: "Pedidos por WhatsApp", text: "El cliente arma el carrito y te llega el pedido con su comprobante." },
@@ -178,6 +204,8 @@ const FAQ = [
   { q: "¿Necesito instalar algo?", a: "No. Funciona en el navegador del computador o del celular. Tus clientes solo abren el enlace del catálogo." },
   { q: "¿Puedo tener varias sedes con inventarios separados?", a: "Sí. Cada punto y bodega tiene sus existencias. Un vendedor de una sede solo ve y vende lo de su sede, y tú ves todo desde el panel principal." },
   { q: "¿Cómo manejo precios distintos para detal, mayoristas o domicilios?", a: "Cada producto tiene Precio 1 al 5. Creas un catálogo por público y eliges qué precio muestra; también puedes poner un precio especial a un producto solo en un catálogo." },
+  { q: "¿Puedo hacer landing pages para mis anuncios de Facebook, Instagram o TikTok?", a: "Sí. En Landing pages escoges un producto y una plantilla, y la publicas con su propio enlace. El precio y las existencias salen de un catálogo, los pedidos llegan a tu panel y ves visitas, pedidos, pauta, ganancia y retorno de cada campaña." },
+  { q: "¿Funciona con mi píxel de Meta?", a: "Sí. Pegas el ID de tu píxel en Mi tienda → Marketing y RemHub envía las vistas, el carrito, el inicio del pedido, los contactos por WhatsApp y las compras. Puedes dejarlo solo para las landings. Si además guardas el token de la API de conversiones, la compra de la landing también se envía desde el servidor con el mismo ID: Meta no la pierde por los bloqueadores y no la cuenta dos veces." },
   { q: "¿Mis clientes pagan en línea?", a: "Pueden enviarte el pedido por WhatsApp y, si activas Wompi o Addi, pagar desde su comprobante." },
   { q: "¿Mis datos están seguros?", a: "Cada tienda solo ve su información y cada usuario solo lo que le permites. Los precios y existencias de los pedidos se validan en el servidor." },
 ];
@@ -267,6 +295,7 @@ export default function HomePage() {
   }, []);
 
   const msgDemo = waLink(`Hola! Vengo por ${BRAND}. Quiero ver una demo: catálogos con varios precios, ventas por punto, inventario con traslados e informes. ¿Me muestras cómo funciona?`);
+  const msgLanding = waLink(`Hola! Vengo por ${BRAND}. Quiero vender con anuncios: landing pages con el píxel de Meta y resultados por campaña. ¿Me muestras cómo quedaría con mi producto?`);
   const current = TOUR[tour];
 
   return (
@@ -284,6 +313,7 @@ export default function HomePage() {
             {BRAND}
           </Link>
           <div className="hidden items-center gap-6 text-sm md:flex" style={{ color: "var(--t-muted)" }}>
+            <a href="#landings" className="hover:text-[color:var(--t-text)]">Landing pages</a>
             <a href="#producto" className="hover:text-[color:var(--t-text)]">Cómo se ve</a>
             <a href="#funciones" className="hover:text-[color:var(--t-text)]">Funciones</a>
             <a href="#planes" className="hover:text-[color:var(--t-text)]">Planes</a>
@@ -301,7 +331,13 @@ export default function HomePage() {
 
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[1.05fr_.95fr] lg:pt-16">
         <div>
-          <Reveal><Kicker>Catálogos · POS · Inventario · Informes</Kicker></Reveal>
+          <Reveal>
+            <a href="#landings" className="inline-flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ background: "var(--t-cta)" }}>Nuevo</span>
+              <span className="truncate">Landing pages para tus anuncios, con el píxel de Meta</span>
+              <ArrowRight size={13} className="shrink-0" />
+            </a>
+          </Reveal>
           <Reveal delay={0.05}>
             <h1 className="mt-5 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
               Tu tienda, tus sedes y tus catálogos{" "}
@@ -310,7 +346,7 @@ export default function HomePage() {
           </Reveal>
           <Reveal delay={0.1}>
             <p className="mt-5 max-w-xl text-base sm:text-lg" style={{ color: "var(--t-muted)" }}>
-              Vende por WhatsApp con un catálogo para cada público, factura en cada punto, controla el inventario de cada bodega y mira tus números al instante.
+              Vende por WhatsApp con un catálogo para cada público, lanza landing pages para tus anuncios, factura en cada punto, controla el inventario de cada bodega y mira tus números al instante.
             </p>
           </Reveal>
           <Reveal delay={0.15}>
@@ -330,7 +366,7 @@ export default function HomePage() {
           </Reveal>
           <Reveal delay={0.2}>
             <div className="mt-7 flex flex-wrap gap-2">
-              {["Varias sedes", "5 listas de precios", "Traslados con firma", "Informes en vivo"].map((t) => (
+              {["Varias sedes", "5 listas de precios", "Landing pages con píxel", "Traslados con firma", "Informes en vivo"].map((t) => (
                 <span key={t} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
                   <Check size={13} className="text-emerald-500" /> {t}
                 </span>
@@ -350,6 +386,49 @@ export default function HomePage() {
                 <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{l}</p>
               </div>
             ))}
+          </div>
+        </Reveal>
+      </section>
+
+      <section id="landings" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20">
+        <Reveal className="text-center">
+          <Kicker>Nuevo · Landing pages y píxel de Meta</Kicker>
+          <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-black sm:text-4xl">Convierte tus anuncios en pedidos y mide cada peso de la pauta</h2>
+          <p className="mx-auto mt-3 max-w-2xl" style={{ color: "var(--t-muted)" }}>
+            Arma en minutos una página de venta para un producto, conéctala con tu píxel de Meta y mira cuánto vendiste y cuánto ganaste con cada campaña.
+          </p>
+        </Reveal>
+        <Reveal>
+          <div className="mt-8 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+            <LandingAdsPreview />
+          </div>
+        </Reveal>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {LANDING_FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 3) * 0.05}>
+              <div className="flex h-full gap-3 rounded-3xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={19} /></span>
+                <div>
+                  <h3 className="font-bold">{f.title}</h3>
+                  <p className="mt-0.5 text-sm" style={{ color: "var(--t-muted)" }}>{f.text}</p>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
+              <Rocket size={17} /> Crear mi primera landing
+            </Link>
+            {DEMO_LANDING_URL ? (
+              <a href={DEMO_LANDING_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                Ver una landing de ejemplo <ArrowRight size={16} />
+              </a>
+            ) : null}
+            <a href={msgLanding} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+              <MessageCircle size={16} /> Quiero verla con mi producto
+            </a>
           </div>
         </Reveal>
       </section>
@@ -544,6 +623,7 @@ export default function HomePage() {
             <Image src={LOGO} alt="" width={22} height={22} className="rounded-md" /> © {new Date().getFullYear()} {BRAND} · Catálogos, ventas e inventario
           </p>
           <div className="flex flex-wrap gap-4 text-sm" style={{ color: "var(--t-muted)" }}>
+            <a href="#landings">Landing pages</a>
             <a href="#producto">Cómo se ve</a>
             <a href="#planes">Planes</a>
             <Link href="/login">Iniciar sesión</Link>

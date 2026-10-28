@@ -17,6 +17,16 @@ export function boldWebhookValid(rawBody: string, header: string | null, secrets
   });
 }
 
+/**
+ * Con qué llave viene firmado el aviso: la de producción, la de pruebas (o la vacía de pruebas) o ninguna.
+ * La firma de pruebas con llave vacía la puede calcular cualquiera: nunca debe mover un pago de producción.
+ */
+export function boldWebhookSigner(rawBody: string, header: string | null, keys: { prod: string | null; test: string | null }): "production" | "test" | null {
+  if (keys.prod && boldWebhookValid(rawBody, header, [keys.prod])) return "production";
+  if (boldWebhookValid(rawBody, header, ["", ...(keys.test ? [keys.test] : [])])) return "test";
+  return null;
+}
+
 /** Referencia única que viaja a Bold (letras, números y guiones). */
 export function boldReference(receipt: string | number | null) {
   return `rh${receipt ? `${String(receipt).replace(/\D/g, "").slice(0, 12)}-` : ""}${randomBytes(6).toString("hex")}`;

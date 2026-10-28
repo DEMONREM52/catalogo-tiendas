@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { boldIntegrity, boldReference, boldReturnUrl, boldWebhookValid } from "../../src/lib/payments/bold-sign";
+import { boldIntegrity, boldReference, boldReturnUrl, boldWebhookSigner, boldWebhookValid } from "../../src/lib/payments/bold-sign";
 
 test("firma de integridad: SHA-256 de referencia + monto + divisa + llave secreta (ejemplo de Bold)", () => {
   const want = createHash("sha256").update("inv033439400COPkgfq2nN0o52XqnuXZWIN2F").digest("hex");
@@ -18,6 +18,17 @@ test("webhook: HMAC-SHA256 del cuerpo en base64; en pruebas con llave vacía", (
   assert.ok(!boldWebhookValid(body, sign("otra"), ["secreta"]), "otra llave no vale");
   assert.ok(!boldWebhookValid(body + " ", sign("secreta"), ["secreta"]), "cuerpo alterado no vale");
   assert.ok(!boldWebhookValid(body, null, ["secreta"]), "sin firma no vale");
+});
+
+test("webhook: la firma con llave vacía cuenta como pruebas, nunca como producción", () => {
+  const body = JSON.stringify({ type: "VOID_APPROVED", data: { metadata: { reference: "rh12-abc" } } });
+  const sign = (key: string) => createHmac("sha256", key).update(Buffer.from(body).toString("base64")).digest("hex");
+  const keys = { prod: "llave-prod", test: "llave-pruebas" };
+  assert.equal(boldWebhookSigner(body, sign("llave-prod"), keys), "production");
+  assert.equal(boldWebhookSigner(body, sign("llave-pruebas"), keys), "test");
+  assert.equal(boldWebhookSigner(body, sign(""), keys), "test", "llave vacía: cualquiera la calcula");
+  assert.equal(boldWebhookSigner(body, sign("otra"), keys), null);
+  assert.equal(boldWebhookSigner(body, sign(""), { prod: null, test: null }), "test");
 });
 
 test("referencia única con el número del pedido, solo letras, números y guiones", () => {

@@ -9,6 +9,7 @@ import { QrDialog } from "@/components/pwa/QrDialog";
 import { normalizeLanding, type LandingConfig } from "@/lib/landing/config";
 import { AD_CHANNELS, adCopies, trackedLink } from "@/lib/landing/templates";
 import { landingInsights, type LandingTotals, type SourceRow } from "@/lib/landing/insights";
+import { CAPI_TEST_HOURS, testCodeUntil } from "@/lib/landing/capi-test-code";
 import { DateField } from "@/components/forms/Fields";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../../pos/VoidSaleDialog";
 import { Pill, Section, errorText, inputCls, inputStyle, money, softBox, swalTheme } from "../catalogs/ui";
@@ -357,11 +358,13 @@ export function AdKit({ page, config, url, price, onBack }: { page: { name: stri
 }
 
 export function MetaConnect({ storeId }: { storeId: string }) {
-  const [status, setStatus] = useState<{ configured: boolean; test_code: string | null; last_ok_at: string | null; last_error: string | null; is_owner: boolean } | null>(null);
+  const [status, setStatus] = useState<{ configured: boolean; test_code: string | null; last_ok_at: string | null; last_error: string | null; updated_at: string | null; is_owner: boolean } | null>(null);
   const [token, setToken] = useState("");
   const [testCode, setTestCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [pixel, setPixel] = useState<string | null>(null);
+  // Hasta cuándo los pedidos van a «Probar eventos» (el código guardado vence solo a las CAPI_TEST_HOURS).
+  const [testUntil, setTestUntil] = useState<Date | null>(null);
 
   async function load() {
     const sb = supabaseBrowser();
@@ -370,16 +373,16 @@ export function MetaConnect({ storeId }: { storeId: string }) {
       sb.from("store_tracking").select("meta_pixel_id,meta_enabled").eq("store_id", storeId).maybeSingle(),
     ]);
     const s = data as typeof status & { ok?: boolean };
-    if (s?.ok) { setStatus(s); setTestCode(s.test_code ?? ""); }
+    if (s?.ok) { setStatus(s); setTestCode(s.test_code ?? ""); setTestUntil(testCodeUntil(s.test_code, s.updated_at)); }
     setPixel((tr as { meta_pixel_id?: string } | null)?.meta_pixel_id || null);
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, [storeId]);
 
-  async function act(action: "save" | "clear" | "test") {
+  async function act(action: "save" | "clear" | "test", code = testCode) {
     setBusy(true);
     try {
-      const r = await fiscalApi<{ received?: number }>("/api/landing/meta", { store_id: storeId, action, token: action === "save" ? token : undefined, test_code: testCode });
+      const r = await fiscalApi<{ received?: number }>("/api/landing/meta", { store_id: storeId, action, token: action === "save" ? token : undefined, test_code: code });
       if (action === "test") void Swal.fire({ icon: "success", title: "¡Meta recibió la prueba!", text: `Revisa en el Administrador de eventos → Probar eventos${testCode ? ` (código ${testCode})` : ""}.`, ...swalTheme });
       else void Swal.fire({ icon: "success", title: action === "save" ? "Guardado y cifrado 🔒" : "Token quitado", timer: 1500, showConfirmButton: false, ...swalTheme });
       void r;
@@ -401,6 +404,19 @@ export function MetaConnect({ storeId }: { storeId: string }) {
           {status?.last_ok_at ? <Pill tone="good">Último envío {new Date(status.last_ok_at).toLocaleString("es-CO")}</Pill> : null}
           {status?.last_error ? <Pill tone="danger">Error: {status.last_error.slice(0, 80)}</Pill> : null}
         </div>
+        {testUntil ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            <p className="min-w-0 flex-1">
+              🧪 <b>Código de prueba activo ({status?.test_code}).</b> Los pedidos de las landings llegan solo a «Probar eventos» y Meta no los usa para tus anuncios.
+              Se quita solo el {testUntil.toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}.
+            </p>
+            {status?.is_owner ? (
+              <button type="button" disabled={busy} onClick={() => void act("save", "")} className="rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-50" style={softBox}>Quitar ya</button>
+            ) : null}
+          </div>
+        ) : status?.test_code ? (
+          <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>El código de prueba {status.test_code} ya venció (dura {CAPI_TEST_HOURS} horas): los pedidos cuentan normal.</p>
+        ) : null}
         {status?.is_owner ? (
           <>
             <ol className="list-decimal space-y-1 pl-5 text-xs" style={{ color: "var(--t-muted)" }}>
@@ -410,7 +426,7 @@ export function MetaConnect({ storeId }: { storeId: string }) {
             </ol>
             <input value={token} onChange={(e) => setToken(e.target.value.trim())} placeholder={status.configured ? "Token guardado ••••  (pega uno nuevo para cambiarlo)" : "Pega el token de acceso"} className={inputCls} style={inputStyle} autoComplete="off" data-1p-ignore data-lpignore="true" />
             <input value={testCode} onChange={(e) => setTestCode(e.target.value.trim())} placeholder="Código de prueba (opcional, ej. TEST12345)" className={inputCls} style={inputStyle} />
-            <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>El código de prueba sirve para ver los eventos en «Probar eventos». Quítalo cuando veas que funciona, para que los pedidos cuenten normal.</p>
+            <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>El código de prueba sirve para ver los eventos en «Probar eventos». Se quita solo a las {CAPI_TEST_HOURS} horas de guardarlo, para que los pedidos cuenten normal.</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={busy || (!token && !status.configured)} onClick={() => void act("save")} className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}>Guardar</button>
               <button type="button" disabled={busy || !status.configured} onClick={() => void act("test")} className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50" style={softBox}>Enviar prueba</button>

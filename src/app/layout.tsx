@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     template: "%s — RemHub",
   },
   description:
-    "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
+    "Catálogo con pedidos por WhatsApp, landing pages para tus anuncios con el píxel de Meta, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
 
   alternates: {
     canonical: SITE_URL,
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "RemHub — Software para vender y administrar tu negocio",
     description:
-      "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
+      "Catálogo con pedidos por WhatsApp, landing pages para tus anuncios con el píxel de Meta, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
     url: SITE_URL,
     siteName: "RemHub",
     type: "website",
@@ -86,7 +86,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "RemHub — Software para vender y administrar tu negocio",
     description:
-      "Catálogo con pedidos por WhatsApp, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
+      "Catálogo con pedidos por WhatsApp, landing pages para tus anuncios con el píxel de Meta, POS, inventario por bodegas y puntos, traslados, caja y rentabilidad. Todo tu negocio en un solo lugar.",
     images: ["/og-image.png"],
   },
 

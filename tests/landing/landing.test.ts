@@ -4,6 +4,7 @@ import { deliveryWindow, discounted, landingTotals, normalizeLanding, DEFAULT_LA
 import { applyTemplate, adCopies, trackedLink, AD_CHANNELS, fillText } from "../../src/lib/landing/templates";
 import { landingInsights, type LandingTotals } from "../../src/lib/landing/insights";
 import { buildOrderEvent, hashPhone } from "../../src/lib/landing/meta-capi";
+import { activeTestCode, testCodeUntil, CAPI_TEST_HOURS } from "../../src/lib/landing/capi-test-code";
 
 test("precios con descuento redondeados a $100 como en la base", () => {
   assert.equal(discounted(99900, 8), 91900);
@@ -70,6 +71,16 @@ test("API de Conversiones: teléfono con 57 cifrado y evento con el mismo id del
   const ud = e.user_data as Record<string, unknown>;
   assert.ok(Array.isArray(ud.ph) && Array.isArray(ud.ln) && ud.fbp === "fb.1.123.456" && !("fbc" in ud));
   assert.ok(!JSON.stringify(e).includes("3105551234"));
+});
+
+test("API de Conversiones: el código de prueba guardado vence solo (los pedidos reales vuelven a contar)", () => {
+  const saved = "2026-10-27T15:00:00.000Z";
+  const at = (h: number) => Date.parse(saved) + h * 3_600_000;
+  assert.equal(activeTestCode("TEST123", saved, at(1)), "TEST123");
+  assert.equal(activeTestCode("TEST123", saved, at(CAPI_TEST_HOURS)), null, "a las 24 h ya no se usa");
+  assert.equal(testCodeUntil("TEST123", saved, at(2))?.toISOString(), "2026-10-28T15:00:00.000Z");
+  assert.equal(activeTestCode(null, saved, at(1)), null);
+  assert.equal(activeTestCode("TEST123", null, at(1)), null, "sin fecha no se arriesga");
 });
 
 test("opciones dobles (estilo / color) y orden de secciones", async () => {

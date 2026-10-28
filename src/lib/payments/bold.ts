@@ -6,7 +6,7 @@ import { FiscalApiError } from "@/lib/fiscal/server";
 import { notifyOrderTeam } from "@/lib/push/order-team";
 import { boldIntegrity, boldReference } from "@/lib/payments/bold-sign";
 
-export { boldIntegrity, boldReference, boldReturnUrl, boldWebhookValid } from "@/lib/payments/bold-sign";
+export { boldIntegrity, boldReference, boldReturnUrl, boldWebhookSigner, boldWebhookValid } from "@/lib/payments/bold-sign";
 
 export type BoldMode = "test" | "production";
 export type BoldAccountRow = {

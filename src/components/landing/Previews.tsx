@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import {
   Bell,
   Check,
   CircleDollarSign,
   FileText,
+  Globe,
   Lock,
   MapPin,
   MessageCircle,
+  MousePointerClick,
   PackageCheck,
+  Radar,
+  Server,
   Printer,
   Receipt,
   ShieldCheck,
@@ -366,6 +370,229 @@ export function StructureDiagram() {
         <p className="max-w-xl text-center text-sm" style={{ color: "var(--t-muted)" }}>
           Juntos pero no revueltos: comparten productos, pero cada punto maneja su propio inventario, documentos y clientes. Tú lo ves todo desde el panel principal.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Landing pages para pauta + píxel de Meta                                   */
+/* -------------------------------------------------------------------------- */
+const LP_PRICE = 89900;
+const LP_BEFORE = 129900;
+const LP_BUNDLES = [
+  { qty: 1, pct: 0, label: "Lleva 1" },
+  { qty: 2, pct: 8, label: "Lleva 2" },
+  { qty: 3, pct: 15, label: "Lleva 3" },
+] as const;
+// Como la landing real: redondea a $100 solo cuando hay descuento.
+const lpTotal = (b: (typeof LP_BUNDLES)[number]) => (b.pct ? Math.round((LP_PRICE * b.qty * (1 - b.pct / 100)) / 100) * 100 : LP_PRICE * b.qty);
+
+// Los mismos eventos que envía la landing (src/lib/landing/client-tracking.ts).
+const LP_EVENTS: Record<string, string> = {
+  PageView: "Entró a la página",
+  ViewContent: "Vio el producto",
+  AddToCart: "Tocó «Comprar»",
+  InitiateCheckout: "Empezó el pedido",
+  Purchase: "Compró",
+  Contact: "Escribió por WhatsApp",
+};
+
+// Ventas − costo − pauta = ganancia; ventas ÷ pauta = retorno (como en Landing pages → Resultados).
+const LP_RESULTS: Array<[string, string, string]> = [
+  ["Visitas", "1.240", "62 % desde Facebook"],
+  ["Pedidos", "38", "conversión 3,1 %"],
+  ["Pauta", "$570.000", "$15.000 por pedido"],
+  ["Ventas", "$3.420.000", "ticket $90.000"],
+  ["Retorno", "6,0x", "por cada peso de pauta"],
+  ["Ganancia", "$1.330.000", "ya sin costo ni pauta"],
+];
+
+type LpEvent = { id: number; name: string; detail: string; server: boolean };
+
+export function LandingAdsPreview() {
+  const box = useRef<HTMLDivElement>(null);
+  const inView = useInView(box, { once: true, margin: "-80px" });
+  const still = useReducedMotion();
+  const [bundle, setBundle] = useState(1);
+  const [step, setStep] = useState<"view" | "form" | "done">("view");
+  const [events, setEvents] = useState<LpEvent[]>([]);
+  const seq = useRef(0);
+  const timers = useRef<number[]>([]);
+  const chosen = LP_BUNDLES[bundle];
+  const total = lpTotal(chosen);
+
+  const emit = useCallback((name: string, detail = "", server = false, delay = 0) => {
+    timers.current.push(window.setTimeout(() => {
+      seq.current += 1;
+      const id = seq.current;
+      setEvents((prev) => [{ id, name, detail, server }, ...prev].slice(0, 6));
+    }, delay));
+  }, []);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => pending.forEach((t) => window.clearTimeout(t));
+  }, []);
+
+  // Al llegar a la sección: la visita de siempre (vio la página y el producto).
+  useEffect(() => {
+    if (!inView) return;
+    emit("PageView", "", false, 300);
+    emit("ViewContent", money(LP_PRICE), false, 900);
+  }, [inView, emit]);
+
+  function buy() {
+    setStep("form");
+    emit("AddToCart", money(LP_PRICE));
+    emit("InitiateCheckout", `${chosen.label} · ${money(total)}`, false, 700);
+  }
+
+  function confirm() {
+    setStep("done");
+    emit("Purchase", money(total), true);
+  }
+
+  function again() {
+    setStep("view");
+    emit("PageView");
+    emit("ViewContent", money(LP_PRICE), false, 500);
+  }
+
+  return (
+    <div ref={box} className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div>
+        <div className="mx-auto w-full max-w-[290px] rounded-[2.2rem] border-[6px] border-black/85 bg-black p-1 shadow-2xl">
+          <div className="relative h-[560px] overflow-hidden rounded-[1.8rem] bg-white text-slate-900">
+            <p className="bg-rose-600 px-3 pb-1.5 pt-6 text-center text-[10px] font-bold text-white">🚚 Envío gratis a toda Colombia · Paga al recibir</p>
+            <div className="relative grid h-36 place-items-center bg-gradient-to-br from-rose-500 via-orange-400 to-amber-300 text-6xl">
+              👟
+              <span className="absolute left-2 top-2 rounded-full bg-black px-2 py-0.5 text-[9px] font-black text-white">OFERTA</span>
+              <span className="absolute right-2 top-2 rounded-full bg-white px-2 py-0.5 text-[9px] font-black text-rose-600">-31%</span>
+            </div>
+            <div className="space-y-2 p-3">
+              <p className="text-sm font-black leading-tight">Tenis urbanos Flex</p>
+              <p className="flex items-baseline gap-2">
+                <span className="text-xl font-black text-rose-600">{money(LP_PRICE)}</span>
+                <span className="text-[11px] text-slate-400 line-through">{money(LP_BEFORE)}</span>
+              </p>
+              <div className="flex flex-wrap gap-1 text-[9px] font-bold">
+                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700">👁️ 14 personas viendo esto ahora</span>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">📦 Quedan 9</span>
+              </div>
+              <div className="space-y-1.5">
+                {LP_BUNDLES.map((b, i) => (
+                  <button
+                    key={b.qty}
+                    type="button"
+                    onClick={() => setBundle(i)}
+                    aria-pressed={i === bundle}
+                    className="flex w-full items-center justify-between rounded-xl border-2 px-2.5 py-1.5 text-left text-[11px] transition"
+                    style={{ borderColor: i === bundle ? "#e11d48" : "#e2e8f0", background: i === bundle ? "#fff1f2" : "#fff" }}
+                  >
+                    <span className="font-bold">
+                      {b.label}
+                      {b.pct ? <span className="ml-1.5 rounded bg-rose-600 px-1 py-px text-[9px] text-white">-{b.pct}%</span> : null}
+                    </span>
+                    <span className="font-black">{money(lpTotal(b))}</span>
+                  </button>
+                ))}
+              </div>
+              <motion.button
+                type="button"
+                onClick={buy}
+                animate={still || step !== "view" ? { scale: 1 } : { scale: [1, 1.04, 1] }}
+                transition={still || step !== "view" ? { duration: 0 } : { duration: 1.6, repeat: Infinity }}
+                className="w-full rounded-xl bg-rose-600 py-2.5 text-[12px] font-black text-white shadow-lg"
+              >
+                ¡Comprar ahora y paga al recibir!
+              </motion.button>
+              <p className="text-center text-[9px] text-slate-500">⏰ Oferta del día · termina a medianoche</p>
+            </div>
+            <button type="button" onClick={() => emit("Contact", "botón de WhatsApp")} aria-label="Escribir por WhatsApp" className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-white shadow-lg">
+              <MessageCircle size={18} />
+            </button>
+            <AnimatePresence>
+              {step === "form" ? (
+                <motion.div key="form" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 26, stiffness: 260 }} className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4 shadow-[0_-12px_40px_rgba(0,0,0,.25)]">
+                  <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+                  <p className="text-sm font-black">Completa tu pedido</p>
+                  <p className="text-[10px] text-slate-500">{chosen.label} · Tenis urbanos Flex</p>
+                  <div className="mt-2 space-y-1.5 text-[11px]">
+                    {["Laura G.", "300 123 4567", "Medellín · Laureles", "Cra 70 # 44-21"].map((v) => (
+                      <p key={v} className="rounded-lg border border-slate-200 px-2.5 py-1.5">{v}</p>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold">
+                    <span className="rounded-lg border-2 border-rose-600 bg-rose-50 px-2 py-1.5 text-center">💵 Al recibir</span>
+                    <span className="rounded-lg border border-slate-200 px-2 py-1.5 text-center">💳 En línea</span>
+                  </div>
+                  <button type="button" onClick={confirm} className="mt-3 w-full rounded-xl bg-rose-600 py-2.5 text-[12px] font-black text-white">Confirmar pedido · {money(total)}</button>
+                  <button type="button" onClick={() => setStep("view")} className="mt-1 w-full py-1 text-[10px] text-slate-500">Volver</button>
+                </motion.div>
+              ) : null}
+              {step === "done" ? (
+                <motion.div key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 grid place-items-center bg-white/95 p-5 text-center">
+                  <div>
+                    <motion.p initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-5xl">🎉</motion.p>
+                    <p className="mt-2 text-base font-black">¡Pedido recibido!</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Te escribimos por WhatsApp para confirmarlo y enviarte la guía.</p>
+                    <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-[11px] font-bold">{chosen.label} · {money(total)} · paga al recibir</p>
+                    <button type="button" onClick={again} className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-[11px] font-bold text-white">Ver otra vez</button>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </div>
+        <p className="mx-auto mt-3 max-w-[290px] text-center text-xs" style={{ color: "var(--t-muted)" }}>
+          Ejemplo. En tu landing, las personas viendo, las unidades y los vendidos salen de datos reales.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="rounded-3xl border p-4" style={frame}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 font-bold"><Radar size={16} /> Píxel de Meta · eventos</p>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Activo
+            </span>
+          </div>
+          <ul className="mt-3 min-h-[150px] space-y-1.5 lg:min-h-[250px]">
+            <AnimatePresence initial={false}>
+              {events.map((e) => (
+                <motion.li key={e.id} layout initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-2" style={frame}>
+                  <code className="text-xs font-black">{e.name}</code>
+                  <span className="text-xs" style={{ color: "var(--t-muted)" }}>{LP_EVENTS[e.name]}{e.detail ? ` · ${e.detail}` : ""}</span>
+                  <span className="ml-auto flex flex-wrap gap-1 text-[10px] font-semibold">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: "var(--t-card-bg-soft)" }}><Globe size={11} /> Navegador</span>
+                    {e.server ? (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }}><Server size={11} /> Servidor · sin contar doble</span>
+                    ) : null}
+                  </span>
+                </motion.li>
+              ))}
+            </AnimatePresence>
+            {!events.length ? (
+              <li className="grid h-[140px] place-items-center px-4 text-center text-sm lg:h-[230px]" style={{ color: "var(--t-muted)" }}>Aquí aparece cada paso de la visita, como lo ve Meta.</li>
+            ) : null}
+          </ul>
+          <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--t-muted)" }}>
+            <MousePointerClick size={14} className="shrink-0" /> Toca «Comprar» en el celular y confirma el pedido: la compra llega desde el navegador y desde el servidor con el mismo ID.
+          </p>
+        </div>
+        <div className="rounded-3xl border p-4" style={frame}>
+          <p className="flex items-center gap-2 font-bold"><TrendingUp size={16} /> Resultados de la campaña</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {LP_RESULTS.map(([label, value, hint]) => (
+              <div key={label} className="rounded-xl border p-2.5" style={frame}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{label}</p>
+                <p className="text-lg font-black">{value}</p>
+                <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>{hint}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

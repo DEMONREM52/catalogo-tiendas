@@ -4,7 +4,7 @@
 
 type Fbq = (...args: unknown[]) => void;
 type Ttq = { load: (id: string) => void; page: () => void; track: (event: string, params?: Record<string, unknown>, opts?: Record<string, unknown>) => void; instance?: (id: string) => Ttq };
-type W = Window & { fbq?: Fbq; ttq?: Ttq; __landingPixels?: { meta: string; tiktok: string } };
+type W = Window & { fbq?: Fbq; ttq?: Ttq; __landingPixels?: { meta: string; tiktok: string }; __remhubPixel?: { meta_pixel_id?: string } | null };
 
 const safe = <T>(fn: () => T, fallback: T): T => {
   try {
@@ -61,9 +61,17 @@ export function metaCookies() {
   return { fbp: read("_fbp"), fbc: read("_fbc") ?? (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null) };
 }
 
-/** Carga los píxeles propios de la landing (si los tiene). */
+/**
+ * Carga los píxeles propios de la landing (si los tiene).
+ * El píxel de la tienda lo registra StorePixel (en el layout) en un efecto del padre, que React corre
+ * DESPUÉS de los efectos de la landing: se espera a que termine esa ronda para saber si es el mismo píxel.
+ */
 export function loadLandingPixels(metaId: string, tiktokId: string) {
-  const w = window as W & { __remhubPixel?: { meta_pixel_id?: string } | null };
+  queueMicrotask(() => loadPixelsNow(metaId, tiktokId));
+}
+
+function loadPixelsNow(metaId: string, tiktokId: string) {
+  const w = window as W;
   // Si el píxel propio es el mismo de la tienda, no se carga otra vez (cada evento llegaría doble).
   if (metaId && w.__remhubPixel?.meta_pixel_id === metaId) metaId = "";
   w.__landingPixels = { meta: metaId, tiktok: tiktokId };
@@ -111,7 +119,8 @@ export function landingPixelEvent(event: string, params: Record<string, unknown>
   const w = window as W;
   const ids = w.__landingPixels;
   if (!ids) return;
-  if (ids.meta) safe(() => w.fbq?.("trackSingle", ids.meta, event, params, eventId ? { eventID: eventId } : undefined), undefined);
+  // Si es el mismo píxel de la tienda, el evento ya le llega por src/lib/tracking.ts: no se manda doble.
+  if (ids.meta && ids.meta !== w.__remhubPixel?.meta_pixel_id) safe(() => w.fbq?.("trackSingle", ids.meta, event, params, eventId ? { eventID: eventId } : undefined), undefined);
   if (ids.tiktok && TIKTOK_EVENT[event]) {
     safe(() => w.ttq?.track(TIKTOK_EVENT[event], {
       value: params.value, currency: "COP", content_type: "product",

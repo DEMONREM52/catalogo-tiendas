@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { serviceClient, isUuid } from "@/lib/fiscal/server";
 import { decryptSecret } from "@/lib/fiscal/crypto";
-import { applyBold, boldAad, boldVoucher, boldWebhookValid, type BoldAccountRow } from "@/lib/payments/bold";
+import { applyBold, boldAad, boldVoucher, boldWebhookSigner, type BoldAccountRow } from "@/lib/payments/bold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,12 +27,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
   if (!account) return reply(404, "Cuenta no encontrada.");
 
   const secret = (enc: string | null, mode: "test" | "production") => { try { return enc ? decryptSecret(enc, boldAad(account.id, mode)) : null; } catch { return null; } };
-  const prodSecret = secret(account.prod_secret_enc, "production");
-  const testSecret = secret(account.test_secret_enc, "test");
-  const header = request.headers.get("x-bold-signature");
-  const signedProd = prodSecret ? boldWebhookValid(raw, header, [prodSecret]) : false;
-  const signedTest = !signedProd && boldWebhookValid(raw, header, ["", ...(testSecret ? [testSecret] : [])]);
-  if (!signedProd && !signedTest) return reply(401, "Firma no válida.");
+  const signer = boldWebhookSigner(raw, request.headers.get("x-bold-signature"), {
+    prod: secret(account.prod_secret_enc, "production"),
+    test: secret(account.test_secret_enc, "test"),
+  });
+  if (!signer) return reply(401, "Firma no válida.");
 
   let event: BoldEvent;
   try { event = JSON.parse(raw) as BoldEvent; } catch { return reply(400, "JSON no válido."); }
@@ -41,10 +40,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
   const { data: pay } = await admin.from("erp_bold_payments").select("account_id,mode,amount").eq("reference", reference).maybeSingle();
   const p = pay as { account_id: string | null; mode: string; amount: number } | null;
   if (!p || p.account_id !== account.id) return reply(200);
+  // Un pago de producción solo lo mueve la firma de producción: con la de pruebas cualquiera podría
+  // «anular» o «rechazar» un pago real (y dejar el pedido como no pagado).
+  if (p.mode === "production" && signer !== "production") return reply(401, "Firma no válida.");
 
   let type = String(event.type ?? "").toUpperCase();
   // Firma de pruebas (llave vacía): no basta para dar un pago por aprobado; se pregunta a Bold.
-  if (!signedProd && type === "SALE_APPROVED") {
+  if (signer !== "production" && type === "SALE_APPROVED") {
     const identity = p.mode === "production" ? account.prod_identity : account.test_identity;
     const v = identity ? await boldVoucher(identity, reference).catch(() => null) : null;
     if (String(v?.payment_status ?? "").toUpperCase() !== "APPROVED") type = "PENDING";
