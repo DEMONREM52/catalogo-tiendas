@@ -9,8 +9,8 @@ import { ChoiceChips } from "@/components/forms/Fields";
 import { esc, swalTheme } from "../rentabilidad/shared";
 
 /**
- * Eliminar productos que no se han vendido (20261260 y 20261263). Solo bloquean las ventas (pedidos, POS, facturas, vales);
- * el resto del historial (kardex, compras, traslados, unidades…) se borra con el producto. Lo vendido se inactiva.
+ * Eliminar productos que no se han vendido (20261260 y 20261263). Bloquean las ventas, los traslados y las unidades (20261264);
+ * el resto del historial (kardex, compras, ajustes…) se borra con el producto. Lo vendido se inactiva.
  */
 
 type Check = { ok: boolean; error?: string; name?: string; can_delete?: boolean; reasons?: Array<{ table: string; label: string }>; units?: number; will_delete?: Array<{ table: string; label: string }> };
@@ -50,7 +50,7 @@ export async function deleteProductFlow(p: { id: string; name: string; active: b
   if (!c.can_delete) {
     const r = await Swal.fire({
       ...swalTheme, icon: "info", title: `«${esc(p.name)}» no se puede eliminar`,
-      html: `<p style="font-size:14px">Ya se vendió y esas ventas se necesitan para tus informes:</p>
+      html: `<p style="font-size:14px">Tiene ventas, traslados o unidades que se necesitan para tus informes y tu inventario:</p>
         <ul style="text-align:left;margin:10px auto 0;max-width:320px;font-size:14px">${(c.reasons ?? []).map((x) => `<li>• ${esc(x.label)}</li>`).join("")}</ul>
         <p style="font-size:13px;opacity:.8;margin-top:12px">${p.active ? "Inactívalo: deja de salir en catálogos, POS y búsquedas, y el historial se conserva." : "Ya está inactivo: no sale en catálogos, POS ni búsquedas."}</p>`,
       showCancelButton: p.active, showConfirmButton: true, confirmButtonText: p.active ? "Inactivar" : "Entendido", cancelButtonText: "Cancelar",
@@ -60,7 +60,7 @@ export async function deleteProductFlow(p: { id: string; name: string; active: b
   const units = Number(c.units ?? 0);
   const extra = [...(units ? [`${units.toLocaleString("es-CO")} unidad${units === 1 ? "" : "es"} en inventario`] : []), ...(c.will_delete ?? []).map((x) => x.label)];
   const reason = await askReason(`¿Eliminar «${esc(p.name)}»?`,
-    `<p style="font-size:14px">No tiene ventas. Se borra para siempre junto con su lugar en catálogos y categorías${extra.length ? " y también:" : "."}</p>
+    `<p style="font-size:14px">No tiene ventas, traslados ni unidades. Se borra para siempre junto con su lugar en catálogos y categorías${extra.length ? " y también:" : "."}</p>
      ${extra.length ? `<ul style="text-align:left;margin:8px auto 0;max-width:320px;font-size:14px;color:#dc2626">${extra.map((x) => `<li>• ${esc(x)}</li>`).join("")}</ul>` : ""}
      <p style="font-size:12px;opacity:.75;margin-top:8px">Queda registrado en la auditoría.</p>`, "Eliminar");
   if (!reason) return null;
@@ -101,7 +101,7 @@ export function CleanupProductsSheet({ storeId, onClose, onChanged }: { storeId:
     const list = (rows ?? []).filter((r) => picked.has(r.id));
     if (!list.length) return;
     const reason = await askReason(`¿Eliminar ${list.length} producto${list.length === 1 ? "" : "s"}?`,
-      `<p style="font-size:14px">Ninguno tiene ventas. Se borran para siempre con su historial (kardex, compras, traslados) y sus unidades${list.some((r) => Number(r.units ?? 0)) ? `: <b>${list.reduce((s, r) => s + Number(r.units ?? 0), 0).toLocaleString("es-CO")} unidades</b> salen del inventario` : ""}. Cada uno queda en la auditoría.</p>`, `Eliminar ${list.length}`);
+      `<p style="font-size:14px">Ninguno tiene ventas, traslados ni unidades. Se borran para siempre con su historial (kardex, compras, ajustes)${list.some((r) => Number(r.units ?? 0)) ? `: <b>${list.reduce((s, r) => s + Number(r.units ?? 0), 0).toLocaleString("es-CO")} unidades</b> salen del inventario` : ""}. Cada uno queda en la auditoría.</p>`, `Eliminar ${list.length}`);
     if (!reason) return;
     const failed: string[] = [];
     for (const [i, p] of list.entries()) {
@@ -120,8 +120,8 @@ export function CleanupProductsSheet({ storeId, onClose, onChanged }: { storeId:
   }
 
   return (
-    <Sheet title="Limpiar productos sin ventas" icon={<Trash2 size={18} />} onClose={onClose}
-      subtitle="Solo salen los que nunca se vendieron en ningún punto ni catálogo. Se borran con su historial y sus unidades."
+    <Sheet title="Limpiar productos sin ventas ni traslados" icon={<Trash2 size={18} />} onClose={onClose}
+      subtitle="Solo salen los que nunca se vendieron ni se trasladaron y no tienen unidades en ninguna bodega o punto."
       footer={<>
         <span className="flex-1 text-xs" style={{ color: "var(--t-muted)" }}>{progress ?? (picked.size ? `${picked.size} seleccionado${picked.size === 1 ? "" : "s"}` : "Escoge los que quieres eliminar")}</span>
         <button type="button" disabled={!picked.size || !!progress} onClick={() => void removePicked()}
@@ -134,7 +134,7 @@ export function CleanupProductsSheet({ storeId, onClose, onChanged }: { storeId:
         {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}
         {rows === null ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Revisando el historial de cada producto…</p> : !rows.length ? (
           !error ? <p className="rounded-2xl border p-6 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-            {checked ? `Revisé ${checked} producto${checked === 1 ? "" : "s"}${scope === "inactive" ? " inactivos" : ""}: todos tienen ventas, así que no se pueden eliminar.` : scope === "inactive" ? "No hay productos inactivos." : "No hay productos."}
+            {checked ? `Revisé ${checked} producto${checked === 1 ? "" : "s"}${scope === "inactive" ? " inactivos" : ""}: todos tienen ventas, traslados o unidades, así que no se pueden eliminar.` : scope === "inactive" ? "No hay productos inactivos." : "No hay productos."}
           </p> : null
         ) : (
           <>
