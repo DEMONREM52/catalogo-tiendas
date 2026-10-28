@@ -48,21 +48,53 @@ const DEMO_PRODUCTS = [
   { name: "Audífonos bluetooth", emoji: "🎧", prices: [52000, 55000, 69900, 72000, 79900] },
 ];
 
+/**
+ * Paso de una demostración automática: avanza cada `ms` mientras se ve y hasta que la persona toca algo
+ * (`stop`). Quieto con «reducir movimiento».
+ */
+function useAutoDemo(ref: React.RefObject<HTMLDivElement | null>, ms: number) {
+  const inView = useInView(ref, { margin: "-60px" });
+  const still = useReducedMotion();
+  const [step, setStep] = useState(0);
+  const [stopped, setStopped] = useState(false);
+  useEffect(() => {
+    if (!inView || still || stopped) return;
+    const t = window.setInterval(() => setStep((s) => s + 1), ms);
+    return () => window.clearInterval(t);
+  }, [inView, still, stopped, ms]);
+  return { step, auto: !stopped && !still, stop: () => setStopped(true) };
+}
+
+/** Etiqueta de la demostración automática. */
+function DemoTag({ auto }: { auto: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold" style={{ background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
+      {auto ? <><span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> demostración en vivo</> : <>✋ tú tienes el control</>}
+    </span>
+  );
+}
+
 export function CatalogsPreview() {
-  const [active, setActive] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 2400);
+  const [picked, setPicked] = useState<number | null>(null);
+  const active = picked ?? demo.step % DEMO_CATALOGS.length;
   const catalog = DEMO_CATALOGS[active];
   return (
-    <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div ref={box} className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="space-y-2">
+        <DemoTag auto={demo.auto} />
         {DEMO_CATALOGS.map((c, i) => (
           <motion.button
             key={c.key}
             type="button"
             whileHover={{ x: 4 }}
-            onClick={() => setActive(i)}
-            className="flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition"
+            animate={{ x: i === active ? 6 : 0 }}
+            onClick={() => { demo.stop(); setPicked(i); }}
+            className="rh-glow relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border p-3 text-left transition"
             style={{ ...frame, borderColor: i === active ? "var(--t-accent)" : frame.borderColor, boxShadow: i === active ? "0 10px 30px color-mix(in oklab, var(--t-accent) 18%, transparent)" : "none" }}
           >
+            {i === active && demo.auto ? <motion.span key={demo.step} aria-hidden initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 2.4, ease: "linear" }} className="absolute bottom-0 left-0 h-0.5" style={{ background: "var(--t-cta)" }} /> : null}
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${c.color} text-white`}><ShoppingBag size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5 font-bold">{c.name}{c.private ? <Lock size={13} /> : null}</span>
@@ -76,7 +108,7 @@ export function CatalogsPreview() {
       <div className="mx-auto w-full max-w-[290px] rounded-[2.2rem] border-[6px] border-black/85 bg-black p-1 shadow-2xl">
         <div className="relative h-[460px] overflow-hidden rounded-[1.8rem] bg-[#0f0a1a] text-white">
           <AnimatePresence mode="wait">
-            <motion.div key={catalog.key} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }} className="h-full">
+            <motion.div key={catalog.key} initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.3 }} className="h-full">
               <div className={`bg-gradient-to-br ${catalog.color} px-4 pb-5 pt-8`}>
                 <p className="text-[10px] uppercase tracking-widest opacity-80">Catálogo</p>
                 <p className="text-lg font-black leading-tight">{catalog.name}</p>
@@ -84,10 +116,10 @@ export function CatalogsPreview() {
               </div>
               <div className="grid grid-cols-2 gap-2 p-3">
                 {DEMO_PRODUCTS.map((p, i) => (
-                  <motion.div key={p.name} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1, transition: { delay: i * 0.05 } }} className="rounded-xl bg-white/10 p-2">
+                  <motion.div key={p.name} initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0, transition: { delay: 0.1 + i * 0.07 } }} className="rounded-xl bg-white/10 p-2">
                     <div className="grid aspect-square place-items-center rounded-lg bg-white/10 text-3xl">{p.emoji}</div>
                     <p className="mt-1.5 line-clamp-1 text-[10px] font-bold">{p.name}</p>
-                    <p className="text-sm font-black">{money(p.prices[catalog.level - 1])}</p>
+                    <motion.p initial={{ color: "#34d399", scale: 1.15 }} animate={{ color: "#ffffff", scale: 1, transition: { delay: 0.3 + i * 0.07, duration: 0.6 } }} className="origin-left text-sm font-black">{money(p.prices[catalog.level - 1])}</motion.p>
                     <div className="mt-1 rounded-md bg-white/90 py-0.5 text-center text-[9px] font-bold text-black">Agregar</div>
                   </motion.div>
                 ))}
@@ -104,50 +136,80 @@ export function CatalogsPreview() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* POS por punto                                                               */
+/* POS por punto: se agregan productos, se elige el documento y se crea       */
 /* -------------------------------------------------------------------------- */
+const POS_LINES = [
+  { name: "Set de arte 124 piezas", qty: 1, price: 52000 },
+  { name: "Encendedor eléctrico", qty: 3, price: 10000 },
+  { name: "Lámpara LED táctil", qty: 1, price: 25000 },
+];
+
 export function PosPreview() {
-  const [kind, setKind] = useState<"remision" | "factura">("remision");
-  const items = [
-    { name: "Set de arte 124 piezas", qty: 1, price: 52000 },
-    { name: "Encendedor eléctrico", qty: 3, price: 10000 },
-  ];
-  const total = items.reduce((s, i) => s + i.qty * i.price, 0);
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 1100);
+  const [manual, setManual] = useState<"remision" | "factura" | null>(null);
+  // Ciclo: 0-2 agrega productos, 3 cambia de documento, 4 «crear», 5-6 creado.
+  const cycle = Math.floor(demo.step / 7);
+  const s = demo.auto ? demo.step % 7 : 6;
+  const kind = manual ?? (cycle % 2 ? "factura" : "remision");
+  const items = demo.auto ? POS_LINES.slice(0, Math.min(3, s + 1)) : POS_LINES;
+  const total = items.reduce((a, i) => a + i.qty * i.price, 0);
+  const created = demo.auto && s >= 5;
+  const number = kind === "remision" ? `REMSR-${String(48 + cycle).padStart(5, "0")}` : `FESR-${String(12 + cycle).padStart(5, "0")}`;
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-      <div className="rounded-3xl border p-4" style={frame}>
-        <div className="flex items-center justify-between">
+    <div ref={box} className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="rh-glow rounded-3xl border p-4" style={frame}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="flex items-center gap-2 font-bold"><Store size={16} /> Punto: San Roque</p>
-          <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold">Solo su inventario</span>
+          <DemoTag auto={demo.auto} />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          {DEMO_PRODUCTS.map((p) => (
-            <div key={p.name} className="flex items-center gap-2 rounded-xl border p-2" style={frame}>
-              <span className="grid h-9 w-9 place-items-center rounded-lg text-lg" style={{ background: "var(--t-card-bg-soft)" }}>{p.emoji}</span>
-              <span className="min-w-0 text-[11px]"><b className="block truncate">{p.name}</b>{money(p.prices[2])} · 4 disp.</span>
-            </div>
-          ))}
+          {DEMO_PRODUCTS.map((p) => {
+            const hit = demo.auto && s <= 2 && POS_LINES[s]?.name.startsWith(p.name.split(" ")[0]);
+            return (
+              <motion.div key={p.name} animate={{ scale: hit ? [1, 0.94, 1.03, 1] : 1, borderColor: hit ? "#10b981" : "var(--t-card-border)" }} transition={{ duration: 0.5 }} className="flex items-center gap-2 rounded-xl border p-2" style={frame}>
+                <span className="grid h-9 w-9 place-items-center rounded-lg text-lg" style={{ background: "var(--t-card-bg-soft)" }}>{p.emoji}</span>
+                <span className="min-w-0 text-[11px]"><b className="block truncate">{p.name}</b>{money(p.prices[2])} · 4 disp.</span>
+              </motion.div>
+            );
+          })}
         </div>
+        <p className="mt-3 flex items-center gap-2 font-mono text-[11px]" style={{ color: "var(--t-muted)" }}>
+          <span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> lector de código listo · busca por nombre o código
+        </p>
       </div>
-      <div className="rounded-3xl border p-4" style={frame}>
+      <div className="rh-glow relative overflow-hidden rounded-3xl border p-4" style={frame}>
         <div className="flex gap-1.5 rounded-xl p-1" style={{ background: "var(--t-card-bg-soft)" }}>
           {(["remision", "factura"] as const).map((k) => (
-            <button key={k} type="button" onClick={() => setKind(k)} className="relative flex-1 rounded-lg py-1.5 text-xs font-bold">
+            <button key={k} type="button" onClick={() => { demo.stop(); setManual(k); }} className="relative flex-1 rounded-lg py-1.5 text-xs font-bold">
               {kind === k ? <motion.span layoutId="pos-kind" className="absolute inset-0 rounded-lg" style={{ background: "var(--t-cta)" }} /> : null}
               <span className="relative" style={{ color: kind === k ? "#fff" : "var(--t-text)" }}>{k === "remision" ? "Remisión" : "Factura"}</span>
             </button>
           ))}
         </div>
-        <ul className="mt-3 space-y-1.5 text-sm">
-          {items.map((i) => (
-            <li key={i.name} className="flex justify-between gap-2"><span className="truncate">{i.qty} × {i.name}</span><b>{money(i.qty * i.price)}</b></li>
-          ))}
+        <ul className="mt-3 min-h-[76px] space-y-1.5 text-sm">
+          <AnimatePresence initial={false}>
+            {items.map((i) => (
+              <motion.li key={i.name} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="flex justify-between gap-2"><span className="truncate">{i.qty} × {i.name}</span><b>{money(i.qty * i.price)}</b></motion.li>
+            ))}
+          </AnimatePresence>
         </ul>
         <div className="mt-3 flex items-end justify-between border-t pt-3" style={{ borderColor: "var(--t-card-border)" }}>
-          <span className="text-xs" style={{ color: "var(--t-muted)" }}>Próximo n.º<br /><AnimatePresence mode="wait"><motion.b key={kind} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm" style={{ color: "var(--t-text)" }}>{kind === "remision" ? "REMSR-00048" : "FESR-00012"}</motion.b></AnimatePresence></span>
-          <span className="text-2xl font-black">{money(total)}</span>
+          <span className="text-xs" style={{ color: "var(--t-muted)" }}>Próximo n.º<br /><AnimatePresence mode="wait"><motion.b key={number} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm" style={{ color: "var(--t-text)" }}>{number}</motion.b></AnimatePresence></span>
+          <motion.span key={total} initial={{ scale: 1.15, color: "#10b981" }} animate={{ scale: 1, color: "var(--t-text)" }} className="origin-right text-2xl font-black">{money(total)}</motion.span>
         </div>
-        <div className="mt-3 rounded-xl py-2.5 text-center text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>Crear {kind === "remision" ? "remisión" : "factura"}</div>
+        <motion.div animate={{ scale: demo.auto && s === 4 ? [1, 0.93, 1] : 1 }} className="mt-3 rounded-xl py-2.5 text-center text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>Crear {kind === "remision" ? "remisión" : "factura"}</motion.div>
+        <AnimatePresence>
+          {created ? (
+            <motion.div key={`ok-${cycle}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 grid place-items-center rounded-3xl text-center backdrop-blur-sm" style={{ background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)" }}>
+              <div>
+                <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }} className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-2xl text-white">✓</motion.p>
+                <p className="mt-2 font-black">{kind === "remision" ? "Remisión" : "Factura"} {number}</p>
+                <p className="text-xs" style={{ color: "var(--t-muted)" }}>{money(total)} · inventario de San Roque descontado</p>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -164,35 +226,42 @@ const STEPS = [
 ];
 
 export function InventoryPreview() {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setStep((s) => (s + 1) % (STEPS.length + 1)), 1400);
-    return () => window.clearInterval(timer);
-  }, []);
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 1300);
+  const step = demo.auto ? demo.step % (STEPS.length + 2) : STEPS.length;
+  // Al recibir, las 20 unidades pasan de la bodega a San Roque.
+  const moved = step >= STEPS.length;
   const stock = [
-    { name: "Bodega principal", qty: 120, icon: Warehouse },
-    { name: "Sede San Roque", qty: 46, icon: Store },
+    { name: "Bodega principal", qty: moved ? 100 : 120, icon: Warehouse },
+    { name: "Sede San Roque", qty: moved ? 66 : 46, icon: Store },
     { name: "Sede Centro", qty: 31, icon: Store },
   ];
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="space-y-2 rounded-3xl border p-4" style={frame}>
-        <p className="font-bold">Existencias por lugar</p>
+    <div ref={box} onPointerDown={demo.stop} className="grid gap-4 md:grid-cols-2">
+      <div className="rh-glow space-y-2 rounded-3xl border p-4" style={frame}>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-bold">Existencias por lugar</p><DemoTag auto={demo.auto} /></div>
         {stock.map((s) => (
           <div key={s.name} className="rounded-xl border p-2.5" style={frame}>
-            <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-2"><s.icon size={15} /> {s.name}</span><b>{s.qty} und.</b></div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2"><s.icon size={15} /> {s.name}</span>
+              <motion.b key={s.qty} initial={{ scale: 1.3, color: s.qty > 60 && s.qty < 120 ? "#10b981" : "var(--t-text)" }} animate={{ scale: 1, color: "var(--t-text)" }} transition={{ duration: 0.8 }}>{s.qty} und.</motion.b>
+            </div>
             <div className="mt-1.5 h-2 rounded-full" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)" }}>
-              <motion.div initial={{ width: 0 }} whileInView={{ width: `${(s.qty / 120) * 100}%` }} viewport={{ once: true }} transition={{ duration: 0.9 }} className="h-full rounded-full" style={{ background: "var(--t-accent)" }} />
+              <motion.div initial={{ width: 0 }} animate={{ width: `${(s.qty / 120) * 100}%` }} transition={{ duration: 0.9 }} className="h-full rounded-full" style={{ background: "var(--t-accent)" }} />
             </div>
           </div>
         ))}
         <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cada punto vende solo lo que tiene. La bodega principal ve todo.</p>
       </div>
-      <div className="rounded-3xl border p-4" style={frame}>
-        <p className="flex items-center gap-2 font-bold"><Truck size={16} /> Traslado #18 · Principal → San Roque</p>
+      <div className="rh-glow rounded-3xl border p-4" style={frame}>
+        <p className="flex items-center gap-2 font-bold"><Truck size={16} /> Traslado #18 · Principal → San Roque · 20 und.</p>
         <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>Cada responsable firma desde su celular con un enlace. Sin iniciar sesión.</p>
-        <ol className="mt-4 space-y-3">
+        <div className="relative mt-3 h-6">
+          <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded" style={{ background: "var(--t-card-border)" }} />
+          <motion.div animate={{ width: `${Math.min(100, (step / STEPS.length) * 100)}%` }} transition={{ duration: 0.8 }} className="absolute left-0 top-1/2 h-0.5 -translate-y-1/2 rounded" style={{ background: "var(--t-cta)" }} />
+          <motion.span animate={{ left: `${Math.min(100, (step / STEPS.length) * 100)}%` }} transition={{ duration: 0.8 }} className="absolute top-0 -translate-x-1/2 text-base">🚚</motion.span>
+        </div>
+        <ol className="mt-2 space-y-3">
           {STEPS.map((s, i) => {
             const done = i < step;
             return (
@@ -202,7 +271,7 @@ export function InventoryPreview() {
                 </motion.span>
                 <span className="text-sm">
                   <b>{s.label}</b>
-                  <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{done ? `Firmó ${s.who}` : "Pendiente"}</span>
+                  <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{done ? <>Firmó {s.who} <span className="font-mono text-emerald-500">✍ ✓</span></> : "Pendiente"}</span>
                 </span>
               </li>
             );
@@ -217,50 +286,58 @@ export function InventoryPreview() {
 /* Comprobantes                                                                */
 /* -------------------------------------------------------------------------- */
 export function BillingPreview() {
-  const [format, setFormat] = useState<"carta" | "tirilla">("carta");
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 2600);
+  const [manual, setManual] = useState<"carta" | "tirilla" | null>(null);
+  const format = manual ?? (demo.step % 2 ? "tirilla" : "carta");
   return (
-    <div className="grid items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+    <div ref={box} className="grid items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div className="space-y-3">
         {[
           { icon: FileText, title: "Remisiones y facturas", text: "Numeración propia por punto, con su resolución de facturación." },
           { icon: Store, title: "Identidad de cada sede", text: "Logo, NIT, dirección y mensaje al pie del punto que vendió." },
           { icon: Printer, title: "Carta o tirilla POS", text: "Imprime en hoja carta o en impresora térmica de 80 y 58 mm." },
           { icon: Receipt, title: "Ingresos de mercancía", text: "Comprobante a costo o con cualquier lista de precios." },
-        ].map((f) => (
-          <div key={f.title} className="flex gap-3">
+        ].map((f, i) => (
+          <motion.div key={f.title} initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="flex gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}><f.icon size={18} /></span>
             <span><b className="block text-sm">{f.title}</b><span className="text-sm" style={{ color: "var(--t-muted)" }}>{f.text}</span></span>
-          </div>
+          </motion.div>
         ))}
       </div>
       <div>
-        <div className="mb-3 flex justify-center gap-1.5">
+        <div className="mb-3 flex flex-wrap items-center justify-center gap-1.5">
           {(["carta", "tirilla"] as const).map((f) => (
-            <button key={f} type="button" onClick={() => setFormat(f)} className="rounded-full border px-3 py-1.5 text-xs font-bold" style={format === f ? { background: "var(--t-cta)", color: "#fff", borderColor: "transparent" } : frame}>
+            <button key={f} type="button" onClick={() => { demo.stop(); setManual(f); }} className="rounded-full border px-3 py-1.5 text-xs font-bold" style={format === f ? { background: "var(--t-cta)", color: "#fff", borderColor: "transparent" } : frame}>
               {f === "carta" ? "Hoja carta" : "Tirilla 80 mm"}
             </button>
           ))}
+          <DemoTag auto={demo.auto} />
         </div>
-        <motion.div layout className="mx-auto rounded-xl bg-white p-4 text-[11px] text-slate-900 shadow-2xl" style={{ width: format === "carta" ? "100%" : 230, maxWidth: 420 }}>
-          <div className={format === "carta" ? "flex items-start justify-between gap-3" : "text-center"}>
-            <div className={format === "carta" ? "flex items-center gap-2" : ""}>
-              <div className={`grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white ${format === "carta" ? "" : "mx-auto"}`}><Store size={18} /></div>
-              <div>
-                <p className="text-sm font-black">Sede San Roque</p>
-                <p className="text-slate-500">NIT 900.123.456-7 · Cra 10 # 5-20</p>
+        <div className="relative overflow-hidden">
+          {/* boca de la impresora */}
+          <div aria-hidden className="mx-auto h-2 rounded-full bg-slate-800 shadow-inner" style={{ width: format === "carta" ? "100%" : 250, maxWidth: 440 }} />
+          <motion.div key={format} layout initial={{ y: "-100%" }} animate={{ y: 0 }} transition={{ duration: 1.1, ease: "easeOut" }} className="mx-auto -mt-1 rounded-b-xl bg-white p-4 text-[11px] text-slate-900 shadow-2xl" style={{ width: format === "carta" ? "100%" : 230, maxWidth: 420 }}>
+            <div className={format === "carta" ? "flex items-start justify-between gap-3" : "text-center"}>
+              <div className={format === "carta" ? "flex items-center gap-2" : ""}>
+                <div className={`grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white ${format === "carta" ? "" : "mx-auto"}`}><Store size={18} /></div>
+                <div>
+                  <p className="text-sm font-black">Sede San Roque</p>
+                  <p className="text-slate-500">NIT 900.123.456-7 · Cra 10 # 5-20</p>
+                </div>
+              </div>
+              <div className={format === "carta" ? "rounded-md border-2 border-black px-2 py-1 text-right" : "mt-2"}>
+                <p className="text-[9px] font-bold uppercase">Factura de venta</p>
+                <p className="text-base font-black">FESR-00012</p>
               </div>
             </div>
-            <div className={format === "carta" ? "rounded-md border-2 border-black px-2 py-1 text-right" : "mt-2"}>
-              <p className="text-[9px] font-bold uppercase">Factura de venta</p>
-              <p className="text-base font-black">FESR-00012</p>
-            </div>
-          </div>
-          <div className="mt-3 border-y border-black py-1 font-bold">Cant · Descripción · Subtotal</div>
-          <p className="mt-1 flex justify-between"><span>1 × Set de arte</span><b>$52.000</b></p>
-          <p className="flex justify-between"><span>3 × Encendedor</span><b>$30.000</b></p>
-          <p className="mt-2 flex justify-between border-t-2 border-black pt-1 text-sm font-black"><span>TOTAL</span><span>$82.000</span></p>
-          <p className="mt-2 text-center text-[9px] text-slate-500">Resolución N.º 18764000000 · del FESR-1 al FESR-5000</p>
-        </motion.div>
+            <div className="mt-3 border-y border-black py-1 font-bold">Cant · Descripción · Subtotal</div>
+            <p className="mt-1 flex justify-between"><span>1 × Set de arte</span><b>$52.000</b></p>
+            <p className="flex justify-between"><span>3 × Encendedor</span><b>$30.000</b></p>
+            <p className="mt-2 flex justify-between border-t-2 border-black pt-1 text-sm font-black"><span>TOTAL</span><span>$82.000</span></p>
+            <p className="mt-2 text-center text-[9px] text-slate-500">Resolución N.º 18764000000 · del FESR-1 al FESR-5000</p>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -270,39 +347,65 @@ export function BillingPreview() {
 /* Informes y notificaciones                                                   */
 /* -------------------------------------------------------------------------- */
 const SERIES = [32, 41, 38, 52, 47, 61, 58, 72, 66, 84, 79, 96];
+const ALERTS = [
+  { color: "#0ca30c", tag: "Buenas noticias", text: "9 pedidos nuevos desde tus catálogos" },
+  { color: "#d03b3b", tag: "Urgente", text: "2 cuentas por pagar vencidas" },
+  { color: "#c98500", tag: "Atención", text: "Sede Centro: 4 productos agotados" },
+  { color: "#ec835a", tag: "Importante", text: "Traslado #18 lleva 2 días en camino" },
+  { color: "#0ca30c", tag: "Buenas noticias", text: "San Roque superó su meta del día 🎯" },
+  { color: "#c98500", tag: "Atención", text: "3 precios por debajo del costo en el POS" },
+];
 
 export function ReportsPreview() {
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 1800);
+  const range = (["Día", "Semana", "Mes"] as const)[Math.floor(demo.step / 3) % 3];
+  const base = { Día: 1284000, Semana: 6930000, Mes: 18450000 }[range];
+  const sales = base + (demo.step % 3) * 124200;
   const max = Math.max(...SERIES);
-  const points = SERIES.map((v, i) => `${(i / (SERIES.length - 1)) * 300},${100 - (v / max) * 88}`).join(" ");
+  const shift = Math.floor(demo.step / 3) % 3;
+  const series = SERIES.map((v, i) => v - ((i * 7 + shift * 13) % 9) * shift);
+  const points = series.map((v, i) => `${(i / (series.length - 1)) * 300},${100 - (v / max) * 88}`).join(" ");
+  const last = series[series.length - 1];
+  const alerts = Array.from({ length: 4 }, (_, i) => ALERTS[(demo.step + ALERTS.length - i) % ALERTS.length]);
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <div className="rounded-3xl border p-4" style={frame}>
-        <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Ventas · este mes · todos los puntos</p>
-        <p className="mt-1 text-4xl font-black tracking-tight">$18.450.000</p>
-        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold"><TrendingUp size={13} className="text-emerald-600" /> +24% vs. mes pasado</span>
-        <svg viewBox="0 0 300 104" className="mt-4 h-32 w-full" preserveAspectRatio="none" aria-hidden="true">
-          <motion.polyline points={points} fill="none" stroke="var(--t-accent)" strokeWidth={2.5} strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.4 }} />
-          <polygon points={`0,104 ${points} 300,104`} fill="var(--t-accent)" opacity={0.1} />
-        </svg>
+    <div ref={box} onPointerDown={demo.stop} className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="rh-glow rounded-3xl border p-4" style={frame}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-1">
+            {(["Día", "Semana", "Mes"] as const).map((r) => <span key={r} className="rounded-full px-2.5 py-0.5 text-[11px] font-bold transition" style={{ background: r === range ? "var(--t-cta)" : "var(--t-card-bg-soft)", color: r === range ? "#fff" : "var(--t-muted)" }}>{r}</span>)}
+          </div>
+          <DemoTag auto={demo.auto} />
+        </div>
+        <p className="mt-2 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Ventas · {range.toLowerCase()} · todos los puntos</p>
+        <motion.p key={sales} initial={{ y: 6, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }} className="mt-1 text-4xl font-black tabular-nums tracking-tight">{money(sales)}</motion.p>
+        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold"><TrendingUp size={13} className="text-emerald-600" /> +{[12, 18, 24][shift]}% vs. {range === "Día" ? "ayer" : range === "Semana" ? "la semana pasada" : "el mes pasado"}</span>
+        <div className="relative mt-4 h-32">
+          <svg viewBox="0 0 300 104" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+            <motion.polyline key={range} points={points} fill="none" stroke="var(--t-accent)" strokeWidth={2.5} strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.2 }} />
+            <polygon points={`0,104 ${points} 300,104`} fill="var(--t-accent)" opacity={0.1} />
+          </svg>
+          <span aria-hidden className="dfx-live absolute right-0 h-3 w-3 -translate-y-1/2 translate-x-1/2 rounded-full bg-emerald-400" style={{ top: `${((100 - (last / max) * 88) / 104) * 100}%` }} />
+        </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          {[["Pedidos", "412"], ["Ticket", "$44.800"], ["Ganancia", "$6,1 M"]].map(([l, v]) => (
-            <div key={l} className="rounded-xl border p-2" style={frame}><p className="text-[10px]" style={{ color: "var(--t-muted)" }}>{l}</p><p className="font-black">{v}</p></div>
+          {[["Pedidos", String(412 + (demo.step % 3))], ["Ticket", "$44.800"], ["Ganancia", "$6,1 M"]].map(([l, v]) => (
+            <div key={l} className="rounded-xl border p-2" style={frame}><p className="text-[10px]" style={{ color: "var(--t-muted)" }}>{l}</p><p className="font-black tabular-nums">{v}</p></div>
           ))}
         </div>
       </div>
-      <div className="space-y-2 rounded-3xl border p-4" style={frame}>
-        <p className="flex items-center gap-2 font-bold"><Bell size={16} /> Notificaciones</p>
-        {[
-          { color: "#d03b3b", tag: "Urgente", text: "2 cuentas por pagar vencidas" },
-          { color: "#c98500", tag: "Atención", text: "Sede Centro: 4 productos agotados" },
-          { color: "#ec835a", tag: "Importante", text: "Traslado #18 lleva 2 días en camino" },
-          { color: "#0ca30c", tag: "Buenas noticias", text: "9 pedidos nuevos desde tus catálogos" },
-        ].map((a, i) => (
-          <motion.div key={a.text} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }} className="rounded-xl border p-2.5" style={frame}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: a.color }}>{a.tag}</p>
-            <p className="text-sm font-semibold">{a.text}</p>
-          </motion.div>
-        ))}
+      <div className="rh-glow space-y-2 rounded-3xl border p-4" style={frame}>
+        <p className="flex items-center gap-2 font-bold">
+          <motion.span key={demo.step} animate={{ rotate: [0, -18, 14, -8, 0] }} transition={{ duration: 0.6 }} style={{ transformOrigin: "50% 10%" }} className="inline-flex"><Bell size={16} /></motion.span>
+          Notificaciones
+        </p>
+        <AnimatePresence initial={false} mode="popLayout">
+          {alerts.map((a, i) => (
+            <motion.div key={`${a.text}-${demo.step - i}`} layout initial={{ opacity: 0, x: 30, scale: 0.95 }} animate={{ opacity: 1 - i * 0.15, x: 0, scale: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", stiffness: 300, damping: 28 }} className="rounded-xl border p-2.5" style={{ ...frame, borderColor: i === 0 ? a.color : frame.borderColor }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: a.color }}>{a.tag}{i === 0 ? " · ahora" : ""}</p>
+              <p className="text-sm font-semibold">{a.text}</p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -312,26 +415,41 @@ export function ReportsPreview() {
 /* Equipo y permisos                                                           */
 /* -------------------------------------------------------------------------- */
 export function TeamPreview() {
+  const box = useRef<HTMLDivElement>(null);
+  const demo = useAutoDemo(box, 1500);
   const people = [
-    { name: "Administradora", role: "Ve todo y todos los puntos", perms: ["Informes", "Inventario", "Catálogos", "Usuarios"], icon: ShieldCheck },
-    { name: "Vendedor San Roque", role: "Solo su punto", perms: ["POS", "Clientes"], icon: CircleDollarSign },
-    { name: "Bodeguero", role: "Bodega principal", perms: ["Inventario", "Traslados", "Compras"], icon: Warehouse },
+    { name: "Administradora", role: "Ve todo y todos los puntos", perms: ["Informes", "Inventario", "Catálogos", "Usuarios"], extra: "Auditoría", icon: ShieldCheck },
+    { name: "Vendedor San Roque", role: "Solo su punto", perms: ["POS", "Clientes"], extra: "Caja", icon: CircleDollarSign },
+    { name: "Bodeguero", role: "Bodega principal", perms: ["Inventario", "Traslados", "Compras"], extra: "Ajustes", icon: Warehouse },
   ];
+  const who = demo.step % people.length;
+  const on = Math.floor(demo.step / people.length) % 2 === 0;
+  const log = ["@andres entró · San Roque", "@laura firmó el traslado #18", "@maria creó la remisión REMSR-00048", "Permiso «Caja» activado para @andres"][demo.step % 4];
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div ref={box} onPointerDown={demo.stop} className="grid gap-3 md:grid-cols-3">
       {people.map((p, i) => (
-        <motion.div key={p.name} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="rounded-3xl border p-4" style={frame}>
+        <motion.div key={p.name} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="rh-glow rounded-3xl border p-4" style={{ ...frame, borderColor: i === who && demo.auto ? "var(--t-accent)" : frame.borderColor }}>
           <span className="grid h-11 w-11 place-items-center rounded-2xl text-white" style={{ background: "var(--t-cta)" }}><p.icon size={20} /></span>
           <p className="mt-3 font-bold">{p.name}</p>
           <p className="text-xs" style={{ color: "var(--t-muted)" }}>{p.role}</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {p.perms.map((perm) => <span key={perm} className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)" }}>✓ {perm}</span>)}
+            <AnimatePresence>
+              {i === who && on && demo.auto ? (
+                <motion.span key="extra" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white">+ {p.extra}</motion.span>
+              ) : null}
+            </AnimatePresence>
           </div>
         </motion.div>
       ))}
-      <div className="flex items-center gap-3 rounded-3xl border p-4 md:col-span-3" style={frame}>
+      <div className="rh-glow flex flex-wrap items-center gap-3 rounded-3xl border p-4 md:col-span-3" style={frame}>
         <Users size={18} />
-        <p className="text-sm">Un solo enlace de acceso para todo el equipo: cada trabajador entra con su usuario y contraseña, sin correo.</p>
+        <p className="min-w-0 flex-1 text-sm">Un solo enlace de acceso para todo el equipo: cada trabajador entra con su usuario y contraseña, sin correo.</p>
+        <AnimatePresence mode="wait">
+          <motion.span key={log} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px]" style={{ background: "var(--t-card-bg-soft)" }}>
+            <span className="dfx-live h-1.5 w-1.5 rounded-full bg-emerald-500" /> {log}
+          </motion.span>
+        </AnimatePresence>
       </div>
     </div>
   );

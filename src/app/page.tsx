@@ -15,8 +15,8 @@ import { captureReferral } from "@/lib/saas/referral";
 const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 // Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
 const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
-import { useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   Banknote,
@@ -276,6 +276,16 @@ function Kicker({ children }: { children: string }) {
 
 export default function HomePage() {
   const [tour, setTour] = useState(0);
+  // El recorrido avanza solo mientras se ve; al tocar una pestaña o una vista previa queda en manos de la persona.
+  const TOUR_MS = 9000;
+  const tourRef = useRef<HTMLElement>(null);
+  const tourInView = useInView(tourRef, { margin: "-120px" });
+  const [tourAuto, setTourAuto] = useState(true);
+  useEffect(() => {
+    if (!tourInView || !tourAuto || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setInterval(() => setTour((x) => (x + 1) % TOUR.length), TOUR_MS);
+    return () => window.clearInterval(t);
+  }, [tourInView, tourAuto]);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
 
@@ -448,11 +458,11 @@ export default function HomePage() {
         </Reveal>
       </section>
 
-      <section id="producto" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20">
+      <section id="producto" ref={tourRef} className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20">
         <Reveal className="text-center">
           <Kicker>Mira cómo se ve</Kicker>
           <h2 className="mx-auto mt-4 max-w-2xl text-3xl font-black sm:text-4xl">Todo lo que tu negocio necesita, fácil de usar</h2>
-          <p className="mx-auto mt-3 max-w-2xl" style={{ color: "var(--t-muted)" }}>Toca cada sección y prueba las vistas previas.</p>
+          <p className="mx-auto mt-3 max-w-2xl" style={{ color: "var(--t-muted)" }}>Mira la demostración o toca cada sección y prueba las vistas previas.</p>
         </Reveal>
         <div className="mt-8 flex gap-2 overflow-x-auto pb-2 sm:justify-center" role="tablist" aria-label="Recorrido por RemHub">
           {TOUR.map((t, i) => (
@@ -461,16 +471,17 @@ export default function HomePage() {
               type="button"
               role="tab"
               aria-selected={tour === i}
-              onClick={() => setTour(i)}
+              onClick={() => { setTourAuto(false); setTour(i); }}
               className="relative inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
               style={{ color: tour === i ? "#fff" : "var(--t-text)" }}
             >
               {tour === i ? <motion.span layoutId="tour-tab" className="absolute inset-0 rounded-2xl shadow-lg" style={{ background: "var(--t-cta)" }} transition={{ type: "spring", stiffness: 380, damping: 30 }} /> : null}
               <span className="relative inline-flex items-center gap-2"><t.icon size={16} /> {t.label}</span>
+              {tour === i && tourAuto && tourInView ? <motion.span key={tour} aria-hidden initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: TOUR_MS / 1000, ease: "linear" }} className="absolute inset-x-3 bottom-1 h-0.5 origin-left rounded bg-white/80" /> : null}
             </button>
           ))}
         </div>
-        <div className="rh-glow mt-6 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+        <div onPointerDown={() => setTourAuto(false)} className="rh-glow mt-6 rounded-[2rem] border p-5 sm:p-8" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
           <AnimatePresence mode="wait">
             <motion.div key={current.key} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
               <div className="mb-6 max-w-2xl">
