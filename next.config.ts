@@ -6,13 +6,13 @@ import { LEGACY_HOSTS, PRODUCTION_ORIGIN } from "./src/lib/share/origin";
  * - Nadie puede meter RemHub dentro de otra página (clickjacking).
  * - El navegador siempre usa https (HSTS) y no adivina tipos de archivo.
  * - Al salir hacia otros sitios solo se comparte el dominio, nunca la ruta (que puede llevar enlaces de comprobantes).
- * - Cámara y ubicación solo para RemHub (búsqueda por foto, «cómo llegar»); micrófono, USB y demás, apagados.
- * - Dentro del panel (/dashboard) USB, puerto serie y Bluetooth quedan permitidos SOLO para RemHub: la impresión
- *   directa en impresoras térmicas los usa (y el navegador igual pide elegir el aparato con un toque).
+ * - Cámara y ubicación solo para RemHub (búsqueda por foto, «cómo llegar»); micrófono, USB y demás, apagados fuera del panel.
+ * - Dentro del panel (/dashboard) USB, puerto serie, Bluetooth y micrófono quedan permitidos SOLO para RemHub: la impresión
+ *   directa en impresoras térmicas, y las notas de voz y llamadas del chat de pedidos internos (el navegador igual pide permiso).
  * La política de contenido completa (CSP) queda pendiente: hay que inventariar GTM, píxeles, Wompi, Addi y jsdelivr.
  */
 const permissions = (hardware: "()" | "(self)") =>
-  `camera=(self), geolocation=(self), microphone=(), usb=${hardware}, serial=${hardware}, bluetooth=${hardware}, payment=(self), browsing-topics=()`;
+  `camera=(self), geolocation=(self), microphone=${hardware}, usb=${hardware}, serial=${hardware}, bluetooth=${hardware}, payment=(self), browsing-topics=()`;
 const SECURITY_HEADERS = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },

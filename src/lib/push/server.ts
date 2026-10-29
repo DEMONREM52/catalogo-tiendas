@@ -20,7 +20,13 @@ export function pushConfigured() {
   return (vapidReady = true);
 }
 
-export type PushPayload = { title: string; body: string; url: string; tag?: string; urgent?: boolean; event?: NotifEvent; id?: string; point?: string | null };
+export type PushPayload = {
+  title: string; body: string; url: string; tag?: string; urgent?: boolean; event?: NotifEvent; id?: string; point?: string | null;
+  /** Llamada entrante: el celular muestra «Contestar» y «Rechazar». */
+  call?: { id: string; video: boolean };
+  /** Segundos que la notificación sigue valiendo (una llamada vieja ya no sirve). */
+  ttl?: number;
+};
 
 type Sub = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string };
 
@@ -38,7 +44,7 @@ export async function sendToUsers(admin: SupabaseClient, storeId: string, payloa
       const payload = payloads.get(s.user_id);
       if (!payload) return;
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 6, urgency: payload.urgent ? "high" : "normal" });
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: payload.ttl ?? 60 * 60 * 6, urgency: payload.urgent ? "high" : "normal" });
         sent++;
       } catch (e) {
         failed++;

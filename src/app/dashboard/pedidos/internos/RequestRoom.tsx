@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, CheckCircle2, ExternalLink, Lock, MessageCircle, Package, Send, Truck, X } from "lucide-react";
+import { ArrowRight, Ban, Camera, Phone, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
 import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
+import { ProductName } from "@/components/ProductName";
+import { startCall } from "./CallManager";
+import { MAX_BYTES, MessageMedia, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 
@@ -33,6 +36,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Después de despachar o recibir se abre la firma de ese paso.
   const [autoSign, setAutoSign] = useState<SrSignStep | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  // Archivos del chat (20261267): los que se van a enviar y los de cada mensaje.
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [media, setMedia] = useState<Record<string, Attachment[]>>({});
+  const [attachMenu, setAttachMenu] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [typing, setTyping] = useState<string | null>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const audioInput = useRef<HTMLInputElement>(null);
+  const recorder = useRecorder();
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
   // Precio por mayor (precio 2) de cada producto, para ver cuánto vale el pedido.
@@ -45,6 +58,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     setError(null);
     setLoaded({ id: requestId, data: res as SrDetail });
     void supabaseBrowser().rpc("erp_stock_request_read", { p_request: requestId });
+    // Sin la migración 20261267 no hay archivos: el chat sigue igual.
+    void supabaseBrowser().rpc("erp_stock_request_media", { p_request: requestId }).then(({ data: m, error: e }) => { if (!e && m) setMedia(m as Record<string, Attachment[]>); });
   }, [requestId]);
   useRunOnChange(load);
 
@@ -84,16 +99,107 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messageCount, mobileTab]);
 
-  async function send(body?: string) {
+  /** Envía texto, o archivos con texto opcional (se suben primero, con progreso). Respuesta rápida = solo texto. */
+  async function send(body?: string, files: Pending[] = body ? [] : pending) {
     const msg = (body ?? text).trim();
-    if (!msg || !requestId || sending) return;
+    if ((!msg && !files.length) || !requestId || sending || !data) return;
     setSending(true);
-    const { error: err } = await supabaseBrowser().rpc("erp_stock_request_message", { p_request: requestId, p_body: msg });
-    setSending(false);
-    if (err) return void Swal.fire({ ...swal, icon: "error", title: "No se envió", text: srError(err) });
-    if (!body) setText("");
-    void load();
+    try {
+      if (files.length) {
+        const attachments: Attachment[] = [];
+        for (const p of files) {
+          const path = await uploadChatFile(data.request.store_id, requestId, p.file, (v) => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, progress: v } : x))));
+          attachments.push({ type: p.type, path, mime: p.file.type, size: p.file.size, duration: p.duration, width: p.width, height: p.height });
+        }
+        const { error: err } = await supabaseBrowser().rpc("erp_stock_request_message_media", { p_request: requestId, p_body: msg, p_attachments: attachments });
+        if (err) throw new Error(/Could not find the function|schema cache/i.test(err.message) ? "Falta ejecutar en Supabase la migración 20261267_chat_multimedia.sql." : srError(err));
+        files.forEach((p) => URL.revokeObjectURL(p.preview));
+        setPending((cur) => cur.filter((x) => !files.some((p) => p.id === x.id)));
+      } else {
+        const { error: err } = await supabaseBrowser().rpc("erp_stock_request_message", { p_request: requestId, p_body: msg });
+        if (err) throw new Error(srError(err));
+      }
+      if (!body) setText("");
+      void load();
+    } catch (e) {
+      void Swal.fire({ ...swal, icon: "error", title: "No se envió", text: e instanceof Error ? e.message : "Intenta de nuevo." });
+    } finally {
+      setSending(false);
+    }
   }
+
+  /** Fotos (más livianas), videos y audios a la bandeja de envío. Máximo 10 y 50 MB cada uno. */
+  async function addFiles(list: FileList | File[] | null) {
+    const files = [...(list ?? [])];
+    const room = 10 - pending.length;
+    const out: Pending[] = [];
+    const skipped: string[] = [];
+    for (const raw of files.slice(0, Math.max(0, room))) {
+      const type = kindOf(raw);
+      if (!type) { skipped.push(`${raw.name}: solo fotos, videos o audios`); continue; }
+      const prepared = type === "image" ? await prepareImage(raw) : { file: raw };
+      if (prepared.file.size > MAX_BYTES) { skipped.push(`${raw.name}: pesa más de 50 MB`); continue; }
+      const meta = type === "image" ? {} : await mediaMeta(prepared.file, type);
+      out.push({ id: crypto.randomUUID(), file: prepared.file, type, preview: URL.createObjectURL(prepared.file), progress: 0, ...("width" in prepared ? { width: prepared.width, height: prepared.height } : {}), ...meta });
+    }
+    if (files.length > room) skipped.push("Máximo 10 archivos por mensaje");
+    if (out.length) setPending((cur) => [...cur, ...out]);
+    if (skipped.length) void Swal.fire({ ...swal, icon: "info", title: "Algunos archivos no se agregaron", html: skipped.map((x) => `• ${x}`).join("<br/>") });
+  }
+
+  function removePending(id: string) {
+    setPending((cur) => {
+      const p = cur.find((x) => x.id === id);
+      if (p) URL.revokeObjectURL(p.preview);
+      return cur.filter((x) => x.id !== id);
+    });
+  }
+
+  async function startVoice() {
+    try {
+      await recorder.start();
+    } catch {
+      void Swal.fire({ ...swal, icon: "info", title: "Sin micrófono", text: "Permite el micrófono para este sitio (candado junto a la dirección) y vuelve a intentar." });
+    }
+  }
+
+  /** Termina la nota de voz y la envía de una vez. */
+  async function sendVoice() {
+    const { file, duration } = await recorder.stop();
+    if (!file || duration < 1) return;
+    const p: Pending = { id: crypto.randomUUID(), file, type: "audio", preview: URL.createObjectURL(file), progress: 0, duration };
+    setPending((cur) => [...cur, p]);
+    await send("", [p]);
+  }
+
+  // «Está escribiendo…»: aviso efímero entre quienes tienen el pedido abierto (no se guarda).
+  const typingChannel = useRef<ReturnType<ReturnType<typeof supabaseBrowser>["channel"]> | null>(null);
+  const lastTyping = useRef(0);
+  const myName = data?.messages.find((m) => m.mine && m.user_name)?.user_name ?? null;
+  useEffect(() => {
+    if (!requestId) return;
+    const me = crypto.randomUUID();
+    let clear = 0;
+    const ch = supabaseBrowser().channel(`sr-typing-${requestId}`, { config: { broadcast: { self: false } } });
+    ch.on("broadcast", { event: "typing" }, ({ payload }) => {
+      const p = payload as { by?: string; name?: string };
+      if (p.by === me) return;
+      setTyping(p.name || "Alguien");
+      window.clearTimeout(clear);
+      clear = window.setTimeout(() => setTyping(null), 3500);
+    }).subscribe();
+    typingChannel.current = ch;
+    (ch as unknown as { __me: string }).__me = me;
+    return () => { window.clearTimeout(clear); typingChannel.current = null; void supabaseBrowser().removeChannel(ch); };
+  }, [requestId]);
+  function announceTyping() {
+    const ch = typingChannel.current;
+    if (!ch || Date.now() - lastTyping.current < 2000) return;
+    lastTyping.current = Date.now();
+    void ch.send({ type: "broadcast", event: "typing", payload: { by: (ch as unknown as { __me: string }).__me, name: myName } });
+  }
+  // Un mensaje nuevo del otro borra el «escribiendo…».
+  useEffect(() => { setTyping(null); }, [messageCount]);
 
   async function run(fn: string, args: Record<string, unknown>, ok: string) {
     setBusy(true);
@@ -206,7 +312,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <div key={i.id} className="flex items-center gap-3 rounded-2xl border p-2.5" style={{ borderColor: short ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
               <Thumb src={thumbs[i.product_id] ?? i.image_url} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold" title={i.name}>{i.name}</p>
+                <ProductName name={i.name} className="text-sm font-semibold" />
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>
                   Pidió <b style={{ color: "var(--t-text)" }}>{i.qty_requested}</b>
                   {r.status !== "dispatched" && r.status !== "received" ? <> · En {r.to_name}: <b style={{ color: i.source_now > 0 ? "#22c55e" : "#ef4444" }}>{i.source_now}</b></> : null}
@@ -350,59 +456,147 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   ) : null;
 
   const chatPanel = data && r ? (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+      onDragOver={(e) => { if (data.access.chat && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+      onDrop={(e) => { if (!data.access.chat) return; e.preventDefault(); setDragging(false); void addFiles(e.dataTransfer.files); }}
+    >
+      {dragging ? (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-2xl border-2 border-dashed text-sm font-bold" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-bg-base) 80%, transparent)", color: "var(--t-accent)" }}>
+          Suelta aquí fotos, videos o audios
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-1 py-2">
-        {data.messages.map((m) =>
-          m.kind === "system" ? (
-            <div key={m.id} className="mx-auto max-w-[92%] whitespace-pre-line rounded-2xl border px-3 py-2 text-center text-xs" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)", color: "var(--t-muted)" }}>
-              {m.body}
-              <span className="mt-0.5 block text-[10px] opacity-70">{new Date(m.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}</span>
-            </div>
-          ) : (
+        {data.messages.map((m) => {
+          if (m.kind === "system") {
+            return (
+              <div key={m.id} className="mx-auto max-w-[92%] whitespace-pre-line rounded-2xl border px-3 py-2 text-center text-xs" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)", color: "var(--t-muted)" }}>
+                {m.body}
+                <span className="mt-0.5 block text-[10px] opacity-70">{new Date(m.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}</span>
+              </div>
+            );
+          }
+          const files = media[m.id] ?? [];
+          // Si el mensaje solo trae archivos, su texto es la etiqueta automática («📷 Foto»): no se repite.
+          const autoLabel = files.length > 0 && /^(📷|🎥|🎤)/u.test(m.body) && m.body.length < 48;
+          return (
             <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
               <div
-                className="max-w-[82%] rounded-2xl px-3.5 py-2 text-sm shadow-sm"
+                className={`max-w-[82%] rounded-2xl text-sm shadow-sm ${files.length ? "p-1.5" : "px-3.5 py-2"}`}
                 style={m.mine
                   ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))", color: "#fff", borderBottomRightRadius: 6 }
                   : { background: "var(--t-card-bg)", border: "1px solid var(--t-card-border)", borderBottomLeftRadius: 6 }}
               >
-                {!m.mine ? <p className="text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>{m.user_name}{m.point_name ? ` · ${m.point_name}` : ""}</p> : null}
-                <p className="whitespace-pre-line break-words">{m.body}</p>
-                <p className="mt-0.5 text-right text-[10px] opacity-70">{new Date(m.created_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p>
+                {!m.mine ? <p className={`text-[11px] font-bold ${files.length ? "px-2 pt-1" : ""}`} style={{ color: "var(--t-accent)" }}>{m.user_name}{m.point_name ? ` · ${m.point_name}` : ""}</p> : null}
+                {files.length ? <MessageMedia items={files} mine={m.mine} /> : null}
+                {!autoLabel ? <p className={`whitespace-pre-line break-words ${files.length ? "px-2 pt-1.5" : ""}`}>{m.body}</p> : null}
+                <p className={`mt-0.5 text-right text-[10px] opacity-70 ${files.length ? "px-2 pb-0.5" : ""}`}>{new Date(m.created_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p>
               </div>
             </motion.div>
-          ),
-        )}
+          );
+        })}
+        <AnimatePresence>
+          {typing ? (
+            <motion.p key="typing" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="px-2 text-xs italic" style={{ color: "var(--t-muted)" }}>
+              {typing} está escribiendo<span className="animate-pulse">…</span>
+            </motion.p>
+          ) : null}
+        </AnimatePresence>
         <div ref={chatEnd} />
       </div>
       {data.access.chat ? (
         <div className="border-t pt-2" style={{ borderColor: "var(--t-card-border)" }}>
-          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
-            {(data.access.attend && !data.access.request ? QUICK.attend : data.access.request && !data.access.attend ? QUICK.request : [...QUICK.attend.slice(0, 2), ...QUICK.request.slice(0, 2)]).map((qr) => (
-              <button key={qr} type="button" disabled={sending} onClick={() => void send(qr)} className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
-                {qr}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-end gap-2">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-              rows={1}
-              placeholder="Escribe un mensaje… (Enter envía)"
-              className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
-              style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
-            />
-            <button type="button" onClick={() => void send()} disabled={sending || !text.trim()} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white transition disabled:opacity-40" style={{ background: "var(--t-accent)" }} aria-label="Enviar">
-              <Send size={17} />
-            </button>
-          </div>
+          {pending.length ? (
+            <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+              {pending.map((p) => (
+                <div key={p.id} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+                  {p.type === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.preview} alt="" className="h-full w-full object-cover" />
+                  ) : p.type === "video" ? (
+                    <video src={p.preview} muted playsInline className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="grid h-full w-full place-items-center text-2xl">🎤</span>
+                  )}
+                  {p.duration ? <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{clock(p.duration)}</span> : null}
+                  {sending ? (
+                    <span className="absolute inset-x-0 bottom-0 h-1 bg-black/30"><span className="block h-full bg-emerald-400 transition-all" style={{ width: `${Math.round(p.progress * 100)}%` }} /></span>
+                  ) : (
+                    <button type="button" onClick={() => removePending(p.id)} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white" aria-label="Quitar"><X size={13} /></button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+              {(data.access.attend && !data.access.request ? QUICK.attend : data.access.request && !data.access.attend ? QUICK.request : [...QUICK.attend.slice(0, 2), ...QUICK.request.slice(0, 2)]).map((qr) => (
+                <button key={qr} type="button" disabled={sending} onClick={() => void send(qr)} className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+                  {qr}
+                </button>
+              ))}
+            </div>
+          )}
+          {recorder.state === "recording" ? (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => void recorder.stop(true)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border text-red-400" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cancelar audio"><Trash2 size={17} /></button>
+              <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3" style={{ borderColor: "color-mix(in oklab, #ef4444 50%, transparent)", background: "var(--t-card-bg)" }}>
+                <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
+                <span className="w-10 shrink-0 font-mono text-xs tabular-nums">{clock(recorder.elapsed)}</span>
+                <span className="flex h-6 min-w-0 flex-1 items-center gap-[2px] overflow-hidden">
+                  {recorder.levels.map((v, i) => <span key={i} className="w-[3px] shrink-0 rounded-full bg-red-400" style={{ height: `${Math.max(12, v * 100)}%` }} />)}
+                </span>
+              </div>
+              <button type="button" onClick={() => void sendVoice()} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white" style={{ background: "var(--t-accent)" }} aria-label="Enviar audio"><Send size={17} /></button>
+            </div>
+          ) : (
+            <div className="flex items-end gap-2">
+              <div className="relative">
+                <button type="button" disabled={sending} onClick={() => setAttachMenu((v) => !v)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border transition hover:-translate-y-0.5 disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }} aria-label="Adjuntar">
+                  <Paperclip size={17} />
+                </button>
+                <AnimatePresence>
+                  {attachMenu ? (
+                    <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-12 left-0 z-30 w-52 overflow-hidden rounded-2xl border p-1 shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+                      <button type="button" onClick={() => { setAttachMenu(false); galleryInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><ImageIcon size={17} className="text-violet-400" /> Fotos o videos</button>
+                      <button type="button" onClick={() => { setAttachMenu(false); cameraInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Camera size={17} className="text-pink-400" /> Cámara</button>
+                      <button type="button" onClick={() => { setAttachMenu(false); audioInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Music size={17} className="text-amber-400" /> Archivo de audio</button>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+                <input ref={galleryInput} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+                <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+                <input ref={audioInput} type="file" accept="audio/*" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+              </div>
+              <textarea
+                value={text}
+                onChange={(e) => { setText(e.target.value); announceTyping(); }}
+                onPaste={(e) => {
+                  const files = [...e.clipboardData.files].filter((f) => kindOf(f));
+                  if (files.length) { e.preventDefault(); void addFiles(files); }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                rows={1}
+                placeholder={pending.length ? "Agrega un texto (opcional)…" : "Escribe un mensaje… (Enter envía)"}
+                className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
+                style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
+              />
+              {text.trim() || pending.length ? (
+                <button type="button" onClick={() => void send()} disabled={sending} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white transition disabled:opacity-40" style={{ background: "var(--t-accent)" }} aria-label="Enviar">
+                  {sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
+                </button>
+              ) : (
+                <button type="button" onClick={() => void startVoice()} disabled={sending} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white transition hover:scale-105 disabled:opacity-40" style={{ background: "var(--t-accent)" }} aria-label="Grabar audio">
+                  <Mic size={18} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <p className="flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
@@ -446,9 +640,17 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                     </p>
                   ) : null}
                 </div>
-                <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
-                  <X size={16} />
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {data && r && data.access.chat && isOpen(r.status) ? (
+                    <>
+                      <button type="button" onClick={() => startCall(r.id, false)} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "#16a34a" }} aria-label="Llamar" title="Llamar al otro punto"><Phone size={16} /></button>
+                      <button type="button" onClick={() => startCall(r.id, true)} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "var(--t-accent)" }} aria-label="Videollamada" title="Videollamada con el otro punto"><Video size={16} /></button>
+                    </>
+                  ) : null}
+                  <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
               {r && st ? (
                 st.step >= 0 ? (

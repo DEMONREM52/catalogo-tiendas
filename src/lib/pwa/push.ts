@@ -8,9 +8,18 @@ import { supabaseBrowser } from "@/lib/supabase/client";
  *   · iPhone / iPad: solo con RemHub instalada en la pantalla de inicio (iOS 16.4 o superior).
  */
 
-export type PushState = "unsupported" | "needs-install" | "denied" | "off" | "on";
+/** «server»: el navegador sí puede, pero el servidor aún no tiene las llaves (VAPID) para enviarlas. */
+export type PushState = "unsupported" | "needs-install" | "server" | "denied" | "off" | "on";
 
-const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+// La llave pública se pide al servidor al momento (si se agregó después de compilar, igual funciona).
+let keyPromise: Promise<string> | null = null;
+function publicKey() {
+  keyPromise ??= fetch("/api/push/key", { cache: "no-store" })
+    .then((r) => r.json() as Promise<{ key?: string | null }>)
+    .then((j) => j.key || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "")
+    .catch(() => process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "");
+  return keyPromise;
+}
 
 function b64ToBytes(b64: string) {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -28,7 +37,8 @@ function isStandalone() {
 export async function getPushState(): Promise<PushState> {
   if (typeof window === "undefined") return "unsupported";
   if (isIos() && !isStandalone()) return "needs-install";
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window) || !PUBLIC_KEY) return "unsupported";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  if (!(await publicKey())) return "server";
   if (Notification.permission === "denied") return "denied";
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
@@ -38,13 +48,13 @@ export async function getPushState(): Promise<PushState> {
 /** Pide permiso y suscribe este equipo para la tienda. Devuelve el estado final real. */
 export async function enablePush(storeId: string): Promise<{ state: PushState; error?: string }> {
   const state = await getPushState();
-  if (state === "unsupported" || state === "needs-install" || state === "denied") return { state };
+  if (state === "unsupported" || state === "needs-install" || state === "server" || state === "denied") return { state };
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return { state: permission === "denied" ? "denied" : "off" };
   const reg = (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register("/sw.js", { scope: "/" }));
   await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
-  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(PUBLIC_KEY) });
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(await publicKey()) });
   const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   const { data, error } = await supabaseBrowser().rpc("erp_push_subscribe", {
     p_store: storeId,

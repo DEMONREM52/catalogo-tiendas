@@ -116,8 +116,15 @@ self.addEventListener("push", (event) => {
     requireInteraction: Boolean(data.urgent),
     vibrate: data.urgent ? [120, 60, 120, 60, 220] : [90, 50, 90],
     timestamp: Date.now(),
-    data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/pedidos?tab=internos" },
+    data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/pedidos?tab=internos", call: data.call || null },
   };
+  // Llamada entrante: «Contestar» y «Rechazar», vibración de timbre y no se quita sola.
+  if (data.call && data.call.id) {
+    options.actions = [{ action: "answer", title: data.call.video ? "🎥 Contestar" : "📞 Contestar" }, { action: "decline", title: "Rechazar" }];
+    options.requireInteraction = true;
+    options.renotify = true;
+    options.vibrate = [500, 250, 500, 250, 500, 250, 500, 250, 500];
+  }
   event.waitUntil(
     (async () => {
       // Si la app está abierta y visible, ella misma suena con el tono elegido; se avisa igual por si acaso.
@@ -131,7 +138,15 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || "/dashboard/pedidos?tab=internos", self.location.origin).href;
+  const call = event.notification.data && event.notification.data.call;
+  // Rechazar una llamada: lo hace la app abierta (si la hay); si no, la llamada queda como perdida.
+  if (call && event.action === "decline") {
+    event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage({ type: "REMHUB_CALL_DECLINE", id: call.id }))));
+    return;
+  }
+  let url = (event.notification.data && event.notification.data.url) || "/dashboard/pedidos?tab=internos";
+  if (call) url += (url.includes("?") ? "&" : "?") + "contestar=1";
+  const target = new URL(url, self.location.origin).href;
   event.waitUntil(
     (async () => {
       const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

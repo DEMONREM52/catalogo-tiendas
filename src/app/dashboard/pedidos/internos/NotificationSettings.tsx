@@ -19,6 +19,7 @@ const PUSH_TEXT: Record<PushState, { title: string; text: string; color: string 
   off: { title: "Desactivadas en este equipo", text: "Actívalas para enterarte de pedidos y mensajes aunque no tengas RemHub abierta.", color: "#f59e0b" },
   denied: { title: "Bloqueadas por el navegador", text: "Ábrelas en la configuración del navegador (candado junto a la dirección → Notificaciones → Permitir) y vuelve aquí.", color: "#ef4444" },
   "needs-install": { title: "En iPhone, primero instala la app", text: "Apple solo permite notificaciones con RemHub en la pantalla de inicio (iOS 16.4 o superior). Instálala y actívalas desde la app.", color: "#0ea5e9" },
+  server: { title: "Falta activarlas en el servidor", text: "Este equipo sí puede recibirlas, pero RemHub aún no tiene configuradas las llaves de notificaciones (VAPID) en el servidor. Cuando el administrador las agregue, actívalas aquí. Mientras tanto suenan los avisos dentro de la app.", color: "#f59e0b" },
   unsupported: { title: "Este navegador no las permite", text: "Prueba con Chrome, Edge, Safari o Samsung Internet actualizados. Los sonidos dentro de la app sí funcionan.", color: "#94a3b8" },
 };
 

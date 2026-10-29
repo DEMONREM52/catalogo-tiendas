@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ProductName } from "@/components/ProductName";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, PackageSearch, Search, Sparkles, X, Zap } from "lucide-react";
@@ -246,7 +247,7 @@ export function NewStockRequest({
                         >
                           <Thumb src={thumbs[h.id]} size={38} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate font-semibold">{h.name}</span>
+                            <ProductName name={h.name} className="font-semibold" expandable={false} />
                             <span className="text-xs" style={{ color: "var(--t-muted)" }}>{h.sku ?? "Sin código"}</span>
                           </span>
                           <span className="text-right text-xs font-bold" style={{ color: h.wh_qty > 0 ? "#22c55e" : "#ef4444" }}>
@@ -272,7 +273,7 @@ export function NewStockRequest({
                       <motion.div key={l.product_id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="flex items-center gap-3 rounded-2xl border p-2.5 transition-colors duration-500" style={{ borderColor: flashId === l.product_id ? "#22c55e" : l.qty > l.there ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)", background: flashId === l.product_id ? "color-mix(in oklab, #22c55e 10%, transparent)" : undefined }}>
                         <Thumb src={thumbs[l.product_id]} size={42} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{l.name}</p>
+                          <ProductName name={l.name} className="text-sm font-semibold" />
                           <p className="text-xs" style={{ color: l.there > 0 ? "var(--t-muted)" : "#ef4444" }}>
                             {l.there > 0 ? `Allá hay ${l.there}` : "Allá está agotado"}{l.here !== null ? ` · Aquí ${l.here}` : ""}
                             {l.qty > l.there && l.there > 0 ? <span className="text-amber-500"> · pides más de lo que hay</span> : null}
