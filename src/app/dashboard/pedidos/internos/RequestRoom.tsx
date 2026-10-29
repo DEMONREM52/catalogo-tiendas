@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, Camera, Phone, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowRight, Ban, Bell, Camera, Phone, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
@@ -13,6 +13,8 @@ import { RequestSignatures } from "./RequestSignatures";
 import { ProductName } from "@/components/ProductName";
 import { startCall } from "./CallManager";
 import { CallPicker, type CallCandidate } from "./CallPicker";
+import { PeoplePicker, type Person } from "./PeoplePicker";
+import { useRouter } from "next/navigation";
 import { MAX_BYTES, MessageMedia, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
@@ -22,6 +24,9 @@ const QUICK = {
   attend: ["✅ Sí hay, lo preparo ya", "⚠️ Solo hay una parte", "⏳ Lo despacho en un rato", "📦 Ya salió"],
   request: ["🙏 ¡Gracias!", "¿Para cuándo llega?", "Me sirve lo que haya", "📥 Ya llegó, reviso"],
 };
+
+const pickSelected = (l: Person[]) => l.filter((p) => p.selected).map((p) => p.user_id);
+const pickInvolved = (l: Person[]) => l.filter((p) => p.involved).map((p) => p.user_id);
 
 /** Pedido interno abierto: estado, productos, acciones y chat en vivo. */
 export function RequestRoom({ requestId, onClose, onChanged }: { requestId: string | null; onClose: () => void; onChanged: () => void }) {
@@ -54,6 +59,15 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     const { data: c, error: e } = await supabaseBrowser().rpc("erp_call_candidates", { p_request: requestId });
     return e ? null : (c as CallCandidate[]);
   }, [requestId]);
+  // «🔔 Avisos»: a quién le llegan los mensajes de este pedido. «💬 Chat aparte»: chat o grupo con quien se escoja.
+  const [peoplePick, setPeoplePick] = useState<"notify" | "chat" | null>(null);
+  const router = useRouter();
+  const loadPeople = useCallback(async (): Promise<Person[] | null> => {
+    if (!requestId) return null;
+    const { data: p, error: e } = await supabaseBrowser().rpc("erp_sr_notify_get", { p_request: requestId });
+    return e ? null : ((p as { people: Person[] }).people ?? []);
+  }, [requestId]);
+  const loadOthers = useCallback(async () => (await loadPeople())?.filter((p) => !p.me) ?? null, [loadPeople]);
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
   // Precio por mayor (precio 2) de cada producto, para ver cuánto vale el pedido.
@@ -651,6 +665,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <div className="flex shrink-0 items-center gap-1.5">
                   {data && r && data.access.chat && isOpen(r.status) ? (
                     <>
+                      <button type="button" onClick={() => setPeoplePick("notify")} className="grid h-9 w-9 place-items-center rounded-full border transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} aria-label="Avisos" title="A quién le llegan los avisos de este chat"><Bell size={16} /></button>
+                      <button type="button" onClick={() => setPeoplePick("chat")} className="grid h-9 w-9 place-items-center rounded-full border transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} aria-label="Chat aparte" title="Abrir un chat o grupo aparte"><MessageCircle size={16} /></button>
                       <button type="button" onClick={() => setCallPick({ video: false })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "#16a34a" }} aria-label="Llamar" title="Llamar al otro punto"><Phone size={16} /></button>
                       <button type="button" onClick={() => setCallPick({ video: true })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "var(--t-accent)" }} aria-label="Videollamada" title="Videollamada con el otro punto"><Video size={16} /></button>
                     </>
@@ -712,6 +728,32 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             ) : null}
             <CallPicker open={Boolean(callPick)} video={Boolean(callPick?.video)} title={r ? `Pedido interno #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
               load={loadCandidates} onCall={(to) => { if (requestId && callPick) startCall(requestId, callPick.video, to); }} onClose={() => setCallPick(null)} />
+            <PeoplePicker open={peoplePick === "notify"} icon={<Bell size={17} />} color="#f59e0b" heading="Avisos de este chat" title={r ? `Pedido #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
+              note="Los mensajes solo suenan y llegan al celular de las personas marcadas. Sin marcar a nadie vuelve al automático: los involucrados."
+              load={loadPeople} initial={pickSelected} emptyLabel="Volver al automático (involucrados)"
+              confirmLabel={(p) => `Avisar solo a ${p.length === 1 ? p[0].name : `${p.length} personas`}`}
+              onConfirm={async (ids) => {
+                if (!requestId) return false;
+                const { error: e } = await supabaseBrowser().rpc("erp_sr_notify_set", { p_request: requestId, p_users: ids });
+                if (e) { void Swal.fire({ ...swal, icon: "error", title: "No se guardó", text: e.message }); return false; }
+                void Swal.fire({ ...swal, toast: true, position: "top-end", timer: 2500, showConfirmButton: false, icon: "success", title: ids.length ? "Listo, solo a los escogidos" : "Avisos automáticos" });
+                return true;
+              }} onClose={() => setPeoplePick(null)} />
+            <PeoplePicker open={peoplePick === "chat"} icon={<MessageCircle size={17} />} color="var(--t-accent)" heading="Chat aparte" title={r ? `Pedido #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
+              note="Una persona abre un chat directo; varias, un grupo. Queda en «Mensajes»."
+              load={loadOthers} initial={pickInvolved}
+              confirmLabel={(p) => (p.length === 1 ? `Chatear con ${p[0].name}` : `Crear grupo con ${p.length} personas`)}
+              onConfirm={async (ids) => {
+                if (!data) return false;
+                const store = data.request.store_id;
+                const res = ids.length === 1
+                  ? await supabaseBrowser().rpc("erp_dm_open", { p_store: store, p_user: ids[0] })
+                  : await supabaseBrowser().rpc("erp_dm_group_create", { p_store: store, p_title: `Pedido #${data.request.number} · ${r?.to_name ?? ""} ↔ ${r?.from_name ?? ""}`, p_users: ids });
+                if (res.error) { void Swal.fire({ ...swal, icon: "error", title: "No se abrió el chat", text: res.error.message }); return false; }
+                onClose();
+                router.push(`/dashboard/mensajes?chat=${(res.data as { id: string }).id}`);
+                return true;
+              }} onClose={() => setPeoplePick(null)} />
           </motion.aside>
         </motion.div>
       ) : null}

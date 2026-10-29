@@ -55,8 +55,10 @@ test("un punto puede apagar un evento sin afectar a los demás", () => {
 });
 
 test("configuración: tonos válidos, se ignoran valores raros", () => {
-  assert.equal(TONES.length, 50);
-  assert.equal(new Set(TONES.map((t) => t.id)).size, 50);
+  assert.equal(TONES.length, 70);
+  assert.equal(new Set(TONES.map((t) => t.id)).size, 70);
+  assert.equal(TONES.filter((t) => t.id.startsWith("llamada-")).length, 20);
+  assert.equal(normalizeConfig({}).events.video_call.tone, "llamada-marimba");
   const cfg = normalizeConfig({ volume: 7, events: { message: { tone: "no-existe", on: false } }, points: { x: { events: { message: { tone: "campanita" } } } } });
   assert.equal(cfg.volume, 1);
   assert.equal(cfg.events.message.on, false);

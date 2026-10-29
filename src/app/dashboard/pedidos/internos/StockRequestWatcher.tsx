@@ -63,11 +63,16 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
     const current = new Map(inbox.unread.map((u) => [u.id, u.count]));
     const openRoom = (window as Window & { __remhubOpenRequest?: string | null }).__remhubOpenRequest;
     if (msgBase.current) {
-      inbox.unread.forEach((u) => {
-        const before = msgBase.current?.get(u.id) ?? 0;
-        if (u.count > before && u.id !== openRoom) {
-          next.push({ key: `msg-${u.id}-${u.count}`, id: u.id, kind: "message", title: `💬 Pedido #${u.number}`, body: `${u.last_user ?? "Alguien"}: ${u.last ?? "Nuevo mensaje"}` });
-        }
+      const changed = inbox.unread.filter((u) => u.count > (msgBase.current?.get(u.id) ?? 0) && u.id !== openRoom);
+      // Solo suena y avisa en los pedidos donde me toca (involucrado o escogido con «🔔 Avisos», 20261272).
+      let mine: Set<string> | null = null;
+      if (changed.length) {
+        const { data: ok, error: e } = await supabaseBrowser().rpc("erp_sr_should_notify", { p_requests: changed.map((u) => u.id) });
+        mine = e || !Array.isArray(ok) ? null : new Set(ok as string[]);
+      }
+      changed.forEach((u) => {
+        if (mine && !mine.has(u.id)) return;
+        next.push({ key: `msg-${u.id}-${u.count}`, id: u.id, kind: "message", title: `💬 Pedido #${u.number}`, body: `${u.last_user ?? "Alguien"}: ${u.last ?? "Nuevo mensaje"}` });
       });
     }
     if (next.some((n) => n.kind === "message")) void soundFor(storeId, "message");

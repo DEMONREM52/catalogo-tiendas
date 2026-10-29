@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { pickRecipients, pushAdminClient, pushConfigured, sendToUsers, stockRequestAudience, type PushPayload } from "@/lib/push/server";
-import { statusEvent } from "@/lib/sounds/prefs";
+import { resolveEvent, statusEvent } from "@/lib/sounds/prefs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -81,11 +81,27 @@ export async function POST(request: Request) {
       url, tag, urgent, event, id: req!.id, point,
     }));
   } else if (type === "message") {
-    recipients = pickRecipients(aud, [req.from_point_id, req.to_point_id], "message", [msg!.user_id], (point) => ({
+    const build = (point: string | null): PushPayload => ({
       title: `💬 ${msg!.user_name ?? "Nuevo mensaje"}${msg!.point_name ? ` · ${msg!.point_name}` : ""}`,
       body: `Pedido #${req!.number}: ${msg!.body.slice(0, 160)}`,
       url, tag: `${tag}-chat`, event: "message", id: req!.id, point,
-    }));
+    });
+    // Solo a los involucrados del pedido o a los que se escogieron con «🔔 Avisos» (20261272).
+    const { data: who, error: whoErr } = await admin.rpc("erp_sr_notify_users", { p_request: req.id });
+    if (whoErr || !Array.isArray(who)) {
+      recipients = pickRecipients(aud, [req.from_point_id, req.to_point_id], "message", [msg!.user_id], build);
+    } else {
+      recipients = new Map();
+      if (aud.cfg.push) {
+        for (const userId of who as string[]) {
+          if (userId === msg!.user_id) continue;
+          const pts = aud.people.get(userId) ?? [];
+          const point = pts.find((p) => p === req!.from_point_id || p === req!.to_point_id) ?? null;
+          if (!resolveEvent(aud.cfg, "message", point).on) continue;
+          recipients.set(userId, build(point));
+        }
+      }
+    }
   } else {
     const event = statusEvent(req.status)!;
     // Avisa al otro lado: recibido/cancelado → quien atiende; lo demás → quien pidió.

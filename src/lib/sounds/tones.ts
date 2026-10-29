@@ -1,5 +1,5 @@
 /**
- * 50 tonos de notificación creados con el sintetizador del navegador (Web Audio).
+ * 50 tonos de notificación y 20 de llamada creados con el sintetizador del navegador (Web Audio).
  * No se descarga ningún archivo: pesan 0 KB, no tienen derechos de autor y suenan igual en todos los equipos.
  */
 
@@ -7,10 +7,11 @@ type Voice = "sine" | "triangle" | "square" | "sawtooth" | "bell" | "marimba" | 
 /** [nota o frecuencia, inicio (s), duración (s), voz, volumen 0-1, desliza hasta (nota/frecuencia)] */
 type Step = [string | number, number, number, Voice?, number?, (string | number)?];
 
-export type ToneCategory = "Campanas" | "Marimba" | "Cristal" | "Retro" | "Burbujas" | "Naturaleza" | "Tienda" | "Timbres" | "Divertidos";
+export type ToneCategory = "Llamadas" | "Campanas" | "Marimba" | "Cristal" | "Retro" | "Burbujas" | "Naturaleza" | "Tienda" | "Timbres" | "Divertidos";
 export type Tone = { id: string; name: string; emoji: string; cat: ToneCategory; steps: Step[] };
 
 export const TONE_CATEGORIES: Array<{ cat: ToneCategory; emoji: string }> = [
+  { cat: "Llamadas", emoji: "📞" },
   { cat: "Campanas", emoji: "🔔" },
   { cat: "Marimba", emoji: "🎵" },
   { cat: "Cristal", emoji: "💎" },
@@ -22,7 +23,38 @@ export const TONE_CATEGORIES: Array<{ cat: ToneCategory; emoji: string }> = [
   { cat: "Divertidos", emoji: "🎉" },
 ];
 
+/** Trino: alterna dos notas rápido (como el timbre de un teléfono). */
+function trill(a: string, b: string, start: number, count: number, gap: number, voice: Voice, vol = 0.5): Step[] {
+  return Array.from({ length: count }, (_, i): Step => [i % 2 ? b : a, start + i * gap, gap * 0.95, voice, vol]);
+}
+/** Melodía: notas seguidas con el mismo paso. */
+function melody(notes: string[], start: number, gap: number, voice: Voice, vol = 0.6, len = gap * 1.6): Step[] {
+  return notes.map((n, i): Step => [n, start + i * gap, len, voice, vol]);
+}
+
 export const TONES: Tone[] = [
+  // 📞 Llamadas (se repiten mientras timbra; duran unos 2 s)
+  { id: "llamada-clasica", name: "Teléfono clásico", emoji: "☎️", cat: "Llamadas", steps: [...trill("E6", "C6", 0, 16, 0.05, "sine", 0.4), ...trill("E6", "C6", 1.1, 16, 0.05, "sine", 0.4)] },
+  { id: "llamada-antigua", name: "Teléfono antiguo", emoji: "📞", cat: "Llamadas", steps: [...trill("G6", "F6", 0, 20, 0.04, "bell", 0.35), ...trill("G6", "F6", 1.2, 20, 0.04, "bell", 0.35)] },
+  { id: "llamada-marimba", name: "Marimba alegre", emoji: "🎶", cat: "Llamadas", steps: melody(["C5", "E5", "G5", "C6", "G5", "E5", "G5", "C6"], 0, 0.16, "marimba", 0.7) },
+  { id: "llamada-amanecer", name: "Amanecer", emoji: "🌅", cat: "Llamadas", steps: melody(["G4", "B4", "D5", "G5", "D5", "B4", "D5", "G5", "B5"], 0, 0.2, "marimba", 0.6) },
+  { id: "llamada-tropical", name: "Tropical", emoji: "🏝️", cat: "Llamadas", steps: [...melody(["E5", "G5", "A5"], 0, 0.14, "marimba", 0.7), ...melody(["A5", "G5", "E5", "D5"], 0.55, 0.14, "marimba", 0.7), ...melody(["E5", "A5"], 1.2, 0.2, "marimba", 0.7)] },
+  { id: "llamada-cristal", name: "Cristales", emoji: "💎", cat: "Llamadas", steps: melody(["C6", "E6", "G6", "B6", "C7", "G6", "E6"], 0, 0.15, "glass", 0.5, 0.6) },
+  { id: "llamada-campanas", name: "Campanario", emoji: "🔔", cat: "Llamadas", steps: melody(["E5", "C5", "D5", "G4", "G4", "D5", "E5", "C5"], 0, 0.25, "bell", 0.6, 0.9) },
+  { id: "llamada-arpa", name: "Arpa", emoji: "🪕", cat: "Llamadas", steps: [...melody(["C4", "E4", "G4", "C5", "E5", "G5", "C6"], 0, 0.08, "pluck", 0.55, 0.8), ...melody(["G5", "E5", "C5"], 1.0, 0.12, "pluck", 0.5, 0.8)] },
+  { id: "llamada-digital", name: "Digital", emoji: "📟", cat: "Llamadas", steps: [...trill("A5", "A5", 0, 4, 0.12, "square", 0.18), ...trill("C6", "C6", 0.7, 4, 0.12, "square", 0.18), ...trill("A5", "A5", 1.4, 4, 0.12, "square", 0.18)] },
+  { id: "llamada-8bit", name: "Videojuego", emoji: "👾", cat: "Llamadas", steps: melody(["C5", "G5", "E5", "C6", "B5", "G5", "A5", "C6"], 0, 0.13, "square", 0.2, 0.12) },
+  { id: "llamada-oficina", name: "Oficina", emoji: "🏢", cat: "Llamadas", steps: [["D5", 0, 0.35, "sine", 0.5], ["A4", 0.4, 0.5, "sine", 0.5], ["D5", 1.1, 0.35, "sine", 0.5], ["A4", 1.5, 0.5, "sine", 0.5]] },
+  { id: "llamada-suave", name: "Despertar suave", emoji: "🌙", cat: "Llamadas", steps: melody(["F4", "A4", "C5", "F5", "C5", "A4"], 0, 0.3, "triangle", 0.45, 0.6) },
+  { id: "llamada-urgente", name: "Urgente", emoji: "🚨", cat: "Llamadas", steps: [["A5", 0, 0.45, "sawtooth", 0.15, "E6"], ["E6", 0.5, 0.45, "sawtooth", 0.15, "A5"], ["A5", 1.0, 0.45, "sawtooth", 0.15, "E6"], ["E6", 1.5, 0.45, "sawtooth", 0.15, "A5"]] },
+  { id: "llamada-espacial", name: "Espacial", emoji: "🚀", cat: "Llamadas", steps: [["C5", 0, 0.6, "sine", 0.45, "C6"], ["G5", 0.65, 0.6, "sine", 0.45, "G6"], ["C6", 1.3, 0.8, "sine", 0.45, "C5"]] },
+  { id: "llamada-pajaritos", name: "Pajaritos", emoji: "🐦", cat: "Llamadas", steps: [["E7", 0, 0.08, "sine", 0.35, "B7"], ["E7", 0.12, 0.08, "sine", 0.35, "B7"], ["G7", 0.5, 0.1, "sine", 0.35, "C7"], ["E7", 0.9, 0.08, "sine", 0.35, "B7"], ["E7", 1.02, 0.08, "sine", 0.35, "B7"], ["G7", 1.4, 0.1, "sine", 0.35, "C7"]] },
+  { id: "llamada-cucu", name: "Cucú", emoji: "🕰️", cat: "Llamadas", steps: [["E5", 0, 0.3, "triangle", 0.55], ["C5", 0.32, 0.45, "triangle", 0.55], ["E5", 1.0, 0.3, "triangle", 0.55], ["C5", 1.32, 0.45, "triangle", 0.55]] },
+  { id: "llamada-xilofono", name: "Xilófono", emoji: "🎹", cat: "Llamadas", steps: melody(["C5", "D5", "E5", "F5", "G5", "A5", "B5", "C6", "G5", "C6"], 0, 0.11, "marimba", 0.65, 0.3) },
+  { id: "llamada-groove", name: "Groove", emoji: "🎸", cat: "Llamadas", steps: [["E3", 0, 0.18, "sawtooth", 0.18], ["E3", 0.25, 0.12, "sawtooth", 0.18], ["G3", 0.5, 0.18, "sawtooth", 0.18], ["A3", 0.75, 0.3, "sawtooth", 0.18], ["E5", 0.75, 0.3, "marimba", 0.5], ["E3", 1.25, 0.18, "sawtooth", 0.18], ["B3", 1.5, 0.4, "sawtooth", 0.18], ["B5", 1.5, 0.4, "marimba", 0.5]] },
+  { id: "llamada-eco", name: "Eco", emoji: "🌊", cat: "Llamadas", steps: [["A5", 0, 0.5, "bell", 0.7], ["A5", 0.35, 0.5, "bell", 0.45], ["A5", 0.7, 0.5, "bell", 0.25], ["E6", 1.1, 0.5, "bell", 0.7], ["E6", 1.45, 0.5, "bell", 0.45], ["E6", 1.8, 0.5, "bell", 0.25]] },
+  { id: "llamada-fiesta", name: "Fiesta", emoji: "🎉", cat: "Llamadas", steps: [...melody(["G5", "G5", "A5", "G5", "C6", "B5"], 0, 0.16, "marimba", 0.7, 0.25), ...melody(["G5", "G5", "A5", "G5", "D6", "C6"], 1.0, 0.16, "marimba", 0.7, 0.25)] },
+
   // 🔔 Campanas
   { id: "campana-dorada", name: "Campana dorada", emoji: "🔔", cat: "Campanas", steps: [["E6", 0, 1.2, "bell", 0.9], ["B6", 0.14, 1.1, "bell", 0.6]] },
   { id: "campanita", name: "Campanita", emoji: "🛎️", cat: "Campanas", steps: [["A6", 0, 0.9, "bell", 0.8]] },

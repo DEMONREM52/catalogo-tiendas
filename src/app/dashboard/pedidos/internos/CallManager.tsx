@@ -6,6 +6,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, RefreshCw, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { inOneTab } from "@/lib/sounds/one-tab";
+import { loadStoreSoundConfig } from "@/lib/sounds/notify";
+import { getDevicePrefs, getStoreConfigCache, resolveEvent } from "@/lib/sounds/prefs";
+import { SILENT, playTone } from "@/lib/sounds/tones";
 
 /**
  * Llamadas y videollamadas de los pedidos internos (20261268). La voz y el video van directo entre los equipos
@@ -50,6 +53,21 @@ function gathered(pc: RTCPeerConnection, ms = 2500) {
   });
 }
 
+/** Tono de llamada escogido para esta tienda y punto. null = timbre de siempre. */
+async function callTone(storeId: string, video: boolean): Promise<{ id: string; volume: number } | null> {
+  try {
+    await loadStoreSoundConfig(storeId);
+    const cached = getStoreConfigCache(storeId);
+    if (!cached) return null;
+    const device = getDevicePrefs(storeId);
+    const pref = resolveEvent(cached.cfg, video ? "video_call" : "call", cached.myPoint);
+    if (device.muted || !cached.cfg.enabled || !pref.on) return { id: SILENT, volume: 0 };
+    return { id: pref.tone, volume: device.volume ?? cached.cfg.volume };
+  } catch {
+    return null;
+  }
+}
+
 /** Timbre generado (no necesita archivos): «ring ring» para quien recibe y tono de espera para quien llama. */
 function useRingtone() {
   const ctx = useRef<AudioContext | null>(null);
@@ -61,7 +79,8 @@ function useRingtone() {
     ctx.current = null;
     navigator.vibrate?.(0);
   }, []);
-  const start = useCallback((kind: "incoming" | "outgoing") => {
+  /** tone: el tono escogido en «Tonos de la tienda» (null = timbre de siempre; "silencio" = solo vibra). */
+  const start = useCallback((kind: "incoming" | "outgoing", tone?: { id: string; volume: number } | null) => {
     stop();
     try {
       const ac = new AudioContext();
@@ -80,11 +99,12 @@ function useRingtone() {
         }
       };
       const ring = () => {
-        if (kind === "incoming") { beep(880, 988, 0.35, 0, 0.12); beep(880, 988, 0.35, 0.5, 0.12); navigator.vibrate?.([400, 200, 400]); }
+        if (kind === "incoming" && tone) { playTone(tone.id, tone.volume); navigator.vibrate?.([400, 200, 400]); }
+        else if (kind === "incoming") { beep(880, 988, 0.35, 0, 0.12); beep(880, 988, 0.35, 0.5, 0.12); navigator.vibrate?.([400, 200, 400]); }
         else beep(425, 440, 1.0, 0, 0.05);
       };
       ring();
-      timer.current = window.setInterval(ring, kind === "incoming" ? 2500 : 4000);
+      timer.current = window.setInterval(ring, kind === "incoming" ? (tone ? 3000 : 2500) : 4000);
     } catch { /* sin audio: queda la vibración y la pantalla */ }
   }, [stop]);
   useEffect(() => stop, [stop]);
@@ -323,7 +343,11 @@ export function CallManager({ storeId }: { storeId: string }) {
     watch(c.id);
     if (autoAnswer) void accept(c);
     // La pantalla de llamada sale en todas las pestañas, pero el timbre suena en una sola.
-    else void inOneTab(`ring:${c.id}`, () => { if (phaseRef.current === "incoming") ring.start("incoming"); }, 60_000);
+    else {
+      // Tono de llamada o videollamada de «Tonos de la tienda» (con el volumen y el silencio de este equipo).
+      const tone = await callTone(storeId, c.video);
+      void inOneTab(`ring:${c.id}`, () => { if (phaseRef.current === "incoming") ring.start("incoming", tone); }, 60_000);
+    }
     // Respaldo: si no llega el aviso en vivo de que la cancelaron, deja de timbrar sola.
     const mine = attempt.current;
     window.clearTimeout(ringTimeout.current);

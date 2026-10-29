@@ -1,7 +1,7 @@
 import { SILENT, TONE_BY_ID } from "./tones";
 
 /** Cada cosa que puede pasar en un pedido interno y que puede sonar. */
-export type NotifEvent = "new_request" | "urgent_request" | "message" | "preparing" | "dispatched" | "received" | "rejected" | "cancelled";
+export type NotifEvent = "new_request" | "urgent_request" | "message" | "preparing" | "dispatched" | "received" | "rejected" | "cancelled" | "call" | "video_call";
 
 export const NOTIF_EVENTS: Array<{ key: NotifEvent; label: string; hint: string; emoji: string; tone: string }> = [
   { key: "new_request", label: "Pedido nuevo", hint: "Otro punto les pide mercancía", emoji: "📦", tone: "campana-dorada" },
@@ -12,6 +12,9 @@ export const NOTIF_EVENTS: Array<{ key: NotifEvent; label: string; hint: string;
   { key: "received", label: "Recibido", hint: "Confirmaron que llegó", emoji: "✅", tone: "marimba-listo" },
   { key: "rejected", label: "Rechazado", hint: "El pedido no se pudo atender", emoji: "⛔", tone: "buho" },
   { key: "cancelled", label: "Cancelado", hint: "Quien pidió lo canceló", emoji: "🚫", tone: "gota" },
+  // Timbre de llamadas (se repite mientras timbra). Con RemHub cerrada suena el tono del celular.
+  { key: "call", label: "Llamada", hint: "Te llaman (pedido o chat)", emoji: "📞", tone: "llamada-clasica" },
+  { key: "video_call", label: "Videollamada", hint: "Te hacen una videollamada", emoji: "🎥", tone: "llamada-marimba" },
 ];
 
 export type EventPref = { on: boolean; tone: string };
