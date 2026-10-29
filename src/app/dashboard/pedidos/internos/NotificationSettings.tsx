@@ -8,6 +8,7 @@ import { BellRing, Check, ChevronDown, Dices, Play, RotateCcw, Smartphone, Store
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { disablePush, enablePush, getPushState, sendTestPush, type PushState } from "@/lib/pwa/push";
+import { PushDiagnostics } from "./PushDiagnostics";
 import { NOTIF_EVENTS, defaultConfig, getDevicePrefs, normalizeConfig, resolveEvent, setDevicePrefs, setStoreConfigCache, subscribeDevicePrefs, type EventPref, type NotifEvent, type StoreNotifConfig } from "@/lib/sounds/prefs";
 import { SILENT, TONES, TONE_BY_ID, TONE_CATEGORIES, playTone, type ToneCategory } from "@/lib/sounds/tones";
 
@@ -232,6 +233,7 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                         <Link href="/instalar" className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: "#0ea5e9" }}>Cómo instalar RemHub</Link>
                       ) : null}
                     </div>
+                    <PushDiagnostics storeId={storeId} onChanged={() => void getPushState().then(setPush)} />
                   </section>
 
                   <section className="space-y-4 rounded-2xl border p-4" style={card}>
