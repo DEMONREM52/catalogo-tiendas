@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, BellRing, Inbox, MessageCircle, Plus, RefreshCw, Search, Send, Truck } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BellRing, Inbox, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Send, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { useRunOnChange } from "../../inventario/shared";
@@ -122,6 +123,9 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         <button type="button" onClick={() => setSounds(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Sonidos y avisos">
           <BellRing size={15} /> <span className="hidden sm:inline">Sonidos</span>
         </button>
+        <Link href="/dashboard/mensajes?nuevo=1" className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Abrir un chat o un grupo con quien quieras, sin hacer un pedido">
+          <MessageCirclePlus size={15} /> <span className="hidden sm:inline">Nuevo chat</span>
+        </Link>
         {canRequest ? (
           <button type="button" onClick={() => setCreating(Date.now())} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
             <Plus size={16} /> Pedir mercancía

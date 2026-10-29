@@ -43,8 +43,11 @@ export default function MessagesPage() {
       if (!access?.store) return;
       setStoreId(access.store.id);
       await loadList(access.store.id);
-      const chat = new URLSearchParams(window.location.search).get("chat");
+      const params = new URLSearchParams(window.location.search);
+      const chat = params.get("chat");
       if (chat) setActive(chat);
+      // Desde pedidos internos («Nuevo chat»): abre de una vez el escoger con quién.
+      else if (params.has("nuevo")) setNewOpen(true);
     })();
   }, [loadList]);
 
