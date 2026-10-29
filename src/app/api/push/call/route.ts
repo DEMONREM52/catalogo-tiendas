@@ -20,17 +20,18 @@ export async function POST(request: Request) {
   const userId = auth.user?.id;
   if (!userId) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const { data: c } = await admin.from("erp_calls").select("id,store_id,request_id,caller_id,caller_name,video,status").eq("id", body.call_id).maybeSingle();
-  const call = c as { id: string; store_id: string; request_id: string | null; caller_id: string; caller_name: string | null; video: boolean; status: string } | null;
+  const { data: c } = await admin.from("erp_calls").select("id,store_id,request_id,thread_id,caller_id,caller_name,video,status").eq("id", body.call_id).maybeSingle();
+  const call = c as { id: string; store_id: string; request_id: string | null; thread_id: string | null; caller_id: string; caller_name: string | null; video: boolean; status: string } | null;
   if (!call || call.caller_id !== userId) return NextResponse.json({ ok: false }, { status: 403 });
   // ended: la llamada ya se canceló o nadie contestó → se cambia la notificación por «Llamada perdida» (sin «Contestar»).
   const ended = body.ended === true;
   if (ended ? call.status === "ringing" || call.status === "active" : call.status !== "ringing") return NextResponse.json({ ok: false }, { status: 409 });
 
-  const [{ data: inv }, { data: r }] = await Promise.all([
+  const [{ data: inv }, { data: th }, { data: r }] = await Promise.all([
     ended
       ? admin.from("erp_call_invites").select("user_id").eq("call_id", call.id).in("status", ["missed", "ringing"])
       : admin.from("erp_call_invites").select("user_id").eq("call_id", call.id).eq("status", "ringing"),
+    call.thread_id ? admin.from("erp_dm_threads").select("kind,title").eq("id", call.thread_id).maybeSingle() : Promise.resolve({ data: null }),
     call.request_id ? admin.from("erp_stock_requests").select("number,from_point_id").eq("id", call.request_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const req = r as { number?: number; from_point_id?: string } | null;
@@ -39,17 +40,21 @@ export async function POST(request: Request) {
     const { data: w } = await admin.from("erp_warehouses").select("name").eq("id", req.from_point_id).maybeSingle();
     where = (w as { name?: string } | null)?.name ?? "";
   }
+  // De dónde viene: un pedido interno o un chat (directo o grupo).
+  const thread = th as { kind?: string; title?: string | null } | null;
+  const context = call.thread_id ? (thread?.kind === "group" && thread.title ? `Grupo «${thread.title}»` : "Chat del equipo") : `${req?.number ? `Pedido interno #${req.number}` : "Pedido interno"}${where ? ` · ${where}` : ""}`;
+  const home = call.thread_id ? `/dashboard/mensajes?chat=${call.thread_id}` : "/dashboard/pedidos?tab=internos";
   const payload: PushPayload = ended ? {
     title: `${call.video ? "🎥 Videollamada" : "📞 Llamada"} perdida de ${call.caller_name ?? "tu equipo"}`,
-    body: `${req?.number ? `Pedido interno #${req.number}` : "Pedido interno"}${where ? ` · ${where}` : ""}. Toca para abrir el pedido.`,
-    url: "/dashboard/pedidos?tab=internos",
+    body: `${context}. Toca para abrirlo.`,
+    url: home,
     tag: `call-${call.id}`,
     quiet: true,
     ttl: 300,
   } : {
     title: `${call.video ? "🎥 Videollamada" : "📞 Llamada"} de ${call.caller_name ?? "tu equipo"}`,
-    body: `${req?.number ? `Pedido interno #${req.number}` : "Pedido interno"}${where ? ` · ${where}` : ""}. Toca para contestar.`,
-    url: `/dashboard/pedidos?tab=internos&llamada=${call.id}`,
+    body: `${context}. Toca para contestar.`,
+    url: `${home}${home.includes("?") ? "&" : "?"}llamada=${call.id}`,
     tag: `call-${call.id}`,
     urgent: true,
     call: { id: call.id, video: call.video },

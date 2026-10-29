@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, RefreshCw, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { inOneTab } from "@/lib/sounds/one-tab";
 
 /**
  * Llamadas y videollamadas de los pedidos internos (20261268). La voz y el video van directo entre los equipos
@@ -14,8 +15,13 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 export const START_CALL_EVENT = "remhub:start-call";
 /** Llamar al otro punto de un pedido interno (lo usa el botón 📞 / 🎥 del pedido). */
-export function startCall(requestId: string, video: boolean) {
-  window.dispatchEvent(new CustomEvent(START_CALL_EVENT, { detail: { requestId, video } }));
+type CallTarget = { requestId?: string; threadId?: string; video: boolean; to?: string[] };
+export function startCall(requestId: string, video: boolean, to?: string[]) {
+  window.dispatchEvent(new CustomEvent<CallTarget>(START_CALL_EVENT, { detail: { requestId, video, to } }));
+}
+/** Llamar desde un chat del equipo (20261271): a los demás del chat o a los escogidos. */
+export function startChatCall(threadId: string, video: boolean, to?: string[]) {
+  window.dispatchEvent(new CustomEvent<CallTarget>(START_CALL_EVENT, { detail: { threadId, video, to } }));
 }
 
 type CallRow = { id: string; store_id: string; request_id: string | null; caller_id: string; caller_name: string | null; video: boolean; status: string; offer: RTCSessionDescriptionInit | null; answer: RTCSessionDescriptionInit | null; answered_name: string | null };
@@ -263,7 +269,7 @@ export function CallManager({ storeId }: { storeId: string }) {
   }, [liveId, inCall, onRow]);
 
   /** Llamar. */
-  const outgoing = useCallback(async (requestId: string, video: boolean) => {
+  const outgoing = useCallback(async ({ requestId, threadId, video, to }: CallTarget) => {
     if (phaseRef.current !== "idle") return;
     const mine = ++attempt.current;
     go("outgoing");
@@ -283,12 +289,16 @@ export function CallManager({ storeId }: { storeId: string }) {
       await gathered(conn);
       if (cancelled(conn)) return;
       const sdp = conn.localDescription!;
-      const { data, error } = await supabaseBrowser().rpc("erp_call_start", { p_request: requestId, p_video: video, p_offer: { type: sdp.type, sdp: sdp.sdp } });
-      if (error) throw new Error(/Could not find the function|schema cache/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261268_llamadas.sql." : error.message);
+      const p_offer = { type: sdp.type, sdp: sdp.sdp };
+      const pick = to?.length ? { p_to: to } : {};
+      const { data, error } = threadId
+        ? await supabaseBrowser().rpc("erp_call_start_dm", { p_thread: threadId, p_video: video, p_offer, ...pick })
+        : await supabaseBrowser().rpc("erp_call_start", { p_request: requestId, p_video: video, p_offer, ...pick });
+      if (error) throw new Error(/Could not find the function|schema cache/i.test(error.message) ? `Falta ejecutar en Supabase la migración ${threadId || to?.length ? "20261271_mensajes_directos.sql" : "20261268_llamadas.sql"}.` : error.message);
       const res = data as { id: string };
       // Colgó justo mientras se creaba: se cierra sin timbrar a nadie.
       if (cancelled(conn)) { void supabaseBrowser().rpc("erp_call_end", { p_call: res.id, p_reason: "canceló" }); return; }
-      setCallBoth({ id: res.id, store_id: storeId, request_id: requestId, caller_id: me ?? "", caller_name: null, video, status: "ringing", offer: null, answer: null, answered_name: null });
+      setCallBoth({ id: res.id, store_id: storeId, request_id: requestId ?? null, caller_id: me ?? "", caller_name: null, video, status: "ringing", offer: null, answer: null, answered_name: null });
       watch(res.id);
       ring.start("outgoing");
       // Timbre en los celulares de quienes reciben, aunque tengan RemHub cerrada.
@@ -312,7 +322,8 @@ export function CallManager({ storeId }: { storeId: string }) {
     go("incoming");
     watch(c.id);
     if (autoAnswer) void accept(c);
-    else ring.start("incoming");
+    // La pantalla de llamada sale en todas las pestañas, pero el timbre suena en una sola.
+    else void inOneTab(`ring:${c.id}`, () => { if (phaseRef.current === "incoming") ring.start("incoming"); }, 60_000);
     // Respaldo: si no llega el aviso en vivo de que la cancelaron, deja de timbrar sola.
     const mine = attempt.current;
     window.clearTimeout(ringTimeout.current);
@@ -369,7 +380,7 @@ export function CallManager({ storeId }: { storeId: string }) {
       q.delete("contestar");
       window.history.replaceState(null, "", `${window.location.pathname}${q.toString() ? `?${q}` : ""}`);
     }
-    const onStart = (e: Event) => { const d = (e as CustomEvent<{ requestId: string; video: boolean }>).detail; void outgoing(d.requestId, d.video); };
+    const onStart = (e: Event) => { void outgoing((e as CustomEvent<CallTarget>).detail); };
     const onSw = (e: MessageEvent) => {
       const m = e.data as { type?: string; id?: string; payload?: { call?: { id: string } } };
       if (m?.type === "REMHUB_CALL_DECLINE" && m.id && callRef.current?.id === m.id && phaseRef.current === "incoming") void decline();

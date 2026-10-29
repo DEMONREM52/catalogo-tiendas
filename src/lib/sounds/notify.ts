@@ -1,6 +1,7 @@
 "use client";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { inOneTab } from "./one-tab";
 import { playTone } from "./tones";
 import { getDevicePrefs, getStoreConfigCache, normalizeConfig, resolveEvent, setStoreConfigCache, type NotifEvent, type StoreNotifConfig } from "./prefs";
 
@@ -36,15 +37,18 @@ export async function soundFor(storeId: string, event: NotifEvent, pointId?: str
   if (!pointId && !cached.myPoint && !cached.cfg.admins_all) return null;
   const pref = resolveEvent(cached.cfg, event, pointId ?? cached.myPoint);
   if (!pref.on) return null;
-  playTone(pref.tone, device.volume ?? cached.cfg.volume);
-  if (device.vibrate) {
-    try {
-      navigator.vibrate?.(event === "urgent_request" ? [120, 60, 120, 60, 220] : [90, 50, 90]);
-    } catch {
-      /* sin vibración */
+  // Con varias pestañas abiertas suena una sola (la que estás mirando).
+  const played = await inOneTab(`${storeId}:${event}`, () => {
+    playTone(pref.tone, device.volume ?? cached.cfg.volume);
+    if (device.vibrate) {
+      try {
+        navigator.vibrate?.(event === "urgent_request" ? [120, 60, 120, 60, 220] : [90, 50, 90]);
+      } catch {
+        /* sin vibración */
+      }
     }
-  }
-  return pref.tone;
+  });
+  return played ? pref.tone : null;
 }
 
 // Lo que hago yo no me suena a mí (ej.: yo despacho → el sonido es para el otro punto).

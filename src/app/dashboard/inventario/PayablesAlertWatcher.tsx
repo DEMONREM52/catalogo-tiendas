@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { inOneTab } from "@/lib/sounds/one-tab";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { BellRing, ChevronDown, ChevronUp, Wallet, X } from "lucide-react";
@@ -36,7 +37,7 @@ export function PayablesAlertWatcher({ storeId }: { storeId: string }) {
     const now = Date.now();
     if (res.rows.length && res.settings.sound && now - read(ringKey) >= RING_MS) {
       write(ringKey, now);
-      playTone(res.rows.some((r) => (r.days_left ?? 1) < 0) ? "intercomunicador" : "campana-dorada", 0.8);
+      void inOneTab("payables", () => playTone(res.rows.some((r) => (r.days_left ?? 1) < 0) ? "intercomunicador" : "campana-dorada", 0.8), 10000);
     }
   }, [storeId, ringKey]);
 

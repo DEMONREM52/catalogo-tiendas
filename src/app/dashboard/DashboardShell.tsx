@@ -25,6 +25,7 @@ import {
 import { useNicknameUpdates } from "./Nickname";
 import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
 import { CallManager } from "./pedidos/internos/CallManager";
+import { DmWatcher } from "./mensajes/DmWatcher";
 import { ImageIndexer } from "./ImageIndexer";
 import { InventoryAlertWatcher } from "./inventario/InventoryAlertWatcher";
 import { PayablesAlertWatcher } from "./inventario/PayablesAlertWatcher";
@@ -779,6 +780,8 @@ export default function DashboardShell({
   }
 
   const canAccessStorePages = Boolean(store) && role === "store";
+  // Mensajes del equipo sin leer (para el menú).
+  const [dmUnread, setDmUnread] = useState(0);
 
   const menu = useMemo(() => {
     const store = canAccessStorePages;
@@ -794,6 +797,7 @@ export default function DashboardShell({
           { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true },
           { href: firstOf("billing"), emoji: "💳", label: "Facturación", hint: hintOf("billing"), show: store && anyOf("billing"), module: "billing" },
           { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", hint: "Catálogos e internos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) },
+          { href: "/dashboard/mensajes", emoji: "💬", label: dmUnread ? `Mensajes (${dmUnread > 99 ? "99+" : dmUnread})` : "Mensajes", hint: dmUnread ? `${dmUnread} sin leer · chat y llamadas con el equipo` : "Chat y llamadas con el equipo", show: store },
           { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", hint: "Documentos y movimientos", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)) },
         ],
       },
@@ -817,7 +821,7 @@ export default function DashboardShell({
       },
     ];
     return groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length);
-  }, [canAccessStorePages, role, canOpen]);
+  }, [canAccessStorePages, role, canOpen, dmUnread]);
 
   // Buscador Ctrl+K: páginas, secciones y acciones que este usuario puede abrir.
   const paletteLinks = useMemo<PaletteLink[]>(() => {
@@ -1066,7 +1070,9 @@ export default function DashboardShell({
             {role === "store" ? <NotificationBell storeId={store?.id} /> : null}
             {/* Si un administrador cambia sus permisos, el usuario lo ve al instante y actualiza la página. */}
             {role === "store" && store?.id && !storeIsOwner && myUserId ? <PermissionChangeWatcher storeId={store.id} userId={myUserId} /> : null}
-            {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <><StockRequestWatcher storeId={store.id} /><CallManager storeId={store.id} /></> : null}
+            {role === "store" && store?.id && ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) ? <StockRequestWatcher storeId={store.id} /> : null}
+            {/* Llamadas y mensajes del equipo: para todos los de la tienda (no solo pedidos internos). */}
+            {role === "store" && store?.id ? <><CallManager storeId={store.id} /><DmWatcher storeId={store.id} onUnread={setDmUnread} /></> : null}
             {role === "store" && store?.id && ["products", "inventory", "purchases"].some((p) => canOpen(p)) ? <ImageIndexer storeId={store.id} /> : null}
             {/* Avisos flotantes abajo a la izquierda, apilados para que no se tapen. */}
             {role === "store" && store?.id && (canOpen("inventory_alerts") || canOpen("payables") || canOpen("internal_credit") || canOpen("internal_credit_manage")) ? (

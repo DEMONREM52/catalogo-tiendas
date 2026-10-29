@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { inOneTab } from "@/lib/sounds/one-tab";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { BellRing, ChevronDown, ChevronUp, Receipt, X } from "lucide-react";
@@ -45,9 +46,11 @@ export function InventoryAlertWatcher({ storeId }: { storeId: string }) {
     const isCritical = list.some((r) => r.hours >= CRITICAL_HOURS);
     if (now - read(ringKey) >= (isCritical ? RING_CRITICAL_MS : RING_MS)) {
       write(ringKey, now);
-      playTone("intercomunicador", isCritical ? 1 : 0.8);
-      // Crítico: suena dos veces seguidas.
-      if (isCritical) window.setTimeout(() => playTone("intercomunicador", 1), 1200);
+      // Una sola pestaña suena. Crítico: dos veces seguidas.
+      void inOneTab("inv-alert", () => {
+        playTone("intercomunicador", isCritical ? 1 : 0.8);
+        if (isCritical) window.setTimeout(() => playTone("intercomunicador", 1), 1200);
+      }, 10000);
     }
   }, [storeId, snoozeKey, ringKey]);
 

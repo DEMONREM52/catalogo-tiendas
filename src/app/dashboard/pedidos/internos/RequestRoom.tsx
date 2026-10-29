@@ -12,6 +12,7 @@ import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
 import { ProductName } from "@/components/ProductName";
 import { startCall } from "./CallManager";
+import { CallPicker, type CallCandidate } from "./CallPicker";
 import { MAX_BYTES, MessageMedia, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
@@ -46,6 +47,13 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const cameraInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
   const recorder = useRecorder();
+  // Llamar: primero se escoge a quién (solo los del pedido), nunca a todo el mundo.
+  const [callPick, setCallPick] = useState<{ video: boolean } | null>(null);
+  const loadCandidates = useCallback(async (): Promise<CallCandidate[] | null> => {
+    if (!requestId) return null;
+    const { data: c, error: e } = await supabaseBrowser().rpc("erp_call_candidates", { p_request: requestId });
+    return e ? null : (c as CallCandidate[]);
+  }, [requestId]);
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
   // Precio por mayor (precio 2) de cada producto, para ver cuánto vale el pedido.
@@ -643,8 +651,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <div className="flex shrink-0 items-center gap-1.5">
                   {data && r && data.access.chat && isOpen(r.status) ? (
                     <>
-                      <button type="button" onClick={() => startCall(r.id, false)} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "#16a34a" }} aria-label="Llamar" title="Llamar al otro punto"><Phone size={16} /></button>
-                      <button type="button" onClick={() => startCall(r.id, true)} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "var(--t-accent)" }} aria-label="Videollamada" title="Videollamada con el otro punto"><Video size={16} /></button>
+                      <button type="button" onClick={() => setCallPick({ video: false })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "#16a34a" }} aria-label="Llamar" title="Llamar al otro punto"><Phone size={16} /></button>
+                      <button type="button" onClick={() => setCallPick({ video: true })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "var(--t-accent)" }} aria-label="Videollamada" title="Videollamada con el otro punto"><Video size={16} /></button>
                     </>
                   ) : null}
                   <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
@@ -702,6 +710,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             ) : !error ? (
               <div className="m-5 h-64 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />
             ) : null}
+            <CallPicker open={Boolean(callPick)} video={Boolean(callPick?.video)} title={r ? `Pedido interno #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
+              load={loadCandidates} onCall={(to) => { if (requestId && callPick) startCall(requestId, callPick.video, to); }} onClose={() => setCallPick(null)} />
           </motion.aside>
         </motion.div>
       ) : null}
