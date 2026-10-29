@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { GalleryEditor } from "./GalleryEditor";
+import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { getYoutubeThumbnailUrl, isSafeHttpUrl, type ProductDetails } from "@/lib/product-details";
 
 type Props = {
@@ -154,7 +155,7 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
             <button key={s} type="button" onClick={() => update("long_description", `${desc}${desc && !desc.endsWith("\n") ? "\n" : ""}${s}`)} className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:-translate-y-0.5" style={textStyle}>+ {s.trim()}</button>
           ))}
         </div>
-        <textarea className="min-h-32 w-full rounded-2xl border p-3 outline-none" style={textStyle} value={desc} onChange={(e) => update("long_description", e.target.value)} placeholder="Detalles, usos y contexto que conozcas del producto…" maxLength={10000} />
+        <RichTextEditor value={desc} onChange={(v) => update("long_description", v)} placeholder="Detalles, usos y contexto que conozcas del producto…" maxLength={10000} />
       </Box>
 
       <Box icon="⭐" title="Características" hint="Toca las sugerencias para agregarlas o quitarlas (puedes elegir varias). Cada una lleva su ícono." right={highlights.length ? <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)" }}>{highlights.length} elegidas</span> : null}>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
+import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -495,12 +496,7 @@ export default function EditProductPage() {
               <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                 Descripción
               </label>
-              <textarea
-                className={`mt-1 ${inputSoftProps("min-h-[120px]").className}`}
-                style={inputSoftProps().style}
-                value={draft.description ?? ""}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              />
+              <RichTextEditor value={draft.description ?? ""} onChange={(v) => setDraft({ ...draft, description: v })} placeholder="Descripción para vender mejor…" minHeight={120} />
             </div>
 
             {pricesEditable ? (

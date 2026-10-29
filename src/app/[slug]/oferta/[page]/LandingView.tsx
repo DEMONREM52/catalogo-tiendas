@@ -9,6 +9,7 @@ import { CO_DEPARTMENTS, SOLD_WINDOWS, VIEWERS_WINDOWS, deliveryWindow, discount
 import { BOLD_LABEL, boldReturn, openBold, waitBold, type BoldCheckoutClient, type BoldStatus } from "@/lib/payments/bold-client";
 import { fillText } from "@/lib/landing/templates";
 import { getYoutubeEmbedUrl } from "@/lib/product-details";
+import { RichText } from "@/components/RichText";
 import { landingPixelEvent, landingRef, landingSession, loadLandingPixels, metaCookies, type LandingRef } from "@/lib/landing/client-tracking";
 
 export type LandingItem = {
@@ -401,7 +402,7 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
       {item.highlights?.length || item.description ? (
         <section className="mx-auto max-w-3xl px-4 py-10">
           <h2 className="text-center text-2xl font-black sm:text-3xl">¿Por qué te va a encantar?</h2>
-          {item.description ? <p className="mx-auto mt-3 max-w-2xl whitespace-pre-line text-center leading-7 text-slate-600">{item.description}</p> : null}
+          {item.description ? <RichText text={item.description} className="mx-auto mt-3 max-w-2xl space-y-1 break-words text-center leading-7 text-slate-600" /> : null}
           {item.highlights?.length ? (
             <ul className="mt-6 grid gap-2 sm:grid-cols-2">
               {item.highlights.map((h, i) => <li key={i} className="flex gap-3 rounded-2xl bg-slate-50 p-4 text-[15px]"><span className="lp-check grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-black text-white">✓</span>{h}</li>)}

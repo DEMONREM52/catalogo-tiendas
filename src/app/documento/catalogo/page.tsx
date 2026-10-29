@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { RichText } from "@/components/RichText";
 import type { CatalogPayload, CategoryRow, ProductRow } from "@/app/[slug]/[mode]/catalog-data";
 
 /**
@@ -136,7 +137,7 @@ function CatalogPdf() {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {p.image_url ? <img className="photo" src={p.image_url} alt="" loading="eager" /> : <div className="photo" style={{ aspectRatio: 1, background: "#f3f4f6", borderRadius: "2mm" }} />}
                       <div className="nm">{p.name}</div>
-                      {desc && p.description ? <div className="ds">{p.description}</div> : null}
+                      {desc && p.description ? <RichText compact text={p.description} className="ds" /> : null}
                       <div className="row">
                         <div>
                           <div className="pr">{money(price)}</div>

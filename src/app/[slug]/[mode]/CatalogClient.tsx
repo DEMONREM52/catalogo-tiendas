@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { RichText } from "@/components/RichText";
 import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
 import { InstallButton } from "@/components/pwa/InstallButton";
@@ -1928,9 +1929,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                     </div>
 
                     {p.description ? (
-                      <p className="mt-2 line-clamp-3 text-sm" style={{ color: "var(--t-muted)" }}>
-                        {p.description}
-                      </p>
+                      <RichText compact text={p.description} className="mt-2 line-clamp-3 text-sm" style={{ color: "var(--t-muted)" }} />
                     ) : null}
 
                     <div className="mt-3 flex flex-wrap gap-2">

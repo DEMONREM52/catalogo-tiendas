@@ -15,6 +15,7 @@ import { CTA_BACKGROUNDS, CTA_STYLES, SECTION_KEYS, SOLD_WINDOWS, VIEWERS_WINDOW
 import { LANDING_TEMPLATES, applyTemplate } from "@/lib/landing/templates";
 import type { LandingData, LandingItem } from "@/app/[slug]/oferta/[page]/LandingView";
 import { Field, Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "../catalogs/ui";
+import { richToPlain } from "@/lib/rich-text";
 
 export type CatalogOption = { id: string; slug: string; name: string; access_key: string | null; active: boolean; point_id: string | null; point_name?: string | null };
 export type StoreInfo = { id: string; slug: string; name: string; logo_url: string | null; whatsapp: string | null };
@@ -475,9 +476,9 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
         ...r.config,
         images: [...new Set(gallery)].slice(0, 20),
         video_url: typeof d.video_url === "string" && /^https:\/\//.test(d.video_url) ? d.video_url : r.config.video_url,
-        subheadline: r.config.subheadline || (p.description ?? "").slice(0, 300),
+        subheadline: r.config.subheadline || richToPlain(p.description).slice(0, 300),
         benefits: highlights.length ? highlights.slice(0, 8).map((h) => ({ icon: "✨", title: h.slice(0, 60), text: "" })) : r.config.benefits,
-        stories: long ? [{ title: "¿Por qué te va a encantar?", text: long.slice(0, 1500), image: gallery[1] ?? "" }] : r.config.stories,
+        stories: long ? [{ title: "¿Por qué te va a encantar?", text: richToPlain(long).slice(0, 1500), image: gallery[1] ?? "" }] : r.config.stories,
         compare_rows: r.config.compare_rows.length ? r.config.compare_rows : [],
         faqs: specs.length ? [{ q: "¿Qué características tiene?", a: specs.map((x) => `• ${x.name}: ${x.value}`).join("\n") }, ...r.config.faqs] : r.config.faqs,
         // Lo traído ya va en fotos, beneficios e historia: se oculta el bloque de detalles para no repetir.

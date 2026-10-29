@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ImageUpload } from "../../store/ImageUpload";
 import ProductDetailsFields from "../ProductDetailsFields";
+import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import {
   EMPTY_PRODUCT_DETAILS,
   type ProductDetails,
@@ -303,15 +304,7 @@ export default function CreateProductPage() {
               <label className="text-xs" style={{ color: "var(--t-muted)" }}>
                 Descripción
               </label>
-              <textarea
-                {...inputProps("min-h-[110px]")}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Descripción corta para vender mejor..."
-                style={{
-                  ...inputProps().style,
-                }}
-              />
+              <RichTextEditor value={description} onChange={setDescription} placeholder="Descripción corta para vender mejor..." minHeight={110} />
             </div>
 
             {storeId && canPrices ? <PricingPanel isNew storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}

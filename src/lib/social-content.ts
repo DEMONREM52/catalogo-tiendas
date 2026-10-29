@@ -1,3 +1,4 @@
+import { richToPlain } from "@/lib/rich-text";
 import {
   formatProductPhotoLinks,
   hasProductLanding,
@@ -50,7 +51,7 @@ export function createSocialCaption(
   options: { style?: string; objective?: string } = {},
 ) {
   const descriptions = [...new Set(
-    [product.description?.trim(), product.details.long_description.trim()].filter(
+    [richToPlain(product.description).trim(), richToPlain(product.details.long_description).trim()].filter(
       (value): value is string => typeof value === "string" && Boolean(value),
     ),
   )];

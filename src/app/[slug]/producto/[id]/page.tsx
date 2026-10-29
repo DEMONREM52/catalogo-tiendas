@@ -14,6 +14,8 @@ import {
 import { ArrowLeft, Camera, Check, PackageCheck, PackageX, ScanSearch, Sparkles } from "lucide-react";
 import { CatalogFinderButton } from "@/components/product-finder/CatalogFinder";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
+import { RichText } from "@/components/RichText";
+import { richToPlain } from "@/lib/rich-text";
 import { TrackProductView } from "@/components/StorePixel";
 import { storeBase, storeUrl } from "@/lib/seo/store-public";
 
@@ -86,7 +88,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   }
 
   const details = normalizeProductDetails(product.product_details);
-  const description = (details.long_description || product.description || `Conoce todos los detalles de ${product.name}.`)
+  const description = richToPlain(details.long_description || product.description || `Conoce todos los detalles de ${product.name}.`)
     .replace(/\s+/g, " ")
     .slice(0, 300);
   const photos = [product.image_url, ...details.gallery_urls].filter(
@@ -208,7 +210,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
-    description: description.replace(/\s+/g, " ").slice(0, 500) || undefined,
+    description: richToPlain(description).replace(/\s+/g, " ").slice(0, 500) || undefined,
     image: gallery.length ? gallery : undefined,
     sku: code ?? undefined,
     brand: { "@type": "Brand", name: (store as { name?: string }).name ?? store.slug },
@@ -283,7 +285,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
                 <span className="product-landing-stock-dot h-2 w-2 rounded-full" />
                 {stock === null ? "Listo para ti" : `${stock} unidades disponibles`}
               </div>
-              {description ? <p className="mt-7 whitespace-pre-line text-base leading-7 opacity-80">{description}</p> : null}
+              {description ? <RichText text={description} className="mt-7 space-y-1 break-words text-base leading-7 opacity-80" /> : null}
 
               <div className="mt-auto pt-8">
                 <div className="flex flex-col gap-3 sm:flex-row">
