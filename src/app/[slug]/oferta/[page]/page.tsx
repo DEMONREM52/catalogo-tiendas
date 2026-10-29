@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
+import { previewImage } from "@/lib/share/link-preview";
 import { normalizeLanding } from "@/lib/landing/config";
 import { fillText } from "@/lib/landing/templates";
 import { LandingView, type LandingData } from "./LandingView";
@@ -29,7 +30,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const price = item ? `$${Math.round(item.price).toLocaleString("es-CO")}` : "";
   const title = `${fillText(cfg.headline || d.page.name, d.page.name, price)} · ${d.store.name}`.slice(0, 120);
   const description = (cfg.subheadline || `${d.page.name} ${price ? `a ${price}` : ""}. ${cfg.shipping.text}.`).slice(0, 200);
-  const image = cfg.images[0] ?? item?.image ?? undefined;
+  // Sin fotos: la tarjeta con el logo de la tienda.
+  const image = cfg.images[0] ?? item?.image ?? previewImage(d.store.slug);
   return {
     title: { absolute: title },
     description,

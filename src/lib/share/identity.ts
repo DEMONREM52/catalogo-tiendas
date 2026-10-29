@@ -58,6 +58,30 @@ function shortOf(name: string) {
 
 const okUrl = (u: unknown) => (typeof u === "string" && /^https?:\/\//i.test(u.trim()) ? u.trim() : null);
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Identidad de un punto o bodega de la tienda (para la vista previa de sus documentos): su logo si tiene,
+ * si no el de la tienda. El punto tiene que ser de esa tienda. Lee con la llave de servicio (solo servidor).
+ */
+export async function resolvePointIdentity(slugRaw: string, pointId: string): Promise<PublicIdentity | null> {
+  const slug = decodeURIComponent(slugRaw || "").trim();
+  if (!SLUG_RE.test(slug) || !UUID.test(pointId)) return null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  const db = createClient(url, key, { auth: { persistSession: false } });
+  for (const c of candidates(slug)) {
+    const { data: s } = await db.from("stores").select("id,name,slug,logo_url").eq("slug", c).maybeSingle();
+    if (!s?.id) continue;
+    const { data: w } = await db.from("erp_warehouses").select("name,logo_url").eq("id", pointId).eq("store_id", s.id).maybeSingle();
+    if (!w) return null;
+    const name = String(w.name || s.name);
+    return { kind: "catalog", name, shortName: shortOf(name), subtitle: String(s.name), badge: String(s.name), logoUrl: okUrl(w.logo_url) ?? okUrl(s.logo_url), path: null };
+  }
+  return null;
+}
+
 /** Identidad del catálogo clásico (detal / mayor) o de un catálogo de RemHub Social. null si no existe. */
 export async function resolveCatalogIdentity(slugRaw: string, modeRaw: string | null): Promise<PublicIdentity | null> {
   const slug = decodeURIComponent(slugRaw || "").trim();

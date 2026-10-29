@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InstallPageClient } from "./InstallPageClient";
+import { hostStore, previewImage, previewMetadata } from "@/lib/share/link-preview";
 
-export const metadata: Metadata = {
+const REMHUB_META: Metadata = {
   title: "Instala RemHub en tu celular",
   description: "Instala RemHub en Android, iPhone o tu computador y ábrelo con un toque, a pantalla completa, con tu mismo usuario.",
   alternates: { canonical: "https://remhub.co/instalar" },
@@ -10,9 +11,21 @@ export const metadata: Metadata = {
     title: "Instala RemHub en tu celular",
     description: "Ventas, pedidos, inventario y catálogos de tu tienda a un toque.",
     url: "https://remhub.co/instalar",
-    images: [{ url: "/og-image.png", width: 1200, height: 1200, type: "image/png", alt: "RemHub" }],
+    images: [{ url: "/og-image.jpg", width: 1200, height: 1200, type: "image/jpeg", alt: "RemHub" }],
   },
 };
+
+/** En el dominio de una tienda (lavitrina.remhub.co/instalar) la vista previa es de esa tienda. */
+export async function generateMetadata(): Promise<Metadata> {
+  const store = await hostStore();
+  if (!store) return REMHUB_META;
+  return previewMetadata({
+    title: `Instala la app de ${store.name}`,
+    description: `Instala ${store.name} en tu celular o computador y ábrela con un toque, a pantalla completa, con tu mismo usuario.`,
+    image: previewImage(store.slug, { label: "instalar" }),
+    siteName: store.name,
+  });
+}
 
 const FEATURES = [
   { icon: "💳", title: "Vende desde el celular", text: "POS, facturas y remisiones con los mismos permisos de tu usuario." },

@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { storeBase, storeUrl } from "@/lib/seo/store-public";
+import { previewImage } from "@/lib/share/link-preview";
 import { MadeWithRemhub } from "@/components/MadeWithRemhub";
 
 type Point = { id: string; name: string; city: string | null; address: string | null; whatsapp: string | null };
@@ -40,7 +41,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const what = seo?.categories?.length ? seo.categories.slice(0, 4).join(", ") : home.catalogs.map((c) => c.name).join(", ");
   const description = [seo?.headline, `${home.name}${seo?.city ? ` en ${seo.city}` : ""}: ${what}.`, `${seo?.count ? `${seo.count} productos con ` : ""}precios al día. Pide por WhatsApp.`]
     .filter(Boolean).join(" ").slice(0, 300);
-  const image = isSafe(home.banner_url) ? home.banner_url : isSafe(home.logo_url) ? home.logo_url : undefined;
+  // Portada si tiene; si no, la tarjeta con su logo (el logo suelto, si es transparente, se pierde en fondo blanco).
+  const image = isSafe(home.banner_url) ? home.banner_url : previewImage(home.slug);
   return {
     title: { absolute: seo?.city ? `${home.name} en ${seo.city} · Catálogo y precios` : `${home.name} · Catálogo y precios` },
     keywords: [home.name, ...(seo?.categories ?? []), ...(seo?.city ? [seo.city, `${(seo.categories ?? [])[0] ?? "tienda"} en ${seo.city}`] : [])],

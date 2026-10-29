@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase/server";
+import { previewDb, previewImage, storeAndPoints } from "@/lib/share/link-preview";
 
 // Vista previa del enlace (WhatsApp, Telegram…): el logo y el nombre de la tienda, y que es un vale para firmar.
 type Props = { params: Promise<{ token: string }> };
@@ -24,14 +25,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const kind = t.kind === "product" ? "Vale de mercancía" : "Vale de préstamo";
   const title = `${kind} #${t.number} para firmar · ${store}`;
   const description = `${t.employee.split(/\s+/)[0]}: revisa el vale por ${money(t.total)} (${t.installments} cuota${t.installments === 1 ? "" : "s"} de ${money(t.installment)} descontadas de la nómina) y fírmalo desde tu celular.`;
-  const logo = d.store?.logo_url || undefined;
+  // Imagen: el logo en la tarjeta con «VALE PARA FIRMAR» (el logo suelto, si es transparente, se pierde en blanco).
+  let image: string | undefined = d.store?.logo_url || undefined;
+  const db = previewDb();
+  if (db) {
+    const { data: l } = await db.from("erp_employee_loans").select("store_id,point_id").eq("sign_token", token).maybeSingle();
+    const loan = l as { store_id?: string; point_id?: string | null } | null;
+    const storeId = loan?.store_id;
+    const slug = storeId ? (await storeAndPoints(db, storeId)).store?.slug : null;
+    if (slug) image = previewImage(slug, { point: loan?.point_id, label: "vale" });
+  }
   return {
     title: { absolute: title },
     description,
     robots,
-    openGraph: { type: "website", title, description, siteName: store, images: logo ? [{ url: logo, width: 512, height: 512, alt: store }] : undefined },
-    twitter: { card: "summary", title, description, images: logo ? [logo] : undefined },
-    icons: logo ? { icon: logo, apple: logo } : undefined,
+    openGraph: { type: "website", title, description, siteName: store, images: image ? [{ url: image, width: 1200, height: 1200, alt: store }] : undefined },
+    twitter: { card: "summary", title, description, images: image ? [image] : undefined },
+    icons: d.store?.logo_url ? { icon: d.store.logo_url, apple: d.store.logo_url } : undefined,
   };
 }
 

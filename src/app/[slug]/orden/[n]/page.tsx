@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase/server";
-import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+import { previewImage } from "@/lib/share/link-preview";
 import { OpenOrder } from "./OpenOrder";
 
 /**
@@ -20,9 +20,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { data } = await supabaseServer().from("stores").select("name").eq("slug", slug).maybeSingle();
   const store = (data as { name?: string } | null)?.name ?? "la tienda";
   const catalog = c && SLUG.test(c) ? c.toLowerCase() : null;
-  const image = `${PRODUCTION_ORIGIN}/api/og?${new URLSearchParams({ store: slug, ...(catalog ? { catalog } : { mode: "detal" }) }).toString()}`;
+  const image = previewImage(slug, { catalog, label: "pedido" });
   const title = `Pedido${receipt ? ` #${receipt}` : ""} · ${store}`;
-  const description = "Toca para abrir y atender este pedido (solo el equipo de la tienda).";
+  const description = `Pedido nuevo de ${store}: toca para abrirlo en Pedidos, confirmarlo y despacharlo. Solo lo abre el equipo de la tienda.`;
   return {
     title: { absolute: title },
     description,
