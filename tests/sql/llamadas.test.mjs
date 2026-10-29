@@ -1,4 +1,4 @@
-// Pruebas de 20261268: llamadas y videollamadas en los pedidos internos.
+// Pruebas de 20261268 y 20261269: llamadas y videollamadas en los pedidos internos.
 import { makeDb } from "./setup.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -19,7 +19,7 @@ fs.writeFileSync(combined, [...["fixtures/prod_ventas.sql", "migraciones/2026110
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); });
 const { db } = await makeDb(combined, { twice: false });
 fs.unlinkSync(combined);
-for (const f of ["20261267_chat_multimedia.sql", "20261268_llamadas.sql", "20261268_llamadas.sql"]) await db.exec(fs.readFileSync(path.join(here, "migraciones", f), "utf8"));
+for (const f of ["20261267_chat_multimedia.sql", "20261268_llamadas.sql", "20261268_llamadas.sql", "20261269_llamadas_rechazo.sql", "20261269_llamadas_rechazo.sql"]) await db.exec(fs.readFileSync(path.join(here, "migraciones", f), "utf8"));
 
 const U = (n) => `a1700000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const OWNER = U(1), ZAM = U(2), BOD1 = U(3), BOD2 = U(4), CEN = U(5), VENTAS = U(6);
@@ -66,8 +66,10 @@ ok(/^🎥 Videollamada · 3:12 \(Andrés con Laura\)$/.test(sys ?? ""), "Queda e
 
 const s2 = await one(BOD1, "select public.erp_call_start($1, false, $2::jsonb) r", [R, offer]);
 ok(s2.invited.includes(ZAM) && !s2.invited.includes(BOD2), "Laura (Bodega) llama: timbra a Zamora, no a su compañero de Bodega", s2.invited);
-ok((await one(ZAM, "select public.erp_call_end($1, 'rechazó') r", [s2.id])).status === "ringing", "Andrés rechaza: sigue timbrando al dueño");
-ok((await one(OWNER, "select public.erp_call_end($1, 'rechazó') r", [s2.id])).status === "declined", "El dueño también rechaza: llamada rechazada");
+ok((await one(ZAM, "select public.erp_call_end($1, 'rechazó') r", [s2.id])).status === "declined", "Andrés rechaza: la llamada termina para todos (20261269)");
+ok((await raw("select count(*)::int n from erp_call_invites where call_id = $1 and status = 'ringing'", [s2.id]))[0].n === 0, "Al dueño ya no le timbra");
+ok((await raw("select count(*)::int n from erp_stock_request_messages where body = '📞 Llamada de Laura rechazada por Andrés'"))[0].n === 1, "Queda «📞 Llamada de Laura rechazada por Andrés»");
+ok((await one(OWNER, "select public.erp_call_end($1, 'rechazó') r", [s2.id])).status === "declined", "Rechazar otra vez no cambia nada");
 
 const s3 = await one(ZAM, "select public.erp_call_start($1, false, $2::jsonb) r", [R, offer]);
 ok((await one(ZAM, "select public.erp_call_end($1, 'sin respuesta') r", [s3.id])).status === "missed", "Nadie contesta: llamada perdida");

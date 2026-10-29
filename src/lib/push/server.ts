@@ -24,6 +24,8 @@ export type PushPayload = {
   title: string; body: string; url: string; tag?: string; urgent?: boolean; event?: NotifEvent; id?: string; point?: string | null;
   /** Llamada entrante: el celular muestra «Contestar» y «Rechazar». */
   call?: { id: string; video: boolean };
+  /** Reemplaza la notificación anterior sin volver a sonar ni vibrar (llamada que ya terminó). */
+  quiet?: boolean;
   /** Segundos que la notificación sigue valiendo (una llamada vieja ya no sirve). */
   ttl?: number;
 };

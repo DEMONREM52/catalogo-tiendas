@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, RefreshCw, Video, VideoOff } from "lucide-react";
+import { ChevronUp, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, RefreshCw, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /**
@@ -95,10 +95,19 @@ export function CallManager({ storeId }: { storeId: string }) {
   const [mini, setMini] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
+  // Altavoz o normal. Donde el navegador deja escoger la salida (computador, Android con Chrome) se cambia de verdad;
+  // donde no (iPhone), «normal» baja el volumen de la llamada.
+  const [speaker, setSpeaker] = useState(false);
+  const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [outputId, setOutputId] = useState<string | null>(null);
+  const [showOutputs, setShowOutputs] = useState(false);
+  const outputsRef = useRef<MediaDeviceInfo[]>([]);
   const pc = useRef<RTCPeerConnection | null>(null);
   const local = useRef<MediaStream | null>(null);
   const channel = useRef<Channel | null>(null);
   const ringTimeout = useRef(0);
+  // Cada llamada tiene su número; colgar o terminar lo cambia y así la preparación que siga en curso se detiene.
+  const attempt = useRef(0);
   const tick = useRef(0);
   const facing = useRef<"user" | "environment">("user");
   const callRef = useRef<CallRow | null>(null);
@@ -116,6 +125,7 @@ export function CallManager({ storeId }: { storeId: string }) {
 
   /** Limpia todo y muestra cómo terminó (2,5 s). */
   const finish = useCallback((text: string) => {
+    attempt.current += 1;
     ring.stop();
     window.clearTimeout(ringTimeout.current);
     window.clearInterval(tick.current);
@@ -129,14 +139,50 @@ export function CallManager({ storeId }: { storeId: string }) {
     setNote(text);
     go("ended");
     setMini(false);
-    window.setTimeout(() => { if (phaseRef.current === "ended") { go("idle"); setCallBoth(null); setElapsed(0); setMuted(false); setCamOff(false); setHasRemoteVideo(false); } }, 2500);
+    window.setTimeout(() => { if (phaseRef.current === "ended") { go("idle"); setCallBoth(null); setElapsed(0); setMuted(false); setCamOff(false); setHasRemoteVideo(false); setSpeaker(false); setOutputId(null); setShowOutputs(false); } }, 2500);
   }, [go, ring, setCallBoth]);
 
   const endCall = useCallback(async (reason: string, text: string) => {
     const c = callRef.current;
-    if (c) await supabaseBrowser().rpc("erp_call_end", { p_call: c.id, p_reason: reason });
+    const wasRinging = phaseRef.current === "outgoing";
     finish(text);
-  }, [finish]);
+    if (!c) return;
+    await supabaseBrowser().rpc("erp_call_end", { p_call: c.id, p_reason: reason });
+    // Si timbraba en celulares, se cambia la notificación por «Llamada perdida» (sin «Contestar»).
+    if (wasRinging && c.caller_id === me) {
+      const { data: s } = await supabaseBrowser().auth.getSession();
+      void fetch("/api/push/call", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token ?? ""}` }, body: JSON.stringify({ call_id: c.id, ended: true }) });
+    }
+  }, [finish, me]);
+
+  /** Altavoz (true) o normal (false); o una salida concreta (Bluetooth, audífonos…). */
+  const applyOutput = useCallback(async (on: boolean, deviceId?: string) => {
+    const el = remoteAudio.current;
+    if (!el) return;
+    // Safari y algunos navegadores de celular no tienen setSinkId (no dejan escoger la salida).
+    const canPick = typeof (el as { setSinkId?: unknown }).setSinkId === "function";
+    let id = deviceId;
+    if (!id && canPick) {
+      const list = outputsRef.current;
+      const pick = list.find((d) => (on ? /speaker|altavoz|bocina|parlante/i : /earpiece|auricular|receiver|handset/i).test(d.label));
+      id = pick?.deviceId ?? (on ? "default" : undefined);
+    }
+    if (id && canPick) {
+      try { await el.setSinkId(id); setOutputId(id); } catch { /* el navegador no dejó cambiar la salida */ }
+    }
+    // Sin poder cambiar la salida, «normal» es más bajo (para tenerlo cerca del oído).
+    el.volume = on || deviceId ? 1 : 0.5;
+    setSpeaker(on);
+  }, []);
+
+  /** Salidas de audio del equipo (con permiso de micrófono ya tienen nombre). */
+  const loadOutputs = useCallback(async () => {
+    try {
+      const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput" && d.deviceId);
+      outputsRef.current = list;
+      setOutputs(list);
+    } catch { /* sin lista */ }
+  }, []);
 
   /** Conexión WebRTC con el audio/video de este equipo. */
   const setup = useCallback(async (video: boolean) => {
@@ -145,6 +191,7 @@ export function CallManager({ storeId }: { storeId: string }) {
       video: video ? { facingMode: facing.current, width: { ideal: 1280 }, height: { ideal: 720 } } : false,
     });
     local.current = stream;
+    void loadOutputs();
     if (localVideo.current) localVideo.current.srcObject = stream;
     const conn = new RTCPeerConnection({ iceServers: await iceServers() });
     stream.getTracks().forEach((t) => conn.addTrack(t, stream));
@@ -153,6 +200,8 @@ export function CallManager({ storeId }: { storeId: string }) {
       remote.current = s;
       if (remoteVideo.current) remoteVideo.current.srcObject = s;
       if (remoteAudio.current) { remoteAudio.current.srcObject = s; void remoteAudio.current.play().catch(() => undefined); }
+      // Como en el celular: la videollamada empieza en altavoz y la de voz en normal.
+      if (e.track.kind === "audio") void applyOutput(Boolean(callRef.current?.video));
       if (e.track.kind === "video") setHasRemoteVideo(true);
     };
     conn.onconnectionstatechange = () => {
@@ -163,20 +212,24 @@ export function CallManager({ storeId }: { storeId: string }) {
         window.clearInterval(tick.current);
         tick.current = window.setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
       }
-      if (conn.connectionState === "failed") void endCall("sin conexión", "No se pudo conectar. Revisa el internet de los dos equipos.");
+      if (conn.connectionState === "failed") void endCall("sin conexión", phaseRef.current === "active" ? "Se cortó la llamada" : "No se pudo conectar. Revisa el internet de los dos equipos.");
+      // El otro equipo se fue (colgó o perdió la señal): si en 8 s no vuelve, se cuelga.
+      if (conn.connectionState === "disconnected") {
+        window.setTimeout(() => {
+          if (pc.current === conn && (conn.connectionState === "disconnected" || conn.connectionState === "failed")) void endCall("se cortó", "Se cortó la llamada");
+        }, 8000);
+      }
     };
     pc.current = conn;
     return conn;
-  }, [endCall, go, ring]);
+  }, [applyOutput, endCall, go, loadOutputs, ring]);
 
   /** Escucha en vivo los cambios de esta llamada (contestó, colgó, rechazó…). */
-  const watch = useCallback((id: string) => {
-    const ch = supabaseBrowser()
-      .channel(`call-${id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_calls", filter: `id=eq.${id}` }, (msg) => {
-        const row = msg.new as CallRow;
+  /** Aplica el estado de la llamada (llegue en vivo o por la revisión cada 3 s). */
+  const onRow = useCallback((row: CallRow) => {
         const prev = callRef.current;
-        setCallBoth(prev ? { ...prev, ...row } : row);
+        if (!prev || prev.id !== row.id) return;
+        setCallBoth({ ...prev, ...row });
         if (row.status === "active" && row.answer && pc.current && !pc.current.currentRemoteDescription && prev?.caller_id === me) {
           ring.stop();
           go("connecting");
@@ -186,25 +239,55 @@ export function CallManager({ storeId }: { storeId: string }) {
         if (["ended", "missed", "declined"].includes(row.status) && phaseRef.current !== "ended" && phaseRef.current !== "idle") {
           finish(row.status === "declined" ? "Llamada rechazada" : row.status === "missed" ? (prev?.caller_id === me ? "No contestaron" : "Llamada perdida") : "Llamada terminada");
         }
-      })
+  }, [finish, go, me, ring, setCallBoth]);
+
+  /** Escucha en vivo los cambios de esta llamada (contestó, colgó, rechazó…). */
+  const watch = useCallback((id: string) => {
+    const ch = supabaseBrowser()
+      .channel(`call-${id}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_calls", filter: `id=eq.${id}` }, (msg) => onRow(msg.new as CallRow))
       .subscribe();
     channel.current = ch;
-  }, [finish, go, me, ring, setCallBoth]);
+  }, [onRow]);
+
+  // Respaldo del aviso en vivo: cada 3 s se revisa la llamada en la base (nadie se queda en una llamada que ya terminó).
+  const liveId = call?.id ?? null;
+  const inCall = phase === "outgoing" || phase === "incoming" || phase === "connecting" || phase === "active";
+  useEffect(() => {
+    if (!liveId || !inCall) return;
+    const t = window.setInterval(() => {
+      void supabaseBrowser().from("erp_calls").select("id,store_id,request_id,caller_id,caller_name,video,status,offer,answer,answered_name").eq("id", liveId).maybeSingle()
+        .then(({ data }) => { if (data) onRow(data as CallRow); });
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [liveId, inCall, onRow]);
 
   /** Llamar. */
   const outgoing = useCallback(async (requestId: string, video: boolean) => {
     if (phaseRef.current !== "idle") return;
+    const mine = ++attempt.current;
     go("outgoing");
     setNote(video ? "Videollamada…" : "Llamando…");
+    // ¿Colgó mientras se preparaba? Entonces se apaga lo que se alcanzó a abrir y no se sigue.
+    const cancelled = (conn?: RTCPeerConnection) => {
+      if (attempt.current === mine && phaseRef.current === "outgoing") return false;
+      conn?.getSenders().forEach((x) => x.track?.stop());
+      conn?.close();
+      return true;
+    };
     try {
       const conn = await setup(video);
+      if (cancelled(conn)) return;
       const offer = await conn.createOffer();
       await conn.setLocalDescription(offer);
       await gathered(conn);
+      if (cancelled(conn)) return;
       const sdp = conn.localDescription!;
       const { data, error } = await supabaseBrowser().rpc("erp_call_start", { p_request: requestId, p_video: video, p_offer: { type: sdp.type, sdp: sdp.sdp } });
       if (error) throw new Error(/Could not find the function|schema cache/i.test(error.message) ? "Falta ejecutar en Supabase la migración 20261268_llamadas.sql." : error.message);
       const res = data as { id: string };
+      // Colgó justo mientras se creaba: se cierra sin timbrar a nadie.
+      if (cancelled(conn)) { void supabaseBrowser().rpc("erp_call_end", { p_call: res.id, p_reason: "canceló" }); return; }
       setCallBoth({ id: res.id, store_id: storeId, request_id: requestId, caller_id: me ?? "", caller_name: null, video, status: "ringing", offer: null, answer: null, answered_name: null });
       watch(res.id);
       ring.start("outgoing");
@@ -214,6 +297,7 @@ export function CallManager({ storeId }: { storeId: string }) {
       ringTimeout.current = window.setTimeout(() => { if (phaseRef.current === "outgoing") void endCall("sin respuesta", "No contestaron"); }, RING_SECONDS * 1000);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
+      if (attempt.current !== mine) return;
       finish(/Permission|NotAllowed/i.test(msg) ? "Permite el micrófono (y la cámara) para este sitio y vuelve a intentar." : msg || "No se pudo llamar.");
     }
   }, [endCall, finish, go, me, ring, setCallBoth, setup, storeId, watch]);
@@ -229,6 +313,10 @@ export function CallManager({ storeId }: { storeId: string }) {
     watch(c.id);
     if (autoAnswer) void accept(c);
     else ring.start("incoming");
+    // Respaldo: si no llega el aviso en vivo de que la cancelaron, deja de timbrar sola.
+    const mine = attempt.current;
+    window.clearTimeout(ringTimeout.current);
+    ringTimeout.current = window.setTimeout(() => { if (attempt.current === mine && phaseRef.current === "incoming") finish("Llamada perdida"); }, (RING_SECONDS + 5) * 1000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [go, me, ring, setCallBoth, watch]);
 
@@ -382,6 +470,25 @@ export function CallManager({ storeId }: { storeId: string }) {
                   {video ? <button type="button" onClick={toggleCam} className={`grid h-14 w-14 place-items-center rounded-full ${camOff ? "bg-white text-black" : "bg-white/15"}`} aria-label="Cámara">{camOff ? <VideoOff size={22} /> : <Video size={22} />}</button> : null}
                   {video ? <button type="button" onClick={() => void flipCam()} className="grid h-14 w-14 place-items-center rounded-full bg-white/15" aria-label="Cambiar cámara"><RefreshCw size={20} /></button> : null}
                   <button type="button" onClick={() => void endCall(phase === "outgoing" ? "canceló" : "colgó", phase === "outgoing" ? "Llamada cancelada" : "Llamada terminada")} className="grid h-16 w-16 place-items-center rounded-full bg-red-500 shadow-xl transition active:scale-95" aria-label="Colgar"><PhoneOff size={26} /></button>
+                  <div className="relative">
+                    <button type="button" onClick={() => void applyOutput(!speaker)} className={`grid h-14 w-14 place-items-center rounded-full ${speaker ? "bg-white text-black" : "bg-white/15"}`} aria-label={speaker ? "Quitar altavoz" : "Altavoz"} aria-pressed={speaker} title={speaker ? "Altavoz" : "Normal"}>
+                      {speaker ? <Volume2 size={22} /> : <Volume1 size={22} />}
+                    </button>
+                    {outputs.length > 1 && "setSinkId" in HTMLMediaElement.prototype ? (
+                      <button type="button" onClick={() => setShowOutputs((v) => !v)} className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-white text-black shadow" aria-label="Elegir salida de audio"><ChevronUp size={14} /></button>
+                    ) : null}
+                    {showOutputs ? (
+                      <div className="absolute bottom-16 left-1/2 w-64 -translate-x-1/2 overflow-hidden rounded-2xl bg-white p-1 text-sm text-slate-900 shadow-2xl">
+                        <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Escuchar por</p>
+                        {outputs.map((d) => (
+                          <button key={d.deviceId} type="button" onClick={() => { setShowOutputs(false); void applyOutput(/speaker|altavoz|bocina|parlante/i.test(d.label), d.deviceId); }}
+                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left ${outputId === d.deviceId ? "bg-violet-100 font-bold" : "hover:bg-slate-100"}`}>
+                            {/bluetooth|airpods|buds/i.test(d.label) ? "🎧" : /speaker|altavoz|bocina|parlante/i.test(d.label) ? "🔊" : "🔈"} <span className="truncate">{d.label || "Salida de audio"}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   {phase === "active" ? <button type="button" onClick={() => setMini(true)} className="grid h-14 w-14 place-items-center rounded-full bg-white/15" aria-label="Minimizar"><Minimize2 size={20} /></button> : null}
                 </>
               )}
