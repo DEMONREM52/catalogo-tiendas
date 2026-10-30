@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, Bell, BellOff, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowRight, Ban, Bell, BellOff, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEditor";
@@ -51,6 +51,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [dragging, setDragging] = useState(false);
   const [typing, setTyping] = useState<string | null>(null);
   const [productPick, setProductPick] = useState(false);
+  const [itemPick, setItemPick] = useState(false);
   const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -259,6 +260,35 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     return res ?? true;
   }
 
+  /** Agregar un producto (o más unidades): queda en el chat. */
+  async function addItem(p: { id: string; name: string; wh_qty?: number }) {
+    if (!data) return;
+    setItemPick(false);
+    const res = await Swal.fire({
+      ...swal, title: `➕ ${p.name}`,
+      html: `<p style="font-size:13px;opacity:.8">${canAttend ? `Se agrega a lo que se envía desde <b>${data.request.to_name}</b>` : "Se agrega a lo que pides"}${typeof p.wh_qty === "number" ? ` · hay <b>${p.wh_qty}</b> en ${data.request.to_name}` : ""}.</p>`,
+      input: "number", inputValue: "1", inputAttributes: { min: "1", step: "1" }, inputLabel: "¿Cuántas unidades?",
+      showCancelButton: true, confirmButtonText: "Agregar", cancelButtonText: "Cancelar",
+      inputValidator: (v) => (Number(v) >= 1 ? null : "Escribe al menos 1."),
+    });
+    if (!res.isConfirmed) return;
+    const note = canAttend ? await Swal.fire({ ...swal, title: "¿Por qué se agrega? (opcional)", input: "text", inputPlaceholder: "Ej: van de regalo, pidieron por chat…", showCancelButton: true, confirmButtonText: "Listo", cancelButtonText: "Sin motivo" }) : null;
+    await run("erp_sr_item_add", { p_request: data.request.id, p_product: p.id, p_qty: Math.floor(Number(res.value)), p_note: note?.isConfirmed ? String(note.value ?? "") : null }, "Producto agregado (quedó en el chat)");
+  }
+
+  /** Quitar un producto del pedido: queda en el chat. */
+  async function removeItem(item: { id: string; name: string }) {
+    if (!data) return;
+    const res = await Swal.fire({
+      ...swal, icon: "warning", title: `¿Quitar ${item.name}?`, text: "Sale del pedido y queda la constancia en el chat.",
+      input: "text", inputPlaceholder: "Motivo (opcional): no hay, se pidió por error…",
+      showCancelButton: true, confirmButtonText: "Quitar", cancelButtonText: "Cancelar", confirmButtonColor: "#ef4444",
+    });
+    if (!res.isConfirmed) return;
+    setApproved((cur) => { const n = { ...cur }; delete n[item.id]; return n; });
+    await run("erp_sr_item_remove", { p_request: data.request.id, p_item: item.id, p_reason: String(res.value ?? "") || null }, "Producto quitado (quedó en el chat)");
+  }
+
   async function saveQuantities(andTake = false) {
     if (!data) return;
     const items = Object.entries(approved).map(([item_id, qty_approved]) => ({ item_id, qty_approved }));
@@ -343,6 +373,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const canReceive = Boolean(data?.access.request && r?.status === "dispatched");
   const edited = Object.keys(approved).length > 0;
   // Para enviar deben estar firmados "Preparó" y "Revisó".
+  // Agregar o quitar: quien atiende, o quien pidió mientras nadie lo toma; nunca después de «Revisó».
+  const canEditItems = Boolean(data && r && (r.status === "pending" || r.status === "preparing") && (canAttend || (data.access.request && r.status === "pending"))
+    && !data.signatures?.some((x) => x.step === "sent" || x.step === "delivered" || x.step === "received"));
   const readyToSend = Boolean(data?.signatures?.some((s) => s.step === "packed") && data?.signatures?.some((s) => s.step === "sent"));
 
   const itemsPanel = data && r ? (
@@ -361,6 +394,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   {r.status !== "dispatched" && r.status !== "received" ? <> · En {r.to_name}: <b style={{ color: i.source_now > 0 ? "#22c55e" : "#ef4444" }}>{i.source_now}</b></> : null}
                   {" "}· En {r.from_name}: {i.dest_now}
                 </p>
+                {i.note ? <p className="text-[11px] font-semibold" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
                 {prices?.get(i.product_id) ? (
                   <p className="text-xs" style={{ color: "var(--t-muted)" }}>
@@ -407,10 +441,24 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               ) : (
                 <span className="text-right text-sm font-black tabular-nums">{i.qty_approved ?? i.qty_requested}<span className="block text-[10px] font-normal" style={{ color: "var(--t-muted)" }}>{i.qty_approved !== null ? "enviar" : "pedido"}</span></span>
               )}
+              {canEditItems && data.items.length > 1 ? (
+                <button type="button" onClick={() => void removeItem(i)} disabled={busy} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ borderColor: "color-mix(in oklab, #ef4444 35%, transparent)" }} aria-label={`Quitar ${i.name}`} title="Quitar del pedido">
+                  <Trash size={14} />
+                </button>
+              ) : null}
             </div>
           );
         })}
       </div>
+
+      {canEditItems ? (
+        <button type="button" onClick={() => setItemPick(true)} disabled={busy}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-3 text-sm font-bold transition hover:-translate-y-0.5 disabled:opacity-50"
+          style={{ borderColor: "color-mix(in oklab, var(--t-accent) 55%, transparent)", color: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+          <PackagePlus size={17} /> {canAttend ? "Agregar producto al envío" : "Agregar producto al pedido"}
+          <span className="hidden text-xs font-semibold opacity-75 sm:inline">· queda en el chat</span>
+        </button>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
         <span>
@@ -738,6 +786,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             ) : !error ? (
               <div className="m-5 h-64 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />
             ) : null}
+            {data ? <ProductSearchModal open={itemPick} onClose={() => setItemPick(false)} storeId={data.request.store_id} warehouseId={data.request.to_point_id}
+              title={canAttend ? `Agregar al envío desde ${data.request.to_name}` : "Agregar al pedido"} stockLabel={(h) => `En ${data.request.to_name}: ${h.wh_qty}`}
+              onPick={(p) => void addItem(p)} /> : null}
             {data ? <ProductSearchModal open={productPick} onClose={() => setProductPick(false)} storeId={data.request.store_id} title="Enviar un producto al chat" onPick={(p) => { setProductPick(false); void kit.sendProduct(p.id); }} /> : null}
             {data ? <ForwardDialog open={Boolean(kit.forward)} storeId={data.request.store_id} onClose={() => kit.setForward(null)} onSend={kit.sendForward} /> : null}
             <CallPicker open={Boolean(callPick)} video={Boolean(callPick?.video)} title={r ? `Pedido interno #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
