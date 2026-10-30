@@ -385,7 +385,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Lista de chequeo: quien despacha chulea lo empacado; quien recibe, lo que llegó. Lo chuleado sube en el orden en que se chuleó.
   const checkSide: "pack" | "receive" = r && (r.status === "dispatched" || r.status === "received") ? "receive" : "pack";
   const canCheck = Boolean(r && (checkSide === "pack" ? canAttend : canReceive));
-  const showChecklist = Boolean(r && (canCheck || checks.some((c) => c.side === checkSide)) && r.status !== "rejected" && r.status !== "cancelled");
+  const showChecklist = Boolean(r && r.status !== "rejected" && r.status !== "cancelled");
+  const checkWho = r ? (checkSide === "pack" ? `Chulea quien despacha en ${r.to_name}` : r.status === "dispatched" ? `Chulea quien recibe en ${r.from_name}` : "") : "";
   const checked = new Map(checks.filter((c) => c.side === checkSide).map((c) => [c.item_id, c]));
   const doneCount = data ? data.items.filter((i) => checked.has(i.id)).length : 0;
   const sortedItems = data ? [
@@ -427,7 +428,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg,#22c55e,#4ade80)" }} animate={{ width: `${data.items.length ? (doneCount / data.items.length) * 100 : 0}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
           </div>
           <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
-            {doneCount === data.items.length ? "✅ ¡Todo chuleado! Revisa arriba lo que quedó listo." : canCheck ? (checkSide === "pack" ? "Toca cada producto cuando lo tengas empacado: se pone verde y sube." : "Toca cada producto cuando lo cuentes: se pone verde y sube.") : "Lo chuleado se ve en verde y en el orden en que se chuleó."}
+            {doneCount === data.items.length ? "✅ ¡Todo chuleado! Revisa arriba lo que quedó listo." : canCheck ? (checkSide === "pack" ? "Toca el círculo (o el producto) cuando lo tengas empacado: se pone verde y sube." : "Toca el círculo (o el producto) cuando lo cuentes: se pone verde y sube.") : `👀 Solo ver: ${checkWho || "lo chuleado se ve en verde y en orden"}.`}
           </p>
         </div>
       ) : null}
@@ -441,15 +442,19 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <motion.div key={i.id} layout transition={{ type: "spring", stiffness: 380, damping: 32 }}
               onClick={canCheck ? () => void toggleCheck(i.id) : undefined}
               role={canCheck ? "button" : undefined} aria-pressed={canCheck ? Boolean(chk) : undefined}
-              className={`flex items-center gap-3 rounded-2xl border p-2.5 transition-colors ${canCheck ? "cursor-pointer select-none active:scale-[0.99]" : ""}`}
+              className={`flex touch-manipulation items-center gap-3 rounded-2xl border p-2.5 transition-colors ${canCheck ? "cursor-pointer select-none active:scale-[0.99]" : ""}`}
               style={chk
                 ? { borderColor: "color-mix(in oklab, #22c55e 65%, transparent)", background: "color-mix(in oklab, #22c55e 14%, transparent)" }
                 : { borderColor: short ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
               {showChecklist ? (
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 transition" aria-hidden
-                  style={chk ? { background: "#22c55e", borderColor: "#22c55e", color: "#fff" } : { borderColor: "var(--t-card-border)" }}>
-                  {chk ? <Check size={20} strokeWidth={3} /> : null}
-                </span>
+                <button type="button" disabled={!canCheck} onClick={(e) => { e.stopPropagation(); void toggleCheck(i.id); }}
+                  aria-label={chk ? `Quitar chulo de ${i.name}` : `Chulear ${i.name}`}
+                  className="-m-1.5 grid h-12 w-12 shrink-0 touch-manipulation place-items-center rounded-full p-1.5 disabled:cursor-default">
+                  <span className="grid h-9 w-9 place-items-center rounded-full border-2 transition"
+                    style={chk ? { background: "#22c55e", borderColor: "#22c55e", color: "#fff" } : { borderColor: canCheck ? "var(--t-accent)" : "var(--t-card-border)", opacity: canCheck ? 1 : 0.5 }}>
+                    {chk ? <Check size={20} strokeWidth={3} /> : null}
+                  </span>
+                </button>
               ) : null}
               <Thumb src={thumbs[i.product_id] ?? i.image_url} size={44} />
               <div className="min-w-0 flex-1">
