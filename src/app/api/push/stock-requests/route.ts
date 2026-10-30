@@ -36,10 +36,10 @@ export async function POST(request: Request) {
 
   // 1. Leer de la base el evento real.
   let req: Req | null = null;
-  let msg: { id: string; request_id: string; user_id: string | null; user_name: string | null; point_name: string | null; body: string; kind: string; created_at: string } | null = null;
+  let msg: { id: string; request_id: string; user_id: string | null; user_name: string | null; point_name: string | null; body: string; kind: string; created_at: string; mentions?: string[] | null } | null = null;
   const reqCols = "id,store_id,number,status,priority,from_point_id,to_point_id,requested_by,handled_by,created_at,updated_at";
   if (type === "message") {
-    const { data } = await admin.from("erp_stock_request_messages").select("id,request_id,user_id,user_name,point_name,body,kind,created_at").eq("id", id).maybeSingle();
+    const { data } = await admin.from("erp_stock_request_messages").select("*").eq("id", id).maybeSingle();
     msg = data;
     if (!msg || msg.kind !== "message") return NextResponse.json({ ok: false, skipped: "not-found" });
     const { data: r } = await admin.from("erp_stock_requests").select(reqCols).eq("id", msg.request_id).maybeSingle();
@@ -84,8 +84,11 @@ export async function POST(request: Request) {
     const build = (point: string | null): PushPayload => ({
       title: `💬 ${msg!.user_name ?? "Nuevo mensaje"}${msg!.point_name ? ` · ${msg!.point_name}` : ""}`,
       body: `Pedido #${req!.number}: ${msg!.body.slice(0, 160)}`,
-      url, tag: `${tag}-chat`, event: "message", id: req!.id, point,
+      url, tag: `${tag}-chat`, event: "message", id: req!.id, point, reply: true,
     });
+    const mentioned = new Set(msg!.mentions ?? []);
+    const { data: muted } = await admin.rpc("erp_chat_muted_users", { p_scope: "sr", p_chat: req.id });
+    const silenced = new Set(Array.isArray(muted) ? (muted as string[]) : []);
     // Solo a los involucrados del pedido o a los que se escogieron con «🔔 Avisos» (20261272).
     const { data: who, error: whoErr } = await admin.rpc("erp_sr_notify_users", { p_request: req.id });
     if (whoErr || !Array.isArray(who)) {
@@ -93,12 +96,14 @@ export async function POST(request: Request) {
     } else {
       recipients = new Map();
       if (aud.cfg.push) {
-        for (const userId of who as string[]) {
+        // Las @menciones avisan siempre; un pedido silenciado no avisa lo demás.
+        for (const userId of new Set([...(who as string[]), ...mentioned])) {
+          if (silenced.has(userId) && !mentioned.has(userId)) continue;
           if (userId === msg!.user_id) continue;
           const pts = aud.people.get(userId) ?? [];
           const point = pts.find((p) => p === req!.from_point_id || p === req!.to_point_id) ?? null;
-          if (!resolveEvent(aud.cfg, "message", point).on) continue;
-          recipients.set(userId, build(point));
+          if (!mentioned.has(userId) && !resolveEvent(aud.cfg, "message", point).on) continue;
+          recipients.set(userId, mentioned.has(userId) ? { ...build(point), title: `📣 ${msg!.user_name ?? "Alguien"} te mencionó · Pedido #${req!.number}` } : build(point));
         }
       }
     }

@@ -32,6 +32,7 @@ export function NewStockRequest({
   initialLines,
   initialTo,
   initialFrom,
+  initialNote,
 }: {
   open: boolean;
   onClose: () => void;
@@ -42,6 +43,8 @@ export function NewStockRequest({
   initialLines?: PrefillLine[];
   initialTo?: string | null;
   initialFrom?: string | null;
+  /** Nota ya escrita (por ejemplo, desde un mensaje del chat). */
+  initialNote?: string;
 }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const firstPoint = myPoint ?? (initialFrom && points.some((p) => p.id === initialFrom) ? initialFrom : null) ?? points.find((p) => p.kind === "point")?.id ?? points[0]?.id ?? "";
@@ -54,7 +57,7 @@ export function NewStockRequest({
   // Al cambiar de punto: las líneas con existencias conocidas se recalculan; las demás se quitan (como antes).
   const relocate = (nextFrom: string, nextTo: string) =>
     setLines((cur) => cur.filter((l) => l.levels).map((l) => ({ ...l, there: Number(l.levels?.[nextTo] ?? 0), here: Number(l.levels?.[nextFrom] ?? 0) })));
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initialNote ?? "");
   const [urgent, setUrgent] = useState(false);
   const [neededBy, setNeededBy] = useState("");
   const [q, setQ] = useState("");

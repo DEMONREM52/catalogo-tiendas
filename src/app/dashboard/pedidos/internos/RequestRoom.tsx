@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, Bell, Camera, Phone, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowRight, Ban, Bell, BellOff, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { Thumb, useThumbs } from "../../inventario/LineEditor";
+import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
 import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
@@ -15,7 +15,9 @@ import { startCall } from "./CallManager";
 import { CallPicker, type CallCandidate } from "./CallPicker";
 import { PeoplePicker, type Person } from "./PeoplePicker";
 import { useRouter } from "next/navigation";
-import { MAX_BYTES, MessageMedia, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
+import { ChatBubble, ChatSearchBar, ComposerBanner, ForwardDialog, MentionSuggestions, PinnedBar, SystemLine, muteChat, type ChatMsg } from "@/components/chat/ChatParts";
+import { useChatKit } from "@/components/chat/useChatKit";
+import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 
@@ -48,6 +50,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [attachMenu, setAttachMenu] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [typing, setTyping] = useState<string | null>(null);
+  const [productPick, setProductPick] = useState(false);
+  const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
@@ -84,6 +88,27 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     void supabaseBrowser().rpc("erp_stock_request_media", { p_request: requestId }).then(({ data: m, error: e }) => { if (!e && m) setMedia(m as Record<string, Attachment[]>); });
   }, [requestId]);
   useRunOnChange(load);
+
+  // Lo compartido con «Mensajes» (20261273): responder, reacciones, visto, editar, fijar, guardar, @, producto, reenviar y buscar.
+  const chatMsgs = (data?.messages ?? []) as ChatMsg[];
+  const filesOf = useCallback((id: string) => media[id] ?? [], [media]);
+  const kit = useChatKit({ scope: "sr", chatId: requestId, storeId: data?.request.store_id ?? null, msgs: chatMsgs, people: srPeople, filesOf, setText, onChanged: () => void load() });
+  const ex = kit.extras;
+  useEffect(() => {
+    if (!requestId) return;
+    let alive = true;
+    void supabaseBrowser().rpc("erp_sr_notify_get", { p_request: requestId }).then(({ data: p, error: e }) => {
+      if (alive && !e) setSrPeople(((p as { people: Array<{ user_id: string; name: string; me?: boolean }> }).people ?? []).filter((x) => !x.me));
+    });
+    // Ediciones y borrados de otros: se vuelve a cargar el chat.
+    const ch = supabaseBrowser()
+      .channel(`sr-edits-${requestId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_request_messages", filter: `request_id=eq.${requestId}` }, () => void load())
+      .subscribe();
+    // Desde la notificación («↩️ Responder»): el cuadro de texto queda listo.
+    if (new URLSearchParams(window.location.search).get("responder") === "1") window.setTimeout(() => document.getElementById("composer-sr")?.focus(), 600);
+    return () => { alive = false; void supabaseBrowser().removeChannel(ch); };
+  }, [requestId, load]);
 
   // En vivo: aviso de la conexión única del panel (StockRequestWatcher) y respaldo cada 15 s mientras esté abierto.
   useEffect(() => {
@@ -133,14 +158,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           const path = await uploadChatFile(data.request.store_id, requestId, p.file, (v) => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, progress: v } : x))));
           attachments.push({ type: p.type, path, mime: p.file.type, size: p.file.size, duration: p.duration, width: p.width, height: p.height });
         }
-        const { error: err } = await supabaseBrowser().rpc("erp_stock_request_message_media", { p_request: requestId, p_body: msg, p_attachments: attachments });
-        if (err) throw new Error(/Could not find the function|schema cache/i.test(err.message) ? "Falta ejecutar en Supabase la migración 20261267_chat_multimedia.sql." : srError(err));
+        if ((await kit.submit(msg, attachments)) === false) return;
         files.forEach((p) => URL.revokeObjectURL(p.preview));
         setPending((cur) => cur.filter((x) => !files.some((p) => p.id === x.id)));
-      } else {
-        const { error: err } = await supabaseBrowser().rpc("erp_stock_request_message", { p_request: requestId, p_body: msg });
-        if (err) throw new Error(srError(err));
-      }
+      } else if ((await kit.submit(msg)) === false) return;
       if (!body) setText("");
       void load();
     } catch (e) {
@@ -489,35 +510,21 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           Suelta aquí fotos, videos o audios
         </div>
       ) : null}
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-1 py-2">
-        {data.messages.map((m) => {
-          if (m.kind === "system") {
-            return (
-              <div key={m.id} className="mx-auto max-w-[92%] whitespace-pre-line rounded-2xl border px-3 py-2 text-center text-xs" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)", color: "var(--t-muted)" }}>
-                {m.body}
-                <span className="mt-0.5 block text-[10px] opacity-70">{new Date(m.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}</span>
-              </div>
-            );
-          }
-          const files = media[m.id] ?? [];
-          // Si el mensaje solo trae archivos, su texto es la etiqueta automática («📷 Foto»): no se repite.
-          const autoLabel = files.length > 0 && /^(📷|🎥|🎤)/u.test(m.body) && m.body.length < 48;
-          return (
-            <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[82%] rounded-2xl text-sm shadow-sm ${files.length ? "p-1.5" : "px-3.5 py-2"}`}
-                style={m.mine
-                  ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))", color: "#fff", borderBottomRightRadius: 6 }
-                  : { background: "var(--t-card-bg)", border: "1px solid var(--t-card-border)", borderBottomLeftRadius: 6 }}
-              >
-                {!m.mine ? <p className={`text-[11px] font-bold ${files.length ? "px-2 pt-1" : ""}`} style={{ color: "var(--t-accent)" }}>{m.user_name}{m.point_name ? ` · ${m.point_name}` : ""}</p> : null}
-                {files.length ? <MessageMedia items={files} mine={m.mine} /> : null}
-                {!autoLabel ? <p className={`whitespace-pre-line break-words ${files.length ? "px-2 pt-1.5" : ""}`}>{m.body}</p> : null}
-                <p className={`mt-0.5 text-right text-[10px] opacity-70 ${files.length ? "px-2 pb-0.5" : ""}`}>{new Date(m.created_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p>
-              </div>
-            </motion.div>
-          );
-        })}
+      <div className="flex items-center gap-1.5 pb-1">
+        <button type="button" onClick={() => kit.setSearching(!kit.searching)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)" }}><Search size={12} /> Buscar</button>
+        <button type="button" onClick={async () => { if (requestId && (await muteChat("sr", requestId, ex?.muted_until ?? null))) void kit.reload(); }} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)", color: ex?.muted_until ? "#f59e0b" : undefined }}>
+          <BellOff size={12} /> {ex?.muted_until ? "Silenciado" : "Silenciar"}
+        </button>
+        <span className="ml-auto truncate text-[10px]" style={{ color: "var(--t-muted)" }}>Mantén presionado un mensaje para más opciones</span>
+      </div>
+      {kit.searching ? <div className="-mx-1 overflow-hidden rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}><ChatSearchBar q={kit.query} setQ={kit.setQuery} msgs={chatMsgs.filter((m) => m.kind === "message")} onJump={kit.jump} onClose={() => { kit.setSearching(false); kit.setQuery(""); }} /></div> : null}
+      {ex?.pinned.length ? <div className="-mx-1 mt-1 overflow-hidden rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}><PinnedBar pinned={ex.pinned} onJump={kit.jump} /></div> : null}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain px-1 py-2 md:px-8">
+        {data.messages.map((m) => (m.kind === "system"
+          ? <SystemLine key={m.id} m={m} extra={ex?.msgs[m.id]} me={ex?.me ?? null} onCallBack={(video, to) => { if (requestId) startCall(requestId, video, to); }} />
+          : <ChatBubble key={m.id} m={m} subtitle={m.point_name} showName files={media[m.id] ?? []} extra={ex?.msgs[m.id]} readers={ex?.reads ?? null} total={null}
+              products={kit.products} query={kit.searching ? kit.query : ""} flash={kit.flash === m.id} canPin={Boolean(ex?.can_pin) && Boolean(data.access.chat)} canPost={Boolean(data.access.chat)}
+              onAction={(a, x) => void kit.onAction(a, x)} onReact={(x, e) => void kit.onReact(x, e)} onJump={kit.jump} />))}
         <AnimatePresence>
           {typing ? (
             <motion.p key="typing" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="px-2 text-xs italic" style={{ color: "var(--t-muted)" }}>
@@ -529,6 +536,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       </div>
       {data.access.chat ? (
         <div className="border-t pt-2" style={{ borderColor: "var(--t-card-border)" }}>
+          {kit.edit ? <ComposerBanner mode="edit" m={kit.edit} onCancel={kit.cancelCompose} /> : kit.reply ? <ComposerBanner mode="reply" m={kit.reply} onCancel={kit.cancelCompose} /> : null}
+          <MentionSuggestions text={text} people={srPeople} onPick={(v) => { setText(v); document.getElementById("composer-sr")?.focus(); }} />
           {pending.length ? (
             <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
               {pending.map((p) => (
@@ -583,6 +592,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                       <button type="button" onClick={() => { setAttachMenu(false); galleryInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><ImageIcon size={17} className="text-violet-400" /> Fotos o videos</button>
                       <button type="button" onClick={() => { setAttachMenu(false); cameraInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Camera size={17} className="text-pink-400" /> Cámara</button>
                       <button type="button" onClick={() => { setAttachMenu(false); audioInput.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Music size={17} className="text-amber-400" /> Archivo de audio</button>
+                      <button type="button" onClick={() => { setAttachMenu(false); setProductPick(true); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Package size={17} className="text-emerald-400" /> Producto (con existencias)</button>
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
@@ -591,6 +601,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <input ref={audioInput} type="file" accept="audio/*" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
               </div>
               <textarea
+                id="composer-sr"
                 value={text}
                 onChange={(e) => { setText(e.target.value); announceTyping(); }}
                 onPaste={(e) => {
@@ -602,9 +613,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                     e.preventDefault();
                     void send();
                   }
+                  if (e.key === "Escape") kit.cancelCompose();
                 }}
                 rows={1}
-                placeholder={pending.length ? "Agrega un texto (opcional)…" : "Escribe un mensaje… (Enter envía)"}
+                placeholder={kit.edit ? "Corrige el mensaje…" : pending.length ? "Agrega un texto (opcional)…" : "Escribe un mensaje… (@ para mencionar)"}
                 className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
                 style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
               />
@@ -726,6 +738,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             ) : !error ? (
               <div className="m-5 h-64 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />
             ) : null}
+            {data ? <ProductSearchModal open={productPick} onClose={() => setProductPick(false)} storeId={data.request.store_id} title="Enviar un producto al chat" onPick={(p) => { setProductPick(false); void kit.sendProduct(p.id); }} /> : null}
+            {data ? <ForwardDialog open={Boolean(kit.forward)} storeId={data.request.store_id} onClose={() => kit.setForward(null)} onSend={kit.sendForward} /> : null}
             <CallPicker open={Boolean(callPick)} video={Boolean(callPick?.video)} title={r ? `Pedido interno #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}
               load={loadCandidates} onCall={(to) => { if (requestId && callPick) startCall(requestId, callPick.video, to); }} onClose={() => setCallPick(null)} />
             <PeoplePicker open={peoplePick === "notify"} icon={<Bell size={17} />} color="#f59e0b" heading="Avisos de este chat" title={r ? `Pedido #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}

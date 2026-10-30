@@ -119,6 +119,8 @@ self.addEventListener("push", (event) => {
     timestamp: Date.now(),
     data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/pedidos?tab=internos", call: data.call || null },
   };
+  // Mensaje de un chat: «Responder» abre el chat con el cuadro de texto listo.
+  if (data.reply && !data.call) options.actions = [{ action: "reply", title: "↩️ Responder" }, { action: "open", title: "Ver" }];
   // Llamada entrante: «Contestar» y «Rechazar», vibración de timbre y no se quita sola.
   if (data.call && data.call.id) {
     options.actions = [{ action: "answer", title: data.call.video ? "🎥 Contestar" : "📞 Contestar" }, { action: "decline", title: "Rechazar" }];
@@ -147,6 +149,7 @@ self.addEventListener("notificationclick", (event) => {
   }
   let url = (event.notification.data && event.notification.data.url) || "/dashboard/pedidos?tab=internos";
   if (call) url += (url.includes("?") ? "&" : "?") + "contestar=1";
+  else if (event.action === "reply") url += (url.includes("?") ? "&" : "?") + "responder=1";
   const target = new URL(url, self.location.origin).href;
   event.waitUntil(
     (async () => {

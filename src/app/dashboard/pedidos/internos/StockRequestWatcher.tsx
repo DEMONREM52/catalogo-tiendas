@@ -67,8 +67,13 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
       // Solo suena y avisa en los pedidos donde me toca (involucrado o escogido con «🔔 Avisos», 20261272).
       let mine: Set<string> | null = null;
       if (changed.length) {
-        const { data: ok, error: e } = await supabaseBrowser().rpc("erp_sr_should_notify", { p_requests: changed.map((u) => u.id) });
+        const [{ data: ok, error: e }, { data: mutes }] = await Promise.all([
+          supabaseBrowser().rpc("erp_sr_should_notify", { p_requests: changed.map((u) => u.id) }),
+          supabaseBrowser().rpc("erp_chat_my_mutes", { p_scope: "sr" }),
+        ]);
         mine = e || !Array.isArray(ok) ? null : new Set(ok as string[]);
+        // Pedidos silenciados (20261273): no suenan dentro de la app.
+        if (Array.isArray(mutes) && mutes.length) { const muted = new Set(mutes as string[]); mine = new Set([...(mine ?? changed.map((u) => u.id))].filter((id) => !muted.has(id))); }
       }
       changed.forEach((u) => {
         if (mine && !mine.has(u.id)) return;

@@ -30,20 +30,29 @@ export function DmWatcher({ storeId, onUnread }: { storeId: string; onUnread: (n
     const ch = supabaseBrowser()
       .channel(`dm-watch-${storeId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_dm_messages", filter: `store_id=eq.${storeId}` }, (msg) => {
-        const m = msg.new as { thread_id: string; user_id: string | null; user_name: string | null; body: string; kind: string };
+        const m = msg.new as { id: string; thread_id: string; user_id: string | null; user_name: string | null; body: string; kind: string };
         window.clearTimeout(t);
         t = window.setTimeout(() => void count(), 400);
         if (m.kind !== "message" || !m.user_id || m.user_id === me.current) return;
         if ((window as Window & { __remhubOpenChat?: string | null }).__remhubOpenChat === m.thread_id && document.visibilityState === "visible") return;
-        void soundFor(storeId, "message", "dm").then((played) => {
+        void (async () => {
+          // Chat silenciado (20261273): no suena, salvo que me mencionen con @.
+          const sb = supabaseBrowser();
+          const [{ data: mutes }, { data: row }] = await Promise.all([
+            sb.rpc("erp_chat_my_mutes", { p_scope: "dm" }),
+            sb.from("erp_dm_messages").select("mentions").eq("id", m.id).maybeSingle(),
+          ]);
+          const mentioned = Array.isArray((row as { mentions?: string[] | null } | null)?.mentions) && (row as { mentions: string[] }).mentions.includes(me.current ?? "");
+          if (Array.isArray(mutes) && (mutes as string[]).includes(m.thread_id) && !mentioned) return;
+          const played = await soundFor(storeId, "message", "dm");
           // Solo la pestaña que sonó muestra el aviso (con varias abiertas no se repite).
           if (!played || document.visibilityState !== "visible") return;
           void Swal.fire({
             toast: true, position: "top-end", timer: 5000, showConfirmButton: true, confirmButtonText: "Abrir", showCloseButton: true,
             background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
-            title: `💬 ${m.user_name ?? "Mensaje del equipo"}`, text: m.body.slice(0, 120),
+            title: mentioned ? `📣 ${m.user_name ?? "Alguien"} te mencionó` : `💬 ${m.user_name ?? "Mensaje del equipo"}`, text: m.body.slice(0, 120),
           }).then((r) => { if (r.isConfirmed) go.current(`/dashboard/mensajes?chat=${m.thread_id}`); });
-        });
+        })();
       })
       .subscribe();
     const onFocus = () => void count();

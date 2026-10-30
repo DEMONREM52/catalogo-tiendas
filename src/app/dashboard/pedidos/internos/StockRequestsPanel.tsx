@@ -7,7 +7,7 @@ import { ArrowRight, BellRing, Inbox, MessageCircle, MessageCirclePlus, Plus, Re
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { useRunOnChange } from "../../inventario/shared";
-import { NewStockRequest, type PointOption } from "./NewStockRequest";
+import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
 import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
@@ -25,6 +25,8 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState<number | null>(null);
+  // Desde el chat («Crear pedido con esto» o «Pedir a otro punto»): nota y producto ya puestos.
+  const [prefill, setPrefill] = useState<{ note: string; lines: PrefillLine[] } | null>(null);
   const [sounds, setSounds] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,8 +48,26 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
       setMyPoint((pt.data as string | null) ?? null);
     });
     // Abrir un pedido desde el enlace (?pedido=…) o desde un aviso.
-    const fromUrl = new URLSearchParams(window.location.search).get("pedido");
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("pedido");
     if (fromUrl) window.setTimeout(() => setOpenId(fromUrl), 0);
+    if (params.get("nuevo") === "1") {
+      const note = params.get("nota") ?? "";
+      const product = params.get("producto");
+      void (async () => {
+        let lines: PrefillLine[] = [];
+        if (product) {
+          const { data: cards } = await sb.rpc("erp_chat_products", { p_store: storeId, p_ids: [product] });
+          const c = Array.isArray(cards) ? (cards[0] as { id: string; name: string; sku: string | null; stock: Array<{ id: string; qty: number }> } | undefined) : undefined;
+          if (c) lines = [{ product_id: c.id, name: c.name, sku: c.sku, qty: 1, levels: Object.fromEntries(c.stock.map((x) => [x.id, x.qty])) }];
+        }
+        setPrefill({ note, lines });
+        setCreating(Date.now());
+        const u = new URL(window.location.href);
+        ["nuevo", "nota", "producto"].forEach((k) => u.searchParams.delete(k));
+        window.history.replaceState(null, "", u.toString());
+      })();
+    }
     const onOpen = (e: Event) => setOpenId(String((e as CustomEvent<string>).detail));
     window.addEventListener(OPEN_REQUEST_EVENT, onOpen);
     // Cambios en vivo: aviso de la conexión única del panel (StockRequestWatcher) + respaldo cada 30 s.
@@ -194,12 +214,15 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         <NewStockRequest
           key={creating}
           open
-          onClose={() => setCreating(null)}
+          onClose={() => { setCreating(null); setPrefill(null); }}
+          initialNote={prefill?.note}
+          initialLines={prefill?.lines}
           storeId={storeId}
           points={points}
           myPoint={myPoint}
           onCreated={(id) => {
             setCreating(null);
+            setPrefill(null);
             setScope("mine");
             void load();
             setOpenId(id);

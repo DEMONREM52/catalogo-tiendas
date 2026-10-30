@@ -22,6 +22,8 @@ export function pushConfigured() {
 
 export type PushPayload = {
   title: string; body: string; url: string; tag?: string; urgent?: boolean; event?: NotifEvent; id?: string; point?: string | null;
+  /** Mensaje de un chat: el celular muestra «Responder». */
+  reply?: boolean;
   /** Llamada entrante: el celular muestra «Contestar» y «Rechazar». */
   call?: { id: string; video: boolean };
   /** Reemplaza la notificación anterior sin volver a sonar ni vibrar (llamada que ya terminó). */
