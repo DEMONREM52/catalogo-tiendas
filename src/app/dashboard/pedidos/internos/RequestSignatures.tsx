@@ -9,6 +9,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { SignaturePad, type SignaturePadHandle } from "@/app/traslado/[token]/SignaturePad";
 import { srError, type SrDetail, type SrSignature, type SrSignStep } from "./types";
 import { transferTrackUrl } from "@/lib/transfer-tracking";
+import QRCode from "qrcode";
 
 export const SIGN_STEPS: Array<{ key: SrSignStep; icon: string; title: string; who: string; side: "attend" | "request" | "both"; declaration: (from: string, to: string) => string }> = [
   { key: "packed", icon: "📦", title: "Preparó", who: "Quien prepara el pedido", side: "attend", declaration: () => "Confirmo que preparé y empaqué la mercancía según el pedido." },
@@ -21,25 +22,31 @@ const NAME_KEY = "remhub_transfer_signer";
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 
 /**
- * Enviar el enlace de firmas (el seguimiento del traslado, sin iniciar sesión) por WhatsApp, copiarlo o compartirlo.
- * Sirve para «En camino» y «Recibió», que suelen firmar quien lleva y quien recibe.
+ * Enviar el enlace de firmas del pedido (/firma-pedido/<enlace>, sin iniciar sesión) por WhatsApp, copiarlo,
+ * compartirlo o mostrar el código QR. Sirve para los cuatro pasos: antes de salir se firma ahí mismo «Preparó» y
+ * «Revisó»; cuando sale, esa misma página lleva al seguimiento del envío para «En camino» y «Recibió».
  */
 async function shareSignLink(data: SrDetail, step: (typeof SIGN_STEPS)[number] | null) {
-  const token = data.transfer?.track_token;
-  if (!token) return;
-  const url = transferTrackUrl(token);
   const r = data.request;
+  const { data: link, error } = await supabaseBrowser().rpc("erp_sr_sign_link", { p_request: r.id });
+  let url: string;
+  if (!error && link) url = `${window.location.origin}/firma-pedido/${(link as { token: string }).token}`;
+  else if (data.transfer?.track_token) url = transferTrackUrl(data.transfer.track_token); // sin la migración 20261276
+  else return void Swal.fire({ ...swal, icon: "info", title: "Falta un paso", text: error && /Could not find the function|schema cache/i.test(error.message) ? "Ejecuta en Supabase la migración 20261276_firma_pedido_enlace.sql." : srError(error) });
+  const qr = await QRCode.toDataURL(url, { margin: 1, width: 240 }).catch(() => null);
   const text = [
     step ? `✍️ Firma «${step.title}» · Pedido interno #${r.number}` : `✍️ Firmas del pedido interno #${r.number}`,
-    `${r.to_name} → ${r.from_name}`,
-    step ? `${step.who}: abre el enlace, escribe tu nombre y firma. No necesitas iniciar sesión.` : "Abre el enlace para ver el envío y firmar tu paso. No necesitas iniciar sesión.",
+    `🏬 ${r.to_name} → 📍 ${r.from_name}`,
+    step ? `${step.who}: abre el enlace, revisa los productos, escribe tu nombre y firma con el dedo. No necesitas iniciar sesión.` : "Abre el enlace, revisa los productos y firma tu paso con el dedo. No necesitas iniciar sesión.",
     url,
   ].join("\n");
   const res = await Swal.fire({
-    ...swal, title: step ? `🔗 Enlace para firmar «${step.title}»` : "🔗 Enlace de firmas",
-    html: `<p style="font-size:13px;opacity:.8">Quien lo abra puede firmar desde su celular, sin cuenta.</p><p style="font-size:12px;word-break:break-all;margin-top:8px;padding:8px;border-radius:10px;background:rgba(127,127,127,.12)">${url}</p>`,
+    ...swal, title: step ? `🔗 Que firmen «${step.title}»` : "🔗 Enlace de firmas del pedido",
+    html: `<p style="font-size:13px;opacity:.8">Mándalo al bodeguero o a quien corresponda: firma desde su celular, sin cuenta. Vale 15 días y sirve para los 4 pasos.</p>`
+      + (qr ? `<img src="${qr}" alt="Código QR" style="margin:12px auto 4px;width:180px;height:180px;border-radius:14px;background:#fff;padding:6px"/><p style="font-size:11px;opacity:.7">O que lo escaneen aquí mismo con la cámara</p>` : "")
+      + `<p style="font-size:11px;word-break:break-all;margin-top:8px;padding:8px;border-radius:10px;background:rgba(127,127,127,.12)">${url}</p>`,
     showDenyButton: true, showCancelButton: true,
-    confirmButtonText: "WhatsApp", denyButtonText: "Copiar", cancelButtonText: typeof navigator !== "undefined" && "share" in navigator ? "Compartir…" : "Cerrar",
+    confirmButtonText: "📲 WhatsApp", denyButtonText: "📋 Copiar", cancelButtonText: typeof navigator !== "undefined" && "share" in navigator ? "↗️ Compartir…" : "Cerrar",
     confirmButtonColor: "#16a34a", denyButtonColor: "#8b5cf6",
   });
   if (res.isConfirmed) window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
@@ -68,15 +75,17 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
   const signed = new Map((data.signatures ?? []).map((s) => [s.step, s]));
   const [signing, setSigning] = useState<SrSignStep | null>(null);
   const current = signing ?? (autoOpen && !signed.has(autoOpen) ? autoOpen : null);
-  // Por enlace (seguimiento del traslado): desde que se envía, «En camino» y «Recibió».
-  const byLink = (step: SrSignStep) => Boolean(data.transfer?.track_token) && !signed.has(step) && data.request.status === "dispatched" && (step === "delivered" || step === "received");
+  // Por enlace: «Preparó» y «Revisó» antes de salir; «En camino» y «Recibió» cuando ya salió.
+  const st = data.request.status;
+  const linkOpen = st === "pending" || st === "preparing" || st === "dispatched";
+  const byLink = (step: SrSignStep) => !signed.has(step) && ((step === "packed" || step === "sent") ? st === "pending" || st === "preparing" : st === "dispatched");
 
   return (
     <section className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-bold"><PenLine size={15} /> Firmas de responsables</p>
         <span className="flex items-center gap-2">
-          {data.transfer?.track_token && signed.size < 4 ? (
+          {linkOpen && signed.size < 4 ? (
             <button type="button" onClick={() => void shareSignLink(data, null)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
               <Share2 size={12} /> Enviar enlace
             </button>

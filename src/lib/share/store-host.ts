@@ -26,7 +26,7 @@ export function storeSpaceOrigin(slug: string) {
  * (lavitrina.remhub.co/dashboard: su espacio); en un dominio propio se mandan al subdominio. /admin siempre en remhub.co.
  */
 const PLATFORM_PATHS = ["/dashboard", "/admin", "/login", "/acceso", "/entrar", "/documento", "/instalar", "/forgot-password", "/reset-password", "/offline",
-  "/traslado", "/firma-vale", "/comprobante", "/pedido", "/tienda-pausada", "/registro"];
+  "/traslado", "/firma-vale", "/firma-pedido", "/comprobante", "/pedido", "/tienda-pausada", "/registro"];
 
 export type StoreHostOptions = {
   /** true en tienda.remhub.co con subdominios activos: el panel vive ahí. */
@@ -110,7 +110,7 @@ export function shortLinkTarget(links: Record<string, string> | null | undefined
 
 /** Primeras partes de ruta de remhub.co que no son tiendas. */
 const PLATFORM_ROOTS = new Set(["", "_next", "api", "acceso", "admin", "comprobante", "dashboard", "documento", "entrar", "forgot-password", "instalar", "login",
-  "offline", "pedido", "registro", "reset-password", "tienda-pausada", "traslado", "firma-vale", "robots.txt", "sitemap.xml", "manifest.webmanifest", "sw.js", "favicon.ico"]);
+  "offline", "pedido", "registro", "reset-password", "tienda-pausada", "traslado", "firma-vale", "firma-pedido", "robots.txt", "sitemap.xml", "manifest.webmanifest", "sw.js", "favicon.ico"]);
 
 /** remhub.co/lavitrina/zamora → { slug: "lavitrina", rest: "/zamora" } (null si la ruta no es de una tienda). */
 export function mainHostStorePath(pathname: string) {
