@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, Bell, BellOff, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowRight, Ban, Bell, BellOff, Check, ListChecks, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEditor";
@@ -52,6 +52,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [typing, setTyping] = useState<string | null>(null);
   const [productPick, setProductPick] = useState(false);
   const [itemPick, setItemPick] = useState(false);
+  // Lista de chequeo (20261277): lo empacado (quien despacha) y lo contado al recibir (quien recibe).
+  const [checks, setChecks] = useState<Array<{ item_id: string; side: "pack" | "receive"; by: string | null; at: string }>>([]);
+  const [onlyPending, setOnlyPending] = useState(false);
   const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -106,9 +109,15 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       .channel(`sr-edits-${requestId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_request_messages", filter: `request_id=eq.${requestId}` }, () => void load())
       .subscribe();
+    const loadChecks = () => void supabaseBrowser().rpc("erp_sr_item_checks", { p_request: requestId }).then(({ data: c, error: e }) => { if (alive && !e && Array.isArray(c)) setChecks(c as typeof checks); });
+    loadChecks();
+    const chk = supabaseBrowser()
+      .channel(`sr-checks-${requestId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "erp_sr_item_checks", filter: `request_id=eq.${requestId}` }, loadChecks)
+      .subscribe();
     // Desde la notificación («↩️ Responder»): el cuadro de texto queda listo.
     if (new URLSearchParams(window.location.search).get("responder") === "1") window.setTimeout(() => document.getElementById("composer-sr")?.focus(), 600);
-    return () => { alive = false; void supabaseBrowser().removeChannel(ch); };
+    return () => { alive = false; void supabaseBrowser().removeChannel(ch); void supabaseBrowser().removeChannel(chk); };
   }, [requestId, load]);
 
   // En vivo: aviso de la conexión única del panel (StockRequestWatcher) y respaldo cada 15 s mientras esté abierto.
@@ -373,6 +382,29 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const canReceive = Boolean(data?.access.request && r?.status === "dispatched");
   const edited = Object.keys(approved).length > 0;
   // Para enviar deben estar firmados "Preparó" y "Revisó".
+  // Lista de chequeo: quien despacha chulea lo empacado; quien recibe, lo que llegó. Lo chuleado sube en el orden en que se chuleó.
+  const checkSide: "pack" | "receive" = r && (r.status === "dispatched" || r.status === "received") ? "receive" : "pack";
+  const canCheck = Boolean(r && (checkSide === "pack" ? canAttend : canReceive));
+  const showChecklist = Boolean(r && (canCheck || checks.some((c) => c.side === checkSide)) && r.status !== "rejected" && r.status !== "cancelled");
+  const checked = new Map(checks.filter((c) => c.side === checkSide).map((c) => [c.item_id, c]));
+  const doneCount = data ? data.items.filter((i) => checked.has(i.id)).length : 0;
+  const sortedItems = data ? [
+    ...data.items.filter((i) => checked.has(i.id)).sort((a, b) => checked.get(a.id)!.at.localeCompare(checked.get(b.id)!.at)),
+    ...data.items.filter((i) => !checked.has(i.id)),
+  ].filter((i) => !onlyPending || !checked.has(i.id)) : [];
+  async function toggleCheck(itemId: string) {
+    if (!canCheck || !data) return;
+    const on = !checked.has(itemId);
+    navigator.vibrate?.(on ? 18 : 8);
+    // Al instante en pantalla; si la base no lo acepta, se devuelve.
+    setChecks((cur) => (on ? [...cur, { item_id: itemId, side: checkSide, by: data.me ?? "Tú", at: new Date().toISOString() }] : cur.filter((c) => !(c.item_id === itemId && c.side === checkSide))));
+    const { error: e } = await supabaseBrowser().rpc("erp_sr_item_check", { p_request: data.request.id, p_item: itemId, p_side: checkSide, p_on: on });
+    if (e) {
+      setChecks((cur) => (on ? cur.filter((c) => !(c.item_id === itemId && c.side === checkSide)) : cur));
+      void Swal.fire({ ...swal, icon: "error", title: "No se pudo chulear", text: /Could not find the function|schema cache/i.test(e.message) ? "Ejecuta en Supabase la migración 20261277_pedido_checklist.sql." : srError(e) });
+    }
+  }
+
   // Agregar o quitar: quien atiende, o quien pidió mientras nadie lo toma; nunca después de «Revisó».
   const canEditItems = Boolean(data && r && (r.status === "pending" || r.status === "preparing") && (canAttend || (data.access.request && r.status === "pending"))
     && !data.signatures?.some((x) => x.step === "sent" || x.step === "delivered" || x.step === "received"));
@@ -380,12 +412,45 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
   const itemsPanel = data && r ? (
     <div className="space-y-3">
+      {showChecklist ? (
+        <div className="sticky top-0 z-10 rounded-2xl border p-3 backdrop-blur" style={{ borderColor: doneCount === data.items.length ? "#22c55e" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
+          <div className="flex items-center gap-2">
+            <ListChecks size={18} style={{ color: doneCount === data.items.length ? "#22c55e" : "var(--t-accent)" }} />
+            <p className="min-w-0 flex-1 text-sm font-bold">
+              {checkSide === "pack" ? "📦 Lista de empaque" : "📥 Lista de lo que llegó"} · <span className="tabular-nums" style={{ color: "#22c55e" }}>{doneCount}</span> de {data.items.length}
+            </p>
+            <button type="button" onClick={() => setOnlyPending((v) => !v)} className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={onlyPending ? { background: "var(--t-accent)", color: "#fff", borderColor: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
+              {onlyPending ? `Ver todos` : `Solo faltantes (${data.items.length - doneCount})`}
+            </button>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
+            <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg,#22c55e,#4ade80)" }} animate={{ width: `${data.items.length ? (doneCount / data.items.length) * 100 : 0}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+          </div>
+          <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
+            {doneCount === data.items.length ? "✅ ¡Todo chuleado! Revisa arriba lo que quedó listo." : canCheck ? (checkSide === "pack" ? "Toca cada producto cuando lo tengas empacado: se pone verde y sube." : "Toca cada producto cuando lo cuentes: se pone verde y sube.") : "Lo chuleado se ve en verde y en el orden en que se chuleó."}
+          </p>
+        </div>
+      ) : null}
       <div className="space-y-2">
-        {data.items.map((i) => {
+        {onlyPending && doneCount === data.items.length ? <p className="rounded-2xl border p-4 text-center text-sm" style={{ borderColor: "#22c55e" }}>🎉 No falta nada por chulear.</p> : null}
+        {sortedItems.map((i) => {
+          const chk = checked.get(i.id);
           const toSend = approved[i.id] ?? i.qty_approved ?? i.qty_requested;
           const short = i.source_now < toSend && isOpen(r.status) && r.status !== "dispatched";
           return (
-            <div key={i.id} className="flex items-center gap-3 rounded-2xl border p-2.5" style={{ borderColor: short ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
+            <motion.div key={i.id} layout transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              onClick={canCheck ? () => void toggleCheck(i.id) : undefined}
+              role={canCheck ? "button" : undefined} aria-pressed={canCheck ? Boolean(chk) : undefined}
+              className={`flex items-center gap-3 rounded-2xl border p-2.5 transition-colors ${canCheck ? "cursor-pointer select-none active:scale-[0.99]" : ""}`}
+              style={chk
+                ? { borderColor: "color-mix(in oklab, #22c55e 65%, transparent)", background: "color-mix(in oklab, #22c55e 14%, transparent)" }
+                : { borderColor: short ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
+              {showChecklist ? (
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 transition" aria-hidden
+                  style={chk ? { background: "#22c55e", borderColor: "#22c55e", color: "#fff" } : { borderColor: "var(--t-card-border)" }}>
+                  {chk ? <Check size={20} strokeWidth={3} /> : null}
+                </span>
+              ) : null}
               <Thumb src={thumbs[i.product_id] ?? i.image_url} size={44} />
               <div className="min-w-0 flex-1">
                 <ProductName name={i.name} className="text-sm font-semibold" />
@@ -395,6 +460,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   {" "}· En {r.from_name}: {i.dest_now}
                 </p>
                 {i.note ? <p className="text-[11px] font-semibold" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
+                {chk ? <p className="text-[11px] font-bold" style={{ color: "#22c55e" }}>✓ {checkSide === "pack" ? "Empacado" : "Contado"} por {chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
                 {prices?.get(i.product_id) ? (
                   <p className="text-xs" style={{ color: "var(--t-muted)" }}>
@@ -403,7 +469,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 ) : null}
               </div>
               {canAttend ? (
-                <label className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
+                <label onClick={(e) => e.stopPropagation()} className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
                   Enviar
                   <input
                     type="text"
@@ -416,7 +482,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   />
                 </label>
               ) : canReceive && receiving ? (
-                <label className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
+                <label onClick={(e) => e.stopPropagation()} className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
                   Llegó
                   <input
                     type="text"
@@ -442,11 +508,11 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <span className="text-right text-sm font-black tabular-nums">{i.qty_approved ?? i.qty_requested}<span className="block text-[10px] font-normal" style={{ color: "var(--t-muted)" }}>{i.qty_approved !== null ? "enviar" : "pedido"}</span></span>
               )}
               {canEditItems && data.items.length > 1 ? (
-                <button type="button" onClick={() => void removeItem(i)} disabled={busy} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ borderColor: "color-mix(in oklab, #ef4444 35%, transparent)" }} aria-label={`Quitar ${i.name}`} title="Quitar del pedido">
+                <button type="button" onClick={(e) => { e.stopPropagation(); void removeItem(i); }} disabled={busy} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ borderColor: "color-mix(in oklab, #ef4444 35%, transparent)" }} aria-label={`Quitar ${i.name}`} title="Quitar del pedido">
                   <Trash size={14} />
                 </button>
               ) : null}
-            </div>
+            </motion.div>
           );
         })}
       </div>
