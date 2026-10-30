@@ -3,11 +3,12 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, PenLine, X } from "lucide-react";
+import { Check, Link2, PenLine, Share2, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { SignaturePad, type SignaturePadHandle } from "@/app/traslado/[token]/SignaturePad";
 import { srError, type SrDetail, type SrSignature, type SrSignStep } from "./types";
+import { transferTrackUrl } from "@/lib/transfer-tracking";
 
 export const SIGN_STEPS: Array<{ key: SrSignStep; icon: string; title: string; who: string; side: "attend" | "request" | "both"; declaration: (from: string, to: string) => string }> = [
   { key: "packed", icon: "📦", title: "Preparó", who: "Quien prepara el pedido", side: "attend", declaration: () => "Confirmo que preparé y empaqué la mercancía según el pedido." },
@@ -17,6 +18,38 @@ export const SIGN_STEPS: Array<{ key: SrSignStep; icon: string; title: string; w
 ];
 
 const NAME_KEY = "remhub_transfer_signer";
+const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
+
+/**
+ * Enviar el enlace de firmas (el seguimiento del traslado, sin iniciar sesión) por WhatsApp, copiarlo o compartirlo.
+ * Sirve para «En camino» y «Recibió», que suelen firmar quien lleva y quien recibe.
+ */
+async function shareSignLink(data: SrDetail, step: (typeof SIGN_STEPS)[number] | null) {
+  const token = data.transfer?.track_token;
+  if (!token) return;
+  const url = transferTrackUrl(token);
+  const r = data.request;
+  const text = [
+    step ? `✍️ Firma «${step.title}» · Pedido interno #${r.number}` : `✍️ Firmas del pedido interno #${r.number}`,
+    `${r.to_name} → ${r.from_name}`,
+    step ? `${step.who}: abre el enlace, escribe tu nombre y firma. No necesitas iniciar sesión.` : "Abre el enlace para ver el envío y firmar tu paso. No necesitas iniciar sesión.",
+    url,
+  ].join("\n");
+  const res = await Swal.fire({
+    ...swal, title: step ? `🔗 Enlace para firmar «${step.title}»` : "🔗 Enlace de firmas",
+    html: `<p style="font-size:13px;opacity:.8">Quien lo abra puede firmar desde su celular, sin cuenta.</p><p style="font-size:12px;word-break:break-all;margin-top:8px;padding:8px;border-radius:10px;background:rgba(127,127,127,.12)">${url}</p>`,
+    showDenyButton: true, showCancelButton: true,
+    confirmButtonText: "WhatsApp", denyButtonText: "Copiar", cancelButtonText: typeof navigator !== "undefined" && "share" in navigator ? "Compartir…" : "Cerrar",
+    confirmButtonColor: "#16a34a", denyButtonColor: "#8b5cf6",
+  });
+  if (res.isConfirmed) window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  else if (res.isDenied) {
+    try { await navigator.clipboard.writeText(text); void Swal.fire({ ...swal, toast: true, position: "top-end", timer: 2000, showConfirmButton: false, icon: "success", title: "Enlace copiado" }); }
+    catch { void Swal.fire({ ...swal, icon: "info", title: "Copia el enlace", text: url }); }
+  } else if (res.dismiss === Swal.DismissReason.cancel && "share" in navigator) {
+    try { await navigator.share({ title: `Pedido interno #${r.number}`, text }); } catch { /* el usuario cerró el menú */ }
+  }
+}
 
 /** Quién puede firmar cada paso ahora mismo. */
 function canSign(data: SrDetail, step: (typeof SIGN_STEPS)[number]) {
@@ -35,12 +68,21 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
   const signed = new Map((data.signatures ?? []).map((s) => [s.step, s]));
   const [signing, setSigning] = useState<SrSignStep | null>(null);
   const current = signing ?? (autoOpen && !signed.has(autoOpen) ? autoOpen : null);
+  // Por enlace (seguimiento del traslado): desde que se envía, «En camino» y «Recibió».
+  const byLink = (step: SrSignStep) => Boolean(data.transfer?.track_token) && !signed.has(step) && data.request.status === "dispatched" && (step === "delivered" || step === "received");
 
   return (
     <section className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-bold"><PenLine size={15} /> Firmas de responsables</p>
-        <span className="text-xs" style={{ color: "var(--t-muted)" }}>{signed.size}/4</span>
+        <span className="flex items-center gap-2">
+          {data.transfer?.track_token && signed.size < 4 ? (
+            <button type="button" onClick={() => void shareSignLink(data, null)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
+              <Share2 size={12} /> Enviar enlace
+            </button>
+          ) : null}
+          <span className="text-xs" style={{ color: "var(--t-muted)" }}>{signed.size}/4</span>
+        </span>
       </div>
       <ol className="mt-2 grid gap-2 sm:grid-cols-2">
         {SIGN_STEPS.map((step, i) => {
@@ -63,10 +105,19 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
                     <img src={sig.signature} alt={`Firma de ${sig.signer_name}`} className="mt-1.5 h-12 w-auto rounded-md border bg-white" style={{ borderColor: "var(--t-card-border)" }} />
                   ) : null}
                 </div>
-              ) : can ? (
-                <button type="button" onClick={() => setSigning(step.key)} className="mt-1.5 w-full rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
-                  ✍️ Firmar
-                </button>
+              ) : can || byLink(step.key) ? (
+                <div className="mt-1.5 flex gap-1.5">
+                  {can ? (
+                    <button type="button" onClick={() => setSigning(step.key)} className="flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
+                      ✍️ Firmar aquí
+                    </button>
+                  ) : null}
+                  {byLink(step.key) ? (
+                    <button type="button" onClick={() => void shareSignLink(data, step)} title="Que firme desde su celular, sin cuenta" className={`${can ? "" : "flex-1"} inline-flex items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-bold`} style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
+                      <Link2 size={13} /> {can ? "Enlace" : "Enviar enlace"}
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{step.who}</p>
               )}
