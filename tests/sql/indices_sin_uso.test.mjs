@@ -33,5 +33,5 @@ const n = (await rows("select public.erp_restore_dropped_indexes() n"))[0].n;
 ok(n === 3 && (await exists("products_desc_trgm_idx")), "Volver atrás los recrea", n);
 
 console.log(`\n${pass} pasaron, ${fail} fallaron`);
-await db.close();
-process.exit(fail ? 1 : 0);
+// Sin process.exit: en Windows, salir de golpe con PGlite abierto revienta libuv.
+process.exitCode = fail ? 1 : 0;
