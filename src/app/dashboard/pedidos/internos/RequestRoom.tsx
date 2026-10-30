@@ -55,6 +55,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Lista de chequeo (20261277): lo empacado (quien despacha) y lo contado al recibir (quien recibe).
   const [checks, setChecks] = useState<Array<{ item_id: string; side: "pack" | "receive"; by: string | null; at: string }>>([]);
   const [onlyPending, setOnlyPending] = useState(false);
+  const [itemQuery, setItemQuery] = useState("");
   const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -393,6 +394,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     ...data.items.filter((i) => checked.has(i.id)).sort((a, b) => checked.get(a.id)!.at.localeCompare(checked.get(b.id)!.at)),
     ...data.items.filter((i) => !checked.has(i.id)),
   ].filter((i) => !onlyPending || !checked.has(i.id)) : [];
+  const foldText = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const queryWords = foldText(itemQuery.trim()).split(/\s+/).filter(Boolean);
+  const shownItems = queryWords.length ? sortedItems.filter((i) => { const h = foldText(`${i.name} ${i.sku ?? ""}`); return queryWords.every((w) => h.includes(w)); }) : sortedItems;
   async function toggleCheck(itemId: string) {
     if (!canCheck || !data) return;
     const on = !checked.has(itemId);
@@ -424,6 +428,22 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               {onlyPending ? `Ver todos` : `Solo faltantes (${data.items.length - doneCount})`}
             </button>
           </div>
+          <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: itemQuery ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            <Search size={15} style={{ color: "var(--t-muted)" }} />
+            <input value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} type="search" enterKeyHint="done"
+              onKeyDown={(e) => {
+                // Con un solo resultado, Enter lo chulea (sirve también con lector de código de barras).
+                if (e.key === "Enter" && shownItems.length === 1 && canCheck) { e.preventDefault(); void toggleCheck(shownItems[0].id); setItemQuery(""); }
+                if (e.key === "Escape") setItemQuery("");
+              }}
+              placeholder="Buscar en este pedido (nombre o referencia)…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
+            {itemQuery ? (
+              <>
+                <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: "var(--t-muted)" }}>{shownItems.length}</span>
+                <button type="button" onClick={() => setItemQuery("")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full" aria-label="Limpiar búsqueda"><X size={14} /></button>
+              </>
+            ) : null}
+          </label>
           <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
             <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg,#22c55e,#4ade80)" }} animate={{ width: `${data.items.length ? (doneCount / data.items.length) * 100 : 0}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
           </div>
@@ -434,7 +454,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       ) : null}
       <div className="space-y-2">
         {onlyPending && doneCount === data.items.length ? <p className="rounded-2xl border p-4 text-center text-sm" style={{ borderColor: "#22c55e" }}>🎉 No falta nada por chulear.</p> : null}
-        {sortedItems.map((i) => {
+        {queryWords.length && !shownItems.length ? <p className="rounded-2xl border p-4 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>🔎 Ningún producto del pedido coincide con «{itemQuery.trim()}».</p> : null}
+        {shownItems.map((i) => {
           const chk = checked.get(i.id);
           const toSend = approved[i.id] ?? i.qty_approved ?? i.qty_requested;
           const short = i.source_now < toSend && isOpen(r.status) && r.status !== "dispatched";
