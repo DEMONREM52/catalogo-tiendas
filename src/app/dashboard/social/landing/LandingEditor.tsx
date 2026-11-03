@@ -157,7 +157,7 @@ function ImageInput({ value, onChange, label = "Foto" }: { value: string; onChan
         try { onChange(await uploadImage(f)); } catch (err) { void Swal.fire({ icon: "error", title: "No se pudo subir", text: errorText(err), ...swalTheme }); } finally { setBusy(false); }
       }} />
       <button type="button" onClick={() => file.current?.click()} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={softBox} title="Subir foto">{busy ? "…" : <ImagePlus size={16} />}</button>
-      {value ? <button type="button" onClick={() => onChange("")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={softBox} title="Quitar"><X size={16} /></button> : null}
+      {value ? <button type="button" onClick={() => onChange("")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={softBox} title="Quitar" aria-label="Quitar"><X size={16} /></button> : null}
     </div>
   );
 }
@@ -273,9 +273,9 @@ function ListEditor<T>({ items, onChange, make, render, addLabel, max = 12 }: { 
       {items.map((it, i) => (
         <div key={i} className="rounded-2xl border p-3" style={softBox}>
           <div className="mb-2 flex justify-end gap-1">
-            <button type="button" disabled={!i} onClick={() => move(i, -1)} className="rounded-lg p-1 disabled:opacity-30" title="Subir"><ArrowUp size={14} /></button>
-            <button type="button" disabled={i === items.length - 1} onClick={() => move(i, 1)} className="rounded-lg p-1 disabled:opacity-30" title="Bajar"><ArrowDown size={14} /></button>
-            <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))} className="rounded-lg p-1 text-red-500" title="Quitar"><Trash2 size={14} /></button>
+            <button type="button" disabled={!i} onClick={() => move(i, -1)} className="rounded-lg p-1 disabled:opacity-30" title="Subir" aria-label="Subir"><ArrowUp size={14} /></button>
+            <button type="button" disabled={i === items.length - 1} onClick={() => move(i, 1)} className="rounded-lg p-1 disabled:opacity-30" title="Bajar" aria-label="Bajar"><ArrowDown size={14} /></button>
+            <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))} className="rounded-lg p-1 text-red-500" title="Quitar" aria-label="Quitar"><Trash2 size={14} /></button>
           </div>
           {render(it, (v) => onChange(items.map((x, k) => (k === i ? v : x))), i)}
         </div>
@@ -831,8 +831,8 @@ export function LandingEditor({ store, catalogs, initial, onClose, onSaved, publ
                 <div key={sec.key} className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ ...softBox, opacity: sec.on ? 1 : 0.55 }}>
                   <span className="w-5 text-xs font-black" style={{ color: "var(--t-muted)" }}>{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{SECTION_NAMES[sec.key]}</span>
-                  <button type="button" disabled={!i} onClick={() => { const n = [...cfg.sections]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCfg({ sections: n }); }} className="p-1 disabled:opacity-30" title="Subir"><ArrowUp size={14} /></button>
-                  <button type="button" disabled={i === cfg.sections.length - 1} onClick={() => { const n = [...cfg.sections]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setCfg({ sections: n }); }} className="p-1 disabled:opacity-30" title="Bajar"><ArrowDown size={14} /></button>
+                  <button type="button" disabled={!i} onClick={() => { const n = [...cfg.sections]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setCfg({ sections: n }); }} className="p-1 disabled:opacity-30" title="Subir" aria-label="Subir"><ArrowUp size={14} /></button>
+                  <button type="button" disabled={i === cfg.sections.length - 1} onClick={() => { const n = [...cfg.sections]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; setCfg({ sections: n }); }} className="p-1 disabled:opacity-30" title="Bajar" aria-label="Bajar"><ArrowDown size={14} /></button>
                   <Switch checked={sec.on} onChange={(on) => setCfg({ sections: cfg.sections.map((x, k) => (k === i ? { ...x, on } : x)) })} label={SECTION_NAMES[sec.key]} />
                 </div>
               ))}

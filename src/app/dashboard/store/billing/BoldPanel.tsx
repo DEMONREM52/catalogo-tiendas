@@ -122,7 +122,7 @@ export default function BoldPanel({ storeId, isOwner }: { storeId: string | null
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={box} title="Actualizar"><RefreshCw size={15} /></button>
+            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={box} title="Actualizar" aria-label="Actualizar"><RefreshCw size={15} /></button>
             <button type="button" onClick={() => setDraft({ ...EMPTY, name: accounts.length ? "" : "Bold Principal" })} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white"><Plus size={15} /> Agregar cuenta Bold</button>
           </div>
         </div>

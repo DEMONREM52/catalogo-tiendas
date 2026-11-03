@@ -1218,7 +1218,19 @@ export default function PosPage() {
     }
   }
 
+  // Candado del cobro: un doble toque, o «Cobrar» + F4, no crea la venta dos veces (las confirmaciones tardan).
+  const charging = useRef(false);
   async function createInvoice() {
+    if (charging.current || saving) return;
+    charging.current = true;
+    try {
+      await createInvoiceOnce();
+    } finally {
+      charging.current = false;
+    }
+  }
+
+  async function createInvoiceOnce() {
     if (!store) return;
     if (cart.length === 0) {
       await Swal.fire({

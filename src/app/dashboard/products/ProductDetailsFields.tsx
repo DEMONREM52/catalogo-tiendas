@@ -95,7 +95,7 @@ function VideoField({ label, icon, value, onChange, hint }: { label: string; ico
       <p className="mb-2 text-xs" style={muted}>{hint}</p>
       <div className="flex items-center gap-2">
         <input className="w-full rounded-xl border p-2.5 text-sm outline-none" style={{ ...textStyle, borderColor: bad ? "rgba(239,68,68,.7)" : "var(--t-card-border)" }} type="url" inputMode="url" value={value} onChange={(e) => onChange(e.target.value.trim())} placeholder="https://youtube.com/…" />
-        {value ? <button type="button" onClick={() => onChange("")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={textStyle} title="Quitar"><X size={15} /></button> : null}
+        {value ? <button type="button" onClick={() => onChange("")} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border" style={textStyle} title="Quitar" aria-label="Quitar"><X size={15} /></button> : null}
       </div>
       {bad ? <p className="mt-1 text-xs font-semibold text-red-500">Ese enlace no se ve bien: debe empezar por https://</p> : null}
       {thumb ? (
@@ -185,9 +185,9 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
                 <div key={i} className="flex items-center gap-2">
                   <IconButton value={icon} onChange={(ic) => saveHighlights(highlights.map((x, k) => (k === i ? (ic ? `${ic} ${text}` : text) : x)))} />
                   <input value={text} onChange={(e) => saveHighlights(highlights.map((x, k) => (k === i ? (icon ? `${icon} ${e.target.value}` : e.target.value) : x)))} className="w-full rounded-xl border p-2.5 text-sm outline-none" style={textStyle} maxLength={160} />
-                  <button type="button" disabled={!i} onClick={() => moveH(i, -1)} className="p-1 disabled:opacity-30" title="Subir"><ArrowUp size={14} /></button>
-                  <button type="button" disabled={i === highlights.length - 1} onClick={() => moveH(i, 1)} className="p-1 disabled:opacity-30" title="Bajar"><ArrowDown size={14} /></button>
-                  <button type="button" onClick={() => saveHighlights(highlights.filter((_, k) => k !== i))} className="p-1 text-red-500" title="Quitar"><Trash2 size={14} /></button>
+                  <button type="button" disabled={!i} onClick={() => moveH(i, -1)} className="p-1 disabled:opacity-30" title="Subir" aria-label="Subir"><ArrowUp size={14} /></button>
+                  <button type="button" disabled={i === highlights.length - 1} onClick={() => moveH(i, 1)} className="p-1 disabled:opacity-30" title="Bajar" aria-label="Bajar"><ArrowDown size={14} /></button>
+                  <button type="button" onClick={() => saveHighlights(highlights.filter((_, k) => k !== i))} className="p-1 text-red-500" title="Quitar" aria-label="Quitar"><Trash2 size={14} /></button>
                 </div>
               );
             })}
@@ -218,9 +218,9 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
                 <input value={s.name} onChange={(e) => saveSpecs(specs.map((x, k) => (k === i ? { ...x, name: e.target.value } : x)))} placeholder="Nombre (ej. Color)" className="rounded-xl border p-2.5 text-sm font-semibold outline-none" style={textStyle} maxLength={60} />
                 <input ref={i === specs.length - 1 ? lastSpec : undefined} value={s.value} onChange={(e) => saveSpecs(specs.map((x, k) => (k === i ? { ...x, value: e.target.value } : x)))} placeholder="Valor (ej. Negro)" className="rounded-xl border p-2.5 text-sm outline-none" style={{ ...textStyle, borderColor: s.name && !s.value ? "rgba(245,158,11,.7)" : "var(--t-card-border)" }} maxLength={160} />
                 <div className="flex">
-                  <button type="button" disabled={!i} onClick={() => moveS(i, -1)} className="p-1 disabled:opacity-30" title="Subir"><ArrowUp size={14} /></button>
-                  <button type="button" disabled={i === specs.length - 1} onClick={() => moveS(i, 1)} className="p-1 disabled:opacity-30" title="Bajar"><ArrowDown size={14} /></button>
-                  <button type="button" onClick={() => saveSpecs(specs.filter((_, k) => k !== i))} className="p-1 text-red-500" title="Quitar"><Trash2 size={14} /></button>
+                  <button type="button" disabled={!i} onClick={() => moveS(i, -1)} className="p-1 disabled:opacity-30" title="Subir" aria-label="Subir"><ArrowUp size={14} /></button>
+                  <button type="button" disabled={i === specs.length - 1} onClick={() => moveS(i, 1)} className="p-1 disabled:opacity-30" title="Bajar" aria-label="Bajar"><ArrowDown size={14} /></button>
+                  <button type="button" onClick={() => saveSpecs(specs.filter((_, k) => k !== i))} className="p-1 text-red-500" title="Quitar" aria-label="Quitar"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}

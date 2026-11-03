@@ -72,7 +72,7 @@ function QtyStepper({ qty, max, onChange, productId, onEnter, onEscape }: {
   const over = max !== null && max !== undefined && qty > max;
   return (
     <div className="flex items-center rounded-full border" style={{ borderColor: over ? "rgba(239,68,68,.6)" : "var(--t-card-border)" }}>
-      <button type="button" aria-label="Quitar uno" onClick={() => onChange(Math.max(1, qty - 1))} className="grid h-8 w-8 place-items-center rounded-full transition hover:bg-white/10 active:scale-90">
+      <button type="button" aria-label="Quitar uno" onClick={() => onChange(Math.max(1, qty - 1))} className="no-tap-expand grid h-8 w-8 place-items-center rounded-full transition hover:bg-white/10 active:scale-90 pointer-coarse:h-11 pointer-coarse:w-11">
         <Minus size={14} />
       </button>
       <input
@@ -93,10 +93,10 @@ function QtyStepper({ qty, max, onChange, productId, onEnter, onEscape }: {
           if (t && Number(t) > 0) onChange(Number(t));
         }}
         onBlur={() => setTyped(null)}
-        className="w-10 text-center text-sm font-black tabular-nums"
+        className="w-10 text-center text-sm font-black tabular-nums pointer-coarse:w-12 pointer-coarse:text-base"
         style={bare}
       />
-      <button type="button" aria-label="Agregar uno" onClick={() => onChange(qty + 1)} className="grid h-8 w-8 place-items-center rounded-full transition hover:bg-white/10 active:scale-90">
+      <button type="button" aria-label="Agregar uno" onClick={() => onChange(qty + 1)} className="no-tap-expand grid h-8 w-8 place-items-center rounded-full transition hover:bg-white/10 active:scale-90 pointer-coarse:h-11 pointer-coarse:w-11">
         <Plus size={14} />
       </button>
     </div>
@@ -178,7 +178,7 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <p className="line-clamp-2 min-w-0 flex-1 text-[13px] font-bold leading-tight">{line.name}</p>
-            <button type="button" onClick={onRemove} aria-label={`Quitar ${line.name}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-red-400 transition hover:bg-red-500/15">
+            <button type="button" onClick={onRemove} aria-label={`Quitar ${line.name}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-400 transition hover:bg-red-500/15 pointer-coarse:h-10 pointer-coarse:w-10">
               <Trash2 size={14} />
             </button>
           </div>

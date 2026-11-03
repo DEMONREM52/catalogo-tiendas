@@ -16,6 +16,7 @@ import { EditableNickname, useNicknameUpdates } from "../Nickname";
 import { BackupPanel } from "./BackupPanel";
 import { LoyaltyPanel, QrPanel } from "./SalesSettings";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { MobileActionBar } from "@/components/ui/MobileActionBar";
 
 type StoreProfileDraft = {
   headline: string;
@@ -1164,6 +1165,10 @@ export default function StoreSettings() {
         <a href={`/${store.slug}/detal`} target="_blank" rel="noreferrer" className="btn-soft inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold"><Link2 size={16} /> Vista previa del catálogo</a>
         <button type="button" onClick={() => void saveSettings()} disabled={!canEdit || saving} className="btn-cta inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold disabled:opacity-50"><Save size={16} /> {saving ? "Guardando…" : "Guardar cambios"}</button>
       </div>
+      {/* En el celular, «Guardar» queda abajo a la mano (la página es larga). */}
+      <MobileActionBar show={canEdit}>
+        <button type="button" onClick={() => void saveSettings()} disabled={saving} className="btn-cta inline-flex items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold disabled:opacity-50"><Save size={16} /> {saving ? "Guardando…" : "Guardar cambios"}</button>
+      </MobileActionBar>
     </main>
   );
 }

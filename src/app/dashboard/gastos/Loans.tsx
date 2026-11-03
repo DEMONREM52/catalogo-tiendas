@@ -204,7 +204,7 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
                           <li key={p.id} className="flex items-center gap-2" style={{ opacity: p.voided ? 0.5 : 1 }}>
                             <span className="min-w-0 flex-1">{fdate(p.paid_at.slice(0, 10))} · {p.source === "payroll" ? `Nómina #${p.run_number ?? ""}` : `Abono ${p.method === "cash" ? "en efectivo" : p.method ?? ""}`}{p.note && p.source === "manual" ? ` · ${p.note}` : ""}{p.voided ? ` · anulado (${p.void_reason ?? ""})` : ""}</span>
                             <b className="tabular-nums">{cop(p.amount)}</b>
-                            {!p.voided && p.source === "manual" && cat.can.payroll_approve ? <button type="button" onClick={() => void voidPayment(p)} className="opacity-60 hover:opacity-100" title="Anular abono"><X size={13} /></button> : null}
+                            {!p.voided && p.source === "manual" && cat.can.payroll_approve ? <button type="button" onClick={() => void voidPayment(p)} className="opacity-60 hover:opacity-100" title="Anular abono" aria-label="Anular abono"><X size={13} /></button> : null}
                           </li>
                         ))}
                       </ul>

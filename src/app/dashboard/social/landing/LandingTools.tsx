@@ -73,7 +73,7 @@ export function LandingStats({ storeId, page, config, onBack, url }: { storeId: 
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={`${inputCls} w-auto`} style={inputStyle}>
           {[1, 7, 30, 90].map((d) => <option key={d} value={d}>{d === 1 ? "Hoy" : `Últimos ${d} días`}</option>)}
         </select>
-        <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Actualizar"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></button>
+        <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Actualizar" aria-label="Actualizar"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></button>
         <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold" style={softBox}><ExternalLink size={15} /> Abrir</a>
       </div>
 
@@ -313,7 +313,7 @@ export function AdKit({ page, config, url, price, onBack }: { page: { name: stri
                 <span className="text-xl">{ch.emoji}</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-bold">{ch.name}</p><p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>{link}</p></div>
                 <button type="button" onClick={() => void doCopy(ch.key, link)} className="inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" style={softBox}>{copied === ch.key ? <Check size={13} /> : <Copy size={13} />} Copiar</button>
-                <button type="button" onClick={() => setQr(link)} className="grid h-8 w-8 place-items-center rounded-xl border" style={softBox} title="Código QR"><QrCode size={14} /></button>
+                <button type="button" onClick={() => setQr(link)} className="grid h-8 w-8 place-items-center rounded-xl border" style={softBox} title="Código QR" aria-label="Código QR"><QrCode size={14} /></button>
               </div>
             );
           })}
@@ -530,7 +530,7 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
               </select>
             ) : null}
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar: nombre, WhatsApp, ciudad o #" className={`${inputCls} min-w-52 flex-1`} style={inputStyle} />
-            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Actualizar"><RefreshCw size={15} /></button>
+            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Actualizar" aria-label="Actualizar"><RefreshCw size={15} /></button>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {FILTERS.map(([k, l]) => (

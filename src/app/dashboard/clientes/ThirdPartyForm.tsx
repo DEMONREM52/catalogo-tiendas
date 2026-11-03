@@ -533,7 +533,7 @@ export function ThirdPartyForm({
               </label>
             </div>
 
-            <footer className="flex items-center justify-end gap-2 border-t px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>
+            <footer className="flex items-center justify-end gap-2 border-t px-5 pt-3" style={{ borderColor: "var(--t-card-border)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
               <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
                 Cancelar
               </button>

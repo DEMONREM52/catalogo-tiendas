@@ -94,6 +94,12 @@ export const RELEASES: Release[] = [
     summary: "Solo te pedimos actualizar si cambió algo de la página donde estás, y te mostramos qué cambió.",
     paths: [],
   },
+  {
+    // Cargas, POS táctil y botones con nombre: en toda la app, sin avisar.
+    id: 9, date: "2026-11-03", title: "Cargas más claras y POS más cómodo en tablet",
+    summary: "Esqueletos de carga en todo el panel, botones de cantidad más grandes en pantallas táctiles y cobro protegido contra doble envío.",
+    paths: [],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

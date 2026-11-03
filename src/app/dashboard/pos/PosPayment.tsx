@@ -88,7 +88,7 @@ export function PosPayment({ total, value, onChange }: { total: number; value: P
                   {SINGLE.map((m) => <option key={m.value} value={m.value}>{m.icon} {m.label}</option>)}
                 </select>
                 <MoneyField value={part.amount} onChange={(v) => onChange({ ...value, parts: value.parts.map((p, j) => (j === i ? { ...p, amount: v } : p)) })} ariaLabel="Valor" />
-                <button type="button" aria-label="Quitar" onClick={() => onChange({ ...value, parts: value.parts.filter((_, j) => j !== i) })} className="grid h-8 w-8 place-items-center rounded-full opacity-60 hover:opacity-100"><X size={14} /></button>
+                <button type="button" aria-label="Quitar" onClick={() => onChange({ ...value, parts: value.parts.filter((_, j) => j !== i) })} className="grid h-10 w-10 shrink-0 place-items-center rounded-full opacity-60 hover:opacity-100"><X size={18} /></button>
               </motion.div>
             ))}
           </AnimatePresence>

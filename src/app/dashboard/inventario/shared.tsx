@@ -168,7 +168,7 @@ export function Btn({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className="rounded-xl border px-3.5 py-2 text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+      className="min-h-10 rounded-xl border px-3.5 py-2 text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:min-h-11"
       style={style}
     >
       {children}
