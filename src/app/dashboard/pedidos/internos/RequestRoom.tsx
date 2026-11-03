@@ -60,6 +60,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [itemQuery, setItemQuery] = useState("");
   // Celular: el buscador de la lista se abre con 🔍 (así la barra fija ocupa poco).
   const [searchOpen, setSearchOpen] = useState(false);
+  // Celular: la ruta y los datos van en una línea; tocándolos se ven completos.
+  const [headOpen, setHeadOpen] = useState(false);
   const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -840,14 +842,15 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               </div>
               {/* Ruta a todo lo ancho (en celular los botones ya no la aprietan). */}
               {r ? (
-                <h3 className="mt-1 truncate text-[11px] font-bold leading-snug sm:mt-1.5 sm:whitespace-normal sm:text-lg sm:font-black" title={`${r.to_name} → ${r.from_name}`}>
+                <h3 role="button" tabIndex={0} aria-expanded={headOpen} onClick={() => setHeadOpen((v) => !v)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHeadOpen((v) => !v); } }}
+                  className={`mt-1 cursor-pointer text-[11px] font-bold leading-snug sm:mt-1.5 sm:cursor-default sm:whitespace-normal sm:text-lg sm:font-black ${headOpen ? "leading-relaxed" : "truncate"}`} title={headOpen ? "Toca para resumir" : "Toca para ver completo"}>
                   <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
                   <ArrowRight size={12} className="mx-0.5 inline align-middle sm:mx-1" style={{ color: "var(--t-muted)" }} />
                   <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>📥 {r.from_name}</span>
                 </h3>
               ) : <div className="mt-1 h-6 w-56 animate-pulse rounded" style={{ background: "var(--t-card-bg)" }} />}
               {r ? (
-                <p className="mt-0.5 truncate text-[10px] sm:mt-1 sm:whitespace-normal sm:text-xs" style={{ color: "var(--t-muted)" }}>
+                <p onClick={() => setHeadOpen((v) => !v)} className={`mt-0.5 cursor-pointer text-[10px] sm:mt-1 sm:cursor-default sm:whitespace-normal sm:text-xs ${headOpen ? "" : "truncate"}`} style={{ color: "var(--t-muted)" }}>
                   Pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b> · {timeAgo(r.created_at)}{r.handled_by_name ? <> · Atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}{r.needed_by ? ` · Para el ${new Date(`${r.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
                 </p>
               ) : null}
