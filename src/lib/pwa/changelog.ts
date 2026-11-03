@@ -155,6 +155,17 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "Rosado: mensajes sin leer" },
     ],
   },
+  {
+    id: 15, date: "2026-11-03", title: "Nuevo aspecto: vidrio",
+    summary: "Tarjetas, ventanas y menús transparentes como vidrio, con fondo de colores. Se apaga en Apariencia → Vidrio.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "✨", text: "Las tarjetas dejan ver el fondo, como vidrio esmerilado" },
+      { icon: "🪟", text: "Las ventanas y avisos también son de vidrio" },
+      { icon: "🧾", text: "En el POS e informes queda casi sólido para leer rápido" },
+      { icon: "🌗", text: "Abajo a la izquierda: Apariencia → Vidrio para apagarlo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

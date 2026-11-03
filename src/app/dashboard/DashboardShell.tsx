@@ -495,6 +495,13 @@ export default function DashboardShell({
   const [drawerMounted, setDrawerMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Efecto vidrio solo en el panel: suave (casi sólido) donde se trabaja rápido y se lee mucho.
+  useEffect(() => {
+    const soft = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos)(\/|$)/.test(pathname ?? "");
+    document.documentElement.dataset.glassArea = soft ? "soft" : "full";
+    return () => { delete document.documentElement.dataset.glassArea; };
+  }, [pathname]);
+
   useEffect(() => {
     (async () => {
       const sb = supabaseBrowser();

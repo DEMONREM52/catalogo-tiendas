@@ -1203,3 +1203,103 @@ html.dark .viz-root,
   animation: skeletonShine 1.4s ease-in-out infinite;
 }
 @keyframes skeletonShine { to { transform: translateX(100%); } }
+
+/* =========================================================
+   ✨ EFECTO VIDRIO (solo en el panel: html[data-glass-area])
+   - Se apaga en «Apariencia → Vidrio», con «reducir transparencia» o al imprimir.
+   - full: tarjetas, ventanas y menús transparentes con desenfoque.
+   - soft: POS, informes, contador y datos casi sólidos (se lee rápido y no gasta batería).
+   - Las variables van en <body> para que también las tomen las ventanas que se abren aparte.
+   ========================================================= */
+html[data-glass="on"][data-glass-area] body {
+  --t-glass-blur: 18px;
+  --t-glass-sat: 170%;
+  --t-card-bg: rgba(255, 255, 255, 0.52);
+  --t-card-bg-soft: rgba(255, 255, 255, 0.38);
+  --t-card-border: rgba(255, 255, 255, 0.72);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 30px -12px rgba(76, 29, 149, 0.22);
+  --t-glass-dialog: rgba(248, 246, 255, 0.72);
+  --t-glass-input: rgba(255, 255, 255, 0.7);
+  --t-bg: radial-gradient(800px 560px at 8% 6%, rgba(168, 85, 247, 0.30), transparent 62%),
+    radial-gradient(760px 560px at 92% 12%, rgba(236, 72, 153, 0.24), transparent 62%),
+    radial-gradient(900px 640px at 70% 96%, rgba(56, 189, 248, 0.22), transparent 62%),
+    radial-gradient(700px 520px at 12% 92%, rgba(79, 70, 229, 0.22), transparent 62%);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
+    --t-card-bg: rgba(28, 20, 48, 0.46);
+    --t-card-bg-soft: rgba(255, 255, 255, 0.06);
+    --t-card-border: rgba(255, 255, 255, 0.14);
+    --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 12px 34px -14px rgba(0, 0, 0, 0.7);
+    --t-glass-dialog: rgba(20, 14, 34, 0.74);
+    --t-glass-input: rgba(10, 6, 20, 0.5);
+    --t-bg: radial-gradient(800px 560px at 8% 6%, rgba(168, 85, 247, 0.38), transparent 62%),
+      radial-gradient(760px 560px at 92% 12%, rgba(236, 72, 153, 0.28), transparent 62%),
+      radial-gradient(900px 640px at 70% 96%, rgba(14, 165, 233, 0.22), transparent 62%),
+      radial-gradient(700px 520px at 12% 92%, rgba(79, 70, 229, 0.32), transparent 62%);
+  }
+}
+html[data-glass="on"][data-glass-area][data-theme="dark"] body {
+  --t-card-bg: rgba(28, 20, 48, 0.46);
+  --t-card-bg-soft: rgba(255, 255, 255, 0.06);
+  --t-card-border: rgba(255, 255, 255, 0.14);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 12px 34px -14px rgba(0, 0, 0, 0.7);
+  --t-glass-dialog: rgba(20, 14, 34, 0.74);
+  --t-glass-input: rgba(10, 6, 20, 0.5);
+  --t-bg: radial-gradient(800px 560px at 8% 6%, rgba(168, 85, 247, 0.38), transparent 62%),
+    radial-gradient(760px 560px at 92% 12%, rgba(236, 72, 153, 0.28), transparent 62%),
+    radial-gradient(900px 640px at 70% 96%, rgba(14, 165, 233, 0.22), transparent 62%),
+    radial-gradient(700px 520px at 12% 92%, rgba(79, 70, 229, 0.32), transparent 62%);
+}
+
+/* Tarjetas y paneles grandes: el desenfoque es el «vidrio esmerilado». */
+html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select) {
+  -webkit-backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
+  backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
+  box-shadow: var(--t-glass-edge);
+}
+
+/* Ventanas, menús y avisos: vidrio más denso para que el texto se lea bien. */
+html[data-glass="on"][data-glass-area] :is([role="dialog"], [role="menu"], [role="listbox"])[style*="--t-bg-base"],
+html[data-glass="on"][data-glass-area] .swal2-popup {
+  background: var(--t-glass-dialog) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: var(--t-glass-edge), 0 30px 80px -20px rgba(0, 0, 0, 0.45);
+}
+
+/* Campos: un poco más sólidos que la tarjeta para escribir cómodo. */
+html[data-glass="on"][data-glass-area] :is(input, textarea, select)[style*="--t-card-bg"] {
+  background-color: var(--t-glass-input) !important;
+}
+
+/* Suave: casi sólido y sin desenfoque. */
+html[data-glass="on"][data-glass-area="soft"] body {
+  --t-card-bg: color-mix(in oklab, var(--t-bg-base) 90%, transparent);
+}
+
+/* Celulares: menos desenfoque (más fluido y gasta menos batería). */
+@media (pointer: coarse) {
+  html[data-glass="on"][data-glass-area] body {
+    --t-glass-blur: 10px;
+    --t-glass-sat: 140%;
+  }
+}
+
+/* Quien pide menos transparencia en su celular o computador: sin vidrio. */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-glass="on"][data-glass-area] body {
+    --t-card-bg: var(--t-bg-base);
+  }
+  html[data-glass="on"][data-glass-area] * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media print {
+  html[data-glass-area] * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
