@@ -2349,6 +2349,7 @@ export default function PosPage() {
             </div>
 
             <PosCartLines
+                storeId={storeId}
               lines={lines}
               floors={floors}
               approvals={approvals}
@@ -2472,6 +2473,7 @@ export default function PosPage() {
               <p className="px-4 text-[11px]" style={{ color: "var(--t-muted)" }}>👤 {effectiveClient.name} · Lista P{currentPriceList}</p>
               <div className="min-h-0 flex-1 overflow-y-auto px-3">
                 <PosCartLines
+                storeId={storeId}
                   lines={lines}
                   floors={floors}
                   approvals={approvals}

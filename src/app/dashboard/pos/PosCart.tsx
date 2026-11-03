@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
+import { OtherPointsStock } from "./OtherPointsStock";
 import type { ApprovalState, FloorInfo } from "./usePriceFloors";
 
 export type CartLine = {
@@ -138,8 +139,8 @@ function InlinePrice({ value, onChange, label, tone, productId, onEnter }: {
   );
 }
 
-function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext }: {
-  line: CartLine; floors: FloorInfo | null; approval?: ApprovalState;
+function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext, storeId }: {
+  line: CartLine; floors: FloorInfo | null; approval?: ApprovalState; storeId?: string | null;
   onQty: (n: number) => void; onPrice: (p: number) => void; onLevel: (l: number) => void; onRemove: () => void; onRequest: (note: string) => Promise<void>;
   /** Aviso corto sobre la línea (ej. «Ya tenías 2 · ahora 3»). */
   flash?: string | null;
@@ -208,7 +209,10 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
             </motion.p>
           ) : null}
           {line.stock !== null && line.stock !== undefined && line.qty > line.stock ? (
-            <p className="mt-1 text-[11px] font-semibold text-red-400">Solo hay {line.stock} en este punto.</p>
+            <>
+              <p className="mt-1 text-[11px] font-semibold text-red-400">Solo hay {line.stock} en este punto.</p>
+              {storeId ? <OtherPointsStock storeId={storeId} productId={line.productId} name={line.name} /> : null}
+            </>
           ) : null}
         </div>
       </div>
@@ -216,6 +220,9 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
       <AnimatePresence initial={false}>
         {open || status === "blocked" ? (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t px-2.5 pb-2.5 pt-2" style={{ borderColor: "var(--t-card-border)" }}>
+            {storeId && !(line.stock !== null && line.stock !== undefined && line.qty > line.stock) ? (
+              <div className="mb-2"><OtherPointsStock storeId={storeId} productId={line.productId} name={line.name} compact /></div>
+            ) : null}
             <div className="flex flex-wrap gap-1 text-[11px]">
               {line.levels.map((p, i) => (
                 <button key={i} type="button" onClick={() => onLevel(i + 1)} className="rounded-full border px-2 py-1 text-[11px] font-bold tabular-nums transition"
@@ -294,8 +301,10 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
   );
 }
 
-export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext }: {
+export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel, onRemove, onRequest, flash, onNext, storeId }: {
   lines: CartLine[]; floors: FloorInfo | null; approvals: Record<string, ApprovalState>;
+  /** Para consultar existencias en otros puntos desde la línea. */
+  storeId?: string | null;
   onQty: (id: string, n: number) => void; onPrice: (id: string, p: number) => void; onLevel: (id: string, l: number) => void;
   onRemove: (id: string) => void; onRequest: (id: string, note: string) => Promise<void>;
   /** Producto recién agregado y su aviso (se resalta un momento). */
@@ -319,7 +328,7 @@ export function PosCartLines({ lines, floors, approvals, onQty, onPrice, onLevel
           <Line key={l.productId} line={l} floors={floors} approval={approvals[l.productId]}
             onQty={(n) => onQty(l.productId, n)} onPrice={(p) => onPrice(l.productId, p)} onLevel={(lv) => onLevel(l.productId, lv)}
             onRemove={() => onRemove(l.productId)} onRequest={(note) => onRequest(l.productId, note)}
-            flash={flash?.id === l.productId ? flash.text : null} onNext={onNext} />
+            flash={flash?.id === l.productId ? flash.text : null} onNext={onNext} storeId={storeId} />
         ))}
       </AnimatePresence>
     </ul>
