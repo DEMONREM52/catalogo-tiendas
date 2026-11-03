@@ -6,6 +6,8 @@
  * Todo es "a prueba de fallos": si un bloqueador quita los scripts, nada se rompe.
  */
 
+import { trafficPixelParams } from "./traffic-source";
+
 export const GTM_ID = "GTM-TGC9KVT3";
 export const CURRENCY = "COP";
 
@@ -55,7 +57,8 @@ function meta(event: string, params: Record<string, unknown>, gate: keyof StoreP
   if (gate && cfg.events?.[gate] === false) return;
   try {
     // trackSingle: el evento va solo al píxel de esta tienda, nunca al de otra.
-    win.fbq("trackSingle", cfg.meta_pixel_id, event, params, eventId ? { eventID: eventId } : undefined);
+    // traffic_source / traffic_medium: de dónde vino la visita (se filtra en el Administrador de eventos de Meta).
+    win.fbq("trackSingle", cfg.meta_pixel_id, event, { ...trafficPixelParams(), ...params }, eventId ? { eventID: eventId } : undefined);
   } catch {
     /* sin píxel */
   }

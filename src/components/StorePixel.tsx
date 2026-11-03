@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { setStorePixel, track, type StorePixelConfig, type TrackItem } from "@/lib/tracking";
+import { trafficPixelParams } from "@/lib/traffic-source";
 
 /** Píxel de Meta (Facebook) de la tienda. Se monta en todas las páginas públicas de la tienda. */
 export function StorePixel({ config: raw }: { config: StorePixelConfig | null }) {
@@ -28,7 +29,7 @@ export function StorePixel({ config: raw }: { config: StorePixelConfig | null })
     }
     const fbq = (window as Window & { fbq?: (...args: unknown[]) => void }).fbq;
     try {
-      fbq?.("trackSingle", id, "PageView");
+      fbq?.("trackSingle", id, "PageView", trafficPixelParams());
     } catch {
       /* bloqueado */
     }
@@ -43,7 +44,7 @@ n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
 document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','${id}');fbq('trackSingle','${id}','PageView');`}
+fbq('init','${id}');fbq('trackSingle','${id}','PageView',window.__remhubTraffic||{});`}
       </Script>
       <noscript>
         {/* eslint-disable-next-line @next/next/no-img-element */}

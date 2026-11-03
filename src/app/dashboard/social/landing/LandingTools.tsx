@@ -16,6 +16,10 @@ import { Pill, Section, errorText, inputCls, inputStyle, money, softBox, swalThe
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Lead = { id: string; name: string | null; whatsapp: string; city: string | null; selection: string | null; status: string; at: string };
+
+/** Parámetros de URL para los anuncios de Meta: {{site_source_name}} = fb, ig, msg, an (RemHub los traduce). */
+const META_URL_PARAMS = "utm_source={{site_source_name}}&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}";
+
 export type Money = { visits: number; wa_people: number; wa_clicks: number; shares: number; engaged: number; orders: number; confirmed: number; revenue: number; revenue_confirmed?: number; spend: number; cost: number | null; profit: number | null; roas: number | null; cpa: number | null };
 type Spend = { id: string; day: string; channel: string; amount: number; note: string | null };
 type Stats = { money: Money; spend: Spend[]; totals: LandingTotals; by_day: Array<{ day: string; visits: number; orders: number; revenue: number }>; by_source: SourceRow[]; leads: Lead[] };
@@ -301,7 +305,31 @@ export function AdKit({ page, config, url, price, onBack }: { page: { name: stri
         <h2 className="min-w-0 flex-1 truncate text-lg font-black">🚀 Kit de pauta · {page.name}</h2>
       </div>
 
-      <Section title="1. Enlaces con seguimiento" hint="Usa uno distinto en cada red: así sabes cuál vende más (sale en las estadísticas)" icon={<span>🔗</span>}>
+      <Section title="1. Enlaces con seguimiento" hint="Con un solo enlace ya sabes de dónde viene cada visita; los de cada red son opcionales y más exactos" icon={<span>🔗</span>}>
+        <div className="mb-3 rounded-2xl border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 55%, transparent)", background: "color-mix(in oklab, var(--t-accent) 7%, transparent)" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⭐</span>
+            <div className="min-w-0 flex-1"><p className="text-sm font-black">Un solo enlace para todo (recomendado)</p><p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>{url}</p></div>
+            <button type="button" onClick={() => void doCopy("single", url)} className="inline-flex min-h-10 items-center gap-1 rounded-xl border px-2.5 text-xs font-semibold" style={softBox}>{copied === "single" ? <Check size={13} /> : <Copy size={13} />} Copiar</button>
+            <button type="button" onClick={() => setQr(url)} className="grid h-10 w-10 place-items-center rounded-xl border" style={softBox} title="Código QR" aria-label="Código QR"><QrCode size={15} /></button>
+          </div>
+          <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
+            RemHub reconoce solo de dónde llega la visita: <b>Facebook, Instagram, TikTok</b> (por la app donde se abre), <b>Google, YouTube</b> y otras páginas (por la página de origen), y <b>anuncios</b> de Google y TikTok (por la marca que agregan).
+            Lo recuerda 30 días para atribuirle la compra. Lo de <b>WhatsApp</b> llega como «directo» (WhatsApp no deja huella): para medirlo, usa su enlace de abajo.
+          </p>
+          <div className="mt-2 rounded-xl border p-2.5" style={softBox}>
+            <p className="text-xs font-bold">📣 En tus anuncios de Meta (Facebook e Instagram)</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Al crear el anuncio: <b>Seguimiento → Parámetros de URL</b>, pega esto. Meta pone solo si fue Facebook, Instagram o Messenger, y el nombre de la campaña y del anuncio:</p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-[11px]" style={{ background: "var(--t-card-bg-soft)" }}>{META_URL_PARAMS}</code>
+              <button type="button" onClick={() => void doCopy("metaparams", META_URL_PARAMS)} className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-xl border px-2.5 text-xs font-semibold" style={softBox}>{copied === "metaparams" ? <Check size={13} /> : <Copy size={13} />} Copiar</button>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+            🔵 <b>En el píxel de Facebook</b>: cada evento (vista, carrito, compra) lleva <code>traffic_source</code> y <code>traffic_medium</code>. Míralo en <b>Administrador de eventos → tu píxel → el evento → Parámetros</b>, o crea una <b>conversión personalizada</b> con la regla «traffic_source contiene instagram».
+          </p>
+        </div>
+        <p className="mb-2 text-xs font-bold" style={{ color: "var(--t-muted)" }}>Enlaces por red (opcional, más exactos)</p>
         <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Nombre de la campaña
           <input value={campaign} onChange={(e) => setCampaign(e.target.value)} className={`${inputCls} mt-1`} style={inputStyle} />
         </label>

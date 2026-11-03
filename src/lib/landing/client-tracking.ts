@@ -2,6 +2,8 @@
 // un identificador anónimo de la visita y los píxeles propios de la landing (Meta y TikTok).
 // El píxel de la tienda y GTM ya los maneja src/lib/tracking.ts; aquí solo se suman los de la landing.
 
+import { currentTraffic, trafficPixelParams } from "@/lib/traffic-source";
+
 type Fbq = (...args: unknown[]) => void;
 type Ttq = { load: (id: string) => void; page: () => void; track: (event: string, params?: Record<string, unknown>, opts?: Record<string, unknown>) => void; instance?: (id: string) => Ttq };
 type W = Window & { fbq?: Fbq; ttq?: Ttq; __landingPixels?: { meta: string; tiktok: string }; __remhubPixel?: { meta_pixel_id?: string } | null };
@@ -28,30 +30,15 @@ export function landingSession(): string {
 
 export type LandingRef = { source?: string; medium?: string; campaign?: string; content?: string; device?: string };
 
-/** De dónde viene la visita. Se recuerda durante la sesión del navegador (si navega dentro de la página). */
+/**
+ * De dónde viene la visita, con un solo enlace: utm (si hay), marcas de anuncios, la app donde se abrió y la página
+ * de origen (ver lib/traffic-source). Se recuerda 30 días para atribuir compras posteriores.
+ */
 export function landingRef(): LandingRef {
-  const q = new URLSearchParams(window.location.search);
   const device = /Mobi|Android|iPhone/i.test(navigator.userAgent) ? "mobile" : /iPad|Tablet/i.test(navigator.userAgent) ? "tablet" : "desktop";
-  const ref = document.referrer;
-  const guess = q.get("fbclid") ? (/instagram/i.test(ref) ? "instagram" : "facebook")
-    : q.get("ttclid") ? "tiktok"
-    : q.get("gclid") ? "google"
-    : /instagram\./i.test(ref) ? "instagram" : /facebook\.|fb\.me/i.test(ref) ? "facebook" : /tiktok\./i.test(ref) ? "tiktok"
-    : /youtube\.|youtu\.be/i.test(ref) ? "youtube"
-    : /google\./i.test(ref) ? "google" : /whatsapp|wa\.me/i.test(ref) ? "whatsapp" : undefined;
-  const fresh: LandingRef = {
-    source: q.get("utm_source") ?? guess,
-    medium: q.get("utm_medium") ?? (q.get("fbclid") || q.get("ttclid") || q.get("gclid") ? "paid" : undefined),
-    campaign: q.get("utm_campaign") ?? undefined,
-    content: q.get("utm_content") ?? undefined,
-  };
-  const key = "remhub-lp-ref";
-  if (fresh.source) {
-    safe(() => window.sessionStorage.setItem(key, JSON.stringify(fresh)), undefined);
-    return { ...fresh, device };
-  }
-  const saved = safe(() => JSON.parse(window.sessionStorage.getItem(key) ?? "null") as LandingRef | null, null);
-  return { ...(saved ?? {}), device };
+  const t = currentTraffic();
+  if (t.source === "directo") return { device };
+  return { source: t.source, medium: t.medium, campaign: t.campaign, content: t.content, device };
 }
 
 /** Cookies de Meta (_fbp, _fbc) para la API de Conversiones. Si llegó por un anuncio y aún no hay _fbc, se arma con fbclid. */
@@ -89,7 +76,7 @@ function loadPixelsNow(metaId: string, tiktokId: string) {
       })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
       /* eslint-enable */
     }
-    safe(() => { w.fbq?.("init", metaId); w.fbq?.("trackSingle", metaId, "PageView"); }, undefined);
+    safe(() => { w.fbq?.("init", metaId); w.fbq?.("trackSingle", metaId, "PageView", trafficPixelParams()); }, undefined);
   }
   if (tiktokId && !w.ttq) {
     /* eslint-disable */
@@ -120,7 +107,7 @@ export function landingPixelEvent(event: string, params: Record<string, unknown>
   const ids = w.__landingPixels;
   if (!ids) return;
   // Si es el mismo píxel de la tienda, el evento ya le llega por src/lib/tracking.ts: no se manda doble.
-  if (ids.meta && ids.meta !== w.__remhubPixel?.meta_pixel_id) safe(() => w.fbq?.("trackSingle", ids.meta, event, params, eventId ? { eventID: eventId } : undefined), undefined);
+  if (ids.meta && ids.meta !== w.__remhubPixel?.meta_pixel_id) safe(() => w.fbq?.("trackSingle", ids.meta, event, { ...trafficPixelParams(), ...params }, eventId ? { eventID: eventId } : undefined), undefined);
   if (ids.tiktok && TIKTOK_EVENT[event]) {
     safe(() => w.ttq?.track(TIKTOK_EVENT[event], {
       value: params.value, currency: "COP", content_type: "product",

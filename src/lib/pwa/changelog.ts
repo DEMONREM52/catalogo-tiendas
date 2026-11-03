@@ -100,6 +100,17 @@ export const RELEASES: Release[] = [
     summary: "Esqueletos de carga en todo el panel, botones de cantidad más grandes en pantallas táctiles y cobro protegido contra doble envío.",
     paths: [],
   },
+  {
+    id: 10, date: "2026-11-03", title: "Un solo enlace que sabe de dónde viene cada visita",
+    summary: "Ya no necesitas un enlace por red: RemHub reconoce Facebook, Instagram, TikTok, Google y YouTube solo, y lo manda al píxel de Facebook.",
+    paths: ["/dashboard/landing", "/dashboard/social"],
+    demo: [
+      { icon: "🔗", text: "Copia el «Un solo enlace» del Kit de pauta" },
+      { icon: "📱", text: "Lo abren desde Instagram, TikTok o Google" },
+      { icon: "🧭", text: "RemHub reconoce de dónde llegó la visita" },
+      { icon: "🔵", text: "El píxel lo recibe como traffic_source" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
