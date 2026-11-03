@@ -645,7 +645,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 />
                 {lines.length > 0 ? (
                   <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-                    <table className="w-full min-w-[560px]">
+                    <table className="rt w-full min-w-[560px]">
                       <thead style={{ color: "var(--t-muted)" }}>
                         <tr>
                           <th className={th}>Producto</th>

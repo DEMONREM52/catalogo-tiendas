@@ -289,7 +289,7 @@ export function TransfersReport({ ctx, warehouses, onClose }: { ctx: ErpCtx; war
             <section className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
               <div className="flex items-center gap-2 border-b px-3 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}><ArrowDownUp size={14} /> Detalle por {groupName.toLowerCase()} <span className="text-xs font-normal" style={{ color: "var(--t-muted)" }}>· toca un título para ordenar</span></div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-xs">
+                <table className="rt w-full min-w-[640px] text-xs">
                   <thead style={{ background: "var(--t-card-bg-soft)" }}>
                     <tr>{head("label", groupName, false)}{head("transfers", "Traslados")}{head("units", "Unidades")}{head("received", "Recibidas")}{head("missing", "No llegaron")}{head("value", "Valor interno")}{data.can_cost ? head("cost", "Costo") : null}<th className="px-2 py-2 text-right">%</th></tr>
                   </thead>

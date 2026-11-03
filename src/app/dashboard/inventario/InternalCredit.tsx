@@ -406,7 +406,7 @@ function StatementDialog({ storeId, pointId, manage, onClose, onChanged, onPay, 
           <Field label="Movimientos">
             {st.moves.length === 0 ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Sin movimientos.</p> : (
               <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-                <table className="w-full min-w-[640px] text-xs">
+                <table className="rt w-full min-w-[640px] text-xs">
                   <thead style={{ color: "var(--t-muted)" }}>
                     <tr><th className="px-3 py-2 text-left">Fecha</th><th className="px-3 py-2 text-left">Concepto</th><th className="px-3 py-2 text-right">Cargo</th><th className="px-3 py-2 text-right">Abono / crédito</th><th className="px-3 py-2 text-right">Saldo</th><th /></tr>
                   </thead>
@@ -800,7 +800,7 @@ export function ChainProfit({ storeId }: { storeId: string }) {
       ) : null}
       {data.points.length ? (
         <div className="mt-3 overflow-x-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-          <table className="w-full min-w-[720px] text-xs">
+          <table className="rt w-full min-w-[720px] text-xs">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr>{["Punto", "Vendió", "Le costó", "Ganó el punto", "Ganó la bodega", "Reparto", "Abonó", "Debe"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
             </thead>

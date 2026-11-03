@@ -160,7 +160,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
               </select>
             </div>
             <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
-              <table className="w-full min-w-[720px] text-xs">
+              <table className="rt w-full min-w-[720px] text-xs">
                 <thead style={{ color: "var(--t-muted)" }}>
                   <tr>
                     <th className="px-3 py-2 text-left">Producto</th>

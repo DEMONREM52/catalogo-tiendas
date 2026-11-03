@@ -204,7 +204,7 @@ export function ReceivablesTab({
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="rt w-full min-w-[760px] text-sm">
               <thead style={{ color: "var(--t-muted)" }}>
                 <tr className="text-left text-xs uppercase tracking-wide">
                   <th className="px-3 py-2">Cliente</th><th className="px-3 py-2">Documento</th><th className="px-3 py-2">Vence</th>

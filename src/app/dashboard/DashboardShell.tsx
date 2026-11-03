@@ -44,6 +44,7 @@ import { GuidedTourHost } from "@/components/tour/GuidedTour";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
 import nextDynamic from "next/dynamic";
 import { useAnimatedBackground } from "@/components/ThemeControl";
+import { ResponsiveTables } from "@/components/ui/ResponsiveTables";
 
 // Fondo animado (red con pulsos): se descarga aparte y solo si está encendido.
 const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.PanelBackdrop), { ssr: false });
@@ -940,6 +941,7 @@ export default function DashboardShell({
         />
       </div>
       {animatedBg && !softArea ? <PanelBackdrop /> : null}
+      <ResponsiveTables />
 
       <div className="mx-auto w-full max-w-[1800px] px-2 py-2 sm:px-4">
         {/* Top bar */}

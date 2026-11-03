@@ -1345,3 +1345,45 @@ html[data-glass="on"][data-glass-area="soft"] body {
     backdrop-filter: none !important;
   }
 }
+
+/* =========================================================
+   📱 TABLAS → TARJETAS EN CELULAR (clase .rt en el <table>)
+   Cada fila es una tarjeta; la primera celda va arriba a todo lo ancho y cada dato lleva el título
+   de su columna encima (lo pone ResponsiveTables en data-label).
+   ========================================================= */
+@media (max-width: 767px) {
+  table.rt { display: block; min-width: 0 !important; width: 100%; }
+  table.rt thead { display: none; }
+  table.rt tbody, table.rt tfoot { display: block; }
+  table.rt tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--t-card-border);
+  }
+  table.rt tbody tr:first-child { border-top: 0; }
+  table.rt td, table.rt tfoot th {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+  table.rt td:first-child, table.rt td[colspan], table.rt tfoot th:first-child { grid-column: 1 / -1; }
+  table.rt td:first-child { font-size: 13px; }
+  table.rt td[data-label]:not(:first-child)::before {
+    content: attr(data-label);
+    margin-bottom: 1px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--t-muted);
+  }
+  /* Celdas sin dato ni título (botones sueltos): no ocupan un hueco vacío. */
+  table.rt td:empty { display: none; }
+}

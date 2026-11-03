@@ -118,7 +118,7 @@ export function StockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehou
         <Empty text="No hay productos para mostrar." />
       ) : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)", opacity: loading ? 0.6 : 1 }}>
-          <table className="w-full min-w-[640px]">
+          <table className="rt w-full min-w-[640px]">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr>
                 <th className={th}>Producto</th>

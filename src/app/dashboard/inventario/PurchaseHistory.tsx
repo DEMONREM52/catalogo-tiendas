@@ -134,7 +134,7 @@ export function PurchaseHistory({
         <Empty text={loading ? "Buscando…" : active ? "Ningún ingreso coincide con la búsqueda." : "Registra la factura de tu proveedor arriba: suma las unidades al inventario, actualiza el costo y, si es a crédito, crea la cuenta por pagar."} icon={!loading && !active ? "🛒" : undefined} title={!loading && !active ? "Aún no hay facturas de compra" : undefined} />
       ) : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-          <table className="w-full min-w-[820px]">
+          <table className="rt w-full min-w-[820px]">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr><th className={th}>N.º</th><th className={th}>Fecha</th><th className={th}>Proveedor</th><th className={th}>Revisó / Recibió</th><th className={th}>Pago</th><th className={th}>Total</th><th className={th}>Estado</th><th className={th} /></tr>
             </thead>

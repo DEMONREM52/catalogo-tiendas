@@ -262,7 +262,7 @@ export function KardexTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
       </div>
       {loading ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : rows.length === 0 ? <Empty text="Sin movimientos para este filtro." /> : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-          <table className="w-full min-w-[760px]">
+          <table className="rt w-full min-w-[760px]">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr>
                 <th className={th}>Fecha</th><th className={th}>Producto</th><th className={th}>Bodega</th><th className={th}>Tipo</th>
@@ -318,7 +318,7 @@ export function AuditTab({ ctx }: { ctx: ErpCtx }) {
     <Panel title="Auditoría" subtitle="Registro inmutable de operaciones críticas. Nadie puede editarlo ni borrarlo.">
       {loading ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : rows.length === 0 ? <Empty text="Aún no hay operaciones registradas." /> : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-          <table className="w-full min-w-[640px]">
+          <table className="rt w-full min-w-[640px]">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr><th className={th}>Fecha</th><th className={th}>Acción</th><th className={th}>Usuario</th><th className={th}>Detalle</th></tr>
             </thead>

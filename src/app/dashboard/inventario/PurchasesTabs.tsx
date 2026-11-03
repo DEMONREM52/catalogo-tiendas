@@ -106,7 +106,7 @@ export function SuppliersTab({ ctx }: { ctx: ErpCtx }) {
       <Panel title="Proveedores" subtitle="Cada proveedor también aparece en Terceros y cartera (menú principal), con todos sus datos.">
         {suppliers.length === 0 ? <Empty icon="🏭" title="Aún no tienes proveedores" text="Crea tus proveedores para registrar sus facturas, saber cuánto les debes y ver el historial de precios de compra." /> : (
           <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
-            <table className="w-full min-w-[620px]">
+            <table className="rt w-full min-w-[620px]">
               <thead style={{ color: "var(--t-muted)" }}>
                 <tr><th className={th}>Proveedor</th><th className={th}>NIT</th><th className={th}>Contacto</th><th className={th}>Crédito</th><th className={th} /></tr>
               </thead>
