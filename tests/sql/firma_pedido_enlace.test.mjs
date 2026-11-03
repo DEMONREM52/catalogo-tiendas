@@ -51,6 +51,9 @@ fs.unlinkSync(combined);
 const mig = fs.readFileSync(path.join(here, "migraciones", "20261276_firma_pedido_enlace.sql"), "utf8");
 await db.exec(mig);
 await db.exec(mig);
+// 20261278 (la página trae la conversación y quién chuleó) necesita la lista de chequeo de 20261277.
+await db.exec("create table if not exists public.erp_sr_item_checks (item_id uuid, request_id uuid, side text, checked_by_name text, checked_at timestamptz default now())");
+await db.exec(fs.readFileSync(path.join(here, "migraciones", "20261278_firma_pedido_chat.sql"), "utf8"));
 
 const U = (n) => `a2100000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const OWNER = U(1), SARA = U(2), SANTI = U(3), OTRO = U(4);
@@ -83,6 +86,7 @@ ok(Number((await raw("select count(*) n from erp_stock_request_messages where re
 
 const T = link.token;
 const view = (await anon("select public.erp_sr_sign_link_get($1) r", [T]))[0].r;
+ok(Array.isArray(view.messages) && view.messages.some((m) => m.body.startsWith("🔗")), "El enlace trae la conversación del pedido", view.messages);
 ok(view.number === 7 && view.items[0].name === "TERMO" && view.from.name === "Pioneros" && view.to.name === "Bodega", "Sin iniciar sesión se ve el pedido y sus productos", view);
 ok(/no es válido/.test(await err(() => anon("select public.erp_sr_sign_link_get($1)", ["f".repeat(64)])) ?? ""), "Un enlace inventado no abre nada");
 

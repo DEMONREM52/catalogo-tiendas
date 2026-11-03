@@ -17,8 +17,9 @@ type Data = {
   number: number; status: "pending" | "preparing" | "dispatched" | "received" | "rejected" | "cancelled"; priority: string; note: string | null; needed_by: string | null;
   requested_by_name: string | null; handled_by_name: string | null; created_at: string; expires_at: string;
   store: { name: string; logo_url: string | null } | null; from: { name: string } | null; to: { name: string } | null;
-  items: Array<{ name: string; image_url: string | null; sku: string | null; requested: number; approved: number | null; received: number | null; note: string | null }>;
+  items: Array<{ name: string; image_url: string | null; sku: string | null; requested: number; approved: number | null; received: number | null; note: string | null; packed_by?: string | null }>;
   signatures: Sig[];
+  messages?: Array<{ user_name: string | null; point_name: string | null; kind: "message" | "system"; body: string; created_at: string }>;
   transfer: { number: number; status: string; track_token: string | null } | null;
 };
 
@@ -47,6 +48,7 @@ export default function SignRequestPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [allChat, setAllChat] = useState(false);
 
   const load = useCallback(async () => {
     const { data: d, error: e } = await supabaseBrowser().rpc("erp_sr_sign_link_get", { p_token: token });
@@ -70,6 +72,11 @@ export default function SignRequestPage() {
   const track = data?.transfer?.track_token ?? null;
   const st = data ? STATUS[data.status] : null;
   const units = data?.items.reduce((s, i) => s + (i.approved ?? i.requested), 0) ?? 0;
+  const packed = data?.items.filter((i) => i.packed_by).length ?? 0;
+  const chat = data?.messages ?? [];
+  // Pedido y traslado son uno solo: cuando sale, este mismo enlace pasa al seguimiento del traslado (firmas, conteo y guía).
+  const goTransfer = Boolean(track && (data?.status === "dispatched" || data?.status === "received"));
+  useEffect(() => { if (goTransfer && track) window.location.replace(`/traslado/${track}`); }, [goTransfer, track]);
 
   async function share() {
     const url = window.location.href;
@@ -81,7 +88,9 @@ export default function SignRequestPage() {
   return (
     <main className="min-h-screen px-4 py-6 sm:py-10" style={{ background: "var(--t-bg), var(--t-bg-base)", color: "var(--t-text)" }}>
       <div className="mx-auto w-full max-w-2xl space-y-4">
-        {loading ? (
+        {goTransfer ? (
+          <div className="rounded-3xl border p-8 text-center" style={card}><p className="animate-bounce text-4xl">🚚</p><p className="mt-2 font-bold">El pedido ya salió: abriendo el seguimiento del traslado…</p></div>
+        ) : loading ? (
           <div className="rounded-3xl border p-8 text-center" style={card}><p className="animate-pulse text-3xl">✍️</p><p className="mt-2">Cargando pedido…</p></div>
         ) : error || !data ? (
           <div className="rounded-3xl border p-8 text-center" style={card}>
@@ -191,11 +200,11 @@ export default function SignRequestPage() {
             <section className="rounded-3xl border p-5" style={card}>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-base font-bold">📦 Productos</h2>
-                <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{data.items.length} referencias · {units} und.</span>
+                <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{data.items.length} referencias · {units} und.{packed ? <> · <b style={{ color: "#22c55e" }}>{packed} empacados</b></> : null}</span>
               </div>
               <ul className="mt-3 space-y-2">
                 {data.items.map((it, k) => (
-                  <li key={k} className="flex items-center gap-3 rounded-2xl border p-2" style={{ borderColor: "var(--t-card-border)" }}>
+                  <li key={k} className="flex items-center gap-3 rounded-2xl border p-2" style={it.packed_by ? { borderColor: "color-mix(in oklab, #22c55e 60%, transparent)", background: "color-mix(in oklab, #22c55e 12%, transparent)" } : { borderColor: "var(--t-card-border)" }}>
                     {it.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={it.image_url} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" loading="lazy" />
@@ -204,6 +213,7 @@ export default function SignRequestPage() {
                       <p className="text-sm font-semibold leading-tight">{it.name}</p>
                       <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>{it.sku ? `${it.sku} · ` : ""}Pidió {it.requested}{it.received !== null ? ` · Llegó ${it.received}` : ""}</p>
                       {it.note ? <p className="text-[11px] font-semibold" style={{ color: "#a78bfa" }}>{it.note}</p> : null}
+                      {it.packed_by ? <p className="text-[11px] font-bold" style={{ color: "#22c55e" }}>✓ Empacado por {it.packed_by}</p> : null}
                     </div>
                     <span className="text-right">
                       <b className="block text-lg tabular-nums">{it.approved ?? it.requested}</b>
@@ -213,6 +223,29 @@ export default function SignRequestPage() {
                 ))}
               </ul>
             </section>
+            {chat.length ? (
+              <section className="rounded-3xl border p-5" style={card}>
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-base font-bold">💬 Conversación del pedido</h2>
+                  <span className="text-xs" style={{ color: "var(--t-muted)" }}>{chat.length} mensajes</span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {chat.length > 12 && !allChat ? <button type="button" onClick={() => setAllChat(true)} className="mx-auto block rounded-full border px-3 py-1 text-xs font-semibold" style={inputStyle}>Ver toda la conversación</button> : null}
+                  {(allChat ? chat : chat.slice(-12)).map((m, k) => (m.kind === "system" ? (
+                    <p key={k} className="mx-auto max-w-[92%] whitespace-pre-line rounded-xl px-3 py-1.5 text-center text-xs" style={{ background: "var(--t-card-bg-soft)", color: "var(--t-muted)" }}>
+                      {m.body} <span className="opacity-70">· {new Date(m.created_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </p>
+                  ) : (
+                    <div key={k} className="max-w-[85%] rounded-2xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", borderBottomLeftRadius: 6 }}>
+                      <p className="text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>{m.user_name ?? "Alguien"}{m.point_name ? ` · ${m.point_name}` : ""}</p>
+                      <p className="whitespace-pre-line break-words">{m.body}</p>
+                      <p className="text-right text-[10px] opacity-60">{new Date(m.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}</p>
+                    </div>
+                  )))}
+                </div>
+                <p className="mt-3 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>Para escribir, entra a RemHub → Pedidos internos.</p>
+              </section>
+            ) : null}
             <p className="pb-6 text-center text-[11px]" style={{ color: "var(--t-muted)" }}>Enlace válido hasta {when(data.expires_at)} · Hecho con RemHub</p>
           </>
         )}

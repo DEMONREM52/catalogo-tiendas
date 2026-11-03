@@ -30,12 +30,16 @@ async function shareSignLink(data: SrDetail, step: (typeof SIGN_STEPS)[number] |
   const r = data.request;
   const { data: link, error } = await supabaseBrowser().rpc("erp_sr_sign_link", { p_request: r.id });
   let url: string;
-  if (!error && link) url = `${window.location.origin}/firma-pedido/${(link as { token: string }).token}`;
-  else if (data.transfer?.track_token) url = transferTrackUrl(data.transfer.track_token); // sin la migración 20261276
+  const sent = r.status === "dispatched" || r.status === "received";
+  const transferToken = (link as { transfer_token?: string | null } | null)?.transfer_token ?? data.transfer?.track_token ?? null;
+  // Ya salió: el mismo enlace de un traslado normal (seguimiento, firmas «En camino»/«Recibió» y guía).
+  if (sent && transferToken) url = transferTrackUrl(transferToken);
+  else if (!error && link) url = `${window.location.origin}/firma-pedido/${(link as { token: string }).token}`;
+  else if (transferToken) url = transferTrackUrl(transferToken); // sin la migración 20261276
   else return void Swal.fire({ ...swal, icon: "info", title: "Falta un paso", text: error && /Could not find the function|schema cache/i.test(error.message) ? "Ejecuta en Supabase la migración 20261276_firma_pedido_enlace.sql." : srError(error) });
   const qr = await QRCode.toDataURL(url, { margin: 1, width: 240 }).catch(() => null);
   const text = [
-    step ? `✍️ Firma «${step.title}» · Pedido interno #${r.number}` : `✍️ Firmas del pedido interno #${r.number}`,
+    sent && data.transfer ? `🚚 Traslado #${data.transfer.number} · Pedido interno #${r.number}` : step ? `✍️ Firma «${step.title}» · Pedido interno #${r.number}` : `✍️ Firmas del pedido interno #${r.number}`,
     `🏬 ${r.to_name} → 📍 ${r.from_name}`,
     step ? `${step.who}: abre el enlace, revisa los productos, escribe tu nombre y firma con el dedo. No necesitas iniciar sesión.` : "Abre el enlace, revisa los productos y firma tu paso con el dedo. No necesitas iniciar sesión.",
     url,
