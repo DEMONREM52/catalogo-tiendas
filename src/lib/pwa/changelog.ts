@@ -210,6 +210,39 @@ export const RELEASES: Release[] = [
       { icon: "🖼️", text: "Toca la foto para verla en grande" },
     ],
   },
+  {
+    id: 20, date: "2026-11-03", title: "Más cómodo en el celular",
+    summary: "Inventario, Pedidos y Clientes ordenados para el celular: lo que más usas a la vista y lo demás plegado.",
+    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/dashboard/clientes"],
+    demo: [
+      { icon: "📦", text: "Existencias en tarjetas con el total grande" },
+      { icon: "⚙️", text: "Filtros plegados: toca «Filtros» o «Más filtros»" },
+      { icon: "⋯", text: "Lo que se usa poco va en el menú ⋯" },
+      { icon: "🖼️", text: "Toca la foto de un producto para verla en grande" },
+    ],
+  },
+  {
+    id: 21, date: "2026-11-03", title: "¿Hay en otros puntos? desde el POS",
+    summary: "En cada producto del carrito puedes ver cuánto hay en los otros puntos y pedirlo con un toque.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🛒", text: "Agrega el producto al carrito" },
+      { icon: "🏬", text: "Toca «¿Hay en otros puntos?»" },
+      { icon: "📍", text: "Mira cuánto hay en cada punto y bodega" },
+      { icon: "📨", text: "«Pedir a otro punto» abre el pedido interno listo" },
+    ],
+  },
+  {
+    id: 22, date: "2026-11-03", title: "Permisos más claros",
+    summary: "Al dar un permiso que necesita otro, se marca solo (ej. «Anular compras» marca «Compras»).",
+    paths: ["/dashboard/store/users"],
+    demo: [
+      { icon: "🔗", text: "Cada permiso muestra lo que incluye" },
+      { icon: "✅", text: "Marcar uno agrega el que necesita" },
+      { icon: "❌", text: "Quitar el base quita los que dependen de él" },
+      { icon: "🧩", text: "Las plantillas ya vienen completas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

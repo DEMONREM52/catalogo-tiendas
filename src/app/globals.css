@@ -1212,6 +1212,8 @@ html.dark .viz-root,
    - Las variables van en <body> para que también las tomen las ventanas que se abren aparte.
    ========================================================= */
 html[data-glass="on"][data-glass-area] body {
+  /* Sobre vidrio el texto gris pierde contraste: un poco más fuerte que el normal. */
+  --t-muted: rgba(23, 32, 51, 0.84);
   --t-glass-blur: 22px;
   --t-glass-sat: 190%;
   --t-card-bg: rgba(237, 225, 255, 0.34);
@@ -1229,6 +1231,7 @@ html[data-glass="on"][data-glass-area] body {
 @media (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
     --t-card-bg: rgba(46, 16, 101, 0.46);
+    --t-muted: rgba(248, 247, 255, 0.84);
     --t-card-bg-soft: rgba(192, 132, 252, 0.08);
     --t-card-border: rgba(192, 132, 252, 0.26);
     --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
@@ -1243,6 +1246,7 @@ html[data-glass="on"][data-glass-area] body {
 }
 html[data-glass="on"][data-glass-area][data-theme="dark"] body {
   --t-card-bg: rgba(46, 16, 101, 0.46);
+  --t-muted: rgba(248, 247, 255, 0.84);
   --t-card-bg-soft: rgba(192, 132, 252, 0.08);
   --t-card-border: rgba(192, 132, 252, 0.26);
   --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
