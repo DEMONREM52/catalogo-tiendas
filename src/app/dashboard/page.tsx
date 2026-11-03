@@ -27,7 +27,6 @@ import { getDashboardStore, hasStorePermission, type DashboardAccess, type Dashb
 import { isNetworkError } from "@/lib/net/status";
 import { storedSessionUser } from "@/lib/supabase/offline-session";
 import { OnboardingCard } from "./OnboardingCard";
-import { DrillCard } from "./DrillCard";
 import { GoalsCard, MyTasks, PointToday } from "./HomePanels";
 import { CostAlertsCard, DailyCloseButton } from "./MoneyPanels";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -210,7 +209,6 @@ export default function DashboardHome() {
       {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
 
       {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
-      {store && !isAdmin && (canPos || isStoreAdmin) ? <DrillCard storeId={store.id} /> : null}
       {store && !isAdmin && canMoney ? <CostAlertsCard storeId={store.id} /> : null}
       {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
       {store && !isAdmin ? <GoalsCard storeId={store.id} /> : null}

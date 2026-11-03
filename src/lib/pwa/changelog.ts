@@ -188,6 +188,17 @@ export const RELEASES: Release[] = [
       { icon: "💲", text: "Se ven P2 (mayor) y P3 (detal); el resto en computador" },
     ],
   },
+  {
+    id: 18, date: "2026-11-03", title: "Toca la foto para verla en grande",
+    summary: "En Productos, la foto se amplía con una animación suave; doble toque o rueda para acercar.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "🖼️", text: "Toca la foto del producto" },
+      { icon: "🔍", text: "Doble toque (o rueda del mouse) para acercar" },
+      { icon: "✋", text: "Con zoom, arrastra para moverla" },
+      { icon: "👇", text: "Desliza hacia abajo o toca el fondo para cerrar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

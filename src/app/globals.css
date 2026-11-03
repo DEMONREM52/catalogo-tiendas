@@ -1228,13 +1228,13 @@ html[data-glass="on"][data-glass-area] body {
 }
 @media (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
-    --t-card-bg: rgba(76, 29, 149, 0.20);
+    --t-card-bg: rgba(46, 16, 101, 0.46);
     --t-card-bg-soft: rgba(192, 132, 252, 0.08);
-    --t-card-border: rgba(216, 180, 254, 0.22);
+    --t-card-border: rgba(192, 132, 252, 0.26);
     --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
     --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(255, 255, 255, 0) 60%, rgba(168, 85, 247, 0.12) 100%);
-    --t-glass-dialog: rgba(30, 14, 56, 0.66);
-    --t-glass-input: rgba(20, 8, 40, 0.45);
+    --t-glass-dialog: rgba(26, 10, 54, 0.78);
+    --t-glass-input: rgba(17, 6, 38, 0.55);
     --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(147, 51, 234, 0.50), transparent 62%),
       radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.34), transparent 62%),
       radial-gradient(900px 640px at 70% 96%, rgba(109, 40, 217, 0.48), transparent 62%),
@@ -1242,13 +1242,13 @@ html[data-glass="on"][data-glass-area] body {
   }
 }
 html[data-glass="on"][data-glass-area][data-theme="dark"] body {
-  --t-card-bg: rgba(76, 29, 149, 0.20);
+  --t-card-bg: rgba(46, 16, 101, 0.46);
   --t-card-bg-soft: rgba(192, 132, 252, 0.08);
-  --t-card-border: rgba(216, 180, 254, 0.22);
+  --t-card-border: rgba(192, 132, 252, 0.26);
   --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
   --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(255, 255, 255, 0) 60%, rgba(168, 85, 247, 0.12) 100%);
-  --t-glass-dialog: rgba(30, 14, 56, 0.66);
-  --t-glass-input: rgba(20, 8, 40, 0.45);
+  --t-glass-dialog: rgba(26, 10, 54, 0.78);
+  --t-glass-input: rgba(17, 6, 38, 0.55);
   --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(147, 51, 234, 0.50), transparent 62%),
     radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.34), transparent 62%),
     radial-gradient(900px 640px at 70% 96%, rgba(109, 40, 217, 0.48), transparent 62%),
@@ -1284,11 +1284,22 @@ html[data-glass="on"][data-glass-area="soft"] body {
 
 /* Celulares: menos desenfoque (más fluido y gasta menos batería). */
 @media (pointer: coarse) {
-  html[data-glass="on"][data-glass-area] body {
+  html[data-glass="on"][data-glass-area="full"] body {
     --t-glass-blur: 12px;
     --t-glass-sat: 140%;
     /* Más denso que en computador: en pantalla pequeña las listas largas se leen mejor. */
     --t-card-bg: color-mix(in oklab, var(--t-bg-base) 58%, rgba(124, 58, 237, 0.18)) !important;
+  }
+}
+/* Celular en oscuro: morado profundo y más sólido. */
+@media (pointer: coarse) and (prefers-color-scheme: dark) {
+  html[data-glass="on"][data-glass-area="full"]:not([data-theme="light"]) body {
+    --t-card-bg: rgba(38, 12, 86, 0.66) !important;
+  }
+}
+@media (pointer: coarse) {
+  html[data-glass="on"][data-glass-area="full"][data-theme="dark"] body {
+    --t-card-bg: rgba(38, 12, 86, 0.66) !important;
   }
 }
 

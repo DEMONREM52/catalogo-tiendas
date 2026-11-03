@@ -18,6 +18,7 @@ import { DateField } from "@/components/forms/Fields";
 import { useCan } from "@/lib/permission-runtime";
 import { CleanupProductsSheet, deleteProductFlow } from "./DeleteProducts";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -952,22 +953,11 @@ export default function ProductsListPage() {
                         p.id
                       )}`}
                       title={p.name}
-                      aria-hidden="true"
                     >
                       {p.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.image_url}
-                          alt={p.name}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
+                        <ZoomableThumb src={p.image_url} alt={p.name} className="block h-full w-full" imgClassName="h-full w-full object-cover" />
                       ) : (
-                        <span className="text-base font-extrabold">{letter}</span>
+                        <span className="text-base font-extrabold" aria-hidden="true">{letter}</span>
                       )}
                     </div>
 
