@@ -13,6 +13,7 @@ import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
 import { BreakdownSheet } from "./Breakdown";
 import { openSettlementReport } from "./report";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -507,7 +508,7 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                 ) : null}
               </section>
             </>
-          ) : !error ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+          ) : !error ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : null}
         </div>
         <PaymentSheet open={Boolean(paying)} title="Pago de liquidación" who={paying ? `👤 ${paying.name}${paying.document ? " · " + paying.document : ""}` : ""} pending={paying ? n(paying.amount) - n(paying.paid) : 0}
           onClose={() => setPaying(null)} onConfirm={(p) => (paying ? pay(paying, p) : Promise.resolve(false))} />

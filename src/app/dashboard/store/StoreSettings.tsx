@@ -15,6 +15,7 @@ import { PRODUCTION_HOST } from "@/lib/share/origin";
 import { EditableNickname, useNicknameUpdates } from "../Nickname";
 import { BackupPanel } from "./BackupPanel";
 import { LoyaltyPanel, QrPanel } from "./SalesSettings";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type StoreProfileDraft = {
   headline: string;
@@ -734,7 +735,7 @@ export default function StoreSettings() {
     }
   }
 
-  if (loading) return <p className="p-4 text-sm" style={{ color: "var(--t-muted)" }}>Cargando configuración de tienda…</p>;
+  if (loading) return <div className="p-4"><SkeletonList rows={6} avatar={false} label="Cargando configuración de tienda…" /></div>;
   if (!store) return <p className="p-4 text-sm text-rose-500">No se pudo cargar la tienda.</p>;
 
   const inputStyle = {

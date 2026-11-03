@@ -8,6 +8,7 @@ import { smartFilter } from "@/lib/search";
 import { Field, MoneyField, NumberField } from "@/components/forms/Fields";
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { distribute, marginOnSale, markupOnCost, priceFromCost, saleLine, toCents, type PriceMode, type PriceResult, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Product = { id: string; name: string; sku: string | null; cost_price: number | null; price_1: number | null; price_2: number | null; price_3: number | null; price_4: number | null; price_5: number | null };
 type Point = { id: string; name: string };
@@ -136,7 +137,7 @@ export function Simulator({ storeId }: { storeId: string }) {
   const pool = base === "profit" ? line.profit : base === "mother" ? motherAmt : pointAmt;
   const dist = distribute(Math.max(0, pool), people.map((p) => ({ id: p.id, pct: p.pct })));
 
-  if (!ready) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>;
+  if (!ready) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></main>;
   const scenarios = [
     ...(current !== null ? [{ key: "now", label: `Actual (precio ${level})`, price: current, profit: current - cost }] : []),
     { key: "new", label: `Propuesto · ${MODES.find((m) => m.key === mode)?.label}`, price: r.ok ? r.finalPrice : NaN, profit: r.ok ? r.profit : NaN },

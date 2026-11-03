@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../store/ImageUpload";
 import { getDashboardStore } from "@/lib/store-utils";
 import { smartFilter } from "@/lib/search";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Category = {
   id: string;
@@ -245,7 +246,7 @@ export default function CategoriesPage() {
     }
   }
 
-  if (loading) return <main className="p-6" style={{ color: "var(--t-text)" }}>Cargando categorías...</main>;
+  if (loading) return <main className="p-4 sm:p-6"><SkeletonList rows={6} avatar={false} label="Cargando categorías…" /></main>;
 
   return (
     <main className="p-6 space-y-6 panel-enter" style={{ color: "var(--t-text)" }}>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { Check, ChevronDown, Copy, KeyRound, Plug, Plus, RefreshCw, Star, Trash2, Zap } from "lucide-react";
 import { errorText, fiscalApi } from "@/lib/fiscal/client";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Bold de la tienda: varias cuentas (una por punto o una para todos), cada una con sus llaves de pruebas
@@ -153,7 +154,7 @@ export default function BoldPanel({ storeId, isOwner }: { storeId: string | null
 
       <div className="space-y-4 p-6 pt-2">
         {error ? <p className="rounded-xl border p-3 text-sm" style={box}>⚠️ {error}</p> : null}
-        {!data && !error ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando cuentas Bold…</p> : null}
+        {!data && !error ? <SkeletonList rows={4} avatar={false} label="Cargando cuentas Bold…" /> : null}
         {data && !accounts.length && !draft ? (
           <div className="rounded-2xl border border-dashed p-6 text-center" style={box}>
             <p className="text-3xl">⚡</p>

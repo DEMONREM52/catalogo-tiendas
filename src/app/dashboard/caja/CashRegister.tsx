@@ -7,6 +7,7 @@ import { MoneyField, NumberField } from "@/components/forms/Fields";
 import { Chip, Field, Modal } from "../inventario/dialog";
 import { Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange } from "../inventario/shared";
 import Swal from "sweetalert2";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 const METHOD: Record<string, string> = { efectivo: "Efectivo", cash: "Efectivo", transferencia: "Transferencia", nequi: "Nequi", daviplata: "Daviplata", tarjeta: "Tarjeta", card: "Tarjeta", mixto: "Mixto", credito: "Crédito" };
 
@@ -80,7 +81,7 @@ export function CashRegister({ storeId }: { storeId: string }) {
   }, [load]);
 
   if (missing) return <Panel title="💵 Caja"><Empty text="Para usar la caja ejecuta en Supabase la migración 20261128_caja.sql." /></Panel>;
-  if (!board) return <Panel title="💵 Caja"><Empty text="Cargando…" /></Panel>;
+  if (!board) return <Panel title="💵 Caja"><SkeletonList rows={5} avatar={false} label="Cargando…" /></Panel>;
   if (!board.ok) return <Panel title="💵 Caja"><Empty text={board.error ?? "Sin permiso."} /></Panel>;
 
   const openNow = board.points.filter((p) => p.open);

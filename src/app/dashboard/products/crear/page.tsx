@@ -18,6 +18,7 @@ import { requestImageIndex } from "@/lib/image-search/indexer";
 import { checkProductCode, cleanProductCode } from "../product-code";
 import { PricingPanel, loadDefaultMarkup, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 type Category = { id: string; name: string };
 
@@ -249,11 +250,16 @@ export default function CreateProductPage() {
   }
 
   if (loading) {
-    const w = wrapProps();
     return (
       <main className="p-4 sm:p-6" style={{ color: "var(--t-text)" }}>
-        <div {...w} className={`${w.className} p-6 text-sm`} style={w.style}>
-          <span style={{ color: "var(--t-muted)" }}>Cargando…</span>
+<div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]" role="status" aria-label="Cargando…">
+          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
+            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-2/3" /><Skeleton className="h-28 w-full" />
+          </div>
+          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
+            <Skeleton className="h-5 w-32" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
+          </div>
         </div>
       </main>
     );

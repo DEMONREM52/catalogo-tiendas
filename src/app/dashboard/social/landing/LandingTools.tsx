@@ -13,6 +13,7 @@ import { CAPI_TEST_HOURS, testCodeUntil } from "@/lib/landing/capi-test-code";
 import { DateField } from "@/components/forms/Fields";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../../pos/VoidSaleDialog";
 import { Pill, Section, errorText, inputCls, inputStyle, money, softBox, swalTheme } from "../catalogs/ui";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Lead = { id: string; name: string | null; whatsapp: string; city: string | null; selection: string | null; status: string; at: string };
 export type Money = { visits: number; wa_people: number; wa_clicks: number; shares: number; engaged: number; orders: number; confirmed: number; revenue: number; revenue_confirmed?: number; spend: number; cost: number | null; profit: number | null; roas: number | null; cpa: number | null };
@@ -538,7 +539,7 @@ export function LandingOrders({ storeId, storeName, landings }: { storeId: strin
           </div>
 
           <div className="mt-3 space-y-2">
-            {rows === null ? <p className="py-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando pedidos…</p> : null}
+            {rows === null ? <SkeletonList rows={4} avatar={false} label="Cargando pedidos…" /> : null}
             {rows && !list.length ? <p className="py-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>{rows.length ? "Ningún pedido con ese filtro." : "Aún no hay pedidos de las landings en este periodo."}</p> : null}
             {list.map((o) => {
               const [label, color] = ORDER_STATUS[o.status] ?? [o.status, "#64748b"];

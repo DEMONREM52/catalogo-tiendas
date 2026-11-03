@@ -7,6 +7,7 @@ import { errorText, fiscalApi, fiscalRpc } from "@/lib/fiscal/client";
 import type { FiscalAccess } from "./useFiscal";
 import { Badge, Button, Card, EmptyState, Notice, SectionTitle, fmtDateTime, fmtMoney, notify, swal } from "./ui";
 import { WhatsAppAlerts } from "./WhatsAppAlerts";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Pending = {
   id: string; full_number: string; point_name: string | null; status: string; total: number; customer_name: string | null;
@@ -109,7 +110,7 @@ export function OfflineFiscal({ access }: { access: FiscalAccess }) {
 
       <div className="space-y-2">
         <p className="text-sm font-black">Facturas de contingencia por aceptar</p>
-        {pending === null ? <p className="text-sm opacity-70">Cargando…</p> : pending.length === 0 ? (
+        {pending === null ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : pending.length === 0 ? (
           <EmptyState icon="✅" title="Nada pendiente" text="Todas las facturas hechas sin internet ya fueron aceptadas." />
         ) : pending.map((d) => (
           <Card key={d.id} className="flex flex-wrap items-center justify-between gap-3">
@@ -135,7 +136,7 @@ export function OfflineFiscal({ access }: { access: FiscalAccess }) {
       {canManage ? (
         <div className="space-y-2">
           <p className="text-sm font-black">Números separados por equipo</p>
-          {blocks === null ? <p className="text-sm opacity-70">Cargando…</p> : blocks.length === 0 ? (
+          {blocks === null ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : blocks.length === 0 ? (
             <EmptyState icon="📟" title="Ningún equipo ha separado números" text="Se separan solos cuando un equipo abre el POS de un punto con numeración de contingencia." />
           ) : blocks.map((b) => (
             <Card key={b.id} className="flex flex-wrap items-center justify-between gap-3">

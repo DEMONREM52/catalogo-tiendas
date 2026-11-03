@@ -12,6 +12,7 @@ import { normalizeLanding } from "@/lib/landing/config";
 import { Pill, errorText, money, softBox, swalTheme } from "../catalogs/ui";
 import { LandingEditor, type CatalogOption, type LandingRow, type StoreInfo } from "./LandingEditor";
 import { AdKit, LandingOrders, LandingStats, LandingSummary, MetaConnect } from "./LandingTools";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type ListItem = {
   id: string; slug: string; name: string; status: LandingRow["status"]; catalog_id: string; catalog_slug: string | null; product_ids: string[]; image: string | null;
@@ -100,7 +101,7 @@ export default function LandingManager() {
     try { await navigator.clipboard.writeText(url(it.slug)); void Swal.fire({ icon: "success", title: "Enlace copiado", timer: 1100, showConfirmButton: false, ...swalTheme }); } catch { window.prompt("Copia el enlace:", url(it.slug)); }
   }
 
-  if (loading && !store) return <p className="py-10 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando landings…</p>;
+  if (loading && !store) return <SkeletonList rows={4} avatar={false} label="Cargando landings…" />;
   if (error) return <div className="rounded-3xl border p-5 text-sm" style={softBox}>⚠️ {error}</div>;
   if (!store) return null;
 

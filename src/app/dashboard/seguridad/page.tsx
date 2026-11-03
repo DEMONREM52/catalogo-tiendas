@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 /**
  * Copias de seguridad y seguridad: cuándo se bajó la última copia, quién tiene acceso a qué,
@@ -60,7 +61,7 @@ export default function SecurityPage() {
   }
 
   if (denied) return <p className="p-6 text-sm">No tienes una tienda abierta.</p>;
-  if (!o) return <p className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!o) return <div className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></div>;
   if (!o.ok) return <p className="rounded-2xl border p-5 text-sm" style={card}>🔒 {o.message}</p>;
 
   const last = o.last_backup;

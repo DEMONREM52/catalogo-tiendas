@@ -41,6 +41,7 @@ import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
 import { HelpButton } from "@/components/HelpButton";
 import { GuidedTourHost } from "@/components/tour/GuidedTour";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Role = "admin" | "store";
 
@@ -875,14 +876,7 @@ export default function DashboardShell({
                 </div>
               </div>
             ) : (
-              <p
-                className="text-sm"
-                style={{
-                  color: "color-mix(in oklab, var(--t-text) 78%, transparent)",
-                }}
-              >
-                Cargando dashboard...
-              </p>
+              <SkeletonDashboard label="Cargando el panel…" />
             )}
           </div>
         </div>

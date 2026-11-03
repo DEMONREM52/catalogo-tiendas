@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { NumberField } from "@/components/forms/Fields";
 import { cardStyle, esc, rpcError, swalTheme } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Mode = "list" | "mother" | "margin" | "cost";
 type PointRow = { point_id: string; name: string; kind: string; mode: Mode | null; margin_pct: number | null; updated_by_name: string | null };
@@ -97,7 +98,7 @@ export function PriceLimits({ storeId }: { storeId: string }) {
   }
 
   if (error) return <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p>;
-  if (!data) return <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!data) return <SkeletonList rows={4} avatar={false} label="Cargando…" />;
   const ro = !data.can_edit;
 
   return (

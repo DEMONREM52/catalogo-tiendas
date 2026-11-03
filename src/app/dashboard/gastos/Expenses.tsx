@@ -13,6 +13,7 @@ import {
 } from "./shared";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Expense = {
   id: string; store_id: string; number: number; point_id: string | null; point_name: string | null; category_id: string; category_name: string; emoji: string; description: string;
@@ -363,7 +364,7 @@ function ExpenseDetail({ id, cat, onClose, onEdit, onChanged }: { id: string; ca
             )}
           </section>
         </>
-      ) : <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>}
+      ) : <SkeletonList rows={4} avatar={false} label="Cargando…" />}
       {e ? <PaymentSheet open={paying} title="Registrar pago" who={`${e.emoji} ${e.description}${e.payee_name ? " · " + e.payee_name : ""}`} pending={pending} defaultMethod="cash" onClose={() => setPaying(false)} onConfirm={pay} /> : null}
     </Sheet>
   );

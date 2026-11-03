@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Clientes frecuentes (20261223): quién compra más, cada cuánto vuelve y a quién conviene escribirle.
@@ -81,7 +82,7 @@ export function FrequentCustomers({ storeId, storeName }: { storeId: string; sto
         </div>
       </div>
       {error ? <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, transparent)" }}>⚠️ {error}</p> : null}
-      {rows === null ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando clientes…</p> : null}
+      {rows === null ? <SkeletonList rows={4} avatar={false} label="Cargando clientes…" /> : null}
       {rows && !shown.length && !error ? (
         <p className="rounded-2xl border p-6 text-center text-sm" style={{ ...box, color: "var(--t-muted)" }}>
           {view === "lost" ? "🎉 Nadie se ha perdido: todos tus clientes frecuentes han vuelto a tiempo." : "Aún no hay ventas con nombre de cliente en este periodo. Escribe el nombre del cliente al vender para verlo aquí."}

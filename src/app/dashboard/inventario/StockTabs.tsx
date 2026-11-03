@@ -7,6 +7,7 @@ import {
   Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast,
   type ErpCtx, type Warehouse,
 } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Overview = {
   inventory_value: number | null;
@@ -112,7 +113,7 @@ export function StockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehou
     >
       <input className={`${inputClass} mb-3`} style={inputStyle} placeholder="Buscar por nombre o SKU…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
       {loading && rows.length === 0 ? (
-        <Empty text="Cargando…" />
+        <SkeletonList rows={5} avatar={false} label="Cargando…" />
       ) : rows.length === 0 ? (
         <Empty text="No hay productos para mostrar." />
       ) : (

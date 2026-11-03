@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { errorText, fiscalApi, fiscalRpc, newIdempotencyKey } from "@/lib/fiscal/client";
 import { Btn, inputClass, inputStyle, money, toast } from "./shared";
 import { NO_AUTOFILL } from "@/components/forms/BankSelect";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 
 type Prepared = {
   purchase: { id: string; number: number; invoice_ref: string | null; status: string; subtotal: number; tax: number; total: number; payment_type: string; due_date: string | null };
@@ -112,7 +113,7 @@ function SupportDialog({ storeId, purchaseId, purchaseNumber, onClose }: { store
           <button type="button" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="flex-1 space-y-4 overflow-auto p-4 text-sm">
-          {error ? <p className="rounded-xl border p-3" style={{ borderColor: "#ef4444" }}>🔒 {error}</p> : !data ? <p>Cargando…</p> : (
+          {error ? <p className="rounded-xl border p-3" style={{ borderColor: "#ef4444" }}>🔒 {error}</p> : !data ? <SkeletonTable rows={5} cols={4} label="Cargando…" /> : (
             <>
               {data.documents.length ? (
                 <div className="space-y-1 rounded-xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>

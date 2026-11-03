@@ -11,6 +11,7 @@ import { downloadXlsx, type XSheet } from "@/lib/data/xlsx";
 import { fold, readTable, type TableSheet } from "@/lib/data/read-table";
 import { EXPORTS, type ExportDef } from "./exports";
 import { IMPORTS, type ImportDef, type Prepared, type Result } from "./imports";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 /**
  * Importar y exportar: todo lo de la tienda en Excel.
@@ -43,7 +44,7 @@ export default function DataCenterPage() {
   }, []);
 
   if (denied) return <p className="p-6 text-sm">No tienes una tienda abierta.</p>;
-  if (!access) return <p className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!access) return <div className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></div>;
 
   return (
     <main className="space-y-4">

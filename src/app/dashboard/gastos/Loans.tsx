@@ -12,6 +12,7 @@ import {
 } from "./shared";
 import type { Loan, LoanPayment as Payment } from "./LoansReport";
 import { LoansReportSheet } from "./LoansReportSheet";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Vales y préstamos a empleados (20261240): productos que se lleva (salen del inventario) o dinero prestado
@@ -166,7 +167,7 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
       </div>
       <p className="text-xs" style={{ color: "var(--t-muted)" }}>Las cuotas se descuentan solas en cada nómina del empleado. Al <b>aprobar</b> la nómina se cobran; si la vuelves a borrador, el saldo vuelve. En la nómina en borrador puedes cambiar o saltar la cuota de esa vez.</p>
 
-      {loans === null ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : !shown.length ? (
+      {loans === null ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : !shown.length ? (
         <p className="rounded-2xl border p-6 text-center text-sm" style={{ ...cardStyle, color: "var(--t-muted)" }}>{filter === "active" ? "No hay vales activos." : "Todavía no hay vales."}{cat.can.payroll ? " Toca «Nuevo vale» para darle productos o un préstamo a un empleado." : ""}</p>
       ) : (
         <ul className="space-y-2">

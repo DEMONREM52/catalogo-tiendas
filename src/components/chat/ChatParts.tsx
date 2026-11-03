@@ -12,6 +12,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MessageMedia, type Attachment } from "@/app/dashboard/pedidos/internos/chat-media";
 import { EDIT_WINDOW_MS, chatRpc, mentionTag, newRequestUrl, type ChatPerson, type Extra, type Extras, type ProductCardData, type Reader, type Scope } from "./chat-api";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /** Piezas de los chats (burbuja, menú, visto, fijados, búsqueda, reenviar, silenciar…), iguales en pedidos y en mensajes. */
 
@@ -372,7 +373,7 @@ export function ForwardDialog({ open, storeId, onClose, onSend }: { open: boolea
               <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {list === null ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando chats…</p> : null}
+              {list === null ? <SkeletonList rows={4} label="Cargando chats…" /> : null}
               {list && !list.length ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>No tienes chats todavía. Abre uno en «Mensajes».</p> : null}
               {list?.map((t) => (
                 <label key={t.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 hover:bg-[color:var(--t-card-bg)]">

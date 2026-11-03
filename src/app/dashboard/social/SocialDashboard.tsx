@@ -29,6 +29,7 @@ import {
 } from "@/lib/social-content";
 import { reviewCommercialContent } from "@/lib/content-review";
 import { ilikeTokenFilters } from "@/lib/search";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type ProductOption = {
   id: string;
@@ -1156,7 +1157,7 @@ export default function SocialDashboard() {
             </select>
           </div>
         </div>
-        {loading ? <p className="p-6 text-sm opacity-65">Cargando actividad…</p> : null}
+        {loading ? <SkeletonList rows={5} label="Cargando actividad…" /> : null}
         {!loading && visiblePosts.length === 0 ? (
           <div className="p-8 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-fuchsia-500/10 text-fuchsia-700"><Megaphone /></div>

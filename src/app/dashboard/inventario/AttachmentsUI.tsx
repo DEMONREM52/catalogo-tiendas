@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Btn, errorMessage, toast } from "./shared";
 import { MAX_PDF_BYTES, compressImage, formatBytes } from "./attachments";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export type Staged = { id: string; kind: "invoice" | "manifest"; name: string; blob: Blob; mime: string; preview: string | null; original: number; product_id?: string; product_name?: string };
 export type PurchaseFile = { id: string; kind: "invoice" | "manifest"; path: string; file_name: string; mime: string; size_bytes: number; product_id?: string | null; product_name?: string | null };
@@ -202,7 +203,7 @@ export function PurchaseFilesButton({ purchaseId }: { purchaseId: string }) {
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-3" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border p-4" style={{ background: "var(--t-card, #fff)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }} onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between"><b>Archivos del ingreso</b><button type="button" onClick={() => setOpen(false)}>✕</button></div>
-            {files === null ? <p className="text-sm">Cargando…</p> : files.length === 0 ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Sin archivos adjuntos.</p> : (
+            {files === null ? <SkeletonList rows={3} avatar={false} label="Cargando…" /> : files.length === 0 ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Sin archivos adjuntos.</p> : (
               <ul className="space-y-2">
                 {files.map((f) => (
                   <li key={f.id} className="flex items-center gap-2 rounded-xl border p-2 text-sm" style={{ borderColor: "var(--t-card-border)" }}>

@@ -13,6 +13,7 @@ import {
 } from "@/lib/fiscal/epayroll";
 import { MoneyInput } from "../MoneyInput";
 import { Modal } from "../inventario/dialog";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 /**
  * Nómina electrónica (DIAN) — módulo APARTE de la nómina interna (Gastos y nómina).
@@ -102,7 +103,7 @@ export default function EPayrollPage() {
   }
 
   if (denied) return <p className="rounded-2xl border p-5 text-sm" style={card}>🔒 {denied}</p>;
-  if (!o) return <p className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!o) return <div className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></div>;
   if (!o.ok) return <p className="rounded-2xl border p-5 text-sm" style={card}>🔒 {o.message}</p>;
 
   const [y, m] = period.split("-").map(Number);

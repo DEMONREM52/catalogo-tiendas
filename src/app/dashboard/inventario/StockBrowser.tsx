@@ -7,6 +7,7 @@ import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, type ErpCtx, type Warehouse } from "./shared";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport, useCan } from "@/lib/permission-runtime";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Row = {
   id: string; name: string; sku: string | null; barcode: string | null; image_url: string | null; active: boolean;
@@ -259,7 +260,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
 
       <div className="mt-3">
         {loading && rows.length === 0 ? (
-          <Empty text="Cargando…" />
+          <SkeletonList rows={5} avatar={false} label="Cargando…" />
         ) : rows.length === 0 ? (
           <Empty text="Ningún producto coincide con estos filtros." />
         ) : (

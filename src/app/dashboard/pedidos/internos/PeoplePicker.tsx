@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Escoger personas del pedido (a quién avisar, con quién abrir un chat). Los involucrados vienen marcados.
@@ -63,7 +64,7 @@ export function PeoplePicker({ open, icon, color, heading, title, note, load, in
             </div>
             {note ? <p className="border-b px-4 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>{note}</p> : null}
             <div className="max-h-[50dvh] space-y-1 overflow-y-auto p-2">
-              {list === null ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+              {list === null ? <SkeletonList rows={4} label="Cargando…" /> : null}
               {list && !list.length && !failed ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>No hay nadie más en este pedido.</p> : null}
               {failed ? <p className="p-3 text-center text-sm" style={{ color: "var(--t-muted)" }}>No se pudo cargar la lista. Falta correr la migración 20261272.</p> : null}
               {list?.map((c) => (

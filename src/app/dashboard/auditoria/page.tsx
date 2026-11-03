@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { AuditCenter } from "@/components/audit/AuditCenter";
 import type { AuditFilters } from "@/components/audit/audit-labels";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 const KEYS = ["from", "to", "module", "category", "severity", "result", "point_id", "user_id", "entity_id", "action", "event_id", "q"] as const;
 
@@ -22,7 +23,7 @@ export default function AuditoriaPage() {
     })();
   }, []);
   const initial = Object.fromEntries(KEYS.map((k) => [k, params.get(k) ?? ""]).filter(([, v]) => v)) as AuditFilters;
-  if (store === undefined) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>;
+  if (store === undefined) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></main>;
   if (!store) return <main className="p-6 text-sm">No tienes acceso a ninguna tienda.</main>;
   return (
     <main className="mx-auto max-w-5xl px-3 py-4 sm:px-6">

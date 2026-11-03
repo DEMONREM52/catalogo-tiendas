@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { smartFilter } from "@/lib/search";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /** =========================
  * Helpers (UI)
@@ -451,7 +452,7 @@ export function CustomerOrders() {
       </div>
 
       {/* Lista */}
-      {loading ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando pedidos…</p> : !filtered.length ? (
+      {loading ? <SkeletonList rows={4} avatar={false} label="Cargando pedidos…" /> : !filtered.length ? (
         <div className={`${tokenCard()} p-6 text-center`}>
           <p className="font-semibold">{view === "pending" ? "🎉 No hay pedidos pendientes" : "No hay pedidos con estos filtros"}</p>
           <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{view === "pending" ? "Todo está confirmado y completado en este periodo." : "Prueba con otro estado, punto o periodo."}</p>

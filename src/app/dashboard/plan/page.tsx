@@ -8,6 +8,7 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { ReferralCard } from "./ReferralCard";
 import { FiscalAddonCard } from "./FiscalAddonCard";
 import { ImplementationPackages } from "@/components/landing/ImplementationPackages";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 /**
  * «Mi plan»: plan y estado de la tienda, días de prueba, consumo frente a los límites, comparación de planes,
@@ -44,7 +45,7 @@ const card = { borderColor: "var(--t-card-border)", background: "color-mix(in ok
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 
 export default function PlanPage() {
-  return <Suspense fallback={<main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>}><PlanView /></Suspense>;
+  return <Suspense fallback={<main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></main>}><PlanView /></Suspense>;
 }
 
 function PlanView() {
@@ -166,7 +167,7 @@ function PlanView() {
   }, [plans]);
 
   if (error) return <main className="mx-auto max-w-5xl p-6"><p className="rounded-2xl border p-4 text-sm" style={card}>{error}</p></main>;
-  if (!ent) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando tu plan…</main>;
+  if (!ent) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando tu plan…" /></main>;
 
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">

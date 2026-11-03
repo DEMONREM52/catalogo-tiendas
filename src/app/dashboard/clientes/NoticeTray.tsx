@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { money, waLink } from "./terceros";
 import { ddmm, fillNotice } from "./notice";
 import { WhatsAppAlerts } from "../fiscal/WhatsAppAlerts";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Item = {
   id: string; kind: "receivable"; customer_id: string | null; name: string; phone: string | null; doc_number: string | null; description: string | null;
@@ -36,7 +37,7 @@ export function NoticeTray({ storeId, storeName }: { storeId: string; storeName:
     void load();
   }, [load]);
 
-  if (!tray) return <p className="text-sm opacity-70">Cargando…</p>;
+  if (!tray) return <SkeletonList rows={4} avatar={false} label="Cargando…" />;
   if (!tray.ok) return <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--t-card-border)" }}>{tray.message}</p>;
 
   const items = tray.items.filter((i) => !onlyPending || !i.sent_today);

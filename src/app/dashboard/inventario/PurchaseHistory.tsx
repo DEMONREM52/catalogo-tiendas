@@ -7,6 +7,7 @@ import { PurchaseFilesButton } from "./AttachmentsUI";
 import { SupportDocumentButton } from "./SupportDocument";
 import { Btn, Empty, Panel, StatusPill, dateTime, inputClass, inputStyle, money, tableWrap, td, th } from "./shared";
 import { emptyFilters, filtersActive, quickRange, type PurchaseFilters, type PurchaseRow, type usePurchaseSearch } from "./purchase-search";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Search = ReturnType<typeof usePurchaseSearch>;
 type Item = { product_id: string; qty: number; unit_cost: number; line_total: number | null; products: { name: string; sku: string | null } | null };
@@ -194,7 +195,7 @@ export function PurchaseHistory({
                     {items ? (
                       <tr>
                         <td colSpan={8} className="px-3 pb-3 pt-0">
-                          {items === "loading" ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cargando productos…</p> : items.length === 0 ? (
+                          {items === "loading" ? <SkeletonList rows={3} label="Cargando productos…" /> : items.length === 0 ? (
                             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Sin productos.</p>
                           ) : (
                             <ItemsTable key={f.q} items={items} term={f.q} hitIds={new Set((hit ?? []).map((m) => m.product_id))} />

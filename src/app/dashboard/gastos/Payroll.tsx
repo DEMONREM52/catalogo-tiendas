@@ -13,6 +13,7 @@ import {
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
 import { downloadRunExcel, periodReport, printRunReport, type PayrollDetail } from "./PayrollReport";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Run = { id: string; number: number; point_id: string | null; point_name: string | null; period_kind: Period; period_start: string; period_end: string; status: RunStatus;
   earnings: number; deductions: number; net: number; employer_cost: number; total_cost: number; created_by_name: string | null; approved_by_name: string | null; employees: number; paid: number };
@@ -505,7 +506,7 @@ function RunSheet({ id, storeId, cat, onClose, onChanged }: { id: string; storeI
           ) : null}
           <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Salario ÷ 30 × días. Verifícalo con tu contador; esto no reemplaza la nómina electrónica ante la DIAN.</p>
         </>
-      ) : <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>}
+      ) : <SkeletonList rows={4} avatar={false} label="Cargando…" />}
       <AnimatePresence>{editLine ? <LineEditor key={editLine.id} line={editLine} concepts={cat.concepts ?? []} onClose={() => setEditLine(null)} onSaved={() => { setEditLine(null); void after(); }} /> : null}</AnimatePresence>
       <PaymentSheet open={Boolean(paying)} title="Pago de nómina" who={paying ? `👤 ${paying.full_name}${/^efectivo$/i.test(paying.bank_name ?? "") ? " · se le paga en efectivo" : paying.bank_account ? ` · ${paying.bank_name ?? ""} ${paying.bank_account}` : ""}` : ""} pending={paying ? n(paying.net) - n(paying.paid) : 0}
         defaultMethod={/^efectivo$/i.test(paying?.bank_name ?? "") ? "cash" : /^(nequi|daviplata)$/i.test(paying?.bank_name ?? "") ? "nequi" : "transfer"}

@@ -7,6 +7,7 @@ import { Sheet } from "@/components/forms/Sheet";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
 import { cop, downloadCsv, esc, inputStyle, rpcError } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Line = { product_id: string; name: string; sku: string | null; qty: number; revenue: number; cost: number; profit: number; mother: number; point: number; cost_source: string };
 type Order = {
@@ -116,7 +117,7 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
   return (
     <Sheet title="Detalle por producto" subtitle={title} onClose={onClose} wide>
       {error ? <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}
-      {!data && !error ? <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+      {!data && !error ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : null}
       {data ? (
         <div className="space-y-3">
           <p className="text-xs" style={{ color: "var(--t-muted)" }}>{MODE_TEXT[mode]} Solo entra lo cobrado de las ventas a crédito; las anuladas restan si ya se habían liquidado.</p>

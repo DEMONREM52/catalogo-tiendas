@@ -12,6 +12,7 @@ import { PriceLimits } from "./PriceLimits";
 import { PointsBoard } from "./PointsBoard";
 import { ProductMargins } from "./ProductMargins";
 import { cardStyle, rpcError, type Point } from "./shared";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Tab = "summary" | "points" | "products" | "rules" | "limits" | "settle" | "sim";
 
@@ -47,7 +48,7 @@ export default function RentabilidadPage() {
     })();
   }, [loadSettings]);
 
-  if (!ready) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>;
+  if (!ready) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></main>;
   const canCosts = perm.view || perm.approve;
   if (!storeId || !(perm.view || perm.rules || perm.approve || perm.settle || perm.price)) {
     return (

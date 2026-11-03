@@ -5,6 +5,7 @@ import { Repeat, ShoppingBag } from "lucide-react";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { CustomerOrders } from "./CustomerOrders";
 import { StockRequestsPanel } from "./internos/StockRequestsPanel";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Tab = "clientes" | "internos";
 
@@ -40,7 +41,7 @@ export default function PedidosPage() {
     window.history.replaceState(null, "", url.toString());
   }
 
-  if (!ready) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando pedidos…</main>;
+  if (!ready) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando pedidos…" /></main>;
 
   const both = perm.orders && perm.internal;
   return (

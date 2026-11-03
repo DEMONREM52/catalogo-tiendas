@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ChoiceChips, DateField } from "@/components/forms/Fields";
 import { AuditEventCard } from "./AuditEventCard";
 import { MODULES, RESULT, actionLabel, diffRows, fmtValue, moduleInfo, useAuditAccess, type AuditEvent, type AuditFilters } from "./audit-labels";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Overview = {
   ok: boolean; scope: string; limited?: boolean; total?: number; critical?: number; security?: number;
@@ -104,7 +105,7 @@ export function AuditCenter({ storeId, points = [], initial = {} }: { storeId: s
 
   const topModules = useMemo(() => Object.entries(overview?.by_module ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 6), [overview]);
 
-  if (!access) return <p className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!access) return <div className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></div>;
   if (!access.scope) {
     return <p className="rounded-2xl border p-4 text-sm" style={card}>🔒 Necesitas el permiso <b>Auditoría</b> para consultar este centro. Pídeselo al administrador de tu tienda.</p>;
   }

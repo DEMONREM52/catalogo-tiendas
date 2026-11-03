@@ -14,6 +14,7 @@ import { StockBrowser } from "./StockBrowser";
 import { StaleStockTab } from "./StaleStock";
 import { ExpiryTab } from "./InventoryExtras";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry";
 
@@ -109,7 +110,7 @@ export default function InventarioPage() {
   }
 
   if (error) return <Empty text={error} />;
-  if (!ctx) return <Empty text="Cargando módulo…" />;
+  if (!ctx) return <SkeletonList rows={5} avatar={false} label="Cargando módulo…" />;
   if (!current) return <Empty text="Tu usuario no tiene permisos para este módulo." />;
 
   return (

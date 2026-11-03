@@ -10,6 +10,7 @@ import {
 import { DateField } from "@/components/forms/Fields";
 import Swal from "sweetalert2";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
@@ -259,7 +260,7 @@ export function KardexTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
         <DateField value={from} onChange={(v) => setFrom(v)} ariaLabel="Desde" />
         <DateField value={to} onChange={(v) => setTo(v)} ariaLabel="Hasta" />
       </div>
-      {loading ? <Empty text="Cargando…" /> : rows.length === 0 ? <Empty text="Sin movimientos para este filtro." /> : (
+      {loading ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : rows.length === 0 ? <Empty text="Sin movimientos para este filtro." /> : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
           <table className="w-full min-w-[760px]">
             <thead style={{ color: "var(--t-muted)" }}>
@@ -315,7 +316,7 @@ export function AuditTab({ ctx }: { ctx: ErpCtx }) {
 
   return (
     <Panel title="Auditoría" subtitle="Registro inmutable de operaciones críticas. Nadie puede editarlo ni borrarlo.">
-      {loading ? <Empty text="Cargando…" /> : rows.length === 0 ? <Empty text="Aún no hay operaciones registradas." /> : (
+      {loading ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : rows.length === 0 ? <Empty text="Aún no hay operaciones registradas." /> : (
         <div className={tableWrap} style={{ borderColor: "var(--t-card-border)" }}>
           <table className="w-full min-w-[640px]">
             <thead style={{ color: "var(--t-muted)" }}>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField } from "@/components/forms/Fields";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Plata y control en el inicio (20261225):
@@ -128,7 +129,7 @@ export function DailyCloseButton({ storeId, storeName }: { storeId: string; stor
             </div>
             <div className="mt-3 flex items-center gap-2 text-sm"><span>Día:</span><DateField value={day} onChange={(v) => setDay(v || today())} max={today()} compact ariaLabel="Día del cierre" /></div>
             {error ? <p className="mt-3 text-sm text-amber-500">⚠️ {error}</p> : null}
-            {!data && !error ? <p className="mt-3 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+            {!data && !error ? <SkeletonList rows={4} avatar={false} label="Cargando…" /> : null}
             {data ? (
               <div className="mt-4 space-y-3 text-sm">
                 <div className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>

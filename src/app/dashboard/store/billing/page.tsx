@@ -8,6 +8,7 @@ import PointBillingPanel from "./PointBillingPanel";
 import BoldPanel from "./BoldPanel";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function inputProps() {
   return {
@@ -988,9 +989,7 @@ export default function BillingSettingsPage() {
 
           <div className="mt-4 space-y-3">
             {loading ? (
-              <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-                Cargando métodos de pago...
-              </p>
+              <SkeletonList rows={3} label="Cargando métodos de pago…" />
             ) : null}
             {(settings.payment_methods || []).map((pm, idx) => (
               <div key={pm?.id ?? idx} className="rounded-2xl border p-3">

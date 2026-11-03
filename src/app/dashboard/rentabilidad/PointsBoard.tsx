@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { PointValuationModal } from "@/app/dashboard/inventario/PointValuation";
 import { cardStyle, cop, downloadCsv } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Tablero de puntos: cómo le va a cada punto mes a mes (ventas, ganancia, gastos, ganancia neta), frente al periodo anterior,
@@ -211,7 +212,7 @@ export function PointsBoard({ storeId }: { storeId: string }) {
   }
 
   if (error) return <p className="rounded-2xl border p-4 text-sm" style={{ ...cardStyle, color: "#ef4444" }}>{error}</p>;
-  if (!board) return <p className="text-sm" style={{ color: "var(--t-muted)" }}>Cargando el tablero de puntos…</p>;
+  if (!board) return <SkeletonList rows={4} avatar={false} label="Cargando el tablero de puntos…" />;
 
   const chip = (on: boolean) => (on
     ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" }

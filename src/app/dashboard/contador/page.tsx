@@ -14,6 +14,7 @@ import {
 import { buildJournal, trialBalance, type Issue, type JLine } from "@/lib/accounting/journal";
 import { BUILTIN_FORMATS, FIELD_LABELS, allFormats, cloneFormat, formatRows, formatText, nitDv } from "@/lib/accounting/formats";
 import { loadLookups, loadPeriod, type Lookups } from "./load";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 /**
  * Para el contador: RemHub no lleva la contabilidad; arma los asientos del periodo y los entrega en el formato
@@ -136,7 +137,7 @@ export default function AccountantPage() {
   }
 
   if (denied) return <p className="rounded-2xl border p-5 text-sm" style={card}>🔒 {denied}</p>;
-  if (!storeId) return <p className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p>;
+  if (!storeId) return <div className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></div>;
 
   const totals = result ? result.lines.reduce((s, l) => ({ d: s.d + l.debit, c: s.c + l.credit }), { d: 0, c: 0 }) : null;
   const docCount = (k: DocKind) => (result ? new Set(result.lines.filter((l) => l.kind === k).map((l) => l.docNumber)).size : 0);

@@ -14,6 +14,7 @@ import {
 } from "./payables-shared";
 import { DateField } from "@/components/forms/Fields";
 import { PayablesReport } from "./PayablesReport";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 const purchaseReceiptUrl = (id: string) => `/comprobante/ingreso/${id}`;
 const DAY_CHOICES = [30, 15, 10, 7, 5, 3, 2, 1, 0];
@@ -179,7 +180,7 @@ export function PayablesTab({ ctx }: { ctx: ErpCtx }) {
         <input className={`${inputClass} ml-auto sm:max-w-64`} style={inputStyle} placeholder="🔎 Proveedor, factura o punto" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
-      {!board ? <Empty text="Cargando…" /> : shown.length === 0 ? (
+      {!board ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : shown.length === 0 ? (
         <Empty text={rows.length ? "No hay cuentas con este filtro." : "No hay cuentas por pagar. Se crean al registrar compras a crédito."} />
       ) : (
         <div className="space-y-3">

@@ -9,6 +9,7 @@ import { ProductPicker } from "./LineEditor";
 import { Chip, Field, Modal, Toggle } from "./dialog";
 import { PointValuationModal } from "./PointValuation";
 import { Btn, Empty, Kpi, Panel, confirmAction, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange, type ErpCtx, type ProductHit } from "./shared";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /* ----------------------------- tipos ----------------------------- */
 
@@ -147,7 +148,7 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
   if (missing) {
     return <Panel title="🤝 Cuenta con puntos"><Empty text="Para usar el crédito en traslados ejecuta en Supabase la migración 20261124_credito_traslados.sql." /></Panel>;
   }
-  if (!board) return <Panel title="🤝 Cuenta con puntos"><Empty text="Cargando…" /></Panel>;
+  if (!board) return <Panel title="🤝 Cuenta con puntos"><SkeletonList rows={5} avatar={false} label="Cargando…" /></Panel>;
   if (!board.ok) return <Panel title="🤝 Cuenta con puntos"><Empty text={board.error ?? "Sin permiso."} /></Panel>;
 
   const manage = board.can_manage;
@@ -376,7 +377,7 @@ function StatementDialog({ storeId, pointId, manage, onClose, onChanged, onPay, 
         {manage ? <Btn onClick={onPay}>💵 Registrar abono</Btn> : null}
         <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
       </>}>
-      {!st || !s ? <Empty text="Cargando…" /> : !st.ok ? <Empty text={st.error ?? "Sin permiso."} /> : (
+      {!st || !s ? <SkeletonList rows={5} avatar={false} label="Cargando…" /> : !st.ok ? <Empty text={st.error ?? "Sin permiso."} /> : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[["Debe", money(s.balance), s.balance > 0 ? "var(--t-text)" : "#22c55e"], ["Vencido", money(s.overdue), s.overdue > 0 ? "#ef4444" : "#22c55e"],

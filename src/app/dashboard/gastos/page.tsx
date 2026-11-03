@@ -10,6 +10,7 @@ import { BudgetsTab, RecurringTab, ReservesTab } from "./Planning";
 import { PayrollTab } from "./Payroll";
 import { LoansTab } from "./Loans";
 import { cardStyle, rpcError, type Catalog, type Point } from "./shared";
+import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
 type Tab = "overview" | "expenses" | "recurring" | "budgets" | "payroll" | "loans" | "reserves";
 
@@ -55,7 +56,7 @@ export default function GastosPage() {
     setRefresh((x) => x + 1);
   }, [storeId, loadCatalog]);
 
-  if (!ready) return <main className="p-6 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</main>;
+  if (!ready) return <main className="p-4 sm:p-6"><SkeletonDashboard label="Cargando…" /></main>;
   if (!storeId || !cat) {
     return (
       <main className="p-6">

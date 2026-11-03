@@ -21,6 +21,7 @@ import { checkProductCode, cleanProductCode, loadProductCodes } from "../product
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { PricingPanel, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 type Category = { id: string; name: string };
 
@@ -384,7 +385,6 @@ export default function EditProductPage() {
   }
 
   const headerPanel = panelProps("p-4 sm:p-6");
-  const loadingPanel = panelProps("p-6");
   const leftPanel = panelProps("p-4 sm:p-6 space-y-3");
   const rightPanel = panelProps("p-4 sm:p-6");
 
@@ -445,8 +445,14 @@ export default function EditProductPage() {
 
       {/* Body */}
       {loading || !draft ? (
-        <div {...loadingPanel} className={`${loadingPanel.className} text-sm`} style={loadingPanel.style}>
-          <span style={{ color: "var(--t-muted)" }}>Cargando…</span>
+<div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]" role="status" aria-label="Cargando el producto…">
+          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
+            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-2/3" /><Skeleton className="h-28 w-full" />
+          </div>
+          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
+            <Skeleton className="h-5 w-32" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-3">

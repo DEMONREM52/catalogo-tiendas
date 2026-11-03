@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { Skeleton, SkeletonTable } from "@/components/ui/Skeleton";
 
 function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
@@ -148,7 +149,10 @@ export default function BillingDocumentPage() {
   if (loading) {
     return (
       <main className="p-6">
-        <p style={{ color: "var(--t-text)" }}>Cargando documento...</p>
+        <div className="mx-auto max-w-2xl space-y-3" role="status" aria-label="Cargando documento…">
+          <Skeleton className="h-8 w-48" /><Skeleton className="h-4 w-64" />
+          <SkeletonTable rows={6} cols={4} label="Cargando documento…" />
+        </div>
       </main>
     );
   }
