@@ -41,8 +41,8 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "RemHub",
-    // «default»: el contenido empieza debajo de la hora y la batería (no se esconde detrás).
-    statusBarStyle: "default",
+    // «black»: barra negra con letras blancas aunque el celular esté en modo claro; el contenido empieza debajo de la hora.
+    statusBarStyle: "black",
   },
   formatDetection: { telephone: false },
 
@@ -107,7 +107,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0b0b0b" },
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    // Oscura también en modo claro: el logo de RemHub es blanco y la app es oscura.
+    { media: "(prefers-color-scheme: light)", color: "#0b0b0b" },
   ],
 };
 

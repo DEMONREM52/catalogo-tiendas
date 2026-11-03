@@ -10,8 +10,11 @@ import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
-import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
+import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrListItem } from "./types";
 import { Skeleton, SkeletonCards } from "@/components/ui/Skeleton";
+
+/** Color de los mensajes sin leer (distinto de todos los estados). */
+const UNREAD = "#ec4899";
 
 type Scope = "attend" | "mine" | "active" | "closed";
 
@@ -165,50 +168,76 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
           {canRequest ? <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>¿Se te acabó algo? Toca “Pedir mercancía” y pídelo a otro punto o a la bodega.</p> : null}
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {list.map((r, i) => {
-            const st = SR_STATUS[r.status];
-            const needsMe = (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
-            return (
-              <motion.button
-                key={r.id}
-                type="button"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i, 10) * 0.025 }}
-                onClick={() => setOpenId(r.id)}
-                className="relative flex flex-col rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl"
-                style={{
-                  borderColor: needsMe ? `color-mix(in oklab, ${st.color} 55%, transparent)` : "var(--t-card-border)",
-                  background: needsMe ? `color-mix(in oklab, ${st.color} 7%, var(--t-card-bg))` : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                }}
-              >
-                {needsMe ? <span className="absolute right-4 top-4 h-2.5 w-2.5 animate-ping rounded-full" style={{ background: st.color }} /> : null}
-                <div className="flex flex-wrap items-center gap-2 pr-6">
-                  <span className="text-sm font-black">#{r.number}</span>
-                  <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `color-mix(in oklab, ${st.color} 16%, transparent)`, color: st.color }}>{st.icon} {st.short}</span>
-                  {r.priority === "urgent" && isOpen(r.status) ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">⚡ Urgente</span> : null}
-                  {r.unread > 0 && isOpen(r.status) ? <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: "#f59e0b" }}>💬 {r.unread}</span> : null}
-                </div>
-                <p className="mt-2 flex flex-wrap items-center gap-1.5 font-bold">
-                  {r.to_name} <ArrowRight size={14} style={{ color: "var(--t-muted)" }} /> {r.from_name}
-                </p>
-                <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  {r.items} producto{r.items === 1 ? "" : "s"} · {r.units} und. · pidió {r.requested_by_name ?? "—"}{r.handled_by_name ? ` · atiende ${r.handled_by_name}` : ""}
-                </p>
-                {r.last_message ? (
-                  <p className="mt-2 line-clamp-2 rounded-xl px-3 py-2 text-xs" style={{ background: "color-mix(in oklab, var(--t-card-border) 45%, transparent)" }}>
-                    {r.last_message.kind === "message" ? <b>{r.last_message.user_name}: </b> : null}{r.last_message.body}
+        <>
+          {/* Guía de colores: cada estado tiene el suyo, igual en la tarjeta, la etiqueta y la barra de pasos. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>
+            {(["pending", "preparing", "dispatched", "received", "rejected"] as const).map((k) => (
+              <span key={k} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: SR_STATUS[k].color }} />{SR_STATUS[k].short}</span>
+            ))}
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Urgente</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: UNREAD }} />Mensajes sin leer</span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {list.map((r, i) => {
+              const st = SR_STATUS[r.status];
+              const needsMe = (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
+              const urgent = r.priority === "urgent" && isOpen(r.status);
+              return (
+                <motion.button
+                  key={r.id}
+                  type="button"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i, 10) * 0.025 }}
+                  onClick={() => setOpenId(r.id)}
+                  className="relative flex flex-col overflow-hidden rounded-3xl border p-4 pl-5 text-left transition hover:-translate-y-0.5 hover:shadow-xl"
+                  style={{
+                    borderColor: `color-mix(in oklab, ${st.color} ${needsMe ? 80 : 40}%, transparent)`,
+                    background: `color-mix(in oklab, ${st.color} ${needsMe ? 12 : 6}%, var(--t-card-bg))`,
+                    boxShadow: needsMe ? `0 0 0 1px color-mix(in oklab, ${st.color} 35%, transparent), 0 8px 28px -12px ${st.color}` : undefined,
+                  }}
+                >
+                  {/* Franja del estado (roja arriba si es urgente). */}
+                  <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: urgent ? `linear-gradient(180deg, #ef4444 0 35%, ${st.color} 35%)` : st.color }} />
+                  {needsMe ? <span className="absolute right-4 top-4 h-2.5 w-2.5 animate-ping rounded-full" style={{ background: st.color }} /> : null}
+                  <div className="flex flex-wrap items-center gap-2 pr-6">
+                    <span className="text-sm font-black">#{r.number}</span>
+                    <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm" style={{ background: st.color }}>{st.icon} {st.short}</span>
+                    {urgent ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">⚡ Urgente</span> : null}
+                    {r.unread > 0 && isOpen(r.status) ? <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: UNREAD }}>💬 {r.unread} sin leer</span> : null}
+                  </div>
+                  {st.step >= 0 ? (
+                    <div className="mt-2 flex gap-1" aria-label={`Paso ${st.step + 1} de ${SR_STEPS.length}: ${st.label}`}>
+                      {SR_STEPS.map((k, n) => (
+                        <span key={k} className="h-1.5 flex-1 rounded-full" style={{ background: n <= st.step ? SR_STATUS[k].color : "var(--t-card-border)" }} />
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="mt-2 flex flex-wrap items-center gap-1.5 font-bold">
+                    <span className="rounded-lg px-1.5 py-0.5 text-sm" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
+                    <ArrowRight size={15} style={{ color: st.color }} />
+                    <span className="rounded-lg px-1.5 py-0.5 text-sm" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80" }}>📥 {r.from_name}</span>
                   </p>
-                ) : null}
-                <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                  {timeAgo(r.updated_at)}
-                  {needsMe ? <b style={{ color: st.color }}> · {r.status === "pending" ? "Te toca revisarlo" : "Confirma cuando llegue"}</b> : null}
-                </p>
-              </motion.button>
-            );
-          })}
-        </div>
+                  <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                    📦 {r.items} producto{r.items === 1 ? "" : "s"} · {r.units} und. · pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b>{r.handled_by_name ? <> · atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}
+                  </p>
+                  {r.last_message ? (
+                    <p className="mt-2 line-clamp-2 rounded-xl border-l-4 px-3 py-2 text-xs"
+                      style={r.last_message.kind === "message"
+                        ? { borderColor: UNREAD, background: `color-mix(in oklab, ${UNREAD} 9%, transparent)` }
+                        : { borderColor: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>
+                      {r.last_message.kind === "message" ? <b>💬 {r.last_message.user_name}: </b> : null}{r.last_message.body}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                    🕒 {timeAgo(r.updated_at)}
+                    {needsMe ? <span className="rounded-full px-2 py-0.5 font-bold text-white" style={{ background: st.color }}>👉 {r.status === "pending" ? "Te toca revisarlo" : "Confirma cuando llegue"}</span> : null}
+                  </p>
+                </motion.button>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {creating !== null ? (

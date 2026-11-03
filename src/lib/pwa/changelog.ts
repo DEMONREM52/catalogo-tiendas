@@ -144,6 +144,17 @@ export const RELEASES: Release[] = [
       { icon: "🔒", text: "Cada paso bloqueado dice qué falta" },
     ],
   },
+  {
+    id: 14, date: "2026-11-03", title: "Pedidos internos en colores",
+    summary: "Cada estado tiene su color en la tarjeta, con barra de pasos, de dónde sale y a dónde llega.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🟣", text: "Morado: enviado, esperando respuesta" },
+      { icon: "🟠", text: "Naranja: preparando · Azul: en camino" },
+      { icon: "🟢", text: "Verde: recibido · Rojo: urgente" },
+      { icon: "💬", text: "Rosado: mensajes sin leer" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
