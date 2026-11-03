@@ -133,6 +133,17 @@ export const RELEASES: Release[] = [
       { icon: "⬇️", text: "Descárgalo en Excel o imprímelo en PDF" },
     ],
   },
+  {
+    id: 13, date: "2026-11-03", title: "Las 4 firmas desde el pedido",
+    summary: "«En camino» y «Recibió» también se firman en el panel del pedido, sin enlace.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "📦", text: "Firman «Preparó» y «Revisó»" },
+      { icon: "🚚", text: "En «En camino» toca «Enviar y firmar aquí»" },
+      { icon: "✅", text: "Al llegar, «Recibió» se firma en el mismo panel" },
+      { icon: "🔒", text: "Cada paso bloqueado dice qué falta" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

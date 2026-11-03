@@ -577,6 +577,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         onCancel={() => { pendingReceive.current = false; }}
         autoOpen={autoSign}
         onAutoOpenDone={() => setAutoSign(null)}
+        onDispatch={canAttend && !busy ? () => void dispatch() : undefined}
       />
 
       {data.transfer ? (

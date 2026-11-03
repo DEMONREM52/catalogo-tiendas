@@ -74,8 +74,23 @@ function canSign(data: SrDetail, step: (typeof SIGN_STEPS)[number]) {
   return s === "dispatched" || s === "received";
 }
 
+/** Por qué un paso todavía no se puede firmar aquí (para que nadie se quede sin saber qué hacer). */
+function lockReason(data: SrDetail, step: (typeof SIGN_STEPS)[number]) {
+  const s = data.request.status;
+  const r = data.request;
+  if (s === "rejected" || s === "cancelled") return "El pedido se cerró.";
+  if (step.key === "packed" || step.key === "sent") {
+    if (!data.access.attend) return `Lo firma quien atiende en ${r.to_name}.`;
+    if (step.key === "sent") return "Primero firma «Preparó».";
+    return step.who;
+  }
+  if (step.key === "delivered") return s === "received" ? step.who : "Primero firma «Revisó».";
+  if (!data.access.request) return `Lo firma quien recibe en ${r.from_name}.`;
+  return `Se firma cuando llegue a ${r.from_name}.`;
+}
+
 /** Firmas del pedido: nombre, cédula y firma de cada responsable (se sincronizan con el seguimiento del traslado). */
-export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, onCancel }: { data: SrDetail; onSigned: (step: SrSignStep) => void; autoOpen?: SrSignStep | null; onAutoOpenDone?: () => void; onCancel?: () => void }) {
+export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, onCancel, onDispatch }: { data: SrDetail; onSigned: (step: SrSignStep) => void; autoOpen?: SrSignStep | null; onAutoOpenDone?: () => void; onCancel?: () => void; onDispatch?: () => void }) {
   const signed = new Map((data.signatures ?? []).map((s) => [s.step, s]));
   const [signing, setSigning] = useState<SrSignStep | null>(null);
   const current = signing ?? (autoOpen && !signed.has(autoOpen) ? autoOpen : null);
@@ -101,6 +116,9 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
         {SIGN_STEPS.map((step, i) => {
           const sig = signed.get(step.key);
           const can = !sig && canSign(data, step);
+          // «En camino» antes de salir: se envía y enseguida se abre la firma de quien lo lleva.
+          const sendAndSign = !sig && step.key === "delivered" && st === "preparing" && data.access.attend && Boolean(onDispatch)
+            && signed.has("packed") && signed.has("sent");
           return (
             <li key={step.key} className="rounded-xl border p-2.5" style={{ borderColor: sig ? "color-mix(in oklab, #22c55e 45%, transparent)" : can ? "var(--t-accent)" : "var(--t-card-border)", background: sig ? "color-mix(in oklab, #22c55e 7%, transparent)" : "transparent" }}>
               <p className="flex items-center gap-1.5 text-xs font-bold">
@@ -118,6 +136,13 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
                     <img src={sig.signature} alt={`Firma de ${sig.signer_name}`} className="mt-1.5 h-12 w-auto rounded-md border bg-white" style={{ borderColor: "var(--t-card-border)" }} />
                   ) : null}
                 </div>
+              ) : sendAndSign ? (
+                <div className="mt-1.5">
+                  <button type="button" onClick={onDispatch} className="w-full rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: "#0ea5e9" }}>
+                    🚚 Enviar y firmar aquí
+                  </button>
+                  <p className="mt-1 text-[10px]" style={{ color: "var(--t-muted)" }}>Sale el traslado y firma quien lo lleva.</p>
+                </div>
               ) : can || byLink(step.key) ? (
                 <div className="mt-1.5 flex gap-1.5">
                   {can ? (
@@ -132,7 +157,10 @@ export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, on
                   ) : null}
                 </div>
               ) : (
-                <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{step.who}</p>
+                <>
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{step.who}</p>
+                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: "#f59e0b" }}>🔒 {lockReason(data, step)}</p>
+                </>
               )}
             </li>
           );
