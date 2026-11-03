@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ScanEye, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -63,8 +64,10 @@ export function AuditDrawer({ storeId, title, filters, onClose }: { storeId: str
     return () => { window.clearTimeout(t); window.removeEventListener("keydown", onKey); };
   }, [load, onClose]);
 
+  // Se abre en <body>: así ninguna tarjeta con desenfoque o transformación lo encierra.
+  if (typeof document === "undefined") return null;
   const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => typeof v === "string" && v).map(([k, v]) => [k, String(v)])).toString();
-  return (
+  return createPortal(
     <motion.div className="fixed inset-0 z-[150]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal aria-label={title}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <motion.aside initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 40, opacity: 0 }} transition={{ type: "spring", stiffness: 380, damping: 34 }}
@@ -92,6 +95,7 @@ export function AuditDrawer({ storeId, title, filters, onClose }: { storeId: str
           </Link>
         </footer>
       </motion.aside>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
