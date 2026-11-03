@@ -3,9 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, CreditCard, Landmark, Smartphone, Wallet, X } from "lucide-react";
+import { Banknote, CreditCard, Landmark, Smartphone, Wallet } from "lucide-react";
 import Swal from "sweetalert2";
 import { Field, MoneyField } from "./Fields";
+import { CloseButton } from "@/components/ui/IconButton";
 
 const swalTheme = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#ef4444" };
 
@@ -42,7 +43,7 @@ export function Sheet({ title, subtitle, icon, onClose, children, footer, wide, 
             <h2 className="truncate text-lg font-black">{title}</h2>
             {subtitle ? <div className="text-xs" style={{ color: "var(--t-muted)" }}>{subtitle}</div> : null}
           </div>
-          <button type="button" onClick={() => void close()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
+          <CloseButton onClick={() => void close()} />
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">{children}</div>
         {footer ? <footer className="flex flex-wrap items-center gap-2 border-t px-5 py-3" style={{ borderColor: "var(--t-card-border)" }}>{footer}</footer> : null}

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
+import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import Swal from "sweetalert2";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -146,6 +147,8 @@ export default function EditProductPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Evita guardar dos veces con un doble toque (antes de que el botón alcance a deshabilitarse).
+  const savingNow = useRef(false);
   // Si el costo no se pudo leer (sin permiso o sin conexión) no se muestra ni se guarda: así nunca se borra.
   const [costKnown, setCostKnown] = useState(true);
   // false si no se pudo leer el % de ganancia (sin «Ver costos» o sin la migración 20261113).
@@ -300,7 +303,8 @@ export default function EditProductPage() {
   }, [id]);
 
   async function save() {
-    if (!draft || !storeId) return;
+    if (!draft || !storeId || savingNow.current) return;
+    savingNow.current = true;
 
     setSaving(true);
     try {
@@ -356,6 +360,7 @@ export default function EditProductPage() {
       });
     } finally {
       setSaving(false);
+      savingNow.current = false;
     }
   }
 
@@ -597,6 +602,11 @@ export default function EditProductPage() {
               />
             </div>
           ) : null}
+          <MobileActionBar show={isDirty} hint="Tienes cambios sin guardar">
+            <button type="button" className={primaryBtn.className} style={primaryBtn.style} disabled={saving || loading || !draft} onClick={() => void save()}>
+              {saving ? "Guardando…" : "💾 Guardar cambios"}
+            </button>
+          </MobileActionBar>
         </>
       ) : null}
     </main>

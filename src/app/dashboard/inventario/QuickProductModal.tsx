@@ -209,7 +209,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
             <h3 className="text-base font-black">✨ Crear producto</h3>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Queda agregado a esta factura. Fotos y descripción las puedes poner después.</p>
           </div>
-          <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} onClick={() => void requestClose()} aria-label="Cerrar">✕</button>
+          <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} onClick={() => void requestClose()} aria-label="Cerrar">✕</button>
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4" onKeyDown={onEnter}>

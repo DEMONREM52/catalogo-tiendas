@@ -271,7 +271,7 @@ export function ThirdPartyForm({
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-accent)" }}>{draft.id ? "Editar tercero" : "Nuevo tercero"}</p>
                 <h3 className="mt-0.5 text-lg font-black">{draft.name.trim() || "Sin nombre"}</h3>
               </div>
-              <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
                 <X size={16} />
               </button>
             </header>

@@ -17,6 +17,7 @@ import { useErpFinderSource } from "../useErpFinder";
 import { DateField } from "@/components/forms/Fields";
 import { useCan } from "@/lib/permission-runtime";
 import { CleanupProductsSheet, deleteProductFlow } from "./DeleteProducts";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -916,7 +917,7 @@ export default function ProductsListPage() {
       {/* LISTA */}
       <div className="space-y-2">
         {loading ? (
-          <div className={`${clsWrap()} p-6 text-sm text-slate-700 dark:text-white/70`}>Cargando productos…</div>
+          <div className={`${clsWrap()} p-3`}><SkeletonList rows={8} label="Cargando productos…" /></div>
         ) : filtered.length === 0 ? (
           <div className={`${clsWrap()} p-6`}>
             <p className="font-semibold">No hay resultados</p>

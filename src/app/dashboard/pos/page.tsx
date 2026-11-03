@@ -2455,7 +2455,7 @@ export default function PosPage() {
               <div className="mx-auto mt-2 h-1.5 w-12 rounded-full" style={{ background: "var(--t-card-border)" }} />
               <div className="flex items-center justify-between gap-2 px-4 pt-2">
                 <h2 className="text-base font-black">🛒 Lo que lleva <span className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>{cart.length} producto{cart.length === 1 ? "" : "s"} · {units} und.</span></h2>
-                <button type="button" onClick={() => setCartSheet(false)} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}><X size={16} /></button>
+                <button type="button" onClick={() => setCartSheet(false)} aria-label="Cerrar" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}><X size={18} /></button>
               </div>
               <p className="px-4 text-[11px]" style={{ color: "var(--t-muted)" }}>👤 {effectiveClient.name} · Lista P{currentPriceList}</p>
               <div className="min-h-0 flex-1 overflow-y-auto px-3">

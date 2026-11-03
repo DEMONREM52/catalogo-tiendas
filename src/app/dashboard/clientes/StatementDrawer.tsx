@@ -232,7 +232,7 @@ export function StatementDrawer({
                 <button type="button" onClick={() => window.print()} className="grid h-9 w-9 place-items-center rounded-full border print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Imprimir" title="Imprimir">
                   <Printer size={15} />
                 </button>
-                <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border transition hover:rotate-90 print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+                <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90 print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
                   <X size={16} />
                 </button>
               </div>

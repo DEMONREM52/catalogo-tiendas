@@ -382,7 +382,7 @@ export default function PurchaseReceiptPage() {
                   <h2 className="text-lg font-extrabold">¿Con qué valores quieres el comprobante?</h2>
                   <p className="text-sm text-slate-500">Ingreso N.º {p.number} · {units} unidades</p>
                 </div>
-                <button type="button" onClick={() => setChooser(false)} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full border border-slate-200">
+                <button type="button" onClick={() => setChooser(false)} aria-label="Cerrar" className="grid h-10 w-10 place-items-center rounded-full border border-slate-200">
                   <X className="h-4 w-4" />
                 </button>
               </div>

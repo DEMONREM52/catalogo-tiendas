@@ -99,7 +99,7 @@ export function PrinterSetup({ size, onClose }: { size: "tirilla" | "carta"; onC
             <p className="text-lg font-black">🖨️ Impresora de este equipo</p>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Cada computador, celular o tablet elige la suya. Si no cambias nada, se imprime como siempre (ventana del navegador).</p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
             <X size={15} />
           </button>
         </div>

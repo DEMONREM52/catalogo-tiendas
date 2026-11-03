@@ -59,7 +59,7 @@ export function PeoplePicker({ open, icon, color, heading, title, note, load, in
                 <p className="font-black">{heading}</p>
                 <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{title}</p>
               </div>
-              <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
             </div>
             {note ? <p className="border-b px-4 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>{note}</p> : null}
             <div className="max-h-[50dvh] space-y-1 overflow-y-auto p-2">

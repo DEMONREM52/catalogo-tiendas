@@ -11,6 +11,7 @@ import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockR
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
 import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, isOpen, srError, timeAgo, type SrListItem } from "./types";
+import { Skeleton, SkeletonCards } from "@/components/ui/Skeleton";
 
 type Scope = "attend" | "mine" | "active" | "closed";
 
@@ -114,7 +115,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
               <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `color-mix(in oklab, ${color as string} 16%, transparent)`, color: color as string }}>{icon}</span>
               {label as string}
             </p>
-            <p className="mt-2 text-2xl font-black tabular-nums">{loading ? "…" : (value as number)}</p>
+            <p className="mt-2 text-2xl font-black tabular-nums">{loading ? <Skeleton className="h-7 w-10" /> : (value as number)}</p>
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>{sub as string}</p>
           </div>
         ))}
@@ -156,7 +157,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
       {error ? (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p>
       ) : loading && !rows.length ? (
-        <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <div key={i} className="h-36 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />)}</div>
+        <SkeletonCards count={4} label="Cargando pedidos internos…" />
       ) : list.length === 0 ? (
         <div className="rounded-3xl border border-dashed p-10 text-center" style={{ borderColor: "var(--t-card-border)" }}>
           <p className="text-3xl">{effectiveScope === "attend" ? "🎉" : "📦"}</p>

@@ -193,7 +193,7 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                 <h2 className="text-lg font-black">Sonidos y avisos</h2>
                 <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>Pedidos nuevos, mensajes y cambios de estado</p>
               </div>
-              <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
                 <X size={16} />
               </button>
             </header>
@@ -238,14 +238,14 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
 
                   <section className="space-y-4 rounded-2xl border p-4" style={card}>
                     <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>🔊 Sonidos en este equipo</p>
-                    <div className="flex items-center gap-3">
+                    <label className="-m-2 flex cursor-pointer items-center gap-3 rounded-2xl p-2 transition hover:bg-[color:var(--t-card-bg-soft)]">
                       <span className="text-2xl">{device.muted ? "🔕" : "🔔"}</span>
                       <div className="min-w-0 flex-1">
                         <p className="font-bold">{device.muted ? "Silenciado" : "Sonidos activos"}</p>
                         <p className="text-xs" style={{ color: "var(--t-muted)" }}>Solo cambia este equipo, no el de tus compañeros.</p>
                       </div>
                       <Toggle on={!device.muted} onChange={(v) => setDevicePrefs(storeId, { muted: !v })} label="Sonidos en este equipo" />
-                    </div>
+                    </label>
                     <div className={device.muted ? "pointer-events-none opacity-40" : ""}>
                       <div className="flex items-center gap-3">
                         <VolumeX size={16} style={{ color: "var(--t-muted)" }} />
@@ -257,14 +257,14 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                         <button type="button" onClick={() => setDevicePrefs(storeId, { volume: null })} className="mt-1 text-xs font-semibold underline" style={{ color: "var(--t-muted)" }}>Usar el volumen de la tienda</button>
                       ) : null}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <label className="-m-2 flex cursor-pointer items-center gap-3 rounded-2xl p-2 transition hover:bg-[color:var(--t-card-bg-soft)]">
                       <span className="text-2xl">📳</span>
                       <div className="min-w-0 flex-1">
                         <p className="font-bold">Vibrar</p>
                         <p className="text-xs" style={{ color: "var(--t-muted)" }}>En celulares Android (iPhone no lo permite en la web).</p>
                       </div>
                       <Toggle on={device.vibrate} onChange={(v) => setDevicePrefs(storeId, { vibrate: v })} label="Vibrar" />
-                    </div>
+                    </label>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {NOTIF_EVENTS.slice(0, 4).map((e) => (
                         <button key={e.key} type="button" disabled={device.muted} onClick={() => draft && playTone(resolveEvent(draft, e.key, meta.myPoint).tone, vol)} className="flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold transition hover:-translate-y-0.5 disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }}>
@@ -290,14 +290,14 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                       ["push", "📲", "Notificaciones del celular", "Llegan aunque la app esté cerrada (a quien las active)"],
                       ["admins_all", "👑", "Dueño y administradores escuchan todo", "Quien no tiene punto asignado recibe los avisos de todos los puntos"],
                     ] as const).map(([k, emoji, title, hint]) => (
-                      <div key={k} className="flex items-center gap-3">
+                      <label key={k} className={`-m-2 flex items-center gap-3 rounded-2xl p-2 transition ${editable ? "cursor-pointer hover:bg-[color:var(--t-card-bg-soft)]" : ""}`}>
                         <span className="text-2xl">{emoji}</span>
                         <div className="min-w-0 flex-1">
                           <p className="font-bold">{title}</p>
                           <p className="text-xs" style={{ color: "var(--t-muted)" }}>{hint}</p>
                         </div>
                         <Toggle on={draft[k]} disabled={!editable} onChange={(v) => setDraft({ ...draft, [k]: v })} label={title} />
-                      </div>
+                      </label>
                     ))}
                     <div className="flex items-center gap-3 pt-1">
                       <span className="text-sm font-bold">Volumen sugerido</span>

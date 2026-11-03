@@ -132,7 +132,7 @@ function Sheet({ target, onClose, onDone }: { target: VoidTarget; onClose: () =>
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose} disabled={saving} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+          <button type="button" onClick={onClose} disabled={saving} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
             <X size={16} />
           </button>
         </header>

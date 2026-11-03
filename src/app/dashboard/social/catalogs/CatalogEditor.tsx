@@ -424,7 +424,7 @@ export function CatalogEditor({
             {error ? (
               <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-2xl border p-3 text-sm" style={{ borderColor: "color-mix(in oklab, #ef4444 45%, transparent)", background: "color-mix(in oklab, #ef4444 10%, transparent)" }}>
                 <span>{error}</span>
-                <button type="button" onClick={() => setError("")} aria-label="Cerrar"><X size={15} /></button>
+                <button type="button" onClick={() => setError("")} aria-label="Cerrar"><X size={18} /></button>
               </div>
             ) : null}
 

@@ -74,10 +74,10 @@ const BLOCK_CSS = `
 
 function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border p-3" style={softBox}>
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border p-3 transition hover:brightness-110" style={softBox}>
       <div className="min-w-0"><p className="text-sm font-semibold">{label}</p>{hint ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>{hint}</p> : null}</div>
       <Switch checked={checked} onChange={onChange} label={label} />
-    </div>
+    </label>
   );
 }
 

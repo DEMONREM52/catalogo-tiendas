@@ -11,6 +11,7 @@ import { CallPicker, type CallCandidate } from "../pedidos/internos/CallPicker";
 import { ProductSearchModal } from "../inventario/LineEditor";
 import { ChatBubble, ChatSearchBar, ComposerBanner, ForwardDialog, MentionSuggestions, PinnedBar, SystemLine, muteChat, showReaders, type ChatMsg } from "@/components/chat/ChatParts";
 import { useChatKit } from "@/components/chat/useChatKit";
+import { SkeletonChat } from "@/components/ui/Skeleton";
 
 /**
  * Conversación de un chat del equipo (20261271 + 20261273): mensajes en vivo, fotos, videos, audios, notas de voz,
@@ -250,7 +251,7 @@ export function Chat({ storeId, thread, me, onBack, onActivity, focusMessage }: 
 
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3 md:px-9" style={{ backgroundImage: "radial-gradient(color-mix(in oklab, var(--t-text) 6%, transparent) 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
         {more && msgs?.length ? <button type="button" onClick={() => void older()} className="mx-auto mb-2 block rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Ver mensajes anteriores</button> : null}
-        {msgs === null ? <p className="py-10 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+        {msgs === null ? <SkeletonChat /> : null}
         {msgs && !msgs.length ? <p className="py-10 text-center text-sm" style={{ color: "var(--t-muted)" }}>👋 Escribe el primer mensaje, manda una foto, una nota de voz o un producto.</p> : null}
         {all.map((m, i) => {
           const prev = all[i - 1];

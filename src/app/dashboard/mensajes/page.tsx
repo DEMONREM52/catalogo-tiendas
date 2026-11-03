@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { Chat, initials, threadName, type Thread } from "./Chat";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 /**
  * Mensajes del equipo (20261271): chats de dos y grupos, sin necesidad de un pedido. Fotos, videos, audios,
@@ -124,7 +125,7 @@ export default function MessagesPage() {
         </label>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
           {missing ? <p className="m-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">Falta ejecutar en Supabase la migración <b>20261271_mensajes_directos.sql</b>.</p> : null}
-          {threads === null ? <p className="p-4 text-sm" style={{ color: "var(--t-muted)" }}>Cargando…</p> : null}
+          {threads === null ? <SkeletonList rows={7} label="Cargando tus chats…" /> : null}
           {threads && !threads.length && !missing ? (
             <div className="p-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>
               <p className="text-3xl">💬</p>
@@ -186,7 +187,7 @@ export default function MessagesPage() {
             <motion.div initial={{ y: 30 }} animate={{ y: 0 }} exit={{ y: 30 }} onClick={(e) => e.stopPropagation()} className="flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}>
               <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
                 <Star size={18} className="fill-amber-400 text-amber-400" /><p className="flex-1 font-black">Mensajes guardados</p>
-                <button type="button" onClick={() => setStarred(null)} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
+                <button type="button" onClick={() => setStarred(null)} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {!starred.length ? <p className="p-6 text-center text-sm" style={{ color: "var(--t-muted)" }}>Mantén presionado un mensaje (o clic derecho) y toca «Guardar ⭐» para encontrarlo aquí.</p> : null}
@@ -280,7 +281,7 @@ function NewChat({ open, storeId, onClose, onOpened }: { open: boolean; storeId:
             className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}>
             <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
               <p className="flex-1 font-black">{announce ? "📢 Nuevo anuncio" : group ? "Nuevo grupo" : "Nuevo chat"}</p>
-              <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
             </div>
             <div className="space-y-2 p-3">
               <div className="flex gap-1.5 rounded-full p-1" style={{ background: "var(--t-card-bg)" }}>
@@ -310,7 +311,7 @@ function NewChat({ open, storeId, onClose, onOpened }: { open: boolean; storeId:
               </label>
             </div>
             <div className={`min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2 ${announce ? "hidden" : ""}`}>
-              {people === null ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando equipo…</p> : null}
+              {people === null ? <SkeletonList rows={5} label="Cargando el equipo…" /> : null}
               {list.map((p) => (
                 <button key={p.user_id} type="button" disabled={busy} onClick={() => (group && !announce ? setPicked((cur) => { const n = new Set(cur); if (n.has(p.user_id)) n.delete(p.user_id); else n.add(p.user_id); return n; }) : void direct(p))}
                   className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-[color:var(--t-card-bg)] disabled:opacity-50">

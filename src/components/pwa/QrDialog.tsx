@@ -62,7 +62,7 @@ function Sheet({ onClose, path, title, subtitle }: { onClose: () => void; path: 
         exit={{ y: 60, opacity: 0, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
       >
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border, rgba(255,255,255,.2))" }} aria-label="Cerrar">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border, rgba(255,255,255,.2))" }} aria-label="Cerrar">
           <X size={16} />
         </button>
         <p className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#a78bfa" }}><QrCode size={14} /> Código QR</p>

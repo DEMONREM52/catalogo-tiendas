@@ -75,7 +75,7 @@ export function AuditDrawer({ storeId, title, filters, onClose }: { storeId: str
             <p className="truncate text-sm font-black">{title}</p>
             <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Solo lectura · los eventos no se pueden editar ni borrar</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}><X size={18} /></button>
         </header>
         <div className="flex-1 space-y-2 overflow-y-auto p-3">
           {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}

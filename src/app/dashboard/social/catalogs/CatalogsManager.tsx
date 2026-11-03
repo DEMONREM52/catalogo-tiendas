@@ -351,7 +351,7 @@ export default function CatalogsManager() {
       {error ? (
         <div role="alert" className="flex items-start justify-between gap-3 rounded-2xl border p-4 text-sm" style={{ borderColor: "color-mix(in oklab, #ef4444 45%, transparent)", background: "color-mix(in oklab, #ef4444 10%, transparent)" }}>
           <span>{error}</span>
-          <button type="button" onClick={() => setError("")} aria-label="Cerrar"><X size={16} /></button>
+          <button type="button" onClick={() => setError("")} aria-label="Cerrar"><X size={18} /></button>
         </div>
       ) : null}
 
@@ -619,7 +619,7 @@ function CreateCatalogDialog({
             <h2 className="text-xl font-black">Nuevo catálogo</h2>
             <p className="text-sm" style={{ color: "var(--t-muted)" }}>Elige una plantilla; después podrás personalizar todo.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-9 w-9 place-items-center rounded-full border" style={softBox}><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="grid h-10 w-10 place-items-center rounded-full border" style={softBox}><X size={18} /></button>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

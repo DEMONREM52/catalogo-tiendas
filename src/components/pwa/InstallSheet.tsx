@@ -162,7 +162,7 @@ function Sheet({ onClose, identity }: { onClose: () => void; identity: InstallId
       >
         <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full blur-3xl" style={{ background: "rgba(168,85,247,.28)" }} />
         <span className="mx-auto mt-2 h-1.5 w-11 shrink-0 rounded-full sm:hidden" style={{ background: "rgba(128,128,128,.35)" }} aria-hidden />
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border, rgba(255,255,255,.2))" }} aria-label="Cerrar">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border, rgba(255,255,255,.2))" }} aria-label="Cerrar">
           <X size={16} />
         </button>
 

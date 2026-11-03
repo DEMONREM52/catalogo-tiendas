@@ -51,7 +51,7 @@ export function CallPicker({ open, video, title, load, onCall, onClose }: {
                 <p className="font-black">{video ? "Videollamada" : "Llamada"}</p>
                 <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{title}</p>
               </div>
-              <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
             </div>
             <div className="max-h-[50dvh] space-y-1 overflow-y-auto p-2">
               {list === null ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>Buscando a quién llamar…</p> : null}

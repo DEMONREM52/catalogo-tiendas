@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -77,6 +78,8 @@ function digitsOnlyToNumber(raw: string, fallback = 0) {
 export default function CreateProductPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Evita crear el producto dos veces con un doble toque.
+  const creatingNow = useRef(false);
 
   const [storeId, setStoreId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -160,6 +163,16 @@ export default function CreateProductPage() {
   }, []);
 
   async function createNow() {
+    if (!storeId || creatingNow.current) return;
+    creatingNow.current = true;
+    try {
+      await createProduct();
+    } finally {
+      creatingNow.current = false;
+    }
+  }
+
+  async function createProduct() {
     if (!storeId) return;
 
     const n = name.trim();
@@ -363,6 +376,11 @@ export default function CreateProductPage() {
                 Cancelar
               </Link>
             </div>
+            <MobileActionBar show={Boolean(name.trim())}>
+              <button type="button" onClick={() => void createNow()} disabled={saving || !storeId} className={primary.className} style={primary.style}>
+                {saving ? "Creando…" : "✅ Crear producto"}
+              </button>
+            </MobileActionBar>
           </div>
 
           {/* Right */}

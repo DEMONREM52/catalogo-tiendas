@@ -278,7 +278,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
             <h2 className="flex items-center gap-2 text-base font-black sm:text-lg"><ScanSearch size={20} className="shrink-0" style={{ color: "var(--t-accent)" }} /> <span className="truncate">{title}</span></h2>
             <p className="mt-0.5 line-clamp-2 text-xs short:hidden" style={{ color: "var(--t-muted)" }}>{subtitle ?? "Busca por nombre, código o con una foto."}</p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
             <X size={16} />
           </button>
         </header>

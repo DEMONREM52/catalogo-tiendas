@@ -369,7 +369,7 @@ export function ForwardDialog({ open, storeId, onClose, onSend }: { open: boolea
             className="flex max-h-[80dvh] w-full max-w-sm flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}>
             <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
               <Forward size={18} /><p className="flex-1 font-black">Reenviar a…</p>
-              <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {list === null ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>Cargando chats…</p> : null}

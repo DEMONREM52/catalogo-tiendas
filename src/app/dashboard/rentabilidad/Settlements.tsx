@@ -399,7 +399,7 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
           </div>
           <ExportGate><button type="button" onClick={() => void pdf()} disabled={!d} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }} aria-label="Informe PDF">📄 Informe PDF</button></ExportGate>
           <ExportGate><button type="button" onClick={exportCsv} disabled={!d} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Exportar a Excel" title="Excel"><Download size={15} /></button></ExportGate>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={18} /></button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {error ? <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}

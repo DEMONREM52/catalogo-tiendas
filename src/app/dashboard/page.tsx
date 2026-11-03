@@ -34,6 +34,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
 import { EditableNickname, useNicknameUpdates } from "./Nickname";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 type Module = { permission: string; key: string; href: string; icon: LucideIcon; title: string; description: string };
 
@@ -175,7 +176,7 @@ export default function DashboardHome() {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] first-letter:uppercase" style={{ color: "var(--t-muted)" }}>{today}</p>
             <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-              {loading ? "Cargando…" : (
+              {loading ? <Skeleton className="h-8 w-64 max-w-full" /> : (
                 <span className="inline-flex flex-wrap items-center gap-x-2">
                   {greeting()},
                   <EditableNickname value={name} fallback={fallbackName} onSaved={setName} inputClassName="text-xl font-black sm:text-2xl" />

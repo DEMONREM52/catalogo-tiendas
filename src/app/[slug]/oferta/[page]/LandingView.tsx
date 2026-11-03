@@ -832,7 +832,7 @@ function Overlay({ title, onClose, children, wide = false }: { title: string; on
       <div className={`lp-sheet max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-slate-900 shadow-2xl sm:rounded-3xl ${wide ? "sm:max-w-xl" : "sm:max-w-lg"}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-3">
           <h2 className="text-base font-black">{title}</h2>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-lg font-bold" aria-label="Cerrar">×</button>
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-lg font-bold" aria-label="Cerrar">×</button>
         </div>
         <div className="p-5">{children}</div>
       </div>

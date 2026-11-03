@@ -210,7 +210,7 @@ function SignModal({ data, step, onClose, onDone }: { data: SrDetail; step: (typ
               <h3 className="text-lg font-black">{step.icon} Firmar: {step.title}</h3>
               <p className="text-xs" style={{ color: "var(--t-muted)" }}>{step.who} escribe su nombre y firma.</p>
             </div>
-            <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+            <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
               <X size={16} />
             </button>
           </div>
