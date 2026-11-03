@@ -949,13 +949,13 @@ export default function ProductsListPage() {
                   <div className="flex w-full flex-wrap items-start gap-x-3 gap-y-2 px-3 py-3 sm:flex-nowrap sm:items-center">
                     {/* Miniatura */}
                     <div
-                      className={`h-12 w-12 shrink-0 rounded-2xl border overflow-hidden flex items-center justify-center ${avatarClass(
+                      className={`h-16 w-16 shrink-0 rounded-2xl border overflow-hidden flex items-center justify-center shadow-md sm:h-20 sm:w-20 ${avatarClass(
                         p.id
                       )}`}
                       title={p.name}
                     >
                       {p.image_url ? (
-                        <ZoomableThumb src={p.image_url} alt={p.name} className="block h-full w-full" imgClassName="h-full w-full object-cover" />
+                        <ZoomableThumb src={p.image_url} alt={p.name} className="block h-full w-full" imgClassName="h-full w-full object-cover transition duration-300 hover:scale-110" />
                       ) : (
                         <span className="text-base font-extrabold" aria-hidden="true">{letter}</span>
                       )}
@@ -998,7 +998,7 @@ export default function ProductsListPage() {
                       </div>
                     </div>
 
-                    <div className="flex basis-full flex-wrap items-center justify-start gap-1.5 pl-15 sm:basis-auto sm:shrink-0 sm:justify-end sm:pl-0">
+                    <div className="flex basis-full flex-wrap items-center justify-start gap-1.5 pl-19 sm:basis-auto sm:shrink-0 sm:justify-end sm:pl-0">
                       <Link
                         href={`/dashboard/products/${p.id}`}
                         className={`${clsBtnSoft()} product-row-action`}
