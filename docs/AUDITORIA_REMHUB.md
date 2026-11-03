@@ -192,6 +192,8 @@ No se probó contra la base de producción.
 | S-11 | Info | El middleware solo mira si existe la cookie `app_session`, no la valida. La seguridad real está en RLS y en las funciones de la base | 🟡 aceptable |
 | S-12 | Baja | `/api/push/stock-requests` es público porque lo llama la base. Solo acepta eventos recientes y cada uno una vez | 🟡 aceptable; se le puede agregar un secreto compartido |
 | S-07 | Media | Acciones del admin global con llave de servicio sin la persona | ⏳ |
+| S-13 | Media | Las rutas públicas (pedido de landing, abrir cobro Bold, contexto de acceso del equipo) no tenían freno: un robot podía llamarlas en bucle | ✅ freno por IP (`src/lib/server/rate-limit.ts`, prueba en `tests/security/rate-limit.test.ts`): 8 pedidos/min, 12 cobros/min, 40 consultas/min. Es por instancia del servidor: frena ráfagas, no es un límite global exacto |
+| S-14 | Baja | `/api/push/cost-alerts` también lo llama la base sin secreto | 🟡 igual que S-12: solo recibe el id, lee todo de la base, solo ventas de los últimos 10 min y una vez cada una |
 
 ---
 
@@ -204,10 +206,41 @@ No se probó contra la base de producción.
    Costos aproximados: sin costo en el plan de Vercel actual. El almacenamiento WORM (por ejemplo S3 Object Lock) cuesta centavos de dólar al mes por este volumen, pero **no está configurado**.
 3. **Copias de seguridad:** confirmar el plan de backups de Supabase (Point-in-Time Recovery es de pago).
 
-## Fases que siguen (no iniciadas en esta entrega)
-- **Fase 6, cookies y rendimiento:** inventario real de cookies, localStorage y service worker; revisión de caché por tienda.
-- **Fase 7, legal ⚖️:** términos, política de datos (Ley 1581 de 2012, Decreto 1074 de 2015), aviso de privacidad, cookies, autorizaciones con versión, y su registro en la base con revocación. Necesita datos de la empresa y revisión de un abogado.
-- **Fase 8, OWASP completo:** endpoints `/api/*`, cabeceras, rate limiting, archivos y webhooks.
-- **Fase 9, centro administrativo:** alertas, incidentes y aceptaciones legales. Lo de auditoría ya está.
-- **Fase 10, precios y planes:** investigación con fuentes verificables.
-- **Fase 5, detalle:** confirmar que cada liquidación guarda las reglas usadas y que las correcciones crean operaciones nuevas.
+## Estado de las fases 6 a 10 (revisión del 2026-11-03)
+
+### Fase 6, cookies y almacenamiento ✅ inventario
+Lo que RemHub guarda en el navegador:
+
+| Tipo | Nombre | Para qué | ¿Necesaria? |
+|---|---|---|---|
+| Cookie | `sb-…-auth-token` (Supabase) | Sesión iniciada | Necesaria |
+| Cookie | `app_session` | Marca que hay sesión (el middleware solo la mira; no da acceso por sí sola, ver S-11) | Necesaria |
+| Cookie | `remhub_staff_access` | Acceso del trabajador por el enlace de su tienda | Necesaria |
+| Cookie de terceros | `_fbp`, `_fbc` (Meta) | Píxel de Meta en catálogos y landings que lo configuran | **Medición: requiere aviso** |
+| localStorage | `remhub-traffic`, `remhub:ref` | De dónde llegó el visitante (30 días), para el píxel y los informes | Medición |
+| localStorage | `remhub:device-id` | Identificar el equipo para ventas sin conexión y avisos | Necesaria |
+| localStorage | carrito, venta en curso, borradores | No perder lo que se estaba haciendo | Necesaria |
+| localStorage | `remhub-color-mode`, `remhub-glass`, `remhub-bg-anim`, `remhub-emoji-recent`, `remhub_print_format`, `remhub:printer`, informes y filtros guardados, `remhub_transfer_signer` | Preferencias de la persona | Preferencia |
+| IndexedDB | ventas y documentos sin conexión | Trabajar sin internet | Necesaria |
+| Service worker | `remhub-pages-*`, `remhub-static-*` | Abrir la app sin conexión y más rápido | Necesaria |
+
+**Conclusión:** todo lo de RemHub es necesario o de preferencia. Lo único que es **medición de terceros** son las cookies del píxel de Meta y el origen de la visita en los catálogos y landings. Decisión pendiente del dueño (fase 7): poner un aviso de cookies con «Aceptar» antes de cargar el píxel. Esto baja un poco los eventos que llegan a Meta, por eso no se activó sin autorización.
+
+### Fase 7, legal ⚖️ ⏳ necesita al dueño y un abogado
+No hay páginas de términos ni de política de datos. Para hacerlas se necesita: razón social o nombre del responsable, NIT o cédula, dirección, correo para peticiones (Ley 1581 exige un canal), finalidades del tratamiento y si se comparten datos con Meta, Wompi, Bold, Addi y Alanube. Con esos datos se arman: términos, política de tratamiento, aviso de privacidad, aviso de cookies y el registro de aceptaciones con versión y revocación en la base.
+
+### Fase 8, OWASP ✅ revisado
+- **Rutas `/api`:** las que manejan datos de una tienda exigen sesión y permiso (`requireUser` + `requirePermission` o `requireOrganizationAccess`). Las tareas programadas exigen `CRON_SECRET` (`cronAuthorized`). Los pagos se confirman solo con evento firmado: Wompi lo valida la base (`process_wompi_event`) y Bold, su webhook por cuenta. `/api/payments/mark-paid` está cerrada (410).
+- **Freno de peticiones:** agregado (S-13).
+- **Archivos:** se suben a Supabase Storage con sus políticas; las descargas fiscales pasan por `/api/fiscal/documents/download` con permiso y quedan auditadas.
+- **Encabezados:** ver S-10. Sigue pendiente la CSP completa.
+- **Pendiente menor:** S-12 y S-14 (secreto compartido para los avisos que llama la base), y S-07.
+
+### Fase 9, centro administrativo ⏳
+Lo de auditoría ya está (`/dashboard/auditoria`). Faltan alertas de incidentes y el registro de aceptaciones legales, que depende de la fase 7.
+
+### Fase 10, precios y planes ✅ cubierta por SaaS
+Los planes, cobros y límites ya están en `docs/SAAS_REMHUB.md` (migración 20261211). La investigación de precios de la competencia con fuentes queda como tarea de negocio.
+
+### Fase 5, detalle ⏳
+Confirmar que cada liquidación guarda las reglas usadas y que las correcciones crean operaciones nuevas.

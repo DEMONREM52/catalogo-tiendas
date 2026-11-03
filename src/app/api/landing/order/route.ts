@@ -1,6 +1,7 @@
 // Pedido desde una landing: la base valida todo (precio, existencias, paquete, pago) y crea el pedido.
 // Después de responder, se avisa a Meta por la API de Conversiones (si la tienda la configuró).
 import { after } from "next/server";
+import { rateLimited } from "@/lib/server/rate-limit";
 import { createClient } from "@supabase/supabase-js";
 import { decryptSecret, secretAad } from "@/lib/fiscal/crypto";
 import { jsonError, jsonOk, readJson, requestMeta, serviceClient, FiscalApiError } from "@/lib/fiscal/server";
@@ -21,6 +22,9 @@ type Body = {
 type OrderResult = { ok: boolean; code?: string; field?: string; message?: string; token?: string; receipt_no?: string; order_id?: string; total?: number; store_id?: string; event_id?: string; payment?: string; bold_account?: string | null; page_name?: string; items?: Array<{ id: string; name: string; price: number; quantity: number }> };
 
 export async function POST(request: Request) {
+  // Un cliente real hace uno o dos pedidos; más de 8 por minuto desde la misma IP es un robot.
+  const limited = rateLimited(request, "landing-order", 8, 60_000);
+  if (limited) return limited;
   try {
     const body = await readJson<Body>(request, 20_000);
     if (!body.store || !body.slug || !body.session) throw new FiscalApiError("Recarga la página e intenta de nuevo.", 400, "INVALID");

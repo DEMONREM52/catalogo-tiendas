@@ -1,6 +1,7 @@
 // Abre un cobro con Bold para un pedido: desde la página del pedido (con su enlace) o para reintentar
 // un pago de landing (con la referencia del intento anterior). Cobra la cuenta Bold del punto del pedido.
 import { jsonError, jsonOk, readJson, serviceClient, FiscalApiError } from "@/lib/fiscal/server";
+import { rateLimited } from "@/lib/server/rate-limit";
 import { boldAccount, boldReturnUrl, createBoldCheckout } from "@/lib/payments/bold";
 
 export const runtime = "nodejs";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 type Order = { id: string; token: string; store_id: string; receipt_no: number | null; status: string; total: number; customer_name: string | null; customer_whatsapp: string | null; payment_status?: string | null };
 
 export async function POST(request: Request) {
+  const limited = rateLimited(request, "bold-checkout", 12, 60_000);
+  if (limited) return limited;
   try {
     const body = await readJson<{ order_token?: string; reference?: string; url?: string }>(request, 5_000);
     const admin = serviceClient();

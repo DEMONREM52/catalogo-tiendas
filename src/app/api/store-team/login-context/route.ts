@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { rateLimited } from "@/lib/server/rate-limit";
 
 export async function GET(request: Request) {
+  // Evita que prueben tiendas al azar en ráfaga.
+  const limited = rateLimited(request, "login-context", 40, 60_000);
+  if (limited) return limited;
   const url = new URL(request.url);
   const storeId = url.searchParams.get("store_id");
   const slug = url.searchParams.get("slug")?.trim().toLowerCase();
