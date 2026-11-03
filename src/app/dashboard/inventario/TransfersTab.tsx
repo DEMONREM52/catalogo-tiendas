@@ -16,6 +16,7 @@ import {
   Btn, Empty, Panel, StatusPill, askReason, confirmAction, dateTime, errorMessage, inputClass, inputStyle,
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
 } from "./shared";
+import { TransfersReport } from "./TransfersReport";
 
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
 type Matrix = Record<string, Record<string, number>>;
@@ -133,6 +134,8 @@ function TransferItemsList({ items }: { items: TransferItem[] }) {
 }
 
 export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
+  // Informe a la medida (20261279): por punto, ruta, producto, categoría, fecha o persona.
+  const [report, setReport] = useState(false);
   const active = warehouses.filter((w) => w.active);
   const names = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
   const canTransfer = ctx.can("transfers");
@@ -765,7 +768,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
           {filtersOn ? (
             <button type="button" onClick={() => { setQLive(""); setTf({ q: "", from: "", to: "", origin: "", dest: "" }); setFilter("all"); setLimit(30); }} className="rounded-full border px-3 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-accent)" }}>✕ Limpiar filtros</button>
           ) : null}
-          {rows.length ? <button type="button" onClick={exportList} className="ml-auto rounded-full border px-3 py-1 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>⬇️ Exportar</button> : null}
+          <button type="button" onClick={() => setReport(true)} className="ml-auto min-h-9 rounded-full px-3.5 font-bold text-white" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>📊 Informes</button>
+          {report ? <TransfersReport ctx={ctx} warehouses={warehouses} onClose={() => setReport(false)} /> : null}
+          {rows.length ? <button type="button" onClick={exportList} className="min-h-9 rounded-full border px-3 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>⬇️ Exportar lista</button> : null}
         </div>
         {rows.length ? (
           <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl border px-4 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>

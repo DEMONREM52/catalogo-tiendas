@@ -122,6 +122,17 @@ export const RELEASES: Release[] = [
       { icon: "🕘", text: "Los que más usas quedan en «Recientes»" },
     ],
   },
+  {
+    id: 12, date: "2026-11-03", title: "Informes de traslados a la medida",
+    summary: "Mira qué se trasladó a cada punto: agrupa por punto, ruta, producto, categoría, fecha o persona, y exporta a Excel o PDF.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "📊", text: "En Traslados toca «Informes»" },
+      { icon: "🏬", text: "Escoge «Agrupar por»: punto, producto, mes…" },
+      { icon: "📅", text: "Filtra fechas, puntos, estado o categoría" },
+      { icon: "⬇️", text: "Descárgalo en Excel o imprímelo en PDF" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
