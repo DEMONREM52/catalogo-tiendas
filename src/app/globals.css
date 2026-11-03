@@ -1255,12 +1255,31 @@ html[data-glass="on"][data-glass-area][data-theme="dark"] body {
     radial-gradient(700px 520px at 12% 92%, rgba(236, 72, 153, 0.24), transparent 62%);
 }
 
-/* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo). */
-html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select) {
-  -webkit-backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
-  backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
+/* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo).
+   El desenfoque va en una capa ::before detrás del contenido y NO en la tarjeta: si la tarjeta tuviera backdrop-filter,
+   las ventanas «fixed» que se abren dentro (historial, menús…) quedarían encerradas en ella. */
+html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"]) {
+  isolation: isolate;
   background-image: var(--t-glass-sheen) !important;
   box-shadow: var(--t-glass-edge);
+}
+html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"], .fixed, .absolute, .sticky) {
+  position: relative;
+}
+html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"])::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
+  backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
+}
+
+/* Cada tarjeta es su propia capa: si tiene un menú abierto o el foco, sube para que el menú no quede debajo de la siguiente. */
+html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"]):is(:focus-within, :has([open], [aria-expanded="true"])) {
+  z-index: 30;
 }
 
 /* Ventanas, menús y avisos: vidrio más denso para que el texto se lea bien. */
