@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Check, Copy, Save, Search, ShieldAlert, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { PERMISSION_GROUPS, PERMISSION_LIST, PERMISSION_PRESETS } from "@/lib/permissions";
+import { PERMISSION_GROUPS, PERMISSION_LIST, PERMISSION_PRESETS, PERMISSION_REQUIRES, permissionLabel, togglePermission } from "@/lib/permissions";
 import { useRunOnChange } from "../../inventario/shared";
 
 type RoleTemplate = { id: string; name: string; icon: string; permissions: string[] };
@@ -59,12 +59,12 @@ export function PermissionPicker({
   }
 
   function toggle(permission: string) {
-    onChange(set.has(permission) ? value.filter((p) => p !== permission) : [...value, permission]);
+    onChange(togglePermission(value, permission));
   }
 
   function toggleGroup(perms: string[]) {
     const all = perms.every((p) => set.has(p));
-    onChange(all ? value.filter((p) => !perms.includes(p)) : [...new Set([...value, ...perms])]);
+    onChange(all ? perms.reduce((v, p) => (v.includes(p) ? togglePermission(v, p) : v), value) : perms.reduce((v, p) => (v.includes(p) ? v : togglePermission(v, p)), value));
   }
 
   return (
@@ -178,6 +178,9 @@ export function PermissionPicker({
                           {item.sensitive ? <ShieldAlert size={13} className="text-amber-500" aria-label="Permiso sensible" /> : null}
                         </span>
                         {!compact ? <span className="block text-xs" style={{ color: "var(--t-muted)" }}>{item.description}</span> : null}
+                        {PERMISSION_REQUIRES[item.value]?.length ? (
+                          <span className="mt-0.5 block text-[10px] font-semibold" style={{ color: "var(--t-accent)" }}>🔗 Incluye: {PERMISSION_REQUIRES[item.value]!.map(permissionLabel).join(", ")}</span>
+                        ) : null}
                       </span>
                     </motion.button>
                   );

@@ -121,6 +121,48 @@ export const PERMISSION_GROUPS: Array<{ key: string; title: string; icon: string
 ];
 
 export const PERMISSION_LIST: PermissionInfo[] = PERMISSION_GROUPS.flatMap((g) => g.items);
+
+/**
+ * Permisos que no sirven solos: al marcarlos se marca también el que necesitan, y al quitar el base se quitan.
+ * Solo los casos claros (la pantalla o el dato que usan exige el otro). Se puede tener el base sin el «hijo».
+ */
+export const PERMISSION_REQUIRES: Partial<Record<StoreMenuPermission, StoreMenuPermission[]>> = {
+  clients_delete: ["clients"],
+  inventory_adjust: ["inventory"],
+  purchases_void: ["purchases"],
+  internal_credit_manage: ["internal_credit"],
+  profit_approve: ["profit_view"],
+  profit_settle: ["profit_view"],
+  profit_settle_approve: ["profit_view"],
+  profit_pay: ["profit_view"],
+  profit_beneficiaries: ["profit_view"],
+  fiscal_notes: ["fiscal"],
+  fiscal_download: ["fiscal"],
+  fiscal_config: ["fiscal"],
+  fiscal_numbering: ["fiscal"],
+  fiscal_provider: ["fiscal"],
+  fiscal_audit: ["fiscal"],
+};
+
+/** Marca o quita un permiso respetando lo que necesita (y lo que depende de él). */
+export function togglePermission(value: string[], permission: string): string[] {
+  const set = new Set(value);
+  if (set.has(permission)) {
+    set.delete(permission);
+    // Quita en cadena lo que dependía de este.
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [child, parents] of Object.entries(PERMISSION_REQUIRES)) {
+        if (set.has(child) && parents!.some((p) => !set.has(p))) { set.delete(child); changed = true; }
+      }
+    }
+  } else {
+    const add = (p: string) => { if (set.has(p)) return; set.add(p); (PERMISSION_REQUIRES[p as StoreMenuPermission] ?? []).forEach(add); };
+    add(permission);
+  }
+  return [...set];
+}
 export const permissionLabel = (value: string) => PERMISSION_LIST.find((p) => p.value === value)?.label ?? value;
 
 /** Plantillas para asignar permisos con un clic (luego se pueden ajustar). */
