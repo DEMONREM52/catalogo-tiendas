@@ -80,7 +80,7 @@ export function StaleStockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wa
         {data && !shown.length ? <Empty icon="🎉" title="Nada quieto" text={`Todo lo que tienes se ha vendido en los últimos ${days} días (o acaba de llegar).`} /> : null}
         {shown.slice(0, 300).map((r) => (
           <div key={`${r.product_id}-${r.warehouse_id}`} className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
-            <Thumb src={r.image_url} size={40} />
+            <Thumb src={r.image_url} size={40} zoom alt={r.name} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold">{r.name}</p>
               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>{r.sku ? `${r.sku} · ` : ""}{r.point} · {r.last_sale ? `última venta hace ${r.days} días` : "nunca se ha vendido aquí"}</p>

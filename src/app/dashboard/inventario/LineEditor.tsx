@@ -9,6 +9,7 @@ import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Ware
 import { basisCost, priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
+import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -31,7 +32,15 @@ export function useThumbs(ids: string[]) {
   return thumbs;
 }
 
-export function Thumb({ src, size = 40 }: { src?: string | null; size?: number }) {
+/** Foto pequeña del producto. Con `zoom` se amplía al tocarla (no usarlo dentro de otro botón). */
+export function Thumb({ src, size = 40, zoom, alt = "" }: { src?: string | null; size?: number; zoom?: boolean; alt?: string }) {
+  if (src && zoom) {
+    return (
+      <span style={{ width: size, height: size }} className="block shrink-0 overflow-hidden rounded-lg">
+        <ZoomableThumb src={src} alt={alt || "Producto"} className="block h-full w-full" imgClassName="h-full w-full object-cover" />
+      </span>
+    );
+  }
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={src} alt="" loading="lazy" style={{ width: size, height: size }} className="shrink-0 rounded-lg object-cover" />
@@ -892,7 +901,7 @@ export function LineEditor({
                 >
                   <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-1">
                     <span className="hidden w-5 shrink-0 text-center text-xs tabular-nums md:block" style={{ color: "var(--t-muted)" }}>{index + 1}</span>
-                    <Thumb src={lineThumbs[line.product_id]} size={44} />
+                    <Thumb src={lineThumbs[line.product_id]} size={44} zoom alt={line.name} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold" title={line.name}>{line.name}</div>
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}

@@ -66,7 +66,7 @@ export function PurchaseSuggestions({ storeId, supplier, onAdd }: { storeId: str
           <div className="max-h-96 space-y-1.5 overflow-y-auto">
             {items.map((i) => (
               <div key={i.product_id} className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
-                <Thumb src={i.image_url} size={38} />
+                <Thumb src={i.image_url} size={38} zoom alt={i.name} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{i.name}</p>
                   <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
@@ -214,7 +214,7 @@ export function ExpiryTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
         {data && !data.items.length ? <Empty icon="📅" title="Nada por vencer" text={`No hay productos que venzan en los próximos ${days} días. Anota la fecha al ingresar mercancía que vence.`} /> : null}
         {(data?.items ?? []).map((l) => (
           <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: `color-mix(in oklab, ${color(l.days)} 40%, var(--t-card-border))` }}>
-            <Thumb src={l.image_url} size={38} />
+            <Thumb src={l.image_url} size={38} zoom alt={l.name} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold">{l.name}</p>
               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>{l.qty} und.{l.point ? ` · ${l.point}` : ""}{l.lot ? ` · lote ${l.lot}` : ""} · vence {new Date(`${l.expires_on}T12:00:00`).toLocaleDateString("es-CO")}</p>

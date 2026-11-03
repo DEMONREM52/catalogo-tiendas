@@ -68,7 +68,7 @@ function ManifestUpload({ storeId, onDone }: { storeId: string; onDone: () => vo
     <Panel title="➕ Nuevo manifiesto" subtitle="Elige el producto y sube sus PDF. Quedan enlazados para encontrarlos después.">
       {product ? (
         <div className="mb-3 flex items-center gap-3 rounded-2xl border p-2" style={{ borderColor: "var(--t-card-border)" }}>
-          <Thumb src={thumbs[product.id]} size={56} />
+          <Thumb src={thumbs[product.id]} size={56} zoom alt={product.name} />
           <div className="min-w-0 flex-1"><b className="block truncate">{product.name}</b>{product.sku ? <span className="text-xs" style={{ color: "var(--t-muted)" }}>{product.sku}</span> : null}</div>
           <Btn variant="ghost" onClick={() => setProduct(null)}>Cambiar</Btn>
         </div>

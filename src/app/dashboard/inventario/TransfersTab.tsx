@@ -662,7 +662,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                             <tr key={line.product_id} className="border-t transition-colors duration-500" style={{ borderColor: "var(--t-card-border)", background: flashId === line.product_id ? "color-mix(in oklab, #22c55e 12%, transparent)" : undefined }}>
                               <td className={td}>
                                 <div className="flex items-center gap-3">
-                                  <Thumb src={lineThumbs[line.product_id]} size={44} />
+                                  <Thumb src={lineThumbs[line.product_id]} size={44} zoom alt={line.name} />
                                   <div className="min-w-0">
                                     <div className="font-semibold">{line.name}</div>
                                     {line.sku ? <div className="text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}

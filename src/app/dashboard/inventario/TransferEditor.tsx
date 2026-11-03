@@ -140,7 +140,7 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
               style={{ ...box, opacity: l.qty === 0 ? 0.5 : 1, transition: "background .4s, box-shadow .4s",
                 background: flashId === l.product_id ? "color-mix(in oklab, #22c55e 18%, transparent)" : edited ? "color-mix(in oklab, var(--t-accent) 8%, transparent)" : undefined,
                 boxShadow: flashId === l.product_id ? "0 0 0 2px #22c55e" : undefined }}>
-              <Thumb src={thumbs[l.product_id]} size={44} />
+              <Thumb src={thumbs[l.product_id]} size={44} zoom alt={l.name} />
               <div className="min-w-0 flex-1 basis-40">
                 <p className="truncate text-sm font-bold" title={l.name}>{l.name}</p>
                 <p className="truncate text-[11px]" style={{ color: edited ? "var(--t-accent)" : "var(--t-muted)" }}>

@@ -282,7 +282,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <tr key={p.id} className="border-t" style={{ borderColor: "var(--t-card-border)", opacity: p.active ? 1 : 0.55 }}>
                     <td className={td}>
                       <div className="flex items-center gap-2.5">
-                        <Thumb src={p.image_url} size={36} />
+                        <Thumb src={p.image_url} size={44} zoom alt={p.name} />
                         <div className="min-w-0">
                           <div className="font-semibold">{p.name}</div>
                           <div className="text-xs" style={{ color: "var(--t-muted)" }}>{[p.sku, p.category].filter(Boolean).join(" · ") || "—"}</div>

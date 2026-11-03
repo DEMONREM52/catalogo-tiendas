@@ -274,7 +274,7 @@ export function NewStockRequest({
                   <AnimatePresence initial={false}>
                     {lines.map((l) => (
                       <motion.div key={l.product_id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 24 }} className="flex items-center gap-3 rounded-2xl border p-2.5 transition-colors duration-500" style={{ borderColor: flashId === l.product_id ? "#22c55e" : l.qty > l.there ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)", background: flashId === l.product_id ? "color-mix(in oklab, #22c55e 10%, transparent)" : undefined }}>
-                        <Thumb src={thumbs[l.product_id]} size={42} />
+                        <Thumb src={thumbs[l.product_id]} size={42} zoom alt={l.name} />
                         <div className="min-w-0 flex-1">
                           <ProductName name={l.name} className="text-sm font-semibold" />
                           <p className="text-xs" style={{ color: l.there > 0 ? "var(--t-muted)" : "#ef4444" }}>

@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import type { ApprovalState, FloorInfo } from "./usePriceFloors";
 
 export type CartLine = {
@@ -172,8 +173,7 @@ function Line({ line, floors, approval, onQty, onPrice, onLevel, onRemove, onReq
     >
       <div className="flex gap-2.5 p-2.5">
         <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border text-xl" style={{ borderColor: "var(--t-card-border)" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {line.image ? <img src={line.image} alt="" className="h-full w-full object-cover" /> : "🛍️"}
+          {line.image ? <ZoomableThumb src={line.image} alt={line.name} className="block h-full w-full" imgClassName="h-full w-full object-cover" /> : "🛍️"}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
