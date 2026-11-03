@@ -819,8 +819,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <header className="border-b px-4 py-3 sm:px-5 sm:py-4" style={{ borderColor: "var(--t-card-border)" }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-accent)" }}>
-                    Pedido interno {r ? `#${r.number}` : ""}
+                  <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider sm:gap-2 sm:text-xs sm:tracking-widest" style={{ color: "var(--t-accent)" }}>
+                    <span className="sm:hidden">Pedido {r ? `#${r.number}` : ""}</span><span className="hidden sm:inline">Pedido interno {r ? `#${r.number}` : ""}</span>
                     {r?.priority === "urgent" ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] text-white">⚡ Urgente</span> : null}
                   </p>
                 </div>
@@ -840,14 +840,14 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               </div>
               {/* Ruta a todo lo ancho (en celular los botones ya no la aprietan). */}
               {r ? (
-                <h3 className="mt-1.5 text-base font-black leading-snug sm:text-lg">
-                  <span className="rounded-lg px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
-                  <ArrowRight size={16} className="mx-1 inline align-middle" style={{ color: "var(--t-muted)" }} />
-                  <span className="rounded-lg px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>📥 {r.from_name}</span>
+                <h3 className="mt-1 truncate text-[11px] font-bold leading-snug sm:mt-1.5 sm:whitespace-normal sm:text-lg sm:font-black" title={`${r.to_name} → ${r.from_name}`}>
+                  <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
+                  <ArrowRight size={12} className="mx-0.5 inline align-middle sm:mx-1" style={{ color: "var(--t-muted)" }} />
+                  <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>📥 {r.from_name}</span>
                 </h3>
               ) : <div className="mt-1 h-6 w-56 animate-pulse rounded" style={{ background: "var(--t-card-bg)" }} />}
               {r ? (
-                <p className="mt-1 truncate text-xs sm:whitespace-normal" style={{ color: "var(--t-muted)" }}>
+                <p className="mt-0.5 truncate text-[10px] sm:mt-1 sm:whitespace-normal sm:text-xs" style={{ color: "var(--t-muted)" }}>
                   Pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b> · {timeAgo(r.created_at)}{r.handled_by_name ? <> · Atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}{r.needed_by ? ` · Para el ${new Date(`${r.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
                 </p>
               ) : null}
