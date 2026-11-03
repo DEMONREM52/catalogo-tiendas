@@ -111,6 +111,17 @@ export const RELEASES: Release[] = [
       { icon: "🔵", text: "El píxel lo recibe como traffic_source" },
     ],
   },
+  {
+    id: 11, date: "2026-11-03", title: "Emojis en el chat",
+    summary: "Botón 😊 junto al clip: caras, gestos, tienda, símbolos y comida, con tus recientes primero.",
+    paths: ["/dashboard/pedidos", "/dashboard/mensajes"],
+    demo: [
+      { icon: "😊", text: "Toca el botón de emojis junto al clip" },
+      { icon: "📦", text: "Escoge una categoría (hay una de tienda)" },
+      { icon: "👍", text: "El emoji entra donde estabas escribiendo" },
+      { icon: "🕘", text: "Los que más usas quedan en «Recientes»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

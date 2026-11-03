@@ -17,6 +17,7 @@ import { PeoplePicker, type Person } from "./PeoplePicker";
 import { useRouter } from "next/navigation";
 import { ChatBubble, ChatSearchBar, ComposerBanner, ForwardDialog, MentionSuggestions, PinnedBar, SystemLine, muteChat, type ChatMsg } from "@/components/chat/ChatParts";
 import { useChatKit } from "@/components/chat/useChatKit";
+import { EmojiButton } from "@/components/chat/EmojiPicker";
 import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
@@ -740,6 +741,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
                 <input ref={audioInput} type="file" accept="audio/*" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
               </div>
+              <EmojiButton targetId="composer-sr" value={text} onChange={setText} disabled={sending} />
               <textarea
                 id="composer-sr"
                 value={text}

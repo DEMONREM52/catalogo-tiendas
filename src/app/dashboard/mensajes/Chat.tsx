@@ -11,6 +11,7 @@ import { CallPicker, type CallCandidate } from "../pedidos/internos/CallPicker";
 import { ProductSearchModal } from "../inventario/LineEditor";
 import { ChatBubble, ChatSearchBar, ComposerBanner, ForwardDialog, MentionSuggestions, PinnedBar, SystemLine, muteChat, showReaders, type ChatMsg } from "@/components/chat/ChatParts";
 import { useChatKit } from "@/components/chat/useChatKit";
+import { EmojiButton } from "@/components/chat/EmojiPicker";
 import { SkeletonChat } from "@/components/ui/Skeleton";
 
 /**
@@ -324,6 +325,7 @@ export function Chat({ storeId, thread, me, onBack, onActivity, focusMessage }: 
                 <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
                 <input ref={audioIn} type="file" accept="audio/*" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
               </div>
+              <EmojiButton targetId="composer-dm" value={text} onChange={setText} disabled={sending} />
               <textarea id="composer-dm" value={text} rows={1}
                 onChange={(e) => { setText(e.target.value); announceTyping(); }}
                 onPaste={(e) => { const f = [...e.clipboardData.files].filter((x) => kindOf(x)); if (f.length) { e.preventDefault(); void addFiles(f); } }}
