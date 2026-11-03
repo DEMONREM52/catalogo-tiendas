@@ -1258,15 +1258,15 @@ html[data-glass="on"][data-glass-area][data-theme="dark"] body {
 /* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo).
    El desenfoque va en una capa ::before detrás del contenido y NO en la tarjeta: si la tarjeta tuviera backdrop-filter,
    las ventanas «fixed» que se abren dentro (historial, menús…) quedarían encerradas en ella. */
-html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"]) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"]) {
   isolation: isolate;
   background-image: var(--t-glass-sheen) !important;
   box-shadow: var(--t-glass-edge);
 }
-html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"], .fixed, .absolute, .sticky) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"], .fixed, .absolute, .sticky) {
   position: relative;
 }
-html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"])::before {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"])::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1277,8 +1277,14 @@ html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .ro
   backdrop-filter: blur(var(--t-glass-blur)) saturate(var(--t-glass-sat));
 }
 
+/* .glass y .glass-soft traen su propio desenfoque: en modo vidrio va en la capa ::before (no encierra ventanas). */
+html[data-glass="on"][data-glass-area] :is(.glass, .glass-soft) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Cada tarjeta es su propia capa: si tiene un menú abierto o el foco, sube para que el menú no quede debajo de la siguiente. */
-html[data-glass="on"][data-glass-area="full"] :is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"]:not(input, textarea, select, [class*="before:"]):is(:focus-within, :has([open], [aria-expanded="true"])) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"]):is(:focus-within, :has([open], [aria-expanded="true"])) {
   z-index: 30;
 }
 

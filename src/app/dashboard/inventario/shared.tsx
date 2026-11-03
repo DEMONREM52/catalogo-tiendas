@@ -118,11 +118,12 @@ export const inputStyle: CSSProperties = {
 
 export function Panel({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   return (
-    <section className="glass rounded-[24px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)" }}>
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <section className="glass rounded-[24px] border p-3 sm:p-5" style={{ borderColor: "var(--t-card-border)" }}>
+      <header className="mb-3 flex flex-wrap items-start justify-between gap-2 sm:mb-4 sm:gap-3">
         <div>
           <h3 className="text-base font-semibold">{title}</h3>
-          {subtitle ? <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>{subtitle}</p> : null}
+          {/* En celular la explicación se oculta para dar espacio a lo que se usa. */}
+          {subtitle ? <p className="mt-0.5 hidden text-xs sm:block" style={{ color: "var(--t-muted)" }}>{subtitle}</p> : null}
         </div>
         {actions}
       </header>

@@ -166,11 +166,11 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
           <input className={field} style={{ ...inputStyle, paddingLeft: "2.2rem" }} placeholder="Buscar por nombre, SKU o código de barras…" value={f.q} onChange={(e) => patch({ q: e.target.value })} />
         </div>
-        <select className={field} style={inputStyle} value={warehouse} disabled={Boolean(ctx.pointId)} onChange={(e) => patch({ warehouse: e.target.value })} aria-label="Punto o bodega">
+        <select className={`${field} ${showMore ? "" : "hidden"} sm:block`} style={inputStyle} value={warehouse} disabled={Boolean(ctx.pointId)} onChange={(e) => patch({ warehouse: e.target.value })} aria-label="Punto o bodega">
           <option value="">🏬 Todos los lugares (total)</option>
           {active.map((w) => <option key={w.id} value={w.id}>{w.kind === "point" ? "📍" : "🏬"} {w.name}</option>)}
         </select>
-        <select className={field} style={inputStyle} value={f.category} onChange={(e) => patch({ category: e.target.value })} aria-label="Categoría">
+        <select className={`${field} ${showMore ? "" : "hidden"} sm:block`} style={inputStyle} value={f.category} onChange={(e) => patch({ category: e.target.value })} aria-label="Categoría">
           <option value="">🗂️ Todas las categorías</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
@@ -264,7 +264,43 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         ) : rows.length === 0 ? (
           <Empty text="Ningún producto coincide con estos filtros." />
         ) : (
-          <div className={tableWrap} style={{ borderColor: "var(--t-card-border)", opacity: loading ? 0.6 : 1 }}>
+          <>
+          {/* Celular: una tarjeta por producto (sin tabla que se corre de lado). */}
+          <ul className="space-y-2 md:hidden" style={{ opacity: loading ? 0.6 : 1 }}>
+            {rows.map((p) => {
+              const tone = p.total < 0 || p.total === 0 ? "#ef4444" : p.total <= f.low ? "#f59e0b" : "#22c55e";
+              return (
+                <li key={p.id} className="rounded-2xl border p-2.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", opacity: p.active ? 1 : 0.55 }}>
+                  <div className="flex items-center gap-2.5">
+                    <Thumb src={p.image_url} size={52} zoom alt={p.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-[13px] font-bold leading-snug">{p.name}</p>
+                      <p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>{[p.sku, p.category].filter(Boolean).join(" · ") || "—"}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xl font-black leading-none tabular-nums" style={{ color: tone }}>{p.total}</p>
+                      <p className="text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>total</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+                    {active.map((w) => {
+                      const q = p.levels?.[w.id] ?? 0;
+                      const mine = w.id === warehouse;
+                      return (
+                        <span key={w.id} className="shrink-0 rounded-lg border px-2 py-1 text-[11px]" style={{ borderColor: mine ? "var(--t-accent)" : "var(--t-card-border)", background: mine ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : undefined }}>
+                          <span style={{ color: "var(--t-muted)" }}>{w.name}</span> <b className="tabular-nums" style={{ color: q < 0 ? "#ef4444" : q === 0 ? "var(--t-muted)" : undefined }}>{q}</b>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {showCost ? (
+                    <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Costo <b style={{ color: "var(--t-text)" }}>{money(p.cost_price)}</b> · Valor <b style={{ color: "var(--t-text)" }}>{money(Math.max(p.qty, 0) * Number(p.cost_price ?? 0))}</b></p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          <div className={`${tableWrap} hidden md:block`} style={{ borderColor: "var(--t-card-border)", opacity: loading ? 0.6 : 1 }}>
             <table className="w-full min-w-[680px]">
               <thead style={{ color: "var(--t-muted)" }}>
                 <tr>
@@ -305,6 +341,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
