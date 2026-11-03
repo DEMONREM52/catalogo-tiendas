@@ -188,6 +188,8 @@ export function CustomerOrders() {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Row[]>([]);
   const [q, setQ] = useState("");
+  // Celular: punto, periodo y orden van plegados detrás de «Filtros».
+  const [showFilters, setShowFilters] = useState(false);
   const [view, setView] = useState<View>("pending");
   const [point, setPoint] = useState<string>("all");
   const [period, setPeriod] = useState<Period>("30d");
@@ -387,10 +389,10 @@ export function CustomerOrders() {
 
   return (
     <main className="space-y-4 p-4 panel-enter sm:p-6" style={{ color: "var(--t-text)" }}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-center justify-between gap-3 sm:items-end">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">Pedidos</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Ventas de los puntos, catálogos y landings. Vigila que ninguno se quede sin confirmar o sin completar.</p>
+          <h1 className="text-xl font-bold sm:text-2xl">Pedidos</h1>
+          <p className="hidden text-sm sm:block" style={{ color: "var(--t-muted)" }}>Ventas de los puntos, catálogos y landings. Vigila que ninguno se quede sin confirmar o sin completar.</p>
         </div>
         <button className={btnSoft()} onClick={() => void load()} disabled={loading}>{loading ? "Cargando…" : "Recargar"}</button>
       </div>
@@ -398,13 +400,13 @@ export function CustomerOrders() {
       {/* Tablero por punto */}
       {board.length ? (
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
-          <button type="button" onClick={() => setPoint("all")} className="min-w-[150px] shrink-0 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5" style={point === "all" ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" } : { borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <button type="button" onClick={() => setPoint("all")} className="min-w-[132px] shrink-0 rounded-2xl border p-2.5 text-left sm:min-w-[150px] sm:p-3 transition hover:-translate-y-0.5" style={point === "all" ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" } : { borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             <p className="text-sm font-black">🏬 Todos los puntos</p>
             <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>{board.reduce((s, b) => s + b.toConfirm, 0)} por confirmar · {board.reduce((s, b) => s + b.toComplete, 0)} por completar</p>
             {board.some((b) => b.stale) ? <p className="mt-1 text-xs font-bold text-red-500">🔴 {board.reduce((s, b) => s + b.stale, 0)} con más de un día</p> : null}
           </button>
           {board.map((b) => (
-            <button key={b.key} type="button" onClick={() => setPoint(point === b.key ? "all" : b.key)} className="min-w-[170px] shrink-0 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5"
+            <button key={b.key} type="button" onClick={() => setPoint(point === b.key ? "all" : b.key)} className="min-w-[150px] shrink-0 rounded-2xl border p-2.5 text-left sm:min-w-[170px] sm:p-3 transition hover:-translate-y-0.5"
               style={point === b.key ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" } : { borderColor: b.stale ? "color-mix(in oklab, #ef4444 45%, var(--t-card-border))" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
               <p className="truncate text-sm font-black">📍 {b.name}</p>
               <p className="mt-1 text-xs"><b>{b.toConfirm}</b> por confirmar · <b>{b.toComplete}</b> por completar</p>
@@ -416,24 +418,28 @@ export function CustomerOrders() {
       ) : null}
 
       {/* Filtros */}
-      <div className={`${tokenCard()} space-y-3 p-4`}>
-        <div className="flex flex-wrap gap-1.5">
+      <div className={`${tokenCard()} space-y-3 p-3 sm:p-4`}>
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] sm:flex-wrap">
           {VIEWS.map(([v, label]) => (
-            <button key={v} type="button" onClick={() => { setView(v); setPicked(new Set()); }} className="rounded-full border px-3 py-1.5 text-xs font-bold transition" style={chip(view === v)}>
+            <button key={v} type="button" onClick={() => { setView(v); setPicked(new Set()); }} className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition" style={chip(view === v)}>
               {label} <span className="opacity-80">{counts[v]}</span>
             </button>
           ))}
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
-          <input className={inputBase()} placeholder="Buscar: número, REMZ-…, cliente, WhatsApp, vendedor, punto…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className={selectBase()} value={point} onChange={(e) => setPoint(e.target.value)} aria-label="Punto">
+          <div className="flex gap-2">
+            <input className={`${inputBase()} min-w-0 flex-1`} placeholder="Buscar: número, REMZ-…, cliente, WhatsApp, vendedor, punto…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className="shrink-0 rounded-xl border px-3 text-xs font-bold sm:hidden"
+              style={showFilters || point !== "all" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>⚙️ Filtros</button>
+          </div>
+          <select className={`${selectBase()} ${showFilters ? "" : "hidden"} sm:block`} value={point} onChange={(e) => setPoint(e.target.value)} aria-label="Punto">
             <option value="all">Todos los puntos</option>
             {board.map((b) => <option key={b.key} value={b.key}>{b.name}</option>)}
           </select>
-          <select className={selectBase()} value={period} onChange={(e) => { const p = e.target.value as Period; setPeriod(p); void load(p); }} aria-label="Periodo">
+          <select className={`${selectBase()} ${showFilters ? "" : "hidden"} sm:block`} value={period} onChange={(e) => { const p = e.target.value as Period; setPeriod(p); void load(p); }} aria-label="Periodo">
             {PERIODS.map(([p, label]) => <option key={p} value={p}>{label}</option>)}
           </select>
-          <button type="button" onClick={() => setOldFirst((v) => !v)} className={btnSoft()} title="Ordenar por fecha">{oldFirst ? "⬆ Más viejos primero" : "⬇ Más nuevos primero"}</button>
+          <button type="button" onClick={() => setOldFirst((v) => !v)} className={`${btnSoft()} ${showFilters ? "" : "hidden"} sm:inline-flex`} title="Ordenar por fecha">{oldFirst ? "⬆ Más viejos primero" : "⬇ Más nuevos primero"}</button>
         </div>
         {pickable.length ? (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -486,14 +492,22 @@ export function CustomerOrders() {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <b className="block text-lg tabular-nums">{money(o.total)}</b>
+                    <b className="block text-base tabular-nums sm:text-lg">{money(o.total)}</b>
                     <span className="text-xs" style={{ color: "var(--t-muted)" }}>{o.catalog_type === "retail" ? "Detal" : "Mayor"}</span>
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                   <a href={`/pedido/${o.token}`} target="_blank" rel="noreferrer" className="btn-soft px-3 py-1 text-sm">Abrir</a>
-                  <button className="btn-soft px-3 py-1 text-sm" onClick={() => void openOrder(o)}>Detalle</button>
-                  <button className="btn-soft px-3 py-1 text-sm" onClick={() => void copyLink(o)}>Copiar enlace</button>
+                  <button className="btn-soft hidden px-3 py-1 text-sm sm:inline-flex" onClick={() => void openOrder(o)}>Detalle</button>
+                  <button className="btn-soft hidden px-3 py-1 text-sm sm:inline-flex" onClick={() => void copyLink(o)}>Copiar enlace</button>
+                  {/* Celular: lo que se usa poco va en «⋯». */}
+                  <details className="relative sm:hidden">
+                    <summary className="btn-soft grid h-8 w-9 cursor-pointer list-none place-items-center px-0 text-base font-black [&::-webkit-details-marker]:hidden" aria-label="Más opciones">⋯</summary>
+                    <div role="menu" className="absolute bottom-full right-0 z-30 mb-2 grid w-44 gap-1 rounded-2xl border p-1.5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-fuchsia-500/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void openOrder(o); }}>📄 Detalle</button>
+                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-fuchsia-500/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void copyLink(o); }}>🔗 Copiar enlace</button>
+                    </div>
+                  </details>
                   {toConfirm ? (
                     <button className="btn-soft px-3 py-1 text-sm font-semibold" style={{ borderColor: "color-mix(in oklab, lime 35%, var(--t-card-border))", background: "color-mix(in oklab, lime 10%, transparent)" }} onClick={() => void setOrderStatus(o, "confirmed")}>Confirmar</button>
                   ) : null}
@@ -523,7 +537,7 @@ export function CustomerOrders() {
         }}
       />
 
-      <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+      <p className="hidden text-xs sm:block" style={{ color: "var(--t-muted)" }}>
         En rojo: pedidos con más de un día sin confirmar o sin completar. El cliente puede editar mientras esté en <b>Enviado</b>; al confirmarlo queda bloqueado.
       </p>
     </main>

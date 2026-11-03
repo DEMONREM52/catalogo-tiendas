@@ -32,6 +32,8 @@ export default function TercerosPage() {
   const [tab, setTab] = useState<Tab>("terceros");
   const [canLoyalty, setCanLoyalty] = useState(false);
   const [q, setQ] = useState("");
+  // Celular: estado y crédito van plegados detrás de «Filtros».
+  const [showFilters, setShowFilters] = useState(false);
   const [kind, setKind] = useState<ThirdKind | "all">("all");
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
   const [credit, setCredit] = useState<CreditFilter>("all");
@@ -164,37 +166,37 @@ export default function TercerosPage() {
 
   return (
     <main className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] border p-5 sm:p-7" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
+      <section className="relative overflow-hidden rounded-[28px] border p-4 sm:p-7" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }} />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
+        <div className="relative flex flex-wrap items-end justify-between gap-3 sm:gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>Terceros y cartera</p>
-            <h1 className="mt-1 text-2xl font-black sm:text-3xl">Clientes, proveedores y más</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
+            <h1 className="mt-1 text-xl font-black sm:text-3xl">Clientes, proveedores y más</h1>
+            <p className="mt-1 hidden max-w-2xl text-sm sm:block" style={{ color: "var(--t-muted)" }}>
               Un solo lugar para todas las personas y empresas con las que trabajas, sus créditos y lo que te deben.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-          <Link href="/dashboard/datos" className="inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Subir o descargar terceros y cartera en Excel">
-            🔄 Importar / exportar
+          <Link href="/dashboard/datos" className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-sm font-bold transition hover:-translate-y-0.5 sm:px-4 sm:py-3" style={{ borderColor: "var(--t-card-border)" }} title="Subir o descargar terceros y cartera en Excel" aria-label="Importar / exportar">
+            🔄 <span className="hidden sm:inline">Importar / exportar</span>
           </Link>
           {canEdit && tab === "terceros" ? (
-            <button type="button" onClick={() => openForm(null)} className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+            <button type="button" onClick={() => openForm(null)} className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 sm:px-5 sm:py-3" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
               <Plus size={17} /> Nuevo tercero
             </button>
           ) : null}
           </div>
         </div>
-        <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="relative mt-3 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4">
           {[
             ["Terceros activos", String(parties.filter((p) => p.active).length), "var(--t-text)"],
             ["Con crédito", String(stats.withCredit), "var(--t-text)"],
             ["Cartera por cobrar", money(stats.open), "var(--t-text)"],
             ["Cartera vencida", money(stats.overdue), stats.overdue > 0 ? "#ef4444" : "var(--t-text)"],
           ].map(([label, value, color]) => (
-            <div key={label} className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
-              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{label}</p>
-              <p className="mt-0.5 text-lg font-black tabular-nums" style={{ color }}>{loading ? "…" : value}</p>
+            <div key={label} className="rounded-2xl border px-3 py-2 sm:px-4 sm:py-3" style={{ borderColor: "var(--t-card-border)" }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]" style={{ color: "var(--t-muted)" }}>{label}</p>
+              <p className="mt-0.5 text-base font-black tabular-nums sm:text-lg" style={{ color }}>{loading ? "…" : value}</p>
             </div>
           ))}
         </div>
@@ -210,7 +212,7 @@ export default function TercerosPage() {
         </section>
       ) : null}
 
-      <div className="flex gap-1 rounded-full border p-1 text-sm font-bold sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
+      <div className="flex gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
         {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"], ["avisos", <Bell key="b" size={15} />, "Avisos del día"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
           <button
             key={k}
@@ -222,7 +224,7 @@ export default function TercerosPage() {
               else url.searchParams.delete("tab");
               window.history.replaceState(null, "", url.toString());
             }}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-2 transition sm:flex-none"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full px-3.5 py-2 transition sm:gap-2 sm:px-5"
             style={tab === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}
           >
             {icon} {label}
@@ -241,7 +243,7 @@ export default function TercerosPage() {
       ) : (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-60 flex-1">
+            <div className="relative min-w-0 flex-1 sm:min-w-60">
               <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 opacity-60" />
               <input
                 className="w-full rounded-2xl border py-3 pr-4 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
@@ -251,12 +253,14 @@ export default function TercerosPage() {
                 onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }}
               />
             </div>
-            <select className="rounded-2xl border px-3 py-3 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+            <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className="rounded-2xl border px-3 py-3 text-xs font-bold sm:hidden"
+              style={showFilters || status !== "active" || credit !== "all" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>⚙️ Filtros</button>
+            <select className={`${showFilters ? "" : "hidden"} rounded-2xl border px-3 py-3 text-sm sm:block`} style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
               <option value="active">Activos</option>
               <option value="inactive">Inactivos</option>
               <option value="all">Todos</option>
             </select>
-            <select className="rounded-2xl border px-3 py-3 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={credit} onChange={(e) => setCredit(e.target.value as CreditFilter)}>
+            <select className={`${showFilters ? "" : "hidden"} rounded-2xl border px-3 py-3 text-sm sm:block`} style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={credit} onChange={(e) => setCredit(e.target.value as CreditFilter)}>
               <option value="all">Crédito: todos</option>
               <option value="with">Con crédito activo</option>
               <option value="overdue">Con facturas vencidas</option>
@@ -306,7 +310,7 @@ export default function TercerosPage() {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(i, 12) * 0.02 }}
-                      className="flex flex-col rounded-3xl border p-4 transition hover:-translate-y-0.5 hover:shadow-xl"
+                      className="flex flex-col rounded-3xl border p-3 transition hover:-translate-y-0.5 hover:shadow-xl sm:p-4"
                       style={{
                         borderColor: b && b.overdue_balance > 0 ? "color-mix(in oklab, #ef4444 40%, transparent)" : "var(--t-card-border)",
                         background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
