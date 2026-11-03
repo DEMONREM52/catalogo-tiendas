@@ -44,22 +44,35 @@ function setColorMode(mode: ColorMode) {
 }
 
 const GLASS_KEY = "remhub-glass";
+const BG_KEY = "remhub-bg-anim";
+const PREF_EVENT = "remhub-appearance-change";
 
-/** Efecto vidrio del panel: encendido salvo que la persona lo apague (se guarda en este navegador). */
-function readGlass(): boolean {
-  try { return localStorage.getItem(GLASS_KEY) !== "off"; } catch { return true; }
+/** Preferencias de apariencia del panel (encendidas salvo que la persona las apague; se guardan en este navegador). */
+function readPref(key: string): boolean {
+  try { return localStorage.getItem(key) !== "off"; } catch { return true; }
 }
 
-function subscribeGlass(onChange: () => void) {
-  const onStorage = (event: StorageEvent) => { if (event.key === GLASS_KEY) onChange(); };
+function subscribePref(onChange: () => void) {
+  const onStorage = (event: StorageEvent) => { if (event.key === GLASS_KEY || event.key === BG_KEY) onChange(); };
   window.addEventListener("storage", onStorage);
-  window.addEventListener("remhub-glass-change", onChange);
-  return () => { window.removeEventListener("storage", onStorage); window.removeEventListener("remhub-glass-change", onChange); };
+  window.addEventListener(PREF_EVENT, onChange);
+  return () => { window.removeEventListener("storage", onStorage); window.removeEventListener(PREF_EVENT, onChange); };
+}
+
+function setPref(key: string, on: boolean) {
+  try { localStorage.setItem(key, on ? "on" : "off"); } catch { /* sin almacenamiento */ }
+  window.dispatchEvent(new Event(PREF_EVENT));
+}
+
+/** ¿Va el fondo animado? (Apariencia → Fondo animado). */
+export function useAnimatedBackground() {
+  return useSyncExternalStore(subscribePref, () => readPref(BG_KEY), () => false);
 }
 
 export function ThemeControl() {
   const mode = useSyncExternalStore(subscribeColorMode, readColorMode, (): ColorMode => "system");
-  const glass = useSyncExternalStore(subscribeGlass, readGlass, () => true);
+  const glass = useSyncExternalStore(subscribePref, () => readPref(GLASS_KEY), () => true);
+  const animated = useAnimatedBackground();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -70,10 +83,7 @@ export function ThemeControl() {
     document.documentElement.dataset.glass = glass ? "on" : "off";
   }, [glass]);
 
-  function toggleGlass() {
-    try { localStorage.setItem(GLASS_KEY, glass ? "off" : "on"); } catch { /* sin almacenamiento */ }
-    window.dispatchEvent(new Event("remhub-glass-change"));
-  }
+  const toggleGlass = () => setPref(GLASS_KEY, !glass);
 
   function choose(nextMode: ColorMode) {
     localStorage.setItem(STORAGE_KEY, nextMode);
@@ -101,7 +111,7 @@ export function ThemeControl() {
         </span>
       </button>
       {open ? (
-        <div className="theme-control-menu mt-2 w-44 overflow-hidden rounded-2xl border p-1 shadow-2xl backdrop-blur-2xl">
+        <div className="theme-control-menu mt-2 w-52 overflow-hidden rounded-2xl border p-1 shadow-2xl backdrop-blur-2xl">
           {([
             ["system", "Sistema", Monitor],
             ["light", "Claro", Sun],
@@ -120,22 +130,23 @@ export function ThemeControl() {
             </button>
           ))}
           <div className="my-1 h-px" style={{ background: "var(--t-card-border)" }} />
-          <button
-            type="button"
-            role="switch"
-            aria-checked={glass}
-            onClick={toggleGlass}
-            title="Tarjetas y ventanas transparentes, como vidrio (solo en el panel)"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-fuchsia-500/10"
-          >
-            <span aria-hidden>✨</span>
-            Vidrio
-            <span className="ml-auto inline-flex h-5 w-9 items-center rounded-full p-0.5 transition" style={{ background: glass ? "#a855f7" : "var(--t-card-border)" }}>
-              <span className="h-4 w-4 rounded-full bg-white shadow transition" style={{ transform: glass ? "translateX(16px)" : "none" }} />
-            </span>
-          </button>
+          <PrefSwitch icon="✨" label="Vidrio" title="Tarjetas y ventanas transparentes, como vidrio (solo en el panel)" on={glass} onToggle={toggleGlass} />
+          <PrefSwitch icon="🌌" label="Fondo animado" title="La red con pulsos y la luz que sigue al mouse, como en la página principal (solo en el panel)" on={animated} onToggle={() => setPref(BG_KEY, !animated)} />
         </div>
       ) : null}
     </div>
+  );
+}
+
+function PrefSwitch({ icon, label, title, on, onToggle }: { icon: string; label: string; title: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={onToggle} title={title}
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-fuchsia-500/10">
+      <span aria-hidden>{icon}</span>
+      {label}
+      <span className="ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition" style={{ background: on ? "#a855f7" : "var(--t-card-border)" }}>
+        <span className="h-4 w-4 rounded-full bg-white shadow transition" style={{ transform: on ? "translateX(16px)" : "none" }} />
+      </span>
+    </button>
   );
 }

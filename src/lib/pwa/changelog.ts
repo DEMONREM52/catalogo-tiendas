@@ -166,6 +166,17 @@ export const RELEASES: Release[] = [
       { icon: "🌗", text: "Abajo a la izquierda: Apariencia → Vidrio para apagarlo" },
     ],
   },
+  {
+    id: 16, date: "2026-11-03", title: "Fondo animado en el panel",
+    summary: "El fondo de la página principal (red con pulsos, lluvia de código y luz que sigue al mouse) ahora también en el panel.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🌌", text: "Detrás de las tarjetas de vidrio se mueve la red con pulsos" },
+      { icon: "🖱️", text: "En computador, una luz sigue al mouse" },
+      { icon: "🧾", text: "En POS e informes no va, para trabajar sin distracción" },
+      { icon: "🌗", text: "Apariencia → Fondo animado para apagarlo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -59,7 +59,7 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 
 
 /* ------------------------------------------------------------------ fondo: red neuronal + lluvia de código */
 
-function NeuralCanvas({ className = "pointer-events-none absolute inset-0 -z-10 h-full w-full", dim = 1 }: { className?: string; dim?: number }) {
+function NeuralCanvas({ className = "pointer-events-none absolute inset-0 -z-10 h-full w-full", dim = 1, interval = 30, density = 1 }: { className?: string; dim?: number; interval?: number; density?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -77,14 +77,14 @@ function NeuralCanvas({ className = "pointer-events-none absolute inset-0 -z-10 
       w = canvas.clientWidth; h = canvas.clientHeight;
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(18, Math.min(64, Math.round((w * h) / 21000)));
+      const count = Math.max(12, Math.min(64, Math.round(((w * h) / 21000) * density)));
       nodes = Array.from({ length: count }, () => ({ x: rnd(0, w), y: rnd(0, h), vx: rnd(-0.25, 0.25), vy: rnd(-0.25, 0.25) }));
       drops = [];
-      for (let x = 14; x < w; x += 34) if (Math.random() < 0.38) drops.push({ x, y: rnd(-h, h), v: rnd(0.6, 1.6), chars: Array.from({ length: 9 }, () => CHARS[(Math.random() * CHARS.length) | 0]) });
+      for (let x = 14; x < w; x += 34) if (Math.random() < 0.38 * density) drops.push({ x, y: rnd(-h, h), v: rnd(0.6, 1.6), chars: Array.from({ length: 9 }, () => CHARS[(Math.random() * CHARS.length) | 0]) });
     };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      if (!visible || document.hidden || now - last < 30) return;
+      if (!visible || document.hidden || now - last < interval) return;
       last = now;
       draw();
     };
@@ -139,7 +139,7 @@ function NeuralCanvas({ className = "pointer-events-none absolute inset-0 -z-10 
     io.observe(canvas);
     if (still) draw(); else raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); };
-  }, []);
+  }, [interval, density]);
   return <canvas ref={ref} aria-hidden className={className} style={{ opacity: dim }} />;
 }
 
@@ -252,4 +252,28 @@ export function ScrambleOnView({ text }: { text: string }) {
     return () => io.disconnect();
   }, []);
   return <span ref={ref}>{seen ? <Scramble text={text} /> : text}</span>;
+}
+
+/**
+ * Fondo del panel: la misma red con pulsos y lluvia de código de la portada, más tenue y a menos cuadros por
+ * segundo (detrás hay tarjetas de vidrio que se repintan con él). En celular va más lento y con menos puntos.
+ * La luz que sigue al mouse solo en computador. Se pausa con la pestaña oculta y queda quieto con «reducir movimiento».
+ */
+export function PanelBackdrop() {
+  const light = useRef<HTMLDivElement>(null);
+  const [coarse] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+  useEffect(() => {
+    if (coarse) return;
+    let raf = 0, x = -999, y = -999;
+    const paint = () => { raf = 0; light.current?.style.setProperty("--mx", `${x}px`); light.current?.style.setProperty("--my", `${y}px`); };
+    const onMove = (e: PointerEvent) => { x = e.clientX; y = e.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => { window.removeEventListener("pointermove", onMove); cancelAnimationFrame(raf); };
+  }, [coarse]);
+  return (
+    <>
+      <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.55} interval={coarse ? 90 : 45} density={coarse ? 0.55 : 0.85} />
+      {coarse ? null : <div ref={light} aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ background: "radial-gradient(560px circle at var(--mx, -999px) var(--my, -999px), rgba(168,85,247,.18), rgba(236,72,153,.06) 30%, transparent 55%)" }} />}
+    </>
+  );
 }

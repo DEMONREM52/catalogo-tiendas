@@ -42,6 +42,11 @@ import { CommandPalette, openCommandPalette, type PaletteLink } from "@/componen
 import { HelpButton } from "@/components/HelpButton";
 import { GuidedTourHost } from "@/components/tour/GuidedTour";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
+import nextDynamic from "next/dynamic";
+import { useAnimatedBackground } from "@/components/ThemeControl";
+
+// Fondo animado (red con pulsos): se descarga aparte y solo si está encendido.
+const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.PanelBackdrop), { ssr: false });
 
 type Role = "admin" | "store";
 
@@ -495,12 +500,13 @@ export default function DashboardShell({
   const [drawerMounted, setDrawerMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Efecto vidrio solo en el panel: suave (casi sólido) donde se trabaja rápido y se lee mucho.
+  // Efecto vidrio solo en el panel: suave (casi sólido) donde se trabaja rápido y se lee mucho; ahí tampoco va el fondo animado.
+  const softArea = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos)(\/|$)/.test(pathname ?? "");
+  const animatedBg = useAnimatedBackground();
   useEffect(() => {
-    const soft = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos)(\/|$)/.test(pathname ?? "");
-    document.documentElement.dataset.glassArea = soft ? "soft" : "full";
+    document.documentElement.dataset.glassArea = softArea ? "soft" : "full";
     return () => { delete document.documentElement.dataset.glassArea; };
-  }, [pathname]);
+  }, [softArea]);
 
   useEffect(() => {
     (async () => {
@@ -933,6 +939,7 @@ export default function DashboardShell({
           }}
         />
       </div>
+      {animatedBg && !softArea ? <PanelBackdrop /> : null}
 
       <div className="mx-auto w-full max-w-[1800px] px-2 py-2 sm:px-4">
         {/* Top bar */}
