@@ -1,5 +1,7 @@
 "use client";
 
+import { BUILD_RELEASE, releaseTouches, type Release } from "./changelog";
+
 /**
  * Instalación y actualización de la app (PWA) en el navegador.
  * Usa lo que el navegador realmente ofrece: el evento «beforeinstallprompt» (Chrome, Edge, Samsung…),
@@ -18,12 +20,14 @@ export type PwaState = {
   standalone: boolean;
   /** Se instaló en esta visita (evento «appinstalled» del navegador). */
   installedNow: boolean;
-  /** Hay una versión nueva lista para activarse. */
+  /** Hay una versión nueva que cambia la página donde está la persona. */
   updateReady: boolean;
+  /** Qué cambió en esta página (para el aviso y el simulador). */
+  notes: Release[];
 };
 
 let deferred: BeforeInstallPromptEvent | null = null;
-let state: PwaState = { canPrompt: false, standalone: false, installedNow: false, updateReady: false };
+let state: PwaState = { canPrompt: false, standalone: false, installedNow: false, updateReady: false, notes: [] };
 const listeners = new Set<() => void>();
 let started = false;
 let waitingWorker: ServiceWorker | null = null;
@@ -40,7 +44,7 @@ export function subscribePwa(fn: () => void) {
   };
 }
 export const getPwaState = () => state;
-const SERVER_STATE: PwaState = { canPrompt: false, standalone: false, installedNow: false, updateReady: false };
+const SERVER_STATE: PwaState = { canPrompt: false, standalone: false, installedNow: false, updateReady: false, notes: [] };
 export const getPwaServerState = () => SERVER_STATE;
 
 function isStandalone() {
@@ -90,7 +94,6 @@ async function registerServiceWorker() {
   const local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   // Solo en producción (https). En desarrollo no se registra para no interferir con la recarga en caliente.
   if (process.env.NODE_ENV !== "production" || (location.protocol !== "https:" && !local)) return;
-  trackLoadedChunks();
   try {
     const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     const watch = (w: ServiceWorker | null) => {
@@ -98,14 +101,14 @@ async function registerServiceWorker() {
       w.addEventListener("statechange", () => {
         if (w.state === "installed" && navigator.serviceWorker.controller) {
           waitingWorker = w;
-          checkedPaths.clear(); // otra versión: lo revisado antes ya no vale
-          void checkPageChanged();
+          news = null; // otra versión: se vuelven a pedir las novedades
+          void evaluateUpdate();
         }
       });
     };
     if (reg.waiting && navigator.serviceWorker.controller) {
       waitingWorker = reg.waiting;
-      void checkPageChanged();
+      void evaluateUpdate();
     }
     reg.addEventListener("updatefound", () => watch(reg.installing));
     // Revisa si hay versión nueva al volver a la app y cada hora.
@@ -127,64 +130,59 @@ async function registerServiceWorker() {
 }
 
 /*
- * ¿La versión nueva cambia la página donde está la persona?
- * Cada despliegue trae un Service Worker nuevo, aunque solo haya cambiado una sección. Los archivos JS de Next
- * llevan en el nombre una huella de su contenido: si la página nueva usa un archivo que esta pestaña no ha cargado,
- * su código cambió y se avisa «Actualizar». Si no, no se molesta; al pasar a otra sección se vuelve a revisar.
- * No cuentan el CSS global ni el arranque de Turbopack (cambian con cualquier despliegue y no rompen nada).
+ * ¿Avisar o no? Cada despliegue trae un Service Worker nuevo, pero no todo despliegue le cambia algo a quien
+ * está trabajando. Se piden las novedades publicadas (/api/version, sale de lib/pwa/changelog.ts) y:
+ *   · Si alguna toca la página donde está (o es importante): aviso con lo que cambió y su simulador.
+ *   · Si no: no se molesta. La versión nueva se aplica sola la próxima vez que cambie de sección
+ *     (justo al llegar a otra página, cuando no hay nada a medio escribir).
  */
-const CHUNK_RE = /\/_next\/static\/chunks\/([^"'?\s]+\.js)/g;
-const loadedChunks = new Set<string>();
-const checkedPaths = new Map<string, boolean>();
-let checking = false;
+let news: Release[] | null = null;
 let watchingPath = false;
+const NEWS_KEY = "remhub:sw-news";
 
-function rememberChunk(url: string) {
-  for (const m of url.matchAll(CHUNK_RE)) if (!m[1].startsWith("turbopack-")) loadedChunks.add(m[1]);
+async function loadNews() {
+  if (news) return news;
+  const res = await fetch("/api/version", { cache: "no-store", credentials: "same-origin" });
+  if (!res.ok) throw new Error("sin versión");
+  const j = (await res.json()) as { releases?: Release[] };
+  news = (j.releases ?? []).filter((r) => r.id > BUILD_RELEASE);
+  return news;
 }
 
-/** Anota los archivos JS que ya cargó esta pestaña (los del inicio y los de cada sección que se abre). */
-function trackLoadedChunks() {
+async function evaluateUpdate() {
+  if (!waitingWorker) return;
   try {
-    document.querySelectorAll<HTMLScriptElement>("script[src]").forEach((s) => rememberChunk(s.src));
-    new PerformanceObserver((list) => list.getEntries().forEach((e) => rememberChunk(e.name))).observe({ type: "resource", buffered: true });
+    const all = await loadNews();
+    const notes = all.filter((r) => releaseTouches(r, location.pathname));
+    set({ updateReady: notes.length > 0, notes });
   } catch {
-    /* navegador sin PerformanceObserver: se avisa como antes */
-  }
-}
-
-async function checkPageChanged() {
-  if (!waitingWorker || state.updateReady || checking) return;
-  const path = location.pathname + location.search;
-  const known = checkedPaths.get(path);
-  if (known !== undefined) {
-    if (known) set({ updateReady: true });
-    return;
-  }
-  checking = true;
-  try {
-    if (!loadedChunks.size) { set({ updateReady: true }); return; }
-    const res = await fetch(path, { cache: "no-store", credentials: "same-origin", headers: { Accept: "text/html" } });
-    // Si redirige (sesión, permisos) o falla, no se sabe: se espera a la próxima revisión.
-    if (!res.ok || res.redirected) return;
-    const html = await res.text();
-    const fresh = [...html.matchAll(CHUNK_RE)].map((m) => m[1]).filter((f) => !f.startsWith("turbopack-"));
-    const changed = fresh.length > 0 && fresh.some((f) => !loadedChunks.has(f));
-    checkedPaths.set(path, changed);
-    if (changed) set({ updateReady: true });
-  } catch {
-    /* sin conexión: se revisa después */
-  } finally {
-    checking = false;
+    /* sin conexión: se revisa al volver o al cambiar de sección */
   }
   if (!watchingPath) {
-    // Navegar dentro de la app no recarga la página: se revisa cada sección nueva a la que entre.
     watchingPath = true;
-    let last = location.pathname + location.search;
+    // Navegar dentro de la app no recarga la página: al llegar a otra sección se aplica la versión nueva.
+    let last = location.pathname;
     window.setInterval(() => {
-      const now = location.pathname + location.search;
-      if (now !== last) { last = now; void checkPageChanged(); }
-    }, 4000);
+      const now = location.pathname;
+      if (now === last) return;
+      last = now;
+      const el = document.activeElement as HTMLElement | null;
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (waitingWorker && !typing) applyUpdate(true);
+      else void evaluateUpdate();
+    }, 400);
+  }
+}
+
+/** Lo nuevo que se debe mostrar después de actualizar (lo deja applyUpdate antes de recargar). */
+export function takeUpdateNews(): Release[] {
+  try {
+    const raw = sessionStorage.getItem(NEWS_KEY);
+    sessionStorage.removeItem(NEWS_KEY);
+    const list = raw ? (JSON.parse(raw) as Release[]) : [];
+    return list.filter((r) => releaseTouches(r, location.pathname) && r.id <= BUILD_RELEASE);
+  } catch {
+    return [];
   }
 }
 
@@ -198,8 +196,14 @@ function sessionStorageFlag() {
   }
 }
 
-/** Activa la versión nueva (el usuario tocó «Actualizar»). */
-export function applyUpdate() {
+/** Activa la versión nueva (el usuario tocó «Actualizar», o en silencio al cambiar de sección). */
+export function applyUpdate(silent = false) {
+  try {
+    // Después de recargar se muestra lo nuevo de la página a la que llega (con su simulador).
+    sessionStorage.setItem(NEWS_KEY, JSON.stringify((news ?? []).filter((r) => r.demo?.length || !silent)));
+  } catch {
+    /* sin almacenamiento */
+  }
   if (!waitingWorker) return window.location.reload();
   try {
     sessionStorage.setItem("remhub:sw-update", "1");
