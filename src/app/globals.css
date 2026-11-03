@@ -1287,6 +1287,8 @@ html[data-glass="on"][data-glass-area="soft"] body {
   html[data-glass="on"][data-glass-area] body {
     --t-glass-blur: 12px;
     --t-glass-sat: 140%;
+    /* Más denso que en computador: en pantalla pequeña las listas largas se leen mejor. */
+    --t-card-bg: color-mix(in oklab, var(--t-bg-base) 58%, rgba(124, 58, 237, 0.18)) !important;
   }
 }
 

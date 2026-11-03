@@ -997,7 +997,7 @@ export default function DashboardShell({
 
             {email ? (
               <p
-                className="mt-2 text-xs"
+                className="mt-2 hidden text-xs sm:block"
                 style={{
                   color: "color-mix(in oklab, var(--t-text) 65%, transparent)",
                 }}
@@ -1035,10 +1035,12 @@ export default function DashboardShell({
             {role === "store" && canOpen("products") ? (
               <Link
                 href="/dashboard/social"
+                aria-label="Mis catálogos"
+                title="Mis catálogos"
                 className="rounded-xl border px-3 py-1.5 text-xs font-semibold transition"
                 style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)", color: "var(--t-text)" }}
               >
-                🛍️ Mis catálogos
+                🛍️ <span className="hidden sm:inline">Mis catálogos</span>
               </Link>
             ) : null}
 
@@ -1094,6 +1096,8 @@ export default function DashboardShell({
 
             <button
               onClick={logout}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
               className="rounded-xl border px-3 py-1.5 text-xs font-semibold backdrop-blur-xl transition active:scale-[0.99]"
               style={{
                 borderColor:
@@ -1105,7 +1109,7 @@ export default function DashboardShell({
                   "0 0 22px color-mix(in oklab, var(--t-accent) 14%, transparent)",
               }}
             >
-              Cerrar sesión
+              🚪<span className="hidden sm:inline"> Cerrar sesión</span>
             </button>
           </div>
         </div>

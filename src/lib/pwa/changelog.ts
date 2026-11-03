@@ -177,6 +177,17 @@ export const RELEASES: Release[] = [
       { icon: "🌗", text: "Apariencia → Fondo animado para apagarlo" },
     ],
   },
+  {
+    id: 17, date: "2026-11-03", title: "Productos cómodos en el celular",
+    summary: "En celular: el nombre se lee completo, los botones bajan a su fila, los filtros se pliegan y lo demás va en el menú ⋯.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "📱", text: "El nombre del producto a todo lo ancho" },
+      { icon: "⚙️", text: "Toca «Filtros» para ver estado, stock y categoría" },
+      { icon: "⋯", text: "Recargar, importar y exportar en el menú ⋯" },
+      { icon: "💲", text: "Se ven P2 (mayor) y P3 (detal); el resto en computador" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

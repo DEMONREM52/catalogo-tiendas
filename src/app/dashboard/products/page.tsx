@@ -184,6 +184,8 @@ export default function ProductsListPage() {
   const [catalogRetail, setCatalogRetail] = useState(false);
   const [socialStatuses, setSocialStatuses] = useState<Record<string, string[]>>({});
   const [socialFilter, setSocialFilter] = useState<SocialFilter>("all");
+  // Celular: los filtros van plegados (en computador siempre se ven).
+  const [showFilters, setShowFilters] = useState(false);
   const [socialDataError, setSocialDataError] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -716,66 +718,49 @@ export default function ProductsListPage() {
               <div className="min-w-0">
                 <h1 className="text-lg font-bold leading-tight sm:text-2xl">Productos</h1>
                 <p className="text-[11px] text-slate-600 sm:text-sm dark:text-white/70">
-                  Cargados: <b className="text-slate-900 dark:text-white/90">{products.length}</b> · Mostrando:{" "}
-                  <b className="text-slate-900 dark:text-white/90">{filtered.length}</b>
-                  {searching ? (
-                    <span className="ml-2">
-                      · <b>Buscando…</b>
-                    </span>
-                  ) : null}
+                  <b className="text-slate-900 dark:text-white/90">{filtered.length}</b> de <b className="text-slate-900 dark:text-white/90">{products.length}</b> cargados
+                  {searching ? <span className="ml-1">· <b>Buscando…</b></span> : null}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  className={clsBtnSoft()}
-                  onClick={reloadAll}
-                  disabled={loading || loadingMore || searching}
-                  type="button"
-                  style={{ padding: "8px 10px", fontSize: 12 }}
-                >
-                  Recargar
-                </button>
-
-                {canDelete && storeId ? (
-                  <button
-                    type="button"
-                    onClick={() => setCleaning(true)}
-                    className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
-                    style={{ borderColor: "var(--t-card-border)" }}
-                    title="Eliminar productos que nunca se vendieron ni trasladaron"
-                  >
-                    🧹 Limpiar
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Computador: todos los botones a la vista. */}
+                <div className="hidden items-center gap-2 md:flex">
+                  <button className={clsBtnSoft()} onClick={reloadAll} disabled={loading || loadingMore || searching} type="button" style={{ padding: "8px 10px", fontSize: 12 }}>
+                    Recargar
                   </button>
-                ) : null}
-                <Link
-                  href="/dashboard/products/importar"
-                  className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
-                  style={{ borderColor: "var(--t-card-border)" }}
-                  title="Subir muchos productos de una vez desde Excel"
-                >
-                  📥 Importar Excel
-                </Link>
-                <Link
-                  href="/dashboard/datos"
-                  className="rounded-xl border px-2.5 py-2 text-xs font-semibold"
-                  style={{ borderColor: "var(--t-card-border)" }}
-                  title="Exportar o importar productos, terceros, cartera, inventario y más"
-                >
-                  🔄 Exportar / importar todo
-                </Link>
-                <Link
-                  href="/dashboard/products/crear"
-                  className={clsBtnPrimary()}
-                  style={{ padding: "8px 10px", fontSize: 12 }}
-                >
+                  {canDelete && storeId ? (
+                    <button type="button" onClick={() => setCleaning(true)} className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Eliminar productos que nunca se vendieron ni trasladaron">
+                      🧹 Limpiar
+                    </button>
+                  ) : null}
+                  <Link href="/dashboard/products/importar" className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Subir muchos productos de una vez desde Excel">
+                    📥 Importar Excel
+                  </Link>
+                  <Link href="/dashboard/datos" className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Exportar o importar productos, terceros, cartera, inventario y más">
+                    🔄 Exportar / importar todo
+                  </Link>
+                </div>
+                {/* Celular: lo de siempre en un menú «⋯». */}
+                <details className="relative md:hidden">
+                  <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border text-lg font-black [&::-webkit-details-marker]:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Más opciones">⋯</summary>
+                  <div role="menu" className="absolute right-0 z-30 mt-2 grid w-60 gap-1 rounded-2xl border p-1.5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+                    <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); void reloadAll(); }} disabled={loading || loadingMore || searching} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-fuchsia-500/10 disabled:opacity-50">🔄 Recargar</button>
+                    <Link role="menuitem" href="/dashboard/products/importar" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-fuchsia-500/10">📥 Importar Excel</Link>
+                    <Link role="menuitem" href="/dashboard/datos" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-fuchsia-500/10">📦 Exportar / importar todo</Link>
+                    {canDelete && storeId ? (
+                      <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); setCleaning(true); }} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-fuchsia-500/10">🧹 Limpiar sin movimientos</button>
+                    ) : null}
+                  </div>
+                </details>
+                <Link href="/dashboard/products/crear" className={clsBtnPrimary()} style={{ padding: "9px 14px", fontSize: 13 }}>
                   + Crear
                 </Link>
               </div>
             </div>
 
-            <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-white/10 dark:bg-black/15 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <section className="mt-3 md:mt-4 md:rounded-2xl md:border md:border-slate-200 md:bg-slate-50/80 md:p-4 md:dark:border-white/10 md:dark:bg-black/15">
+              <div className="hidden flex-wrap items-center justify-between gap-2 md:flex">
                 <div>
                   <h2 className="text-sm font-bold">Búsqueda y filtros</h2>
                   <p className="mt-0.5 text-[11px] text-slate-500 dark:text-white/55">
@@ -798,7 +783,7 @@ export default function ProductsListPage() {
                   </button>
                 </div>
               </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_190px]">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_190px] md:mt-3">
               <div className="flex gap-2">
                 <input
                   className={clsInput()}
@@ -813,9 +798,15 @@ export default function ProductsListPage() {
                   storageKey={`products:${storeId ?? ""}`}
                   onPick={(hit) => router.push(`/dashboard/products/${hit.id}`)}
                 />
+                <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters}
+                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold md:hidden"
+                  style={showFilters || activeFilterCount ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
+                  ⚙️ Filtros
+                  {activeFilterCount ? <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] text-white" style={{ background: "var(--t-accent)" }}>{activeFilterCount}</span> : null}
+                </button>
               </div>
 
-              <select className={clsInput()} value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+              <select className={`${clsInput()} ${showFilters ? "" : "hidden"} sm:block`} value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
                 <option value="newest">Más nuevos</option>
                 <option value="oldest">Más antiguos</option>
                 <option value="name">Nombre (A-Z)</option>
@@ -824,8 +815,9 @@ export default function ProductsListPage() {
                 <option value="stock">Stock</option>
               </select>
             </div>
-            <div className="mt-1.5 px-0.5"><PhotoIndexStatus storeId={storeId} /></div>
+            <div className="mt-1.5 hidden px-0.5 md:block"><PhotoIndexStatus storeId={storeId} /></div>
 
+            <div className={`${showFilters ? "" : "hidden"} md:block`}>
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <select className={clsInput()} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
                 <option value="all">Estado: Todos</option>
@@ -905,7 +897,14 @@ export default function ProductsListPage() {
               </p>
             ) : null}
 
-            <p className="mt-2 text-[11px] text-slate-600 sm:text-xs dark:text-white/60">
+            {activeFilterCount ? (
+              <button type="button" onClick={clearFilters} className="mt-2 w-full rounded-xl border px-3 py-2 text-xs font-bold md:hidden" style={{ borderColor: "var(--t-card-border)" }}>
+                ✕ Quitar los {activeFilterCount} filtros
+              </button>
+            ) : null}
+            </div>
+
+            <p className="mt-2 hidden text-[11px] text-slate-600 sm:text-xs md:block dark:text-white/60">
               {isSearchMode
                 ? "Búsqueda PRO: corrige palabras, permite varias palabras y rankea resultados. (50 por página)"
                 : `(Cargando en bloques de ${PAGE_SIZE}. Usa “Cargar más” al final)`}
@@ -945,7 +944,8 @@ export default function ProductsListPage() {
 
               return (
                 <div key={p.id} className="border-b border-slate-200/50 transition-colors hover:bg-slate-50/60 dark:border-white/[0.07] dark:hover:bg-white/[0.025]">
-                  <div className="flex w-full items-center gap-3 px-3 py-3">
+                  {/* Celular: foto y nombre a todo lo ancho; las acciones bajan a su propia fila. */}
+                  <div className="flex w-full flex-wrap items-start gap-x-3 gap-y-2 px-3 py-3 sm:flex-nowrap sm:items-center">
                     {/* Miniatura */}
                     <div
                       className={`h-12 w-12 shrink-0 rounded-2xl border overflow-hidden flex items-center justify-center ${avatarClass(
@@ -972,8 +972,8 @@ export default function ProductsListPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="min-w-0 whitespace-normal break-words font-semibold leading-snug [overflow-wrap:anywhere]">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="min-w-0 whitespace-normal break-words text-sm font-semibold leading-snug [overflow-wrap:anywhere] sm:text-base">
                           {p.name}
                           {p.sku ? <span className="ml-1.5 whitespace-nowrap rounded-md bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-white/55">Cód. {p.sku}</span> : null}
                         </p>
@@ -999,16 +999,16 @@ export default function ProductsListPage() {
 
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-white/70">
                         {([p.price_1, p.price_2, p.price_3, p.price_4, p.price_5] as Array<number | null | undefined>).map((v, i) => (
-                          <span key={i} className="rounded-md border border-slate-300 px-1.5 py-0.5 dark:border-white/15" title={`Precio ${i + 1}${i === 1 ? " (mayor)" : i === 2 ? " (detal)" : ""}`}>
+                          <span key={i} className={`${i === 1 || i === 2 ? "" : "hidden sm:inline"} rounded-md border border-slate-300 px-1.5 py-0.5 dark:border-white/15`} title={`Precio ${i + 1}${i === 1 ? " (mayor)" : i === 2 ? " (detal)" : ""}`}>
                             P{i + 1}: <b className="text-slate-900 dark:text-white/90">{money(Number(v ?? 0))}</b>
                           </span>
                         ))}
-                        <span className="text-slate-300 dark:text-white/30">·</span>
-                        <span className="text-slate-500 dark:text-white/60">{formatDate(p.created_at)}</span>
+                        <span className="hidden text-slate-300 sm:inline dark:text-white/30">·</span>
+                        <span className="hidden text-slate-500 sm:inline dark:text-white/60">{formatDate(p.created_at)}</span>
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    <div className="flex basis-full flex-wrap items-center justify-start gap-1.5 pl-15 sm:basis-auto sm:shrink-0 sm:justify-end sm:pl-0">
                       <Link
                         href={`/dashboard/products/${p.id}`}
                         className={`${clsBtnSoft()} product-row-action`}
