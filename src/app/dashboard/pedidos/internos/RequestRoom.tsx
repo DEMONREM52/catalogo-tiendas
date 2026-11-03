@@ -10,6 +10,7 @@ import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEdito
 import { useRunOnChange } from "../../inventario/shared";
 import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
+import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { ProductName } from "@/components/ProductName";
 import { startCall } from "./CallManager";
 import { CallPicker, type CallCandidate } from "./CallPicker";
@@ -57,6 +58,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [checks, setChecks] = useState<Array<{ item_id: string; side: "pack" | "receive"; by: string | null; at: string }>>([]);
   const [onlyPending, setOnlyPending] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
+  // Celular: el buscador de la lista se abre con 🔍 (así la barra fija ocupa poco).
+  const [searchOpen, setSearchOpen] = useState(false);
   const [srPeople, setSrPeople] = useState<Array<{ user_id: string; name: string }>>([]);
   const galleryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -419,17 +422,22 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const itemsPanel = data && r ? (
     <div className="space-y-3">
       {showChecklist ? (
-        <div className="sticky top-0 z-10 rounded-2xl border p-3 backdrop-blur" style={{ borderColor: doneCount === data.items.length ? "#22c55e" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
+        <div className="sticky top-0 z-10 rounded-2xl border p-2.5 backdrop-blur sm:p-3" style={{ borderColor: doneCount === data.items.length ? "#22c55e" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 96%, transparent)", boxShadow: "0 10px 24px -12px rgba(0,0,0,.6)" }}>
           <div className="flex items-center gap-2">
             <ListChecks size={18} style={{ color: doneCount === data.items.length ? "#22c55e" : "var(--t-accent)" }} />
-            <p className="min-w-0 flex-1 text-sm font-bold">
-              {checkSide === "pack" ? "📦 Lista de empaque" : "📥 Lista de lo que llegó"} · <span className="tabular-nums" style={{ color: "#22c55e" }}>{doneCount}</span> de {data.items.length}
+            <p className="min-w-0 flex-1 truncate text-sm font-bold">
+              <span className="sm:hidden">{checkSide === "pack" ? "📦 Empaque" : "📥 Llegó"}</span>
+              <span className="hidden sm:inline">{checkSide === "pack" ? "📦 Lista de empaque" : "📥 Lista de lo que llegó"}</span> · <span className="tabular-nums" style={{ color: "#22c55e" }}>{doneCount}</span>/{data.items.length}
             </p>
             <button type="button" onClick={() => setOnlyPending((v) => !v)} className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={onlyPending ? { background: "var(--t-accent)", color: "#fff", borderColor: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
-              {onlyPending ? `Ver todos` : `Solo faltantes (${data.items.length - doneCount})`}
+              {onlyPending ? `Ver todos` : <><span className="sm:hidden">Faltan {data.items.length - doneCount}</span><span className="hidden sm:inline">Solo faltantes ({data.items.length - doneCount})</span></>}
+            </button>
+            <button type="button" onClick={() => setSearchOpen((v) => !v)} aria-label="Buscar en el pedido" aria-expanded={searchOpen || Boolean(itemQuery)}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full border sm:hidden" style={searchOpen || itemQuery ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
+              <Search size={14} />
             </button>
           </div>
-          <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: itemQuery ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <label className={`mt-2 ${searchOpen || itemQuery ? "flex" : "hidden"} items-center gap-2 rounded-xl border px-3 py-2 sm:flex`} style={{ borderColor: itemQuery ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             <Search size={15} style={{ color: "var(--t-muted)" }} />
             <input value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} type="search" enterKeyHint="done"
               onKeyDown={(e) => {
@@ -445,10 +453,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               </>
             ) : null}
           </label>
-          <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full sm:h-2" style={{ background: "var(--t-card-border)" }}>
             <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg,#22c55e,#4ade80)" }} animate={{ width: `${data.items.length ? (doneCount / data.items.length) * 100 : 0}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
           </div>
-          <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
+          <p className="mt-1.5 hidden text-[11px] sm:block" style={{ color: "var(--t-muted)" }}>
             {doneCount === data.items.length ? "✅ ¡Todo chuleado! Revisa arriba lo que quedó listo." : canCheck ? (checkSide === "pack" ? "Toca el círculo (o el producto) cuando lo tengas empacado: se pone verde y sube." : "Toca el círculo (o el producto) cuando lo cuentes: se pone verde y sube.") : `👀 Solo ver: ${checkWho || "lo chuleado se ve en verde y en orden"}.`}
           </p>
         </div>
@@ -464,34 +472,43 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <motion.div key={i.id} layout transition={{ type: "spring", stiffness: 380, damping: 32 }}
               onClick={canCheck ? () => void toggleCheck(i.id) : undefined}
               role={canCheck ? "button" : undefined} aria-pressed={canCheck ? Boolean(chk) : undefined}
-              className={`flex touch-manipulation items-center gap-3 rounded-2xl border p-2.5 transition-colors ${canCheck ? "cursor-pointer select-none active:scale-[0.99]" : ""}`}
+              className={`flex touch-manipulation items-center gap-2 rounded-2xl border p-2 transition-colors sm:gap-3 sm:p-2.5 ${canCheck ? "cursor-pointer select-none active:scale-[0.99]" : ""}`}
               style={chk
                 ? { borderColor: "color-mix(in oklab, #22c55e 65%, transparent)", background: "color-mix(in oklab, #22c55e 14%, transparent)" }
                 : { borderColor: short ? "color-mix(in oklab, #f59e0b 50%, transparent)" : "var(--t-card-border)" }}>
               {showChecklist ? (
                 <button type="button" disabled={!canCheck} onClick={(e) => { e.stopPropagation(); void toggleCheck(i.id); }}
                   aria-label={chk ? `Quitar chulo de ${i.name}` : `Chulear ${i.name}`}
-                  className="-m-1.5 grid h-12 w-12 shrink-0 touch-manipulation place-items-center rounded-full p-1.5 disabled:cursor-default">
-                  <span className="grid h-9 w-9 place-items-center rounded-full border-2 transition"
+                  className="-m-1.5 grid h-11 w-11 shrink-0 touch-manipulation place-items-center rounded-full p-1.5 disabled:cursor-default sm:h-12 sm:w-12">
+                  <span className="grid h-8 w-8 place-items-center rounded-full border-2 transition sm:h-9 sm:w-9"
                     style={chk ? { background: "#22c55e", borderColor: "#22c55e", color: "#fff" } : { borderColor: canCheck ? "var(--t-accent)" : "var(--t-card-border)", opacity: canCheck ? 1 : 0.5 }}>
                     {chk ? <Check size={20} strokeWidth={3} /> : null}
                   </span>
                 </button>
               ) : null}
-              <Thumb src={thumbs[i.product_id] ?? i.image_url} size={44} />
+              {thumbs[i.product_id] ?? i.image_url ? (
+                <ZoomableThumb src={(thumbs[i.product_id] ?? i.image_url)!} alt={i.name} className="block h-12 w-12 shrink-0 overflow-hidden rounded-xl sm:h-14 sm:w-14" imgClassName="h-full w-full object-cover" />
+              ) : <Thumb src={null} size={48} />}
               <div className="min-w-0 flex-1">
-                <ProductName name={i.name} className="text-sm font-semibold" />
-                <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Pidió <b style={{ color: "var(--t-text)" }}>{i.qty_requested}</b>
-                  {r.status !== "dispatched" && r.status !== "received" ? <> · En {r.to_name}: <b style={{ color: i.source_now > 0 ? "#22c55e" : "#ef4444" }}>{i.source_now}</b></> : null}
-                  {" "}· En {r.from_name}: {i.dest_now}
+                <ProductName name={i.name} className="text-[13px] font-bold leading-snug sm:text-sm" />
+                {/* Celular: existencias en chips cortos (📤 sale · 📥 llega); el nombre completo del punto, en computador. */}
+                <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] sm:text-xs" style={{ color: "var(--t-muted)" }}>
+                  <span>Pidió <b style={{ color: "var(--t-text)" }}>{i.qty_requested}</b></span>
+                  {r.status !== "dispatched" && r.status !== "received" ? (
+                    <span className="rounded-md px-1.5 py-px" style={{ background: "color-mix(in oklab, #f59e0b 12%, transparent)" }} title={`Hay en ${r.to_name}`}>
+                      📤 <span className="hidden sm:inline">{r.to_name}: </span><b style={{ color: i.source_now > 0 ? "#22c55e" : "#ef4444" }}>{i.source_now}</b>
+                    </span>
+                  ) : null}
+                  <span className="rounded-md px-1.5 py-px" style={{ background: "color-mix(in oklab, #22c55e 12%, transparent)" }} title={`Hay en ${r.from_name}`}>
+                    📥 <span className="hidden sm:inline">{r.from_name}: </span><b style={{ color: "var(--t-text)" }}>{i.dest_now}</b>
+                  </span>
                 </p>
-                {i.note ? <p className="text-[11px] font-semibold" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
-                {chk ? <p className="text-[11px] font-bold" style={{ color: "#22c55e" }}>✓ {checkSide === "pack" ? "Empacado" : "Contado"} por {chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
+                {i.note ? <p className="truncate text-[11px] font-semibold sm:whitespace-normal" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
+                {chk ? <p className="truncate text-[11px] font-bold sm:whitespace-normal" style={{ color: "#22c55e" }}>✓ {checkSide === "pack" ? "Empacado" : "Contado"} · {chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
                 {prices?.get(i.product_id) ? (
                   <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                    P. mayor {cop(prices.get(i.product_id)!.price2)} · <b style={{ color: "var(--t-text)" }}>{cop(toSend * prices.get(i.product_id)!.price2)}</b>
+                    <span className="hidden sm:inline">P. mayor </span>{cop(prices.get(i.product_id)!.price2)} · <b style={{ color: "var(--t-text)" }}>{cop(toSend * prices.get(i.product_id)!.price2)}</b>
                   </p>
                 ) : null}
               </div>
@@ -504,7 +521,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                     value={toSend}
                     onFocus={(e) => e.currentTarget.select()}
                     onChange={(e) => setApproved((cur) => ({ ...cur, [i.id]: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0) }))}
-                    className="mt-0.5 block h-9 w-16 rounded-lg border text-center text-sm font-black outline-none"
+                    className="mt-0.5 block h-9 w-13 rounded-lg border text-center text-sm font-black outline-none sm:w-16"
                     style={{ borderColor: short ? "#f59e0b" : "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
                   />
                 </label>
@@ -799,23 +816,13 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             exit={{ x: 60, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 34 }}
           >
-            <header className="border-b px-5 py-4" style={{ borderColor: "var(--t-card-border)" }}>
-              <div className="flex items-start justify-between gap-3">
+            <header className="border-b px-4 py-3 sm:px-5 sm:py-4" style={{ borderColor: "var(--t-card-border)" }}>
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-accent)" }}>
                     Pedido interno {r ? `#${r.number}` : ""}
                     {r?.priority === "urgent" ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] text-white">⚡ Urgente</span> : null}
                   </p>
-                  {r ? (
-                    <h3 className="mt-1 flex flex-wrap items-center gap-2 text-lg font-black">
-                      {r.to_name} <ArrowRight size={17} style={{ color: "var(--t-muted)" }} /> {r.from_name}
-                    </h3>
-                  ) : <div className="mt-1 h-6 w-56 animate-pulse rounded" style={{ background: "var(--t-card-bg)" }} />}
-                  {r ? (
-                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                      Pidió {r.requested_by_name ?? "—"} · {timeAgo(r.created_at)}{r.handled_by_name ? ` · Atiende ${r.handled_by_name}` : ""}{r.needed_by ? ` · Para el ${new Date(`${r.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
-                    </p>
-                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {data && r && data.access.chat && isOpen(r.status) ? (
@@ -831,9 +838,22 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   </button>
                 </div>
               </div>
+              {/* Ruta a todo lo ancho (en celular los botones ya no la aprietan). */}
+              {r ? (
+                <h3 className="mt-1.5 text-base font-black leading-snug sm:text-lg">
+                  <span className="rounded-lg px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
+                  <ArrowRight size={16} className="mx-1 inline align-middle" style={{ color: "var(--t-muted)" }} />
+                  <span className="rounded-lg px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>📥 {r.from_name}</span>
+                </h3>
+              ) : <div className="mt-1 h-6 w-56 animate-pulse rounded" style={{ background: "var(--t-card-bg)" }} />}
+              {r ? (
+                <p className="mt-1 truncate text-xs sm:whitespace-normal" style={{ color: "var(--t-muted)" }}>
+                  Pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b> · {timeAgo(r.created_at)}{r.handled_by_name ? <> · Atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}{r.needed_by ? ` · Para el ${new Date(`${r.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
+                </p>
+              ) : null}
               {r && st ? (
                 st.step >= 0 ? (
-                  <div className="mt-3 grid grid-cols-4 gap-1.5">
+                  <div className="mt-2.5 grid grid-cols-4 gap-1.5 sm:mt-3">
                     {SR_STEPS.map((s, idx) => {
                       const meta = SR_STATUS[s];
                       const done = idx <= st.step;

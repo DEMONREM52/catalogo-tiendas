@@ -199,6 +199,17 @@ export const RELEASES: Release[] = [
       { icon: "👇", text: "Desliza hacia abajo o toca el fondo para cerrar" },
     ],
   },
+  {
+    id: 19, date: "2026-11-03", title: "Pedido interno más ordenado en el celular",
+    summary: "La ruta a todo lo ancho, la lista de empaque compacta y cada producto con chips cortos de existencias.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "📤", text: "Arriba: de dónde sale → 📥 a dónde llega" },
+      { icon: "📦", text: "Barra de empaque pequeña: 6/6 y «Faltan»" },
+      { icon: "🔍", text: "Toca la lupa para buscar dentro del pedido" },
+      { icon: "🖼️", text: "Toca la foto para verla en grande" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
