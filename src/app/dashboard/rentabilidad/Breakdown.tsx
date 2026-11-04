@@ -174,7 +174,7 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-xs">
+                    <table className="rt w-full min-w-[560px] text-xs">
                       <thead style={{ color: "var(--t-muted)" }}>
                         <tr className="text-left text-[10px] uppercase">
                           <th className="px-3 py-1.5">Producto</th><th className="px-2 text-right">Cant.</th><th className="px-2 text-right">Venta</th>

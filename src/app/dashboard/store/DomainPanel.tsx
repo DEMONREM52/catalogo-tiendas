@@ -147,7 +147,7 @@ export function DomainPanel({ storeId, storeSlug, storeName, canEdit }: { storeI
                 <div className="mt-2 text-xs">
                   <p style={{ color: "var(--t-muted)" }}>{d.status_detail === "manual" ? "Crea estos registros en el panel de tu dominio. Luego avísale a RemHub para activarlo." : `${d.status_detail ?? "Crea estos registros en el panel de tu dominio"} · luego toca «Revisar» (el DNS puede tardar de minutos a unas horas).`}</p>
                   <div className="mt-2 overflow-x-auto rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}>
-                    <table className="w-full min-w-[460px]">
+                    <table className="rt w-full min-w-[460px]">
                       <thead style={{ color: "var(--t-muted)" }}><tr><th className="px-2 py-1 text-left">Tipo</th><th className="px-2 py-1 text-left">Nombre</th><th className="px-2 py-1 text-left">Valor</th><th className="px-2 py-1 text-left">Para qué</th></tr></thead>
                       <tbody>
                         {(d.dns ?? []).map((r, i) => (

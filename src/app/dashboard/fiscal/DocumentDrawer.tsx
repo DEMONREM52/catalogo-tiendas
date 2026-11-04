@@ -218,7 +218,7 @@ export function DocumentDrawer({ id, onClose, onChanged, onOpen }: { id: string 
           <Card>
             <p className="mb-2 text-sm font-black">Productos</p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="rt w-full min-w-[520px] text-sm">
                 <thead><tr className="text-left text-[11px] uppercase" style={{ color: "var(--t-muted)" }}><th className="py-1">#</th><th>Descripción</th><th className="text-right">Cant.</th><th className="text-right">Precio</th><th className="text-right">IVA</th><th className="text-right">Total</th></tr></thead>
                 <tbody>
                   {data.lines.map((l) => (

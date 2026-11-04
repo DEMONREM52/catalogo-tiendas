@@ -371,7 +371,7 @@ function Importer({ def, access, onBack }: { def: ImportDef; access: Access; onB
           </div>
           {!prepared.length ? <p className="mt-3 text-sm">El archivo no tiene filas debajo de los títulos.</p> : (
             <div className="mt-3 max-h-[55vh] overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-              <table className="w-full min-w-[560px] text-xs">
+              <table className="rt w-full min-w-[560px] text-xs">
                 <thead className="sticky top-0" style={{ background: "var(--t-bg-base)", color: "var(--t-muted)" }}>
                   <tr><th className="px-2 py-1.5 text-left">Fila</th><th className="px-2 py-1.5 text-left">Dato</th><th className="px-2 py-1.5 text-left">Detalle</th><th className="px-2 py-1.5 text-left">Qué pasa</th></tr>
                 </thead>

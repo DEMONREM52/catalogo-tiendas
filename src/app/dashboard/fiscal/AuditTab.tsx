@@ -16,7 +16,7 @@ function Diff({ row }: { row: AuditRow }) {
   if (!keys.length) return <pre className="overflow-x-auto whitespace-pre-wrap text-[11px]">{JSON.stringify(row.detail, null, 2)}</pre>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] text-xs">
+      <table className="rt w-full min-w-[420px] text-xs">
         <thead><tr style={{ color: "var(--t-muted)" }}><th className="py-1 text-left">Campo</th><th className="text-left">Antes</th><th className="text-left">Después</th></tr></thead>
         <tbody>
           {keys.map((k) => (

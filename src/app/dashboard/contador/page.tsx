@@ -252,7 +252,7 @@ export default function AccountantPage() {
               </details>
             ) : null}
             <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
-              <table className="w-full min-w-[720px] text-xs">
+              <table className="rt w-full min-w-[720px] text-xs">
                 <thead><tr>{format.columns.map((c, i) => <th key={i} className="px-2 py-1.5 text-left font-semibold" style={{ color: "var(--t-muted)" }}>{c.header}</th>)}</tr></thead>
                 <tbody>
                   {formatRows(result.lines.slice(0, 15), format).map((r, i) => (

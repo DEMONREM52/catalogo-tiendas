@@ -293,7 +293,7 @@ export function PointsBoard({ storeId }: { storeId: string }) {
 
       {rows.length === 0 ? <p className="rounded-2xl border p-4 text-sm" style={cardStyle}>No hay puntos para mostrar.</p> : prefs.view === "table" ? (
         <div className="overflow-x-auto rounded-2xl border" style={cardStyle}>
-          <table className="w-full min-w-[900px] text-xs">
+          <table className="rt w-full min-w-[900px] text-xs">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr>{["Punto", "Estado", "Ventas", "vs antes", "Ganancia neta", "Margen", "Pedidos", "Ticket", "Deuda", "Vencido", "Inventario", ""].map((h) => <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}</tr>
             </thead>
@@ -424,7 +424,7 @@ function PointCard({ r, open, onToggle, onValuation, prefs }: { r: Row; open: bo
 
       {open ? (
         <div className="mt-3 overflow-x-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-          <table className="w-full min-w-[520px] text-[11px]">
+          <table className="rt w-full min-w-[520px] text-[11px]">
             <thead style={{ color: "var(--t-muted)" }}>
               <tr>{["Mes", "Ventas", "Ganancia", "Gastos", "Nómina", "Neta", "Pedidos", "Trasladado", "Abonó"].map((h) => <th key={h} className="px-2 py-1.5 text-right first:text-left">{h}</th>)}</tr>
             </thead>

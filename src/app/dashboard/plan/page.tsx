@@ -281,7 +281,7 @@ function PlanView() {
         <section className="rounded-3xl border p-5" style={card}>
           <h2 className="mb-3 text-lg font-black">Pagos</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="rt w-full min-w-[560px] text-sm">
               <thead style={{ color: "var(--t-muted)" }}><tr>{["Fecha", "Plan", "Periodo", "Valor", "Estado", "Referencia"].map((h) => <th key={h} className="px-2 py-1.5 text-left text-xs font-semibold">{h}</th>)}</tr></thead>
               <tbody>
                 {pays.map((p) => (

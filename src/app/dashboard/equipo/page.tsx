@@ -162,7 +162,7 @@ export default function TeamPage() {
           </div>
         ) : null}
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
+          <table className="rt w-full min-w-[420px] text-sm">
             <thead><tr className="text-left text-[11px] uppercase" style={{ color: "var(--t-muted)" }}><th className="p-2">Vendedor</th><th className="p-2 text-right">Ventas</th><th className="p-2 text-right">Documentos</th><th className="p-2 text-right">Comisión</th></tr></thead>
             <tbody>
               {(sellers ?? []).map((s, i) => (

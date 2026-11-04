@@ -305,7 +305,7 @@ export default function ImportProductsPage() {
             </section>
           ) : null}
           <div className="overflow-x-auto rounded-2xl border" style={box}>
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="rt w-full min-w-[820px] text-sm">
               <thead><tr className="text-left text-[11px] uppercase" style={{ color: "var(--t-muted)" }}>
                 <th className="p-2">Fila</th><th className="p-2">Nombre</th><th className="p-2">Referencia</th><th className="p-2">Categoría</th><th className="p-2 text-right">P1</th><th className="p-2 text-right">P2</th><th className="p-2 text-right">P3</th><th className="p-2 text-right">Und.</th><th className="p-2 text-right">Costo</th><th className="p-2">Estado</th>
               </tr></thead>

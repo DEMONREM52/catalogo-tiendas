@@ -272,7 +272,7 @@ export function LandingSummary({ storeId, onOpen }: { storeId: string; onOpen: (
         <Kpi label="Ganancia" value={data.costs ? money(t.profit) : "🔒"} />
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="rt w-full min-w-[640px] text-sm">
           <thead><tr className="text-left text-xs" style={{ color: "var(--t-muted)" }}><th className="py-1">Landing</th><th>Visitas</th><th>WhatsApp</th><th>Pedidos</th><th>Ventas</th><th>Pauta</th><th>Retorno</th><th>Ganancia</th></tr></thead>
           <tbody>
             {data.items.map((r) => (

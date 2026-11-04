@@ -103,7 +103,7 @@ export function ProductMargins({ storeId, points }: { storeId: string; points: P
         </button>
       </div>
       <div className="overflow-x-auto rounded-2xl border" style={cardStyle}>
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="rt w-full min-w-[640px] text-sm">
           <thead><tr className="text-left text-[11px] uppercase" style={{ color: "var(--t-muted)" }}>
             <th className="p-3">Producto</th><th className="p-3 text-right">Und.</th><th className="p-3 text-right">Ventas</th><th className="p-3 text-right">Costo</th><th className="p-3 text-right">Ganancia</th><th className="p-3 text-right">Margen</th>
           </tr></thead>
