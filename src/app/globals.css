@@ -1391,3 +1391,29 @@ html[data-glass="on"][data-glass-area="soft"] body {
   /* Celdas sin dato ni título (botones sueltos): no ocupan un hueco vacío. */
   table.rt td:empty { display: none; }
 }
+
+/* =========================================================
+   ▾ MENÚS DESPLEGABLES NATIVOS (<select>)
+   La lista de opciones la pinta el navegador: con un fondo transparente sale gris y fea.
+   Opciones con fondo sólido del tema y la lista del sistema en claro/oscuro según corresponda.
+   ========================================================= */
+select option,
+select optgroup {
+  background-color: #ffffff;
+  color: #172033;
+}
+select option:checked {
+  background-color: #ede4ff;
+  color: #4c1d95;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) select { color-scheme: dark; }
+  :root:not([data-theme="light"]) select option,
+  :root:not([data-theme="light"]) select optgroup { background-color: #1b1230; color: #f8f7ff; }
+  :root:not([data-theme="light"]) select option:checked { background-color: #4c1d95; color: #ffffff; }
+}
+:root[data-theme="dark"] select { color-scheme: dark; }
+:root[data-theme="dark"] select option,
+:root[data-theme="dark"] select optgroup { background-color: #1b1230; color: #f8f7ff; }
+:root[data-theme="dark"] select option:checked { background-color: #4c1d95; color: #ffffff; }
+select option:disabled { color: #9ca3af; }
