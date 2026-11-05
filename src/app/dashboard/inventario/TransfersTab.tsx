@@ -597,7 +597,8 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   async function confirmReceive(row: TransferRow) {
     if (!receiving) return;
     const missing = row.erp_transfer_items.some((i) => (receiving.qty[i.product_id] ?? i.qty) < i.qty);
-    if (missing && !receiving.notes.trim()) return void toast("Explica el faltante en las notas", "warning");
+    const extra = row.erp_transfer_items.some((i) => (receiving.qty[i.product_id] ?? i.qty) > i.qty);
+    if ((missing || extra) && !receiving.notes.trim()) return void toast(missing ? "Explica el faltante en las notas" : "Explica en las notas por qué llegó de más", "warning");
     if (!(await confirmAction(`Confirmar recepción #${row.number}`, `Quedará registrado que tú recibiste en ${names.get(row.to_warehouse_id) ?? "el destino"}.`, "Confirmar"))) return;
     const { error } = await supabaseBrowser().rpc("erp_confirm_transfer", {
       p_transfer: row.id,
@@ -892,8 +893,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                       value={receiving.qty}
                       onChange={(qty) => setReceiving({ ...receiving, qty })}
                       storageKey={`remhub_recibir_t_${row.id}`}
+                      max={100000}
                     />
-                    <input className={inputClass} style={inputStyle} placeholder="Notas de recepción (obligatorio si falta algo)" value={receiving.notes} onChange={(e) => setReceiving({ ...receiving, notes: e.target.value })} />
+                    <input className={inputClass} style={inputStyle} placeholder="Notas de recepción (obligatorio si falta o sobra algo)" value={receiving.notes} onChange={(e) => setReceiving({ ...receiving, notes: e.target.value })} />
                     <div className="flex gap-2">
                       <Btn onClick={() => void confirmReceive(row)}>✅ Confirmar recepción</Btn>
                       <Btn variant="ghost" onClick={() => setReceiving(null)}>Cancelar</Btn>

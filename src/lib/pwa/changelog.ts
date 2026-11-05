@@ -287,6 +287,17 @@ export const RELEASES: Release[] = [
       { icon: "🔗", text: "El pedido se cierra solo y queda en su chat" },
     ],
   },
+  {
+    id: 27, date: "2026-11-05", title: "Recibir cuando llega de más",
+    summary: "Al recibir un traslado ya se puede anotar más de lo enviado: esas unidades se descuentan del origen.",
+    paths: ["/dashboard/inventario", "/traslado"],
+    demo: [
+      { icon: "➕", text: "Sube la cantidad con + si llegó de más" },
+      { icon: "🏬", text: "Las unidades de más salen del origen" },
+      { icon: "📝", text: "Se pide una nota explicando la diferencia" },
+      { icon: "💬", text: "El chat del pedido lo dice" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

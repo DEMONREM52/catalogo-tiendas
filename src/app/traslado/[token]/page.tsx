@@ -409,19 +409,21 @@ function SignForm({
   const [busy, setBusy] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(track.items.map((i) => [i.product_id, i.qty])));
   const isReceive = step.key === "received";
-  const missing = isReceive ? track.items.reduce((s, i) => s + (i.qty - (counts[i.product_id] ?? i.qty)), 0) : 0;
+  const missing = isReceive ? track.items.reduce((s, i) => s + Math.max(0, i.qty - (counts[i.product_id] ?? i.qty)), 0) : 0;
+  // Llegó de más (20261281): esas unidades salen del origen.
+  const extra = isReceive ? track.items.reduce((s, i) => s + Math.max(0, (counts[i.product_id] ?? i.qty) - i.qty), 0) : 0;
 
   async function submit() {
     if (name.trim().length < 2) return void Swal.fire({ icon: "warning", title: "Escribe tu nombre completo" });
     if (!hasInk) return void Swal.fire({ icon: "warning", title: "Dibuja tu firma" });
     if (!agree) return void Swal.fire({ icon: "warning", title: "Marca la casilla de confirmación" });
-    if (missing > 0 && !notes.trim()) return void Swal.fire({ icon: "warning", title: "Explica el faltante en las notas" });
+    if ((missing > 0 || extra > 0) && !notes.trim()) return void Swal.fire({ icon: "warning", title: missing > 0 ? "Explica el faltante en las notas" : "Explica en las notas por qué llegó de más" });
 
     const ask = await Swal.fire({
       icon: "question",
       title: `Firmar "${step.title}"`,
       html: isReceive
-        ? `Se sumará la mercancía al inventario de <b>${toName}</b>${missing > 0 ? ` y <b>${missing}</b> unidad(es) faltantes volverán al origen` : ""}. Esta acción no se puede deshacer.`
+        ? `Se sumará la mercancía al inventario de <b>${toName}</b>${missing > 0 ? ` y <b>${missing}</b> unidad(es) faltantes volverán al origen` : ""}${extra > 0 ? `; <b>${extra}</b> unidad(es) de más se descontarán del origen` : ""}. Esta acción no se puede deshacer.`
         : "Tu firma quedará registrada con fecha y hora.",
       showCancelButton: true,
       confirmButtonText: "Firmar",
@@ -479,8 +481,10 @@ function SignForm({
               value={counts}
               onChange={setCounts}
               storageKey={`remhub_recibir_${token}`}
+              max={100000}
             />
             {missing > 0 ? <p className="mt-2 text-sm font-semibold" style={{ color: "#ef4444" }}>Faltan {missing} unidad(es).</p> : null}
+            {extra > 0 ? <p className="mt-1 text-sm font-semibold" style={{ color: "#0ea5e9" }}>Llegaron {extra} unidad(es) de más: se descuentan del origen.</p> : null}
           </div>
         ) : null}
 
@@ -493,7 +497,7 @@ function SignForm({
           style={inputStyle}
           rows={2}
           maxLength={500}
-          placeholder={missing > 0 ? "Explica el faltante *" : "Notas (opcional): novedades, estado de las cajas, placa del vehículo…"}
+          placeholder={missing > 0 ? "Explica el faltante *" : extra > 0 ? "Explica por qué llegó de más *" : "Notas (opcional): novedades, estado de las cajas, placa del vehículo…"}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />

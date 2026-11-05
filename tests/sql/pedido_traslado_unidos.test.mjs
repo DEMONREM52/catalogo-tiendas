@@ -130,5 +130,23 @@ ok(Array.isArray(hidden) && hidden.length === 0, "Quien no tiene acceso no ve el
 const anon = await db.query("select has_function_privilege('anon', 'public.erp_transfer_requests(uuid, uuid[])', 'execute') r");
 ok(anon.rows[0].r === false, "Sin sesión no se puede consultar");
 
+// 7) 20261281: llegó de más.
+const M2 = fs.readFileSync(path.join(MIG, "20261281_traslado_llego_de_mas.sql"), "utf8");
+await db.exec(M2);
+await db.exec(M2);
+const qty = async (w, p) => Number((await raw("select qty from erp_stock_levels where warehouse_id = $1 and product_id = $2", [w, p]))[0]?.qty ?? 0);
+const seven = await requestWithTransfer(7);
+const [bP, bQ, zP] = [await qty(B1, P), await qty(B1, Q), await qty(Z, P)];
+await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, 'venía una de más')", [seven.T, JSON.stringify([{ product_id: P, received_qty: 6 }, { product_id: Q, received_qty: 3 }])]);
+ok(await qty(Z, P) === zP + 6 && await qty(B1, P) === bP - 1 && await qty(B1, Q) === bQ, "Llegó una de más: el destino suma 6 y esa unidad sale del origen", { z: await qty(Z, P) - zP, b: await qty(B1, P) - bP });
+const ti7 = await raw("select received_qty from erp_transfer_items where transfer_id = $1 and product_id = $2", [seven.T, P]);
+const m7 = await raw("select body from erp_stock_request_messages where request_id = $1", [seven.R]);
+ok(ti7[0].received_qty === 6 && m7.length === 1 && /llegaron 1 und\. de más/.test(m7[0].body), "Queda anotado y el chat del pedido dice «llegaron 1 de más»", { ti7, m7 });
+const [{ id: T8 }] = await as(OWNER, "select public.erp_create_transfer($1, $2, $3, 'x', $4::jsonb) id", [A, B1, Z, JSON.stringify([{ product_id: Q, qty: 1 }])]);
+const tooMany = await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [T8, JSON.stringify([{ product_id: Q, received_qty: 9999 }])]).then(() => null).catch((e) => e.message);
+ok(typeof tooMany === "string" && /origen solo tiene/.test(tooMany) && (await raw("select status from erp_transfers where id = $1", [T8]))[0].status === "in_transit", "Si el origen no tiene esas unidades de más, no deja recibir y lo explica", tooMany);
+const neg = await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [T8, JSON.stringify([{ product_id: Q, received_qty: -1 }])]).then(() => null).catch((e) => e.message);
+ok(typeof neg === "string" && /no es válida/.test(neg), "Cantidades negativas siguen sin aceptarse", neg);
+
 console.log(`\n${pass} bien, ${fail} mal`);
 process.exit(fail ? 1 : 0);
