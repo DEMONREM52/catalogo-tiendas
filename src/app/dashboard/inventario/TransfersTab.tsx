@@ -87,11 +87,45 @@ function WarehouseChip({ w, selected, onClick }: { w: Warehouse; selected: boole
 /** Traslado a medio armar: se guarda en este equipo hasta que se envíe o se descarte. */
 type TransferDraft = { v: 1; savedAt: string; from: string; targets: string[]; lines: PlanLine[]; matrix: Matrix; notes: string; carrier: string; checkedBy: string };
 
+/** Sin tildes ni mayúsculas: «baño» encuentra «BANO» y al revés. */
+const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/** Busca por nombre o código; cada palabra debe aparecer (en cualquier orden). */
+function matchesItem(item: TransferItem, query: string) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const p = Array.isArray(item.products) ? item.products[0] : item.products;
+  const hay = fold(`${p?.name ?? ""} ${p?.sku ?? ""}`);
+  return words.every((w) => hay.includes(w));
+}
+
+function ItemSearch({ value, onChange, found, total }: { value: string; onChange: (v: string) => void; found: number; total: number }) {
+  return (
+    <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: value ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+      <span aria-hidden>🔍</span>
+      <input
+        type="search" value={value} onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") onChange(""); }}
+        placeholder="Buscar en este traslado por nombre o código…" aria-label="Buscar producto en el traslado"
+        className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+      />
+      {value ? (
+        <>
+          <span className="shrink-0 text-xs font-bold tabular-nums" style={{ color: "var(--t-muted)" }}>{found} de {total}</span>
+          <button type="button" onClick={() => onChange("")} aria-label="Borrar búsqueda" className="shrink-0 rounded-full px-1.5 text-sm">✕</button>
+        </>
+      ) : null}
+    </label>
+  );
+}
+
 /** Productos de un traslado: resumen corto y, al tocarlo, la lista con fotos. */
 function TransferItemsList({ items }: { items: TransferItem[] }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const units = items.reduce((a, i) => a + Number(i.qty || 0), 0);
   const missing = items.filter((i) => i.received_qty !== null && i.received_qty !== i.qty).length;
+  const shown = useMemo(() => items.filter((i) => matchesItem(i, query)), [items, query]);
   return (
     <div className="mt-2">
       <button
@@ -105,17 +139,20 @@ function TransferItemsList({ items }: { items: TransferItem[] }) {
         {missing ? <span style={{ color: "#f59e0b" }}>· {missing} con diferencia</span> : null}
         <span aria-hidden>{open ? "▲" : "▼"}</span>
       </button>
-      {open ? (
+      {open && items.length > 6 ? (
+        <ItemSearch value={query} onChange={setQuery} found={shown.length} total={items.length} />
+      ) : null}
+      {open && query && !shown.length ? (
+        <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>Ningún producto de este traslado coincide con «{query}».</p>
+      ) : null}
+      {open && shown.length ? (
         <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((i) => {
+          {shown.map((i) => {
             const p = Array.isArray(i.products) ? i.products[0] : i.products;
             const diff = i.received_qty !== null && i.received_qty !== i.qty;
             return (
               <li key={i.product_id} className="flex items-center gap-2.5 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}>
-                {p?.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border object-cover" style={{ borderColor: "var(--t-card-border)" }} />
-                ) : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border text-lg" style={{ borderColor: "var(--t-card-border)" }}>📦</span>}
+                <Thumb src={p?.image_url} size={44} zoom alt={p?.name ?? "Producto"} />
                 <span className="min-w-0 flex-1">
                   <span className="line-clamp-2 text-xs font-semibold">{p?.name ?? "Producto"}</span>
                   {p?.sku ? <span className="block text-[10px]" style={{ color: "var(--t-muted)" }}>{p.sku}</span> : null}
@@ -136,6 +173,8 @@ function TransferItemsList({ items }: { items: TransferItem[] }) {
 export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   // Informe a la medida (20261279): por punto, ruta, producto, categoría, fecha o persona.
   const [report, setReport] = useState(false);
+  // Buscador del conteo al recibir: lo no mostrado conserva su cantidad (por defecto, lo enviado).
+  const [receiveQuery, setReceiveQuery] = useState("");
   const active = warehouses.filter((w) => w.active);
   const names = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
   const canTransfer = ctx.can("transfers");
@@ -540,6 +579,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   }
 
   function startReceive(row: TransferRow) {
+    setReceiveQuery("");
     setReceiving({
       id: row.id,
       notes: "",
@@ -827,7 +867,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                         }}
                       />
                     ) : null}
-                    {row.erp_transfer_items.map((i) => (
+                    {row.erp_transfer_items.length > 6 ? (
+                      <ItemSearch value={receiveQuery} onChange={setReceiveQuery} found={row.erp_transfer_items.filter((i) => matchesItem(i, receiveQuery)).length} total={row.erp_transfer_items.length} />
+                    ) : null}
+                    {row.erp_transfer_items.filter((i) => matchesItem(i, receiveQuery)).map((i) => (
                       <label key={i.product_id} className="flex items-center justify-between gap-3 text-sm">
                         <span className="min-w-0 truncate">{itemName(i)} <span style={{ color: "var(--t-muted)" }}>(enviadas {i.qty})</span></span>
                         <input

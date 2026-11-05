@@ -254,6 +254,17 @@ export const RELEASES: Release[] = [
       { icon: "▾", text: "Menús desplegables con fondo del tema" },
     ],
   },
+  {
+    id: 24, date: "2026-11-05", title: "Buscar dentro de un traslado",
+    summary: "Al abrir los productos de un traslado (o al contar lo que llegó) hay un buscador por nombre o código.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔍", text: "Escribe parte del nombre o el código" },
+      { icon: "🔤", text: "No importan tildes ni mayúsculas" },
+      { icon: "🔢", text: "Muestra cuántos coinciden" },
+      { icon: "🖼️", text: "La foto se amplía al tocarla" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
