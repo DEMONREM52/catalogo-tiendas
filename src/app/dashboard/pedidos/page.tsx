@@ -68,7 +68,7 @@ export default function PedidosPage() {
       {tab === "internos" && perm.internal && storeId ? (
         <div className="px-4 pb-6 sm:px-6">
           {both ? (
-            <div className="mb-4">
+            <div className="mb-4 hidden sm:block">
               <h1 className="text-2xl font-bold">Pedidos internos</h1>
               <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Entre puntos y bodegas: quien pide ve lo disponible, quien atiende prepara y despacha, y todos coordinan por chat.</p>
             </div>

@@ -265,6 +265,17 @@ export const RELEASES: Release[] = [
       { icon: "🖼️", text: "La foto se amplía al tocarla" },
     ],
   },
+  {
+    id: 25, date: "2026-11-05", title: "Pedidos internos más limpios",
+    summary: "Menos recuadros y textos: cada pedido muestra lo justo y lo que necesita acción salta a la vista.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🔢", text: "Los números van en las pestañas" },
+      { icon: "🚚", text: "Arriba solo lo que pide acción" },
+      { icon: "🃏", text: "Tarjetas más bajas: número, estado, ruta y hora" },
+      { icon: "🎨", text: "La guía de colores, plegada al final" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

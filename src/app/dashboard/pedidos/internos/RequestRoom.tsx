@@ -504,15 +504,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   <span className="rounded-md px-1.5 py-px" style={{ background: "color-mix(in oklab, #22c55e 12%, transparent)" }} title={`Hay en ${r.from_name}`}>
                     📥 <span className="hidden sm:inline">{r.from_name}: </span><b style={{ color: "var(--t-text)" }}>{i.dest_now}</b>
                   </span>
+                  {/* Valor por mayor en la misma línea (antes ocupaba una línea aparte). */}
+                  {prices?.get(i.product_id) ? (
+                    <span title={`Precio por mayor ${cop(prices.get(i.product_id)!.price2)} c/u`}>
+                      · <span className="hidden sm:inline">{cop(prices.get(i.product_id)!.price2)} → </span><b style={{ color: "var(--t-text)" }}>{cop(toSend * prices.get(i.product_id)!.price2)}</b>
+                    </span>
+                  ) : null}
                 </p>
                 {i.note ? <p className="truncate text-[11px] font-semibold sm:whitespace-normal" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
-                {chk ? <p className="truncate text-[11px] font-bold sm:whitespace-normal" style={{ color: "#22c55e" }}>✓ {checkSide === "pack" ? "Empacado" : "Contado"} · {chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
+                {chk ? <p className="truncate text-[11px] font-bold sm:whitespace-normal" style={{ color: "#22c55e" }}>✓ <span className="hidden sm:inline">{checkSide === "pack" ? "Empacado" : "Contado"} · </span>{chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
-                {prices?.get(i.product_id) ? (
-                  <p className="text-xs" style={{ color: "var(--t-muted)" }}>
-                    <span className="hidden sm:inline">P. mayor </span>{cop(prices.get(i.product_id)!.price2)} · <b style={{ color: "var(--t-text)" }}>{cop(toSend * prices.get(i.product_id)!.price2)}</b>
-                  </p>
-                ) : null}
               </div>
               {canAttend ? (
                 <label onClick={(e) => e.stopPropagation()} className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>

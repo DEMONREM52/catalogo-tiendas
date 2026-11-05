@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, BellRing, Inbox, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Send, Truck } from "lucide-react";
+import { ArrowRight, BellRing, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { useRunOnChange } from "../../inventario/shared";
@@ -11,7 +11,7 @@ import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockR
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
 import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrListItem } from "./types";
-import { Skeleton, SkeletonCards } from "@/components/ui/Skeleton";
+import { SkeletonCards } from "@/components/ui/Skeleton";
 
 /** Color de los mensajes sin leer (distinto de todos los estados). */
 const UNREAD = "#ec4899";
@@ -105,57 +105,59 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   }, [rows, effectiveScope, q]);
 
   return (
-    <section className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {[
-          [<Inbox key="i" size={16} />, "Por atender", counts.attend, counts.attendNew ? `${counts.attendNew} nuevo${counts.attendNew === 1 ? "" : "s"}` : "Al día", counts.attendNew ? "#ef4444" : "var(--t-accent)"],
-          [<Send key="s" size={16} />, "Mis pedidos activos", counts.mine, "Esperando respuesta o en camino", "#8b5cf6"],
-          [<Truck key="t" size={16} />, "En camino a mi punto", counts.arriving, "Confirma al recibir", "#0ea5e9"],
-          [<MessageCircle key="m" size={16} />, "Mensajes sin leer", counts.unread, "En pedidos activos", counts.unread ? "#f59e0b" : "var(--t-accent)"],
-        ].map(([icon, label, value, sub, color]) => (
-          <div key={label as string} className="rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)" }}>
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>
-              <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `color-mix(in oklab, ${color as string} 16%, transparent)`, color: color as string }}>{icon}</span>
-              {label as string}
-            </p>
-            <p className="mt-2 text-2xl font-black tabular-nums">{loading ? <Skeleton className="h-7 w-10" /> : (value as number)}</p>
-            <p className="text-xs" style={{ color: "var(--t-muted)" }}>{sub as string}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 overflow-x-auto rounded-full border p-1 text-xs font-bold [scrollbar-width:none]" style={{ borderColor: "var(--t-card-border)" }}>
+    <section className="space-y-3">
+      {/* Antes eran 4 recuadros grandes; los números ya van en las pestañas y aquí solo lo que pide acción. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 text-xs font-bold [scrollbar-width:none] sm:mx-0 sm:rounded-full sm:border sm:p-1" style={{ borderColor: "var(--t-card-border)" }}>
           {([
-            ["attend", `📥 Por atender${counts.attend ? ` (${counts.attend})` : ""}`],
-            ["mine", `📤 Mis pedidos${counts.mine ? ` (${counts.mine})` : ""}`],
-            ["active", `🔄 Todos activos (${counts.active})`],
-            ["closed", `🗂️ Cerrados (${counts.closed})`],
-          ] as Array<[Scope, string]>).map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setScope(k)} className="shrink-0 rounded-full px-3 py-1.5 transition" style={effectiveScope === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
+            ["attend", "📥 Por atender", counts.attend, counts.attendNew > 0],
+            ["mine", "📤 Mis pedidos", counts.mine, false],
+            ["active", "🔄 Activos", counts.active, false],
+            ["closed", "🗂️ Cerrados", counts.closed, false],
+          ] as Array<[Scope, string, number, boolean]>).map(([k, l, n, hot]) => (
+            <button key={k} type="button" onClick={() => setScope(k)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 transition sm:border-0"
+              style={effectiveScope === k ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { color: "var(--t-muted)", borderColor: "var(--t-card-border)" }}>
               {l}
+              {n ? <span className="rounded-full px-1.5 text-[10px] tabular-nums" style={hot ? { background: "#ef4444", color: "#fff" } : { background: "color-mix(in oklab, currentColor 18%, transparent)" }}>{n}</span> : null}
             </button>
           ))}
         </div>
-        <div className="relative min-w-48 flex-1">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-          <input className="w-full rounded-full border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por número, punto o persona…" />
-        </div>
-        <button type="button" onClick={() => { setLoading(true); void load(); }} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar" title="Actualizar">
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-        </button>
-        <button type="button" onClick={() => setSounds(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Sonidos y avisos">
-          <BellRing size={15} /> <span className="hidden sm:inline">Sonidos</span>
-        </button>
-        <Link href="/dashboard/mensajes?nuevo=1" className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} title="Abrir un chat o un grupo con quien quieras, sin hacer un pedido">
-          <MessageCirclePlus size={15} /> <span className="hidden sm:inline">Nuevo chat</span>
-        </Link>
-        {canRequest ? (
-          <button type="button" onClick={() => setCreating(Date.now())} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
-            <Plus size={16} /> Pedir mercancía
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="relative min-w-0 flex-1">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+            <input type="search" className="w-full rounded-full border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar número, punto o persona…" />
+          </div>
+          <button type="button" onClick={() => { setLoading(true); void load(); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar" title="Actualizar">
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
-        ) : null}
+          <button type="button" onClick={() => setSounds(true)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border text-sm font-bold lg:w-auto lg:px-3" style={{ borderColor: "var(--t-card-border)" }} title="Sonidos y avisos" aria-label="Sonidos y avisos">
+            <BellRing size={15} /> <span className="hidden lg:inline">Sonidos</span>
+          </button>
+          <Link href="/dashboard/mensajes?nuevo=1" className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border text-sm font-bold lg:w-auto lg:px-3" style={{ borderColor: "var(--t-card-border)" }} title="Abrir un chat o un grupo con quien quieras, sin hacer un pedido" aria-label="Nuevo chat">
+            <MessageCirclePlus size={15} /> <span className="hidden lg:inline">Nuevo chat</span>
+          </Link>
+          {canRequest ? (
+            <button type="button" onClick={() => setCreating(Date.now())} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-bold text-white shadow-lg sm:px-4" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+              <Plus size={16} /> Pedir<span className="hidden sm:inline"> mercancía</span>
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {counts.arriving || counts.unread ? (
+        <div className="flex flex-wrap gap-1.5 text-xs font-bold">
+          {counts.arriving ? (
+            <button type="button" onClick={() => setScope("mine")} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: "color-mix(in oklab, #0ea5e9 16%, transparent)", color: "#38bdf8" }}>
+              <Truck size={13} /> {counts.arriving} en camino a tu punto · confirma al recibir
+            </button>
+          ) : null}
+          {counts.unread ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: `color-mix(in oklab, ${UNREAD} 16%, transparent)`, color: UNREAD }}>
+              <MessageCircle size={13} /> {counts.unread} mensaje{counts.unread === 1 ? "" : "s"} sin leer
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p>
@@ -169,19 +171,12 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         </div>
       ) : (
         <>
-          {/* Guía de colores: cada estado tiene el suyo, igual en la tarjeta, la etiqueta y la barra de pasos. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>
-            {(["pending", "preparing", "dispatched", "received", "rejected"] as const).map((k) => (
-              <span key={k} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: SR_STATUS[k].color }} />{SR_STATUS[k].short}</span>
-            ))}
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Urgente</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: UNREAD }} />Mensajes sin leer</span>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-2 md:gap-3">
             {list.map((r, i) => {
               const st = SR_STATUS[r.status];
               const needsMe = (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
               const urgent = r.priority === "urgent" && isOpen(r.status);
+              const unread = r.unread > 0 && isOpen(r.status);
               return (
                 <motion.button
                   key={r.id}
@@ -190,7 +185,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(i, 10) * 0.025 }}
                   onClick={() => setOpenId(r.id)}
-                  className="relative flex flex-col overflow-hidden rounded-3xl border p-4 pl-5 text-left transition hover:-translate-y-0.5 hover:shadow-xl"
+                  className="relative flex flex-col overflow-hidden rounded-2xl border p-3 pl-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl sm:p-4 sm:pl-5"
                   style={{
                     borderColor: `color-mix(in oklab, ${st.color} ${needsMe ? 80 : 40}%, transparent)`,
                     background: `color-mix(in oklab, ${st.color} ${needsMe ? 12 : 6}%, var(--t-card-bg))`,
@@ -199,44 +194,51 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                 >
                   {/* Franja del estado (roja arriba si es urgente). */}
                   <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: urgent ? `linear-gradient(180deg, #ef4444 0 35%, ${st.color} 35%)` : st.color }} />
-                  {needsMe ? <span className="absolute right-4 top-4 h-2.5 w-2.5 animate-ping rounded-full" style={{ background: st.color }} /> : null}
-                  <div className="flex flex-wrap items-center gap-2 pr-6">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-sm font-black">#{r.number}</span>
-                    <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm" style={{ background: st.color }}>{st.icon} {st.short}</span>
-                    {urgent ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">⚡ Urgente</span> : null}
-                    {r.unread > 0 && isOpen(r.status) ? <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: UNREAD }}>💬 {r.unread} sin leer</span> : null}
+                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: st.color }} title={st.label}>{st.icon} {st.short}</span>
+                    {urgent ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white" title="Urgente">⚡<span className="hidden sm:inline"> Urgente</span></span> : null}
+                    {unread ? <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: UNREAD }} title={`${r.unread} mensajes sin leer`}>💬 {r.unread}</span> : null}
+                    <span className="ml-auto shrink-0 text-[11px]" style={{ color: "var(--t-muted)" }}>{timeAgo(r.updated_at)}</span>
                   </div>
+                  <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-sm font-bold">
+                    <span className="min-w-0 truncate rounded-md px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }} title={`Envía: ${r.to_name}`}>📤 {r.to_name}</span>
+                    <ArrowRight size={14} className="shrink-0" style={{ color: st.color }} />
+                    <span className="min-w-0 truncate rounded-md px-1.5 py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80" }} title={`Recibe: ${r.from_name}`}>📥 {r.from_name}</span>
+                  </p>
                   {st.step >= 0 ? (
                     <div className="mt-2 flex gap-1" aria-label={`Paso ${st.step + 1} de ${SR_STEPS.length}: ${st.label}`}>
                       {SR_STEPS.map((k, n) => (
-                        <span key={k} className="h-1.5 flex-1 rounded-full" style={{ background: n <= st.step ? SR_STATUS[k].color : "var(--t-card-border)" }} />
+                        <span key={k} className="h-1 flex-1 rounded-full" style={{ background: n <= st.step ? SR_STATUS[k].color : "var(--t-card-border)" }} />
                       ))}
                     </div>
                   ) : null}
-                  <p className="mt-2 flex flex-wrap items-center gap-1.5 font-bold">
-                    <span className="rounded-lg px-1.5 py-0.5 text-sm" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
-                    <ArrowRight size={15} style={{ color: st.color }} />
-                    <span className="rounded-lg px-1.5 py-0.5 text-sm" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80" }}>📥 {r.from_name}</span>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs" style={{ color: "var(--t-muted)" }}>
+                    <span>📦 {r.items} prod. · {r.units} und.</span>
+                    <span className="hidden sm:inline">· pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b>{r.handled_by_name ? <> · atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}</span>
+                    {needsMe ? <span className="ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: st.color }}>👉 {r.status === "pending" ? "Te toca revisarlo" : "Confirma al llegar"}</span> : null}
                   </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
-                    📦 {r.items} producto{r.items === 1 ? "" : "s"} · {r.units} und. · pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b>{r.handled_by_name ? <> · atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}
-                  </p>
-                  {r.last_message ? (
-                    <p className="mt-2 line-clamp-2 rounded-xl border-l-4 px-3 py-2 text-xs"
-                      style={r.last_message.kind === "message"
-                        ? { borderColor: UNREAD, background: `color-mix(in oklab, ${UNREAD} 9%, transparent)` }
-                        : { borderColor: st.color, background: `color-mix(in oklab, ${st.color} 9%, transparent)` }}>
-                      {r.last_message.kind === "message" ? <b>💬 {r.last_message.user_name}: </b> : null}{r.last_message.body}
+                  {r.last_message && r.last_message.kind === "message" && (unread || isOpen(r.status)) ? (
+                    <p className="mt-1.5 truncate rounded-lg border-l-4 px-2 py-1 text-xs"
+                      style={{ borderColor: UNREAD, background: `color-mix(in oklab, ${UNREAD} 9%, transparent)` }}>
+                      <b>💬 {r.last_message.user_name}: </b>{r.last_message.body}
                     </p>
                   ) : null}
-                  <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                    🕒 {timeAgo(r.updated_at)}
-                    {needsMe ? <span className="rounded-full px-2 py-0.5 font-bold text-white" style={{ background: st.color }}>👉 {r.status === "pending" ? "Te toca revisarlo" : "Confirma cuando llegue"}</span> : null}
-                  </p>
                 </motion.button>
               );
             })}
           </div>
+          {/* Guía de colores plegada al final: se consulta una vez, no tiene que ocupar espacio arriba. */}
+          <details className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+            <summary className="cursor-pointer select-none font-semibold">🎨 ¿Qué significa cada color?</summary>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 font-semibold">
+              {(["pending", "preparing", "dispatched", "received", "rejected"] as const).map((k) => (
+                <span key={k} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: SR_STATUS[k].color }} />{SR_STATUS[k].short}</span>
+              ))}
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />Urgente</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: UNREAD }} />Mensajes sin leer</span>
+            </div>
+          </details>
         </>
       )}
 
