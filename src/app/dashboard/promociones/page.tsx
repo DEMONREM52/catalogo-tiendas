@@ -89,7 +89,7 @@ export default function PromotionsPage() {
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-4 sm:px-6">
       <header>
         <h1 className="text-2xl font-black">🏷️ Promociones y combos</h1>
-        <p className="text-sm" style={{ color: "var(--t-muted)" }}>Las promociones se activan y se apagan solas en el POS. Los combos se venden desde «🎁 Combos» y cada producto descuenta su inventario.</p>
+        <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Las promociones se activan y se apagan solas en el POS. Los combos se venden desde «🎁 Combos» y cada producto descuenta su inventario.</p>
       </header>
       <nav className="flex w-fit gap-1 rounded-full border p-1 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
         {([["promos", "Promociones"], ["combos", "Combos"]] as const).map(([k, l]) => (

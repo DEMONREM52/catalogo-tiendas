@@ -858,7 +858,7 @@ export default function SocialDashboard() {
               <Sparkles size={16} /> RemHub Social
             </p>
             <h1 className="mt-2 text-3xl font-black sm:text-4xl">Campañas de tu catálogo.</h1>
-            <p className="mt-2 max-w-2xl text-sm opacity-70">
+            <p className="hidden sm:block mt-2 max-w-2xl text-sm opacity-70">
               {store?.name ?? "Tu tienda"} · Crea campañas y elige cuáles se muestran en tu catálogo.
             </p>
           </div>

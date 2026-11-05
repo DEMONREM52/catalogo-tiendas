@@ -215,7 +215,7 @@ function Customers({ plans, onChanged }: { plans: Plan[]; onChanged: () => void 
         </select>
       </div>
       <div className="overflow-x-auto rounded-2xl border" style={box}>
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="rt w-full min-w-[900px] text-sm">
           <thead style={muted}><tr>{["Tienda", "Dueño", "Plan", "Estado", "Vence", "Uso", "Creada", ""].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold">{h}</th>)}</tr></thead>
           <tbody>
             {(data?.rows ?? []).map((c) => (
@@ -368,7 +368,7 @@ function Referrals() {
       <p className="mb-3 text-xs" style={muted}>Tiendas que llegaron por el enlace o el sello «Hecho con RemHub» de otra. El premio lo decides tú (días de todo incluido).</p>
       {rows.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="rt w-full min-w-[640px] text-sm">
             <thead style={muted}><tr>{["Tienda que invitó", "Invitadas", "Pagaron", "Última", "Premio dado", ""].map((h) => <th key={h} className="px-2 py-1.5 text-left text-xs font-semibold">{h}</th>)}</tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -574,7 +574,7 @@ function Payments() {
         <span className="ml-auto self-center text-sm" style={muted}>Aprobado en la lista: <b style={{ color: "#10b981" }}>{cop(total)}</b></span>
       </div>
       <div className="overflow-x-auto rounded-2xl border" style={box}>
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="rt w-full min-w-[900px] text-sm">
           <thead style={muted}><tr>{["Fecha", "Tienda", "Plan", "Valor", "Estado", "Referencia", "Transacción / comprobante", "Origen"].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold">{h}</th>)}</tr></thead>
           <tbody>
             {(data?.payments ?? []).map((p) => (

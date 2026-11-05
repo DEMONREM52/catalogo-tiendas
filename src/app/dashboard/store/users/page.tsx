@@ -487,7 +487,7 @@ export default function StoreUsersPage() {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>{store?.name ?? "Tu tienda"} · equipo</p>
             <h1 className="mt-1 flex items-center gap-2 text-2xl font-black sm:text-3xl"><Users size={26} /> Usuarios y vendedores</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
+            <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
               Crea accesos para tu equipo y decide qué puede ver y hacer cada persona.
             </p>
           </div>

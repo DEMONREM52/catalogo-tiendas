@@ -50,7 +50,7 @@ export default function DataCenterPage() {
     <main className="space-y-4">
       <section className="rounded-3xl border p-5" style={card}>
         <h1 className="text-xl font-black">🔄 Importar y exportar</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+        <p className="hidden sm:block mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
           Saca todo a Excel cuando quieras (tus datos siempre son tuyos) o sube de una vez tus productos, terceros, cartera, deudas con proveedores o un conteo de inventario.
         </p>
         <div className="mt-3 inline-flex rounded-full border p-1" style={{ borderColor: "var(--t-card-border)" }}>

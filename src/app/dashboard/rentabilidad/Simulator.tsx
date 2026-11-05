@@ -279,7 +279,7 @@ export function Simulator({ storeId }: { storeId: string }) {
           <div className="overflow-hidden rounded-2xl border" style={card}>
             <p className="px-4 pt-4 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>Comparar escenarios (por unidad, sin descuento)</p>
             <div className="overflow-x-auto">
-              <table className="mt-2 w-full min-w-[30rem] text-sm">
+              <table className="rt mt-2 w-full min-w-[30rem] text-sm">
                 <thead>
                   <tr className="text-left text-xs" style={{ color: "var(--t-muted)" }}>
                     <th className="px-4 py-2 font-semibold">Escenario</th>

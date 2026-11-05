@@ -182,7 +182,7 @@ function XmlReview({ storeId, warehouseId, canCreateProducts, inv, match, file, 
         </div>
 
         <div className="flex-1 overflow-auto p-4">
-          <table className="w-full text-sm">
+          <table className="rt w-full text-sm">
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--t-muted)" }}>
                 <th className="py-1 pr-2">En la factura</th><th className="px-2 text-right">Cant.</th><th className="px-2 text-right">Costo sin IVA</th><th className="px-2 text-right">IVA</th><th className="pl-2">Producto en RemHub</th>

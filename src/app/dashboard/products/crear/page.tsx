@@ -276,7 +276,7 @@ export default function CreateProductPage() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Crear producto</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>
             Fácil, rápido y bonito 🙂
           </p>
         </div>

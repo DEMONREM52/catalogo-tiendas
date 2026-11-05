@@ -113,7 +113,7 @@ export default function EPayrollPage() {
     <main className="space-y-4">
       <section className="rounded-3xl border p-5" style={card}>
         <h1 className="text-xl font-black">🧾 Nómina electrónica (DIAN)</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+        <p className="hidden sm:block mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
           Aparte de la nómina interna: aquí se transmite a la DIAN un documento por trabajador y por mes (se presenta a más tardar en los primeros días hábiles del mes siguiente).
           Puedes traer lo aprobado en «Gastos y nómina» o llenarlo a mano; la nómina interna no cambia.
         </p>

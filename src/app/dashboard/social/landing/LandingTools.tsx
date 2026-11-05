@@ -143,7 +143,7 @@ export function LandingStats({ storeId, page, config, onBack, url }: { storeId: 
 
             <Section title="¿De dónde vienen?" hint="Visitas y pedidos por fuente (utm, Facebook, Instagram, TikTok…)" icon={<span>📣</span>}>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="rt w-full text-sm">
                   <thead><tr className="text-left text-xs" style={{ color: "var(--t-muted)" }}><th className="py-1">Fuente</th><th>Visitas</th><th>Compran</th><th>Pedidos</th><th>Tiempo</th></tr></thead>
                   <tbody>
                     {stats!.by_source.map((s) => (

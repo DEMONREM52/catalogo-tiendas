@@ -105,7 +105,7 @@ export default function TeamPage() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-black">🏆 Comisiones y metas</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>{manage ? "Lo que gana cada vendedor y cómo va cada punto frente a su meta." : "Tus ventas, tu comisión y tu meta del mes."}</p>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>{manage ? "Lo que gana cada vendedor y cómo va cada punto frente a su meta." : "Tus ventas, tu comisión y tu meta del mes."}</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button type="button" onClick={() => setOffset((o) => o - 1)} className="rounded-lg border px-2.5 py-1" style={{ borderColor: "var(--t-card-border)" }}>◀</button>

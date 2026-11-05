@@ -360,7 +360,7 @@ export default function ReportsDashboard({ storeId, points }: { storeId: string;
             >
               {showTable ? (
                 <div className="max-h-72 overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-                  <table className="w-full text-sm">
+                  <table className="rt w-full text-sm">
                     <thead className="sticky top-0" style={{ background: "var(--t-bg-base)", color: "var(--t-muted)" }}>
                       <tr><th className="px-3 py-2 text-left text-xs">Fecha</th><th className="px-3 py-2 text-right text-xs">Ventas</th><th className="px-3 py-2 text-right text-xs">Anterior</th><th className="px-3 py-2 text-right text-xs">Pedidos</th></tr>
                     </thead>

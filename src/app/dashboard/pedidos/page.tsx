@@ -51,7 +51,7 @@ export default function PedidosPage() {
           {perm.internal && !perm.orders ? (
             <div>
               <h1 className="text-2xl font-bold">Pedidos internos</h1>
-              <p className="text-sm" style={{ color: "var(--t-muted)" }}>Pide mercancía a otros puntos o bodegas y coordina por chat hasta que llegue.</p>
+              <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Pide mercancía a otros puntos o bodegas y coordina por chat hasta que llegue.</p>
             </div>
           ) : (
             <div className="flex w-full gap-1 rounded-full border p-1 text-sm font-bold sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
@@ -70,7 +70,7 @@ export default function PedidosPage() {
           {both ? (
             <div className="mb-4">
               <h1 className="text-2xl font-bold">Pedidos internos</h1>
-              <p className="text-sm" style={{ color: "var(--t-muted)" }}>Entre puntos y bodegas: quien pide ve lo disponible, quien atiende prepara y despacha, y todos coordinan por chat.</p>
+              <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Entre puntos y bodegas: quien pide ve lo disponible, quien atiende prepara y despacha, y todos coordinan por chat.</p>
             </div>
           ) : null}
           <StockRequestsPanel storeId={storeId} canRequest={perm.request} />

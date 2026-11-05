@@ -53,7 +53,7 @@ export default function OperationsPage() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>Vista operativa</p>
             <h1 className="mt-1 text-2xl font-black sm:text-3xl">Centro de operaciones</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>Pedidos, remisiones, despachos, traslados y movimientos: documentos internos del negocio, distintos de los documentos fiscales.</p>
+            <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>Pedidos, remisiones, despachos, traslados y movimientos: documentos internos del negocio, distintos de los documentos fiscales.</p>
           </div>
           {fiscal ? (
             <div className="flex gap-1 rounded-full border p-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>

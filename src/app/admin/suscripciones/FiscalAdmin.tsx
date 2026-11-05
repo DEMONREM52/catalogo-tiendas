@@ -178,7 +178,7 @@ export function FiscalAdmin() {
       <div className="rounded-2xl border p-4" style={box}>
         <h3 className="mb-2 font-black">Uso de este mes</h3>
         {!ov.stores.length ? <p className="text-sm" style={muted}>Ninguna tienda usa facturación electrónica todavía.</p> : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
+          <div className="overflow-x-auto"><table className="rt w-full min-w-[640px] text-sm">
             <thead style={muted}><tr>{["Tienda", "Paquete", "Vence", "Usados", "Extra", "Extras por cobrar", ""].map((h) => <th key={h} className="px-2 py-1.5 text-left text-xs">{h}</th>)}</tr></thead>
             <tbody>{ov.stores.map((s) => (
               <tr key={s.store_id} className="border-t" style={{ borderColor: "rgba(255,255,255,.08)" }}>
@@ -198,7 +198,7 @@ export function FiscalAdmin() {
       <div className="rounded-2xl border p-4" style={box}>
         <h3 className="mb-2 font-black">Cobros de documentos extra</h3>
         {!ov.overages.length ? <p className="text-sm" style={muted}>Todavía no hay cobros de extras. Se crean solos el día 1 de cada mes.</p> : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
+          <div className="overflow-x-auto"><table className="rt w-full min-w-[640px] text-sm">
             <thead style={muted}><tr>{["Mes", "Tienda", "Usados", "Extra", "Valor", "Estado", ""].map((h) => <th key={h} className="px-2 py-1.5 text-left text-xs">{h}</th>)}</tr></thead>
             <tbody>{ov.overages.map((o) => (
               <tr key={o.id} className="border-t" style={{ borderColor: "rgba(255,255,255,.08)" }}>

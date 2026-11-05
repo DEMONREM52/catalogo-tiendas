@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import AdminBell from "./AdminBell";
 import { logSessionEvent } from "@/lib/audit-client";
+import { ResponsiveTables } from "@/components/ui/ResponsiveTables";
 
 /* =========================================================
    ✅ Context: evita doble AdminShell
@@ -385,6 +386,7 @@ function AdminShellRoot({ children }: { children: React.ReactNode }) {
   return (
     <AdminShellContext.Provider value={true}>
       <main className="min-h-screen" style={{ color: "var(--t-text)" }}>
+        <ResponsiveTables />
         {/* ✅ Theme auto según sistema */}
         <style jsx global>{`
           :root {

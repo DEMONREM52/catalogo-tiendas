@@ -71,7 +71,7 @@ function FiscalCenter() {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>Facturación electrónica · {scopeLabel}</p>
             <h1 className="mt-1 text-2xl font-black sm:text-3xl">Centro fiscal</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
+            <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
               Documentos electrónicos, numeración, contribuyentes y proveedor de cada punto, separados de los documentos internos.
             </p>
           </div>

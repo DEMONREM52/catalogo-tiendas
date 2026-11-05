@@ -243,6 +243,17 @@ export const RELEASES: Release[] = [
       { icon: "🧩", text: "Las plantillas ya vienen completas" },
     ],
   },
+  {
+    id: 23, date: "2026-11-05", title: "Todo el panel más cómodo en el celular",
+    summary: "Las tablas se ven como tarjetas, las explicaciones largas se ocultan y los menús desplegables se leen bien.",
+    paths: ["/dashboard", "/admin"],
+    demo: [
+      { icon: "📱", text: "Cada fila de una tabla es una tarjeta" },
+      { icon: "🏷️", text: "Cada dato lleva el nombre de su columna encima" },
+      { icon: "✂️", text: "Sin párrafos largos debajo del título" },
+      { icon: "▾", text: "Menús desplegables con fondo del tema" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

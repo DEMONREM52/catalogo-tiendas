@@ -94,7 +94,7 @@ export default function LayawaysPage() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-black">📌 Apartados y cotizaciones</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Se crean desde el POS con «📌 Apartar» o «📝 Cotizar».</p>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Se crean desde el POS con «📌 Apartar» o «📝 Cotizar».</p>
         </div>
         <Link href="/dashboard/pos" className="rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ background: "var(--t-cta)" }}>💳 Ir al POS</Link>
       </header>

@@ -82,7 +82,7 @@ export default function GastosPage() {
         <span className="grid h-11 w-11 place-items-center rounded-2xl text-white" style={{ background: "linear-gradient(135deg,#d95926,#8b5cf6)" }}><Wallet size={20} /></span>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-black">Gastos y nómina</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Lo que sale, lo que falta pagar, presupuestos, nómina y reservas{can.madre ? " de la madre y sus puntos" : " de tu punto"}.</p>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Lo que sale, lo que falta pagar, presupuestos, nómina y reservas{can.madre ? " de la madre y sus puntos" : " de tu punto"}.</p>
         </div>
       </header>
       <nav className="flex w-full gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>

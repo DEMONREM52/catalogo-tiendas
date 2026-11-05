@@ -289,7 +289,7 @@ function ItemsTable({ items, term, hitIds }: { items: Item[]; term: string; hitI
           </button>
         ) : null}
       </div>
-      <table className="w-full text-xs">
+      <table className="rt w-full text-xs">
         <thead style={{ color: "var(--t-muted)" }}>
           <tr><th className="px-3 py-1.5 text-left">Producto</th><th className="px-3 py-1.5 text-right">Cant.</th><th className="px-3 py-1.5 text-right">Costo unit.</th><th className="px-3 py-1.5 text-right">Subtotal</th></tr>
         </thead>

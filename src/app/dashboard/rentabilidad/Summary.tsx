@@ -186,7 +186,7 @@ export function Summary({ storeId, points, myPoints }: { storeId: string; points
               </div>
             </div>
             <div className="max-h-[28rem] overflow-auto">
-              <table className="w-full min-w-[34rem] text-sm">
+              <table className="rt w-full min-w-[34rem] text-sm">
                 <thead className="sticky top-0" style={{ background: "var(--t-card-bg)" }}>
                   <tr className="text-left text-xs" style={{ color: "var(--t-muted)" }}>
                     <th className="px-4 py-2 font-semibold">Producto</th>

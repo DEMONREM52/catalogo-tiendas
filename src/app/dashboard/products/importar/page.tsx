@@ -262,7 +262,7 @@ export default function ImportProductsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black">📥 Importar productos desde Excel</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Sube todos tus productos de una vez. Revisa la vista previa antes de importar.</p>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Sube todos tus productos de una vez. Revisa la vista previa antes de importar.</p>
         </div>
         <Link href="/dashboard/products" className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>← Volver a productos</Link>
       </header>

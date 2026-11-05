@@ -901,7 +901,7 @@ export default function AdminOverview() {
           </div>
           {recentFinancialDocs.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-left text-xs">
+              <table className="rt w-full min-w-[620px] text-left text-xs">
                 <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                   <tr>
                     <th className="px-4 py-3 font-medium">Documento</th>
@@ -945,7 +945,7 @@ export default function AdminOverview() {
           </div>
           {recentPayments.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px] text-left text-xs">
+              <table className="rt w-full min-w-[480px] text-left text-xs">
                 <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                   <tr>
                     <th className="px-4 py-3 font-medium">Tienda / origen</th>
@@ -982,7 +982,7 @@ export default function AdminOverview() {
           </div>
           {operationalMetrics.movements.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-xs">
+              <table className="rt w-full min-w-[520px] text-left text-xs">
                 <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                   <tr><th className="px-4 py-3 font-medium">Tienda / producto</th><th className="px-4 py-3 font-medium">Tipo / fecha</th><th className="px-4 py-3 text-right font-medium">Cantidad</th></tr>
                 </thead>
@@ -1013,7 +1013,7 @@ export default function AdminOverview() {
           </div>
           {operationalMetrics.credits.length + operationalMetrics.posReceivables.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-xs">
+              <table className="rt w-full min-w-[560px] text-left text-xs">
                 <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                   <tr><th className="px-4 py-3 font-medium">Tienda / origen</th><th className="px-4 py-3 font-medium">Vencimiento / estado</th><th className="px-4 py-3 text-right font-medium">Saldo</th></tr>
                 </thead>
@@ -1049,7 +1049,7 @@ export default function AdminOverview() {
           </div>
           {(storeFilter === "all" ? storeTeam : storeTeam.filter((member) => member.store_id === storeFilter)).length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[540px] text-left text-xs">
+              <table className="rt w-full min-w-[540px] text-left text-xs">
                 <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                   <tr><th className="px-4 py-3 font-medium">Tienda / usuario</th><th className="px-4 py-3 font-medium">Rol / estado</th><th className="px-4 py-3 font-medium">Permisos</th></tr>
                 </thead>
@@ -1271,7 +1271,7 @@ export default function AdminOverview() {
         </div>
         {recentOrders.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="rt w-full min-w-[760px] text-left text-sm">
               <thead style={{ background: "var(--t-card-bg)", color: "var(--t-muted)" }}>
                 <tr>
                   <th className="px-5 py-3 font-medium">Pedido</th>

@@ -77,7 +77,7 @@ export default function RentabilidadPage() {
         </span>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-black">Rentabilidad</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Costos, ganancias y precios de cada punto, con la madre en control.</p>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Costos, ganancias y precios de cada punto, con la madre en control.</p>
         </div>
       </header>
 

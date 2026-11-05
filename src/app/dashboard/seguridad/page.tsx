@@ -72,7 +72,7 @@ export default function SecurityPage() {
     <main className="space-y-4">
       <section className="rounded-3xl border p-5" style={card}>
         <h1 className="text-xl font-black">🛡️ Copias de seguridad y seguridad</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+        <p className="hidden sm:block mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
           Tus datos son tuyos: aquí ves cuándo sacaste la última copia, quién tiene acceso a qué y cómo se protege la información.
         </p>
       </section>

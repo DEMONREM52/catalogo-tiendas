@@ -230,7 +230,7 @@ export default function ProductListPage() {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>{store.name} · todos los puntos</p>
             <h1 className="mt-1 flex items-center gap-2 text-2xl font-black sm:text-3xl"><ClipboardList size={26} /> Lista general de productos</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
+            <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
               Mira todo lo que maneja la tienda y cuánto hay en cada punto o bodega. Filtra lo que falta en tu sede y pídelo en un clic.
             </p>
           </div>

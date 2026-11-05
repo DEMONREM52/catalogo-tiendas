@@ -146,7 +146,7 @@ export default function AccountantPage() {
     <main className="space-y-4">
       <section className="rounded-3xl border p-5" style={card}>
         <h1 className="text-xl font-black">🧮 Para el contador</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
+        <p className="hidden sm:block mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
           RemHub no reemplaza a tu contador: le entrega el mes listo. Ventas, compras, abonos, pagos, gastos y nómina salen como asientos contables
           (débito y crédito con cuentas del PUC) en el formato de su programa, para que los importe en minutos en vez de digitarlos.
         </p>

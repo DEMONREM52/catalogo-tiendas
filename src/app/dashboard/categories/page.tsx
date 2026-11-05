@@ -254,7 +254,7 @@ export default function CategoriesPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Categorías</h1>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>
+          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>
             Crea categorías con imagen para ordenar tus productos.
           </p>
         </div>

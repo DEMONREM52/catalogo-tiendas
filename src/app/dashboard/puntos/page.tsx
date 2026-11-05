@@ -53,7 +53,7 @@ export default function PointsPage() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>{store.name} · tienda madre</p>
             <h1 className="mt-1 text-2xl font-black sm:text-3xl">Puntos</h1>
-            <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>Cada punto opera aislado: su inventario, ventas, caja, usuarios y su propia identidad fiscal.</p>
+            <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>Cada punto opera aislado: su inventario, ventas, caja, usuarios y su propia identidad fiscal.</p>
           </div>
           {canCreate ? (
             <button type="button" onClick={() => setWizard((n) => n + 1)} className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
