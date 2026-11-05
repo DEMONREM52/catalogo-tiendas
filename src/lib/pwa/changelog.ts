@@ -276,6 +276,17 @@ export const RELEASES: Release[] = [
       { icon: "🎨", text: "La guía de colores, plegada al final" },
     ],
   },
+  {
+    id: 26, date: "2026-11-05", title: "Recibir un traslado, igual que un pedido",
+    summary: "En el enlace del traslado y en Inventario se recibe tocando cada producto, con buscador, y el pedido interno se cierra solo.",
+    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/traslado"],
+    demo: [
+      { icon: "✅", text: "Toca cada producto al contarlo: se pone verde" },
+      { icon: "➖", text: "Si falta algo, bájalo con − / +" },
+      { icon: "📥", text: "«Recibir ahora» sin esperar las firmas de antes" },
+      { icon: "🔗", text: "El pedido se cierra solo y queda en su chat" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

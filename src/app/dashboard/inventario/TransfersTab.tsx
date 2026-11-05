@@ -10,6 +10,7 @@ import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import { TransferEditor } from "./TransferEditor";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { ScanCounter } from "@/components/ScanCounter";
+import { ReceiveChecklist } from "@/components/ReceiveChecklist";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import {
@@ -64,6 +65,9 @@ function TrackProgress({ row }: { row: TransferRow }) {
     </div>
   );
 }
+
+/** Pedido interno que originó el traslado (si lo hay). */
+type LinkedReq = { transfer_id: string; request_id: string; number: number; status: string };
 
 const itemName = (item: TransferItem) => (Array.isArray(item.products) ? item.products[0]?.name : item.products?.name) ?? "Producto";
 
@@ -173,8 +177,6 @@ function TransferItemsList({ items }: { items: TransferItem[] }) {
 export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   // Informe a la medida (20261279): por punto, ruta, producto, categoría, fecha o persona.
   const [report, setReport] = useState(false);
-  // Buscador del conteo al recibir: lo no mostrado conserva su cantidad (por defecto, lo enviado).
-  const [receiveQuery, setReceiveQuery] = useState("");
   const active = warehouses.filter((w) => w.active);
   const names = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
   const canTransfer = ctx.can("transfers");
@@ -251,6 +253,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
 
   const [filter, setFilter] = useState<"all" | "in_transit" | "received" | "cancelled" | "diff">("all");
   const [rows, setRows] = useState<TransferRow[]>([]);
+  const [linked, setLinked] = useState<Map<string, LinkedReq>>(new Map());
   // Filtros de la lista: texto (número, producto, código o persona), fechas, origen y destino; se cargan de a 30.
   // ?q=#12 abre la lista ya filtrada (desde el buscador Ctrl+K).
   const urlQ = () => { if (typeof window === "undefined") return ""; const p = new URLSearchParams(window.location.search); return p.get("tab") === "transfers" ? p.get("q") ?? "" : ""; };
@@ -320,6 +323,11 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     if (filter === "diff") list = list.filter((r) => r.erp_transfer_items.some((i) => i.received_qty !== null && i.received_qty !== i.qty));
     setRows(list);
     setTotal(filter === "diff" ? null : count ?? list.length);
+    // El pedido interno que originó cada traslado (20261280); sin la migración, simplemente no se muestra.
+    if (list.length) {
+      const { data: reqs, error: reqErr } = await sb.rpc("erp_transfer_requests", { p_store: ctx.storeId, p_transfers: list.map((r) => r.id) });
+      setLinked(reqErr || !Array.isArray(reqs) ? new Map() : new Map((reqs as LinkedReq[]).map((x) => [x.transfer_id, x])));
+    }
   }, [ctx.storeId, filter, tf, limit]);
 
   const listSummary = useMemo(() => {
@@ -579,7 +587,6 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   }
 
   function startReceive(row: TransferRow) {
-    setReceiveQuery("");
     setReceiving({
       id: row.id,
       notes: "",
@@ -598,6 +605,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       p_notes: receiving.notes,
     });
     if (error) return void toast("No se pudo confirmar", "error", errorMessage(error));
+    try { localStorage.removeItem(`remhub_recibir_t_${row.id}`); } catch { /* comodidad */ }
     setReceiving(null);
     void toast("Recepción confirmada");
     void load();
@@ -827,7 +835,15 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
               <div key={row.id} className="glass-soft rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">#{row.number} · {names.get(row.from_warehouse_id) ?? "—"} → {names.get(row.to_warehouse_id) ?? "—"}</p>
-                  <StatusPill status={row.status} />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {linked.get(row.id) ? (
+                      <a href={`/dashboard/pedidos?tab=internos&pedido=${linked.get(row.id)!.request_id}`} title="Abrir el pedido interno con su chat"
+                        className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: "color-mix(in oklab, #8b5cf6 18%, transparent)", color: "#a78bfa" }}>
+                        📝 Pedido #{linked.get(row.id)!.number}
+                      </a>
+                    ) : null}
+                    <StatusPill status={row.status} />
+                  </span>
                 </div>
                 <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
                   Envió: <b>{row.created_by_name ?? "—"}</b> · Revisó: <b>{row.checked_by_name ?? "—"}</b> · Traslada: <b>{row.carrier_name ?? "—"}</b> · {dateTime(row.created_at)}
@@ -867,23 +883,16 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                         }}
                       />
                     ) : null}
-                    {row.erp_transfer_items.length > 6 ? (
-                      <ItemSearch value={receiveQuery} onChange={setReceiveQuery} found={row.erp_transfer_items.filter((i) => matchesItem(i, receiveQuery)).length} total={row.erp_transfer_items.length} />
-                    ) : null}
-                    {row.erp_transfer_items.filter((i) => matchesItem(i, receiveQuery)).map((i) => (
-                      <label key={i.product_id} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="min-w-0 truncate">{itemName(i)} <span style={{ color: "var(--t-muted)" }}>(enviadas {i.qty})</span></span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={i.qty}
-                          className={`${inputClass} w-24`}
-                          style={inputStyle}
-                          value={receiving.qty[i.product_id] ?? i.qty}
-                          onChange={(e) => setReceiving({ ...receiving, qty: { ...receiving.qty, [i.product_id]: Math.min(i.qty, Math.max(0, Math.floor(Number(e.target.value) || 0))) } })}
-                        />
-                      </label>
-                    ))}
+                    {/* El mismo conteo que en Pedidos internos y en el enlace del traslado. */}
+                    <ReceiveChecklist
+                      items={row.erp_transfer_items.map((i) => {
+                        const p = Array.isArray(i.products) ? i.products[0] : i.products;
+                        return { id: i.product_id, name: itemName(i), sku: p?.sku ?? null, image_url: p?.image_url ?? null, sent: i.qty };
+                      })}
+                      value={receiving.qty}
+                      onChange={(qty) => setReceiving({ ...receiving, qty })}
+                      storageKey={`remhub_recibir_t_${row.id}`}
+                    />
                     <input className={inputClass} style={inputStyle} placeholder="Notas de recepción (obligatorio si falta algo)" value={receiving.notes} onChange={(e) => setReceiving({ ...receiving, notes: e.target.value })} />
                     <div className="flex gap-2">
                       <Btn onClick={() => void confirmReceive(row)}>✅ Confirmar recepción</Btn>

@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { TRANSFER_STEPS, transferTrackUrl, type TransferStep } from "@/lib/transfer-tracking";
 import { SignaturePad, type SignaturePadHandle } from "./SignaturePad";
 import { cop, useListPrices } from "@/lib/print/list-prices";
+import { ReceiveChecklist } from "@/components/ReceiveChecklist";
 
 type Place = { name: string; address: string | null; phone: string | null; kind: "warehouse" | "point" } | null;
 type Item = { product_id: string; name: string; image_url: string | null; qty: number; received_qty: number | null };
@@ -211,6 +212,16 @@ export default function TransferTrackPage() {
 
             {nextStep && !track.expired ? (
               <SignForm key={nextStep.key} token={token} track={track} step={nextStep} toName={toName} onSigned={setTrack} />
+            ) : null}
+            {/* Como en Pedidos internos: si la mercancía ya llegó, quien recibe no tiene que esperar las firmas de antes. */}
+            {nextStep && nextStep.key !== "received" && !track.expired ? (
+              <details className="rounded-3xl border p-4" style={card}>
+                <summary className="cursor-pointer select-none text-sm font-bold">📥 ¿Ya llegó la mercancía? Recibir ahora</summary>
+                <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>Las firmas que falten quedan pendientes en el recorrido.</p>
+                <div className="mt-3">
+                  <SignForm key="early-received" token={token} track={track} step={TRANSFER_STEPS[TRANSFER_STEPS.length - 1]} toName={toName} onSigned={setTrack} />
+                </div>
+              </details>
             ) : null}
             {track.status === "in_transit" && track.expired ? (
               <div className="rounded-3xl border p-5 text-center text-sm" style={card}>
@@ -429,7 +440,19 @@ function SignForm({
       p_items: isReceive ? track.items.map((i) => ({ product_id: i.product_id, received_qty: counts[i.product_id] ?? i.qty })) : null,
     });
     setBusy(false);
-    if (error) return void Swal.fire({ icon: "error", title: "No se pudo firmar", text: cleanError(error) });
+    if (error) {
+      const msg = cleanError(error);
+      const order = isReceive && /primero|antes|orden|pendiente/i.test(msg);
+      return void Swal.fire({
+        icon: "error", title: "No se pudo firmar",
+        text: order ? `${msg} Si ya llegó, también puedes recibirlo desde el panel: Inventario → Traslados → Recibir.` : msg,
+      });
+    }
+    try {
+      localStorage.removeItem(`remhub_recibir_${token}`);
+    } catch {
+      /* nada que limpiar */
+    }
     try {
       localStorage.setItem(NAME_KEY, name.trim().toUpperCase());
     } catch {
@@ -449,26 +472,14 @@ function SignForm({
         {isReceive ? (
           <div className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
             <p className="text-sm font-bold">Cuenta lo que llegó</p>
-            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Si falta algo, baja la cantidad. Lo que no llegó vuelve al origen.</p>
-            <div className="mt-2 space-y-2">
-              {track.items.map((i) => (
-                <label key={i.product_id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 flex-1">{i.name} <span style={{ color: "var(--t-muted)" }}>(enviadas {i.qty})</span></span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={i.qty}
-                    className={`${input} w-24 text-center`}
-                    style={inputStyle}
-                    value={counts[i.product_id] ?? i.qty}
-                    onChange={(e) =>
-                      setCounts({ ...counts, [i.product_id]: Math.min(i.qty, Math.max(0, Math.floor(Number(e.target.value) || 0))) })
-                    }
-                  />
-                </label>
-              ))}
-            </div>
+            <p className="mb-2 text-xs" style={{ color: "var(--t-muted)" }}>Toca cada producto cuando lo cuentes. Si falta algo, bájalo con −. Lo que no llegó vuelve al origen.</p>
+            {/* El mismo conteo que en Pedidos internos y en Inventario → Traslados. */}
+            <ReceiveChecklist
+              items={track.items.map((i) => ({ id: i.product_id, name: i.name, image_url: i.image_url, sent: i.qty }))}
+              value={counts}
+              onChange={setCounts}
+              storageKey={`remhub_recibir_${token}`}
+            />
             {missing > 0 ? <p className="mt-2 text-sm font-semibold" style={{ color: "#ef4444" }}>Faltan {missing} unidad(es).</p> : null}
           </div>
         ) : null}
