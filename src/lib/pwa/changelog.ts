@@ -309,6 +309,17 @@ export const RELEASES: Release[] = [
       { icon: "⌨️", text: "Las respuestas rápidas se esconden al escribir" },
     ],
   },
+  {
+    id: 29, date: "2026-11-06", title: "Pegar o arrastrar la foto",
+    summary: "En la imagen del producto (y logos, categorías, catálogos) ya puedes arrastrar la foto o pegarla con Ctrl+V.",
+    paths: ["/dashboard/products", "/dashboard/categories", "/dashboard/store", "/dashboard/social", "/admin"],
+    demo: [
+      { icon: "🖱️", text: "Arrastra la foto desde la carpeta al recuadro" },
+      { icon: "📋", text: "O copia la imagen y toca «📋 Pegar»" },
+      { icon: "⌨️", text: "O pon el mouse encima y presiona Ctrl+V" },
+      { icon: "🗜️", text: "Se comprime sola antes de subir" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
