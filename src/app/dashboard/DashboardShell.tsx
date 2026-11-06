@@ -48,6 +48,7 @@ import { ResponsiveTables } from "@/components/ui/ResponsiveTables";
 
 // Fondo animado (red con pulsos): se descarga aparte y solo si está encendido.
 const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.PanelBackdrop), { ssr: false });
+const MouseGlow = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.MouseGlow), { ssr: false });
 
 type Role = "admin" | "store";
 
@@ -918,6 +919,8 @@ export default function DashboardShell({
         />
       </div>
       {animatedBg && !softArea ? <PanelBackdrop /> : null}
+      {/* Luz que sigue al mouse: en todas las páginas del panel y por encima de todo. */}
+      <MouseGlow />
       <ResponsiveTables />
 
       <div className="mx-auto w-full max-w-[1800px] px-2 py-2 sm:px-4">

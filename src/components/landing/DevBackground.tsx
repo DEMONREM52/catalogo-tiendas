@@ -260,20 +260,30 @@ export function ScrambleOnView({ text }: { text: string }) {
  * La luz que sigue al mouse solo en computador. Se pausa con la pestaña oculta y queda quieto con «reducir movimiento».
  */
 export function PanelBackdrop() {
-  const light = useRef<HTMLDivElement>(null);
   const [coarse] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+  return <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.38} interval={coarse ? 90 : 45} density={coarse ? 0.55 : 0.85} />;
+}
+
+/**
+ * La luz que sigue al mouse, ENCIMA de todo el panel (tarjetas, tablas, POS…) para que se vea donde esté el puntero.
+ * No recibe clics (pointer-events: none), va debajo de las ventanas y menús, y solo en computador (con mouse).
+ * Solo cambia dos variables por cuadro: no repinta la página.
+ */
+export function MouseGlow() {
+  const light = useRef<HTMLDivElement>(null);
+  const [fine] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches);
   useEffect(() => {
-    if (coarse) return;
+    if (!fine) return;
     let raf = 0, x = -999, y = -999;
-    const paint = () => { raf = 0; light.current?.style.setProperty("--mx", `${x}px`); light.current?.style.setProperty("--my", `${y}px`); };
-    const onMove = (e: PointerEvent) => { x = e.clientX; y = e.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    const paint = () => { raf = 0; const el = light.current; if (!el) return; el.style.setProperty("--mx", `${x}px`); el.style.setProperty("--my", `${y}px`); el.style.opacity = "1"; };
+    const onMove = (e: PointerEvent) => { if (e.pointerType !== "mouse") return; x = e.clientX; y = e.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    const onLeave = () => { if (light.current) light.current.style.opacity = "0"; };
     window.addEventListener("pointermove", onMove, { passive: true });
-    return () => { window.removeEventListener("pointermove", onMove); cancelAnimationFrame(raf); };
-  }, [coarse]);
+    document.documentElement.addEventListener("mouseleave", onLeave);
+    return () => { window.removeEventListener("pointermove", onMove); document.documentElement.removeEventListener("mouseleave", onLeave); cancelAnimationFrame(raf); };
+  }, [fine]);
+  if (!fine) return null;
   return (
-    <>
-      <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.38} interval={coarse ? 90 : 45} density={coarse ? 0.55 : 0.85} />
-      {coarse ? null : <div ref={light} aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ background: "radial-gradient(560px circle at var(--mx, -999px) var(--my, -999px), rgba(168,85,247,.12), rgba(236,72,153,.04) 30%, transparent 55%)" }} />}
-    </>
+    <div ref={light} aria-hidden className="mouse-glow pointer-events-none fixed inset-0 z-[60] opacity-0 transition-opacity duration-500" />
   );
 }
