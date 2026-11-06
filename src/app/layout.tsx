@@ -118,12 +118,17 @@ const SUPABASE_ORIGIN = (() => {
   try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin; } catch { return null; }
 })();
 
+// Apariencia antes de pintar (sin parpadeo): el último tema CONFIRMADO de la cuenta, guardado por src/lib/appearance/store.ts.
+// El CSS del tema personal lo genera RemHub desde valores validados y solo se usa en el panel.
+const EARLY_THEME_SCRIPT = "(function(){try{var r=document.documentElement,b=JSON.parse(localStorage.getItem('remhub-appearance-boot')||'null'),m=localStorage.getItem('remhub-color-mode');var t=b?b.theme:(m==='light'||m==='dark'?m:null);if(t)r.setAttribute('data-theme',t);var d=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.classList.toggle('dark',d);r.setAttribute('data-glass',(b?b.glass:localStorage.getItem('remhub-glass')!=='off')?'on':'off');if(b&&b.level)r.setAttribute('data-glass-level',b.level);if(b&&b.rm)r.setAttribute('data-reduce-motion','on');if(b&&typeof b.css==='string'&&b.css.length<20000&&/^\\/(dashboard|admin)(\\/|$)/.test(location.pathname)){var s=document.createElement('style');s.id='remhub-user-theme';s.textContent=b.css;document.head.appendChild(s);r.setAttribute('data-user-theme','on');}}catch(e){}})();";
+
 const EARLY_INSTALL_SCRIPT = "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__remhubBIP=e;});";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: EARLY_THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: EARLY_INSTALL_SCRIPT }} />
         {SUPABASE_ORIGIN ? (
           <>

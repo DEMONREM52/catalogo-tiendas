@@ -62,6 +62,15 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  /* Estados (no cambian con el tema: un «peligro» siempre se reconoce) */
+  --t-success: #16a34a;
+  --t-warning: #d97706;
+  --t-danger: #dc2626;
+  --t-info: #2563eb;
+  --t-on-accent: #ffffff;
+  --t-menu-bg: var(--t-card-bg);
+  --t-input-bg: var(--t-card-bg);
+
   /* ✅ Layout tokens */
   --app-max: 1180px;
   --app-pad: 16px;
@@ -145,68 +154,116 @@ html.light :root {
   --t-shadow: 0 26px 85px rgba(2, 6, 23, 0.16);
 }
 
+/* =========================================================
+   💎 REMHUB AMETHYST GLASS — temas oficiales
+   Pearl Amethyst (claro) y Obsidian Amethyst (oscuro). Mismos valores en src/lib/appearance/theme.ts.
+   Los temas personales (por usuario) se aplican encima, solo en el panel, con html[data-user-theme].
+   ========================================================= */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     color-scheme: light;
-    --t-text: #172033 !important;
-    --t-muted: rgba(23, 32, 51, 0.78) !important;
-    --t-border: rgba(23, 32, 51, 0.16) !important;
+    --t-text: #20192e !important;
+    --t-muted: #625b70 !important;
+    --t-border: rgba(32, 25, 46, 0.14) !important;
     --t-card-bg: rgba(255, 255, 255, 0.96) !important;
-    --t-card-bg-soft: rgba(23, 32, 51, 0.045) !important;
-    --t-card-border: rgba(23, 32, 51, 0.15) !important;
-    --t-bg-base: #f7f6fb !important;
-    --t-vignette: rgba(15, 23, 42, 0.06) !important;
+    --t-card-bg-soft: rgba(32, 25, 46, 0.045) !important;
+    --t-card-border: rgba(115, 90, 155, 0.16) !important;
+    --t-bg-base: #f8f9fd !important;
+    --t-vignette: rgba(32, 25, 46, 0.05) !important;
     --t-store-bg-opacity: 0.08 !important;
-    --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.1), transparent 65%),
-      radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.08), transparent 65%) !important;
+    --t-accent: #7545d6;
+    --t-accent2: #8b5cf6;
+    --t-accent3: #c026d3;
+    --t-menu-bg: rgba(251, 250, 254, 0.92);
+    --t-input-bg: #f5f1fa;
+    --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.09), transparent 64%),
+      radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.05), transparent 64%) !important;
+    --t-shadow: 0 24px 70px rgba(32, 25, 46, 0.12);
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --t-text: #f8f7ff !important;
-    --t-muted: rgba(248, 247, 255, 0.78) !important;
-    --t-border: rgba(248, 247, 255, 0.2) !important;
-    --t-card-bg: rgba(22, 17, 34, 0.96) !important;
-    --t-card-bg-soft: rgba(248, 247, 255, 0.075) !important;
-    --t-card-border: rgba(248, 247, 255, 0.18) !important;
-    --t-bg-base: #100b18 !important;
+    --t-text: #f7f5ff !important;
+    --t-muted: #b5abc8 !important;
+    --t-border: rgba(255, 255, 255, 0.14) !important;
+    --t-card-bg: rgba(23, 18, 37, 0.96) !important;
+    --t-card-bg-soft: rgba(247, 245, 255, 0.065) !important;
+    --t-card-border: rgba(255, 255, 255, 0.12) !important;
+    --t-bg-base: #090711 !important;
     --t-vignette: rgba(0, 0, 0, 0.24) !important;
     --t-store-bg-opacity: 0.18 !important;
-    --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.15), transparent 65%),
-      radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.11), transparent 65%) !important;
+    --t-accent: #a78bfa;
+    --t-accent2: #8b5cf6;
+    --t-accent3: #d946ef;
+    --t-menu-bg: rgba(18, 14, 29, 0.92);
+    --t-input-bg: #1b1528;
+    --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
+    --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
+      radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.08), transparent 64%),
+      radial-gradient(900px 700px at 60% 40%, rgba(52, 32, 80, 0.35), transparent 70%) !important;
+    --t-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
   }
 }
 
 :root[data-theme="light"],
 html.light {
   color-scheme: light;
-  --t-text: #172033 !important;
-  --t-muted: rgba(23, 32, 51, 0.78) !important;
-  --t-border: rgba(23, 32, 51, 0.16) !important;
+  --t-text: #20192e !important;
+  --t-muted: #625b70 !important;
+  --t-border: rgba(32, 25, 46, 0.14) !important;
   --t-card-bg: rgba(255, 255, 255, 0.96) !important;
-  --t-card-bg-soft: rgba(23, 32, 51, 0.045) !important;
-  --t-card-border: rgba(23, 32, 51, 0.15) !important;
-  --t-bg-base: #f7f6fb !important;
-  --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.1), transparent 65%),
-    radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.08), transparent 65%) !important;
+  --t-card-bg-soft: rgba(32, 25, 46, 0.045) !important;
+  --t-card-border: rgba(115, 90, 155, 0.16) !important;
+  --t-bg-base: #f8f9fd !important;
+  --t-vignette: rgba(32, 25, 46, 0.05) !important;
+  --t-store-bg-opacity: 0.08 !important;
+  --t-accent: #7545d6;
+  --t-accent2: #8b5cf6;
+  --t-accent3: #c026d3;
+  --t-menu-bg: rgba(251, 250, 254, 0.92);
+  --t-input-bg: #f5f1fa;
+  --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.09), transparent 64%),
+    radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.05), transparent 64%) !important;
+  --t-shadow: 0 24px 70px rgba(32, 25, 46, 0.12);
 }
 
 :root[data-theme="dark"],
 html.dark {
   color-scheme: dark;
-  --t-text: #f8f7ff !important;
-  --t-muted: rgba(248, 247, 255, 0.78) !important;
-  --t-border: rgba(248, 247, 255, 0.2) !important;
-  --t-card-bg: rgba(22, 17, 34, 0.96) !important;
-  --t-card-bg-soft: rgba(248, 247, 255, 0.075) !important;
-  --t-card-border: rgba(248, 247, 255, 0.18) !important;
-  --t-bg-base: #100b18 !important;
+  --t-text: #f7f5ff !important;
+  --t-muted: #b5abc8 !important;
+  --t-border: rgba(255, 255, 255, 0.14) !important;
+  --t-card-bg: rgba(23, 18, 37, 0.96) !important;
+  --t-card-bg-soft: rgba(247, 245, 255, 0.065) !important;
+  --t-card-border: rgba(255, 255, 255, 0.12) !important;
+  --t-bg-base: #090711 !important;
   --t-vignette: rgba(0, 0, 0, 0.24) !important;
   --t-store-bg-opacity: 0.18 !important;
-  --t-bg: radial-gradient(900px 600px at 15% 0%, rgba(168, 85, 247, 0.15), transparent 65%),
-    radial-gradient(900px 700px at 95% 100%, rgba(236, 72, 153, 0.11), transparent 65%) !important;
+  --t-accent: #a78bfa;
+  --t-accent2: #8b5cf6;
+  --t-accent3: #d946ef;
+  --t-menu-bg: rgba(18, 14, 29, 0.92);
+  --t-input-bg: #1b1528;
+  --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
+  --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
+    radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.08), transparent 64%),
+    radial-gradient(900px 700px at 60% 40%, rgba(52, 32, 80, 0.35), transparent 70%) !important;
+  --t-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+/* Tema personal: tamaño de letra/densidad y sin movimiento al pasar el mouse si así lo eligió. */
+html[data-user-theme] { font-size: calc(100% * var(--t-font-scale, 1)); }
+
+/* «Reducir animaciones» de Apariencia (además de la del sistema). */
+html[data-reduce-motion="on"] *,
+html[data-reduce-motion="on"] *::before,
+html[data-reduce-motion="on"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 .theme-control-trigger,
@@ -1213,51 +1270,55 @@ html.dark .viz-root,
    ========================================================= */
 html[data-glass="on"][data-glass-area] body {
   /* Sobre vidrio el texto gris pierde contraste: un poco más fuerte que el normal. */
-  --t-muted: rgba(23, 32, 51, 0.84);
-  --t-glass-blur: 22px;
-  --t-glass-sat: 190%;
-  --t-card-bg: rgba(237, 225, 255, 0.34);
-  --t-card-bg-soft: rgba(168, 85, 247, 0.08);
-  --t-card-border: rgba(255, 255, 255, 0.78);
-  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(168, 85, 247, 0.12), 0 12px 34px -14px rgba(109, 40, 217, 0.35);
-  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 60%, rgba(216, 180, 254, 0.18) 100%);
-  --t-glass-dialog: rgba(243, 236, 255, 0.62);
-  --t-glass-input: rgba(255, 255, 255, 0.62);
-  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(168, 85, 247, 0.42), transparent 62%),
-    radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.30), transparent 62%),
-    radial-gradient(900px 640px at 70% 96%, rgba(124, 58, 237, 0.34), transparent 62%),
-    radial-gradient(700px 520px at 12% 92%, rgba(236, 72, 153, 0.22), transparent 62%);
+  /* Pearl Amethyst en vidrio: cristal blanco perla, lavanda solo en los reflejos. */
+  --t-muted: #574f66;
+  --t-glass-blur: 18px;
+  --t-glass-sat: 160%;
+  --t-card-bg: rgba(255, 255, 255, 0.62);
+  --t-card-bg-soft: rgba(117, 69, 214, 0.06);
+  --t-card-border: rgba(255, 255, 255, 0.85);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(115, 90, 155, 0.10), 0 12px 34px -16px rgba(80, 55, 140, 0.28);
+  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.14) 38%, rgba(255, 255, 255, 0) 62%, rgba(234, 229, 245, 0.35) 100%);
+  --t-glass-dialog: rgba(255, 255, 255, 0.82);
+  --t-glass-input: rgba(245, 241, 250, 0.85);
+  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.22), transparent 62%),
+    radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.12), transparent 62%),
+    radial-gradient(900px 640px at 70% 96%, rgba(117, 69, 214, 0.16), transparent 62%);
 }
 @media (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
-    --t-card-bg: rgba(46, 16, 101, 0.46);
-    --t-muted: rgba(248, 247, 255, 0.84);
-    --t-card-bg-soft: rgba(192, 132, 252, 0.08);
-    --t-card-border: rgba(192, 132, 252, 0.26);
-    --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
-    --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(255, 255, 255, 0) 60%, rgba(168, 85, 247, 0.12) 100%);
-    --t-glass-dialog: rgba(26, 10, 54, 0.78);
-    --t-glass-input: rgba(17, 6, 38, 0.55);
-    --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(147, 51, 234, 0.50), transparent 62%),
-      radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.34), transparent 62%),
-      radial-gradient(900px 640px at 70% 96%, rgba(109, 40, 217, 0.48), transparent 62%),
-      radial-gradient(700px 520px at 12% 92%, rgba(236, 72, 153, 0.24), transparent 62%);
+    /* Obsidian Amethyst en vidrio: cristal oscuro ahumado, violeta en bordes y reflejos. */
+    --t-card-bg: rgba(29, 22, 44, 0.62);
+    --t-muted: #c3bad4;
+    --t-card-bg-soft: rgba(167, 139, 250, 0.07);
+    --t-card-border: rgba(255, 255, 255, 0.12);
+    --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(167, 139, 250, 0.10), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 26px -16px rgba(139, 92, 246, 0.35);
+    --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 35%, rgba(255, 255, 255, 0) 60%, rgba(139, 92, 246, 0.08) 100%);
+    --t-glass-dialog: rgba(33, 25, 50, 0.86);
+    --t-glass-input: rgba(255, 255, 255, 0.055);
+    --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.26), transparent 62%),
+      radial-gradient(760px 560px at 92% 10%, rgba(217, 70, 239, 0.12), transparent 62%),
+      radial-gradient(900px 640px at 70% 96%, rgba(52, 32, 80, 0.55), transparent 62%);
   }
 }
 html[data-glass="on"][data-glass-area][data-theme="dark"] body {
-  --t-card-bg: rgba(46, 16, 101, 0.46);
-  --t-muted: rgba(248, 247, 255, 0.84);
-  --t-card-bg-soft: rgba(192, 132, 252, 0.08);
-  --t-card-border: rgba(192, 132, 252, 0.26);
-  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(168, 85, 247, 0.18), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 28px -14px rgba(168, 85, 247, 0.45);
-  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(255, 255, 255, 0) 60%, rgba(168, 85, 247, 0.12) 100%);
-  --t-glass-dialog: rgba(26, 10, 54, 0.78);
-  --t-glass-input: rgba(17, 6, 38, 0.55);
-  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(147, 51, 234, 0.50), transparent 62%),
-    radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.34), transparent 62%),
-    radial-gradient(900px 640px at 70% 96%, rgba(109, 40, 217, 0.48), transparent 62%),
-    radial-gradient(700px 520px at 12% 92%, rgba(236, 72, 153, 0.24), transparent 62%);
+  /* Obsidian Amethyst en vidrio: cristal oscuro ahumado, violeta en bordes y reflejos. */
+  --t-card-bg: rgba(29, 22, 44, 0.62);
+  --t-muted: #c3bad4;
+  --t-card-bg-soft: rgba(167, 139, 250, 0.07);
+  --t-card-border: rgba(255, 255, 255, 0.12);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(167, 139, 250, 0.10), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 26px -16px rgba(139, 92, 246, 0.35);
+  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 35%, rgba(255, 255, 255, 0) 60%, rgba(139, 92, 246, 0.08) 100%);
+  --t-glass-dialog: rgba(33, 25, 50, 0.86);
+  --t-glass-input: rgba(255, 255, 255, 0.055);
+  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.26), transparent 62%),
+    radial-gradient(760px 560px at 92% 10%, rgba(217, 70, 239, 0.12), transparent 62%),
+    radial-gradient(900px 640px at 70% 96%, rgba(52, 32, 80, 0.55), transparent 62%);
 }
+
+/* Intensidad del vidrio: sutil (más sólido y rápido), elegante (normal) o premium (más transparente). */
+html[data-glass="on"][data-glass-area][data-glass-level="subtle"] body { --t-glass-blur: 10px; --t-glass-sat: 130%; }
+html[data-glass="on"][data-glass-area][data-glass-level="premium"] body { --t-glass-blur: 28px; --t-glass-sat: 195%; }
 
 /* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo).
    El desenfoque va en una capa ::before detrás del contenido y NO en la tarjeta: si la tarjeta tuviera backdrop-filter,

@@ -376,6 +376,19 @@ export const RELEASES: Release[] = [
       { icon: "👆", text: "Toca un aviso para ir directo; queda como visto" },
     ],
   },
+  {
+    id: 35, date: "2026-11-06", title: "Amethyst Glass: temas nuevos y tus propios temas",
+    summary: "Nuevos temas oficiales Pearl Amethyst (claro) y Obsidian Amethyst (oscuro). Crea todos los temas que quieras con vista previa en vivo; se guardan en tu cuenta y te siguen en todos tus dispositivos.",
+    paths: ["/dashboard", "/admin"],
+    important: true,
+    demo: [
+      { icon: "🎨", text: "Toca el botón de apariencia (abajo a la izquierda)" },
+      { icon: "💎", text: "Elige Pearl Amethyst, Obsidian Amethyst o Automático" },
+      { icon: "➕", text: "«Crear tema»: colores, fondos, vidrio, bordes, letra…" },
+      { icon: "👁️", text: "Míralo en vivo; «Cancelar» deja todo como estaba" },
+      { icon: "📱", text: "Tu tema aparece al entrar desde otro celular o computador" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
