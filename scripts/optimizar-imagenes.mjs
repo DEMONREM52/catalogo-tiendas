@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Optimizar las fotos que ya están en Supabase Storage (Cached Egress).
  *
@@ -21,6 +20,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 
@@ -34,12 +34,15 @@ const BUCKETS = args.bucket ? [String(args.bucket)] : ["product-images", "store-
 const MIN_BYTES = Number(args["min-kb"] ?? 200) * 1024;
 const MAX_SIDE = Number(args.lado ?? 1600);
 const LIMIT = args.limite ? Number(args.limite) : Infinity;
-const BACKUP = path.resolve("backups", "imagenes");
+// Todo relativo a la carpeta del proyecto (funciona aunque se corra desde otra carpeta, p. ej. con Code Runner).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const BACKUP = path.join(ROOT, "backups", "imagenes");
 const CACHE = "31536000";
 
 function env() {
   const out = { ...process.env };
-  for (const file of [".env.local", ".env"]) {
+  for (const name of [".env.local", ".env"]) {
+    const file = path.join(ROOT, name);
     if (!fs.existsSync(file)) continue;
     for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
