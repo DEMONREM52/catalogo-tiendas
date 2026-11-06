@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Ban, Bell, BellOff, Check, ListChecks, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRight, Ban, Bell, BellOff, Check, ListChecks, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEditor";
 import { useRunOnChange } from "../../inventario/shared";
 import { cop, useListPrices } from "@/lib/print/list-prices";
 import { RequestSignatures } from "./RequestSignatures";
+import { CommentButton, CommentPreview, ItemCommentsSheet, useItemComments, type ItemComment } from "./ItemComments";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { ProductName } from "@/components/ProductName";
 import { startCall } from "./CallManager";
@@ -261,6 +262,12 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Un mensaje nuevo del otro borra el «escribiendo…».
   useEffect(() => { setTyping(null); }, [messageCount]);
 
+  // Comentarios por producto (20261283): se recargan con cada mensaje nuevo del chat.
+  const comments = useItemComments(requestId, messageCount);
+  const [commentItem, setCommentItem] = useState<string | null>(null);
+  const [onlyCommented, setOnlyCommented] = useState(false);
+  const itemsScrollRef = useRef<HTMLDivElement>(null);
+
   // Quien tiene permiso de traslados puede anular el traslado en camino (y con él, el pedido).
   const [canVoidTransfer, setCanVoidTransfer] = useState(false);
   const permStore = data?.request.store_id ?? null;
@@ -300,6 +307,13 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     if (!res.isConfirmed) return;
     const note = canAttend ? await Swal.fire({ ...swal, title: "¿Por qué se agrega? (opcional)", input: "text", inputPlaceholder: "Ej: van de regalo, pidieron por chat…", showCancelButton: true, confirmButtonText: "Listo", cancelButtonText: "Sin motivo" }) : null;
     await run("erp_sr_item_add", { p_request: data.request.id, p_product: p.id, p_qty: Math.floor(Number(res.value)), p_note: note?.isConfirmed ? String(note.value ?? "") : null }, "Producto agregado (quedó en el chat)");
+  }
+
+  /** «Necesito N más» desde los comentarios: suma esas unidades al pedido (queda en el chat). */
+  async function addMoreUnits(productId: string, qty: number) {
+    if (!data) return false;
+    const res = await run("erp_sr_item_add", { p_request: data.request.id, p_product: productId, p_qty: qty, p_note: "Pedido en los comentarios" }, `Se agregaron ${qty} und. (quedó en el chat)`);
+    return res !== null;
   }
 
   /** Quitar un producto del pedido: queda en el chat. */
@@ -423,9 +437,13 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     ...data.items.filter((i) => checked.has(i.id)).sort((a, b) => checked.get(a.id)!.at.localeCompare(checked.get(b.id)!.at)),
     ...data.items.filter((i) => !checked.has(i.id)),
   ].filter((i) => !onlyPending || !checked.has(i.id)) : [];
+  const commentsBy = new Map<string, ItemComment[]>();
+  for (const c of comments.list) commentsBy.set(c.item_id, [...(commentsBy.get(c.item_id) ?? []), c]);
+  const openCommentItems = new Set(comments.list.filter((c) => !c.resolved_at && c.tag !== "ok" && c.tag !== "note").map((c) => c.item_id));
+  const filteredByComments = onlyCommented ? sortedItems.filter((i) => openCommentItems.has(i.id)) : sortedItems;
   const foldText = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   const queryWords = foldText(itemQuery.trim()).split(/\s+/).filter(Boolean);
-  const shownItems = queryWords.length ? sortedItems.filter((i) => { const h = foldText(`${i.name} ${i.sku ?? ""}`); return queryWords.every((w) => h.includes(w)); }) : sortedItems;
+  const shownItems = queryWords.length ? filteredByComments.filter((i) => { const h = foldText(`${i.name} ${i.sku ?? ""}`); return queryWords.every((w) => h.includes(w)); }) : filteredByComments;
   async function toggleCheck(itemId: string) {
     if (!canCheck || !data) return;
     const on = !checked.has(itemId);
@@ -457,6 +475,13 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <button type="button" onClick={() => setOnlyPending((v) => !v)} className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={onlyPending ? { background: "var(--t-accent)", color: "#fff", borderColor: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
               {onlyPending ? `Ver todos` : <><span className="sm:hidden">Faltan {data.items.length - doneCount}</span><span className="hidden sm:inline">Solo faltantes ({data.items.length - doneCount})</span></>}
             </button>
+            {openCommentItems.size || onlyCommented ? (
+              <button type="button" onClick={() => setOnlyCommented((v) => !v)} title="Productos con comentarios por atender"
+                className="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                style={onlyCommented ? { background: "#f59e0b", color: "#fff", borderColor: "#f59e0b" } : { borderColor: "#f59e0b", color: "#f59e0b" }}>
+                💬 {openCommentItems.size}<span className="hidden sm:inline"> por atender</span>
+              </button>
+            ) : null}
             <button type="button" onClick={() => setSearchOpen((v) => !v)} aria-label="Buscar en el pedido" aria-expanded={searchOpen || Boolean(itemQuery)}
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full border sm:hidden" style={searchOpen || itemQuery ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
               <Search size={14} />
@@ -537,6 +562,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 {i.note ? <p className="truncate text-[11px] font-semibold sm:whitespace-normal" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
                 {chk ? <p className="truncate text-[11px] font-bold sm:whitespace-normal" style={{ color: "#22c55e" }}>✓ <span className="hidden sm:inline">{checkSide === "pack" ? "Empacado" : "Contado"} · </span>{chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
+                <CommentPreview comments={commentsBy.get(i.id) ?? []} onOpen={() => setCommentItem(i.id)} />
               </div>
               {canAttend ? (
                 <label onClick={(e) => e.stopPropagation()} className="text-center text-[10px] font-semibold uppercase" style={{ color: "var(--t-muted)" }}>
@@ -577,24 +603,19 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               ) : (
                 <span className="text-right text-sm font-black tabular-nums">{i.qty_approved ?? i.qty_requested}<span className="block text-[10px] font-normal" style={{ color: "var(--t-muted)" }}>{i.qty_approved !== null ? "enviar" : "pedido"}</span></span>
               )}
+              <div className="flex shrink-0 flex-col items-center gap-1.5">
+              <CommentButton comments={commentsBy.get(i.id) ?? []} onOpen={() => setCommentItem(i.id)} name={i.name} />
               {canEditItems && data.items.length > 1 ? (
                 <button type="button" onClick={(e) => { e.stopPropagation(); void removeItem(i); }} disabled={busy} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ borderColor: "color-mix(in oklab, #ef4444 35%, transparent)" }} aria-label={`Quitar ${i.name}`} title="Quitar del pedido">
                   <Trash size={14} />
                 </button>
               ) : null}
+              </div>
             </motion.div>
           );
         })}
       </div>
 
-      {canEditItems ? (
-        <button type="button" onClick={() => setItemPick(true)} disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-3 text-sm font-bold transition hover:-translate-y-0.5 disabled:opacity-50"
-          style={{ borderColor: "color-mix(in oklab, var(--t-accent) 55%, transparent)", color: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
-          <PackagePlus size={17} /> {canAttend ? "Agregar producto al envío" : "Agregar producto al pedido"}
-          <span className="hidden text-xs font-semibold opacity-75 sm:inline">· queda en el chat</span>
-        </button>
-      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
         <span>
@@ -609,6 +630,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       <RequestSignatures
         data={data}
         onSigned={(step) => {
+          if (step === "packed" && canAttend && r.status === "pending") {
+            void saveQuantities(true);
+            return;
+          }
           if (step === "received" && pendingReceive.current) {
             pendingReceive.current = false;
             void receive(true);
@@ -640,8 +665,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
       <div className="flex flex-wrap gap-2">
         {canAttend && r.status === "pending" ? (
-          <button type="button" disabled={busy} onClick={() => void saveQuantities(true)} className="rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: "#f59e0b" }}>
-            🧑‍🔧 Tomar y preparar
+          <button type="button" disabled={busy} onClick={() => void saveQuantities(true)} className="rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60" style={{ borderColor: "#f59e0b", color: "#f59e0b" }}
+            title="No hace falta: al firmar «Preparó» el pedido queda tomado solo">
+            🧑‍🔧 Solo tomar (sin firmar)
           </button>
         ) : null}
         {canAttend && r.status === "preparing" && edited ? (
@@ -684,7 +710,28 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         ) : null}
       </div>
       {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Todo queda en el chat y el kardex.</p> : null}
-      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
+      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” (con eso el pedido queda tomado y en preparación) → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
+
+      {/* Barra flotante: siempre a la mano para subir, agregar otro producto o bajar a las firmas. */}
+      <div className="pointer-events-none sticky bottom-0 z-20 -mx-1 flex items-center justify-center gap-2 pb-1 pt-2">
+        <button type="button" onClick={() => itemsScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Subir al inicio" title="Subir al inicio"
+          className="pointer-events-auto grid h-11 w-11 shrink-0 place-items-center rounded-full border shadow-lg backdrop-blur transition hover:-translate-y-0.5"
+          style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
+          <ArrowUp size={18} />
+        </button>
+        {canEditItems ? (
+          <button type="button" onClick={() => setItemPick(true)} disabled={busy}
+            className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-[0_10px_28px_-8px_var(--t-accent)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+            <PackagePlus size={18} /> <span className="sm:hidden">Agregar</span><span className="hidden sm:inline">{canAttend ? "Agregar producto al envío" : "Agregar producto al pedido"}</span>
+          </button>
+        ) : null}
+        <button type="button" onClick={() => { const el = itemsScrollRef.current; el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" }); }} aria-label="Bajar al final (firmas y botones)" title="Bajar al final: firmas y botones"
+          className="pointer-events-auto grid h-11 w-11 shrink-0 place-items-center rounded-full border shadow-lg backdrop-blur transition hover:translate-y-0.5"
+          style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
+          <ArrowDown size={18} />
+        </button>
+      </div>
     </div>
   ) : null;
 
@@ -940,7 +987,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   ))}
                 </div>
                 <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-                  <div className={`min-h-0 overflow-y-auto overscroll-contain p-4 md:block md:border-r ${mobileTab === "items" ? "block" : "hidden"}`} style={{ borderColor: "var(--t-card-border)" }}>
+                  <div ref={itemsScrollRef} className={`min-h-0 overflow-y-auto overscroll-contain p-4 pb-0 md:block md:border-r ${mobileTab === "items" ? "block" : "hidden"}`} style={{ borderColor: "var(--t-card-border)" }}>
                     {itemsPanel}
                   </div>
                   <div className={`min-h-0 flex-col px-2 pb-2 pt-1 md:flex md:p-3 ${mobileTab === "chat" ? "flex" : "hidden"}`}>
@@ -957,6 +1004,19 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             {data ? <ProductSearchModal open={itemPick} onClose={() => setItemPick(false)} storeId={data.request.store_id} warehouseId={data.request.to_point_id}
               title={canAttend ? `Agregar al envío desde ${data.request.to_name}` : "Agregar al pedido"} stockLabel={(h) => `En ${data.request.to_name}: ${h.wh_qty}`}
               onPick={(p) => void addItem(p)} /> : null}
+            {data ? (() => {
+              const it = commentItem ? data.items.find((x) => x.id === commentItem) ?? null : null;
+              return (
+                <ItemCommentsSheet key={commentItem ?? "none"}
+                  item={it ? { id: it.id, name: it.name, image_url: thumbs[it.product_id] ?? it.image_url ?? null, qty: approved[it.id] ?? it.qty_approved ?? it.qty_requested } : null}
+                  comments={it ? comments.list.filter((c) => c.item_id === it.id) : []}
+                  requestId={data.request.id}
+                  onClose={() => setCommentItem(null)}
+                  onChanged={() => { comments.reload(); void load(); }}
+                  onAddMore={it && canEditItems ? (qty) => addMoreUnits(it.product_id, qty) : undefined}
+                />
+              );
+            })() : null}
             {data ? <ProductSearchModal open={productPick} onClose={() => setProductPick(false)} storeId={data.request.store_id} title="Enviar un producto al chat" onPick={(p) => { setProductPick(false); void kit.sendProduct(p.id); }} /> : null}
             {data ? <ForwardDialog open={Boolean(kit.forward)} storeId={data.request.store_id} onClose={() => kit.setForward(null)} onSend={kit.sendForward} /> : null}
             <CallPicker open={Boolean(callPick)} video={Boolean(callPick?.video)} title={r ? `Pedido interno #${r.number} · ${r.to_name} ↔ ${r.from_name}` : "Pedido interno"}

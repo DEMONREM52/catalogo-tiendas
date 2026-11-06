@@ -352,6 +352,19 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "O pégala con Ctrl+V, incluso en «Nombre o código»" },
     ],
   },
+  {
+    id: 33, date: "2026-11-06", title: "Comentarios por producto y botón flotante",
+    summary: "Cada producto del pedido interno tiene sus comentarios (necesito más, otro color, dañado…) con «✓ Atendido». Agregar productos y bajar a las firmas siempre está a la mano. Firmar «Preparó» ya toma el pedido.",
+    paths: ["/dashboard/pedidos"],
+    important: true,
+    demo: [
+      { icon: "💬", text: "Toca 💬 en un producto y escribe o elige «➕ Necesito más»" },
+      { icon: "✅", text: "Quien despacha lo marca «Atendido» o lo agrega al pedido con un toque" },
+      { icon: "➕", text: "El botón «Agregar» flota abajo: no hay que bajar cada vez" },
+      { icon: "⬇️", text: "La flecha baja directo a las firmas; ⬆️ sube al inicio" },
+      { icon: "✍️", text: "Firmar «Preparó» deja el pedido tomado y en preparación" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

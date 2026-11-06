@@ -315,15 +315,18 @@ export function NewStockRequest({
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen(true)}
-                    className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5"
-                    style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))", color: "var(--t-accent)" }}
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-full text-base transition group-hover:scale-110" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }}>＋</span>
-                    Agregar otro producto
-                  </button>
+                  {/* Flotante: siempre a la mano aunque la lista sea larga. */}
+                  <div className="pointer-events-none sticky bottom-0 z-20 flex justify-center pb-1 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(true)}
+                      className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-[0_10px_28px_-8px_var(--t-accent)] transition hover:-translate-y-0.5 active:scale-95"
+                      style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}
+                    >
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25 text-base">＋</span>
+                      Agregar otro producto <span className="rounded-full bg-white/25 px-2 text-[11px]">{lines.length}</span>
+                    </button>
+                  </div>
                 </div>
               )}
               <ProductSearchModal
