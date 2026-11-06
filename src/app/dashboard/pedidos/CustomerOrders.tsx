@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
-import { smartFilter } from "@/lib/search";
+import { ilikeTokenFilters, searchTokens, smartFilter } from "@/lib/search";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
@@ -188,6 +188,8 @@ export function CustomerOrders() {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Row[]>([]);
   const [q, setQ] = useState("");
+  // Búsqueda por producto: pedidos que llevan productos cuyo nombre, código o código de barras coincide.
+  const [byProduct, setByProduct] = useState<{ q: string; names: Map<string, string[]>; loading: boolean }>({ q: "", names: new Map(), loading: false });
   // Celular: punto, periodo y orden van plegados detrás de «Filtros».
   const [showFilters, setShowFilters] = useState(false);
   const [view, setView] = useState<View>("pending");
@@ -303,13 +305,53 @@ export function CustomerOrders() {
     return [...map.values()].sort((a, b) => b.stale - a.stale || b.toConfirm + b.toComplete - (a.toConfirm + a.toComplete) || a.name.localeCompare(b.name));
   }, [orders, now]);
 
+  useEffect(() => {
+    const term = q.trim();
+    if (!storeId || term.length < 3 || /^\d{1,6}$/.test(term) || !searchTokens(term).length) {
+      setByProduct({ q: "", names: new Map(), loading: false });
+      return;
+    }
+    let alive = true;
+    setByProduct((cur) => ({ ...cur, loading: true }));
+    const timer = window.setTimeout(async () => {
+      try {
+        const sb = supabaseBrowser();
+        let pq = sb.from("products").select("id,name").eq("store_id", storeId);
+        for (const filter of ilikeTokenFilters(["name", "sku", "barcode"], term)) pq = pq.or(filter);
+        const { data: prods } = await pq.limit(300);
+        const nameOf = new Map(((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]));
+        const names = new Map<string, string[]>();
+        const pids = [...nameOf.keys()];
+        for (let i = 0; i < pids.length && alive; i += 100) {
+          const chunk = pids.slice(i, i + 100);
+          // De a 1.000 filas (la base no entrega más por consulta); tope de 20.000 renglones.
+          for (let from = 0; from < 20_000; from += PAGE) {
+            const { data, error } = await sb.from("order_items").select("order_id,product_id").in("product_id", chunk).order("id").range(from, from + PAGE - 1);
+            if (error || !data) break;
+            for (const r of data as Array<{ order_id: string; product_id: string }>) {
+              const list = names.get(r.order_id) ?? [];
+              const n = nameOf.get(r.product_id);
+              if (n && !list.includes(n)) list.push(n);
+              names.set(r.order_id, list);
+            }
+            if (data.length < PAGE) break;
+          }
+        }
+        if (alive) setByProduct({ q: term, names, loading: false });
+      } catch {
+        if (alive) setByProduct({ q: "", names: new Map(), loading: false });
+      }
+    }, 400);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [q, storeId]);
+
   const filtered = useMemo(() => {
     const base = orders.filter((o) => inView(o.status, view) && (point === "all" || (o.point_id ?? NO_POINT) === point));
     const hits = smartFilter(base, q,
-      (o) => `${o.receipt_no ?? ""} ${o.doc_number ?? ""} ${statusLabel(o.status)} ${paymentStatusLabel(o.payment_status)} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""} ${o.point_name} ${o.seller_name ?? ""} ${o.source}`,
+      (o) => `${o.receipt_no ?? ""} ${o.doc_number ?? ""} ${statusLabel(o.status)} ${paymentStatusLabel(o.payment_status)} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""} ${o.point_name} ${o.seller_name ?? ""} ${o.source} ${(byProduct.names.get(o.id) ?? []).join(" ")}`,
       { keepOrder: true });
     return oldFirst ? [...hits].reverse() : hits;
-  }, [orders, q, view, point, oldFirst]);
+  }, [orders, q, view, point, oldFirst, byProduct]);
 
   const counts = useMemo(() => {
     const inPoint = orders.filter((o) => point === "all" || (o.point_id ?? NO_POINT) === point);
@@ -428,7 +470,7 @@ export function CustomerOrders() {
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
           <div className="flex gap-2">
-            <input className={`${inputBase()} min-w-0 flex-1`} placeholder="Buscar: número, REMZ-…, cliente, WhatsApp, vendedor, punto…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className={`${inputBase()} min-w-0 flex-1`} placeholder="Buscar: número, REMZ-…, cliente, producto, código, vendedor…" value={q} onChange={(e) => setQ(e.target.value)} />
             <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className="shrink-0 rounded-xl border px-3 text-xs font-bold sm:hidden"
               style={showFilters || point !== "all" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>⚙️ Filtros</button>
           </div>
@@ -490,6 +532,11 @@ export function CustomerOrders() {
                       {safeCustomer(o.customer_name)}{cleanText(o.customer_whatsapp) ? ` · ${o.customer_whatsapp}` : ""} · {new Date(o.created_at).toLocaleString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                       {" · "}<b style={{ color: a.color }}>{a.stale ? "🔴 " : ""}{a.text}{toConfirm ? " sin confirmar" : o.status === "confirmed" ? " sin completar" : ""}</b>
                     </p>
+                    {q.trim() && byProduct.names.get(o.id)?.length ? (
+                      <p className="mt-1 truncate text-xs font-semibold" style={{ color: "var(--t-accent)" }} title={byProduct.names.get(o.id)!.join(", ")}>
+                        📦 {byProduct.names.get(o.id)!.join(" · ")}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="shrink-0 text-right">
                     <b className="block text-base tabular-nums sm:text-lg">{money(o.total)}</b>

@@ -320,6 +320,16 @@ export const RELEASES: Release[] = [
       { icon: "🗜️", text: "Se comprime sola antes de subir" },
     ],
   },
+  {
+    id: 30, date: "2026-11-06", title: "Buscar pedidos por producto",
+    summary: "En Pedidos de clientes escribe el nombre, código o código de barras de un producto y salen los pedidos que lo llevan.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🔎", text: "Escribe «camion» o el código RC 48786" },
+      { icon: "🧾", text: "Salen los pedidos que llevan ese producto" },
+      { icon: "📦", text: "Cada pedido muestra qué producto coincidió" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
