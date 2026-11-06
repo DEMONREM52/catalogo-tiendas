@@ -274,7 +274,7 @@ export function themeTokens(input: ThemeConfig): Record<string, string> {
     "--t-menu-bg": rgba(c.menu, Math.max(alpha, 0.86)),
     "--t-input-bg": c.input,
     "--t-glow": String(t.effects.halo ? 60 : 0),
-    "--t-radius": String(r),
+    "--t-radius": String(Math.round(r * 1.5)),
     "--radius-lg": `${Math.round(r * 0.5)}px`,
     "--radius-xl": `${Math.round(r * 0.75)}px`,
     "--radius-2xl": `${r}px`,
@@ -293,14 +293,20 @@ export function themeTokens(input: ThemeConfig): Record<string, string> {
 }
 
 /** Bloque CSS seguro para el panel. `scope` es un selector fijo nuestro (nunca de la persona). */
-export function themeCss(t: ThemeConfig, scope = "html[data-user-theme]") {
+export function themeCss(t: ThemeConfig, scope = "html:root[data-user-theme]") {
   const tokens = themeTokens(t);
   const body = Object.entries(tokens).map(([k, v]) => `${k}: ${v} !important;`).join(" ");
   // En vidrio las variables van en <body>; se repiten ahí para que el tema gane también en ese modo.
   const glassBody = ["--t-card-bg", "--t-card-border", "--t-muted", "--t-glass-edge", "--t-glass-sheen", "--t-glass-dialog", "--t-glass-input", "--t-glass-blur", "--t-glass-sat", "--t-bg"]
     .map((k) => `${k}: ${k === "--t-card-bg" ? tokens["--t-glass-card"] : k === "--t-card-border" ? tokens["--t-glass-border"] : tokens[k]} !important;`).join(" ");
   const noHover = t.effects.hover ? "" : ` ${scope} *:hover { transform: none !important; }`;
-  return `${scope} { ${body} } ${scope} body { ${body} } ${scope}[data-glass="on"][data-glass-area] body { ${glassBody} }${noHover}`;
+  const c = t.colors;
+  // Listas nativas: fondo sólido del tema (el navegador no acepta transparencias ahí).
+  const options = ` ${scope} select option, ${scope} select optgroup { background-color: ${c.dialog} !important; color: ${c.text} !important; } ${scope} select option:checked { background-color: ${mix(c.dialog, c.accent, 0.35)} !important; color: ${c.text} !important; }`;
+  // Celular: menos desenfoque (fluido y gasta menos batería) y tarjetas un poco más sólidas.
+  const g = effectiveGlass(t);
+  const coarse = ` @media (pointer: coarse) { ${scope}[data-glass="on"][data-glass-area="full"] body { --t-glass-blur: ${Math.min(g.blur, 12)}px !important; --t-card-bg: ${rgba(c.surface, Math.max(g.opacity / 100, 0.8))} !important; } }`;
+  return `${scope} { ${body} } ${scope} body { ${body} } ${scope}[data-glass="on"][data-glass-area] body { ${glassBody} }${options}${coarse}${noHover}`;
 }
 
 /** Tema → texto para exportar (JSON con nombre). */

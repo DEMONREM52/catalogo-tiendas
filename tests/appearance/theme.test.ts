@@ -56,7 +56,7 @@ test("contraste: blanco sobre negro es 21:1 y se detecta texto ilegible", () => 
 test("el CSS generado solo trae variables, colores y números (nada de url() ni etiquetas)", () => {
   const css = themeCss(normalizeTheme({ ...OBSIDIAN, colors: { ...OBSIDIAN.colors, accent: "</style><script>" } }));
   assert.ok(!/url\(|<|>|@import|expression\(|javascript:/i.test(css), css.slice(0, 200));
-  assert.ok(css.startsWith("html[data-user-theme]"));
+  assert.ok(css.startsWith("html:root[data-user-theme]"));
   const tokens = themeTokens(PEARL);
   assert.equal(tokens["--t-bg-base"], "#f8f9fd");
   assert.equal(tokens["--radius-2xl"], "16px");
