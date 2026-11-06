@@ -112,12 +112,12 @@
   :root:not([data-theme]) {
     color-scheme: dark;
     --t-text: #f8f5ff !important;
-    --t-muted: #c7b9d9 !important;
-    --t-border: rgba(194, 172, 220, 0.11) !important;
-    --t-card-bg: rgba(44, 34, 58, 0.97) !important;
-    --t-card-bg-soft: rgba(194, 172, 220, 0.06) !important;
-    --t-card-border: rgba(178, 145, 213, 0.20) !important;
-    --t-bg-base: #171223 !important;
+    --t-muted: #c9b8e6 !important;
+    --t-border: rgba(190, 160, 235, 0.12) !important;
+    --t-card-bg: rgba(38, 25, 58, 0.97) !important;
+    --t-card-bg-soft: rgba(196, 164, 240, 0.07) !important;
+    --t-card-border: rgba(176, 140, 230, 0.22) !important;
+    --t-bg-base: #150c24 !important;
     --t-vignette: rgba(10, 6, 18, 0.22) !important;
     --t-store-bg-opacity: 0.14 !important;
     --t-accent: #a98af0;
@@ -125,15 +125,15 @@
     --t-accent3: #d16be8;
     --t-accent-soft: rgba(169, 138, 240, 0.14);
     --t-on-accent: #1a1328;
-    --t-menu-bg: rgba(36, 27, 50, 0.94);
-    --t-input-bg: #241b32;
-    --t-popover: rgba(48, 37, 62, 0.94);
+    --t-menu-bg: rgba(31, 20, 49, 0.94);
+    --t-input-bg: #1d1230;
+    --t-popover: rgba(44, 29, 68, 0.94);
     --t-popover-border: rgba(212, 187, 242, 0.18);
     --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
     --t-glow: 60;
-    --t-bg: radial-gradient(1000px 680px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
+    --t-bg: radial-gradient(1000px 680px at 12% 0%, rgba(139, 92, 246, 0.24), transparent 64%),
       radial-gradient(900px 700px at 96% 100%, rgba(209, 107, 232, 0.08), transparent 64%),
-      linear-gradient(180deg, #1b1529 0%, #171223 60%) !important;
+      linear-gradient(180deg, #1c1032 0%, #150c24 60%) !important;
     --t-shadow: 0 24px 60px -26px rgba(8, 4, 16, 0.75), 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 }
@@ -168,12 +168,12 @@ html.light {
 html.dark {
   color-scheme: dark;
   --t-text: #f8f5ff !important;
-  --t-muted: #c7b9d9 !important;
-  --t-border: rgba(194, 172, 220, 0.11) !important;
-  --t-card-bg: rgba(44, 34, 58, 0.97) !important;
-  --t-card-bg-soft: rgba(194, 172, 220, 0.06) !important;
-  --t-card-border: rgba(178, 145, 213, 0.20) !important;
-  --t-bg-base: #171223 !important;
+  --t-muted: #c9b8e6 !important;
+  --t-border: rgba(190, 160, 235, 0.12) !important;
+  --t-card-bg: rgba(38, 25, 58, 0.97) !important;
+  --t-card-bg-soft: rgba(196, 164, 240, 0.07) !important;
+  --t-card-border: rgba(176, 140, 230, 0.22) !important;
+  --t-bg-base: #150c24 !important;
   --t-vignette: rgba(10, 6, 18, 0.22) !important;
   --t-store-bg-opacity: 0.14 !important;
   --t-accent: #a98af0;
@@ -181,15 +181,15 @@ html.dark {
   --t-accent3: #d16be8;
   --t-accent-soft: rgba(169, 138, 240, 0.14);
   --t-on-accent: #1a1328;
-  --t-menu-bg: rgba(36, 27, 50, 0.94);
-  --t-input-bg: #241b32;
-  --t-popover: rgba(48, 37, 62, 0.94);
+  --t-menu-bg: rgba(31, 20, 49, 0.94);
+  --t-input-bg: #1d1230;
+  --t-popover: rgba(44, 29, 68, 0.94);
   --t-popover-border: rgba(212, 187, 242, 0.18);
   --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
   --t-glow: 60;
-  --t-bg: radial-gradient(1000px 680px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
+  --t-bg: radial-gradient(1000px 680px at 12% 0%, rgba(139, 92, 246, 0.24), transparent 64%),
     radial-gradient(900px 700px at 96% 100%, rgba(209, 107, 232, 0.08), transparent 64%),
-      linear-gradient(180deg, #1b1529 0%, #171223 60%) !important;
+      linear-gradient(180deg, #1c1032 0%, #150c24 60%) !important;
   --t-shadow: 0 24px 60px -26px rgba(8, 4, 16, 0.75), 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -1220,58 +1220,63 @@ html[data-glass="on"][data-glass-area] body {
   --t-muted: #5a5368;
   --t-glass-blur: 14px;
   --t-glass-sat: 120%;
-  --t-card-bg: rgba(255, 255, 255, 0.82);
+  --t-card-bg: rgb(255 255 255 / calc(var(--t-glass-alpha, 0.68) + 0.14 + var(--t-glass-boost, 0)));
   --t-card-bg-soft: rgba(70, 55, 95, 0.035);
   --t-card-border: rgba(100, 80, 140, 0.12);
   --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 18px 48px -24px rgba(32, 25, 46, 0.22);
   --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 42%);
   --t-glass-dialog: rgba(255, 255, 255, 0.92);
   --t-glass-input: rgba(247, 247, 251, 0.9);
-  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.09), transparent 62%),
-    radial-gradient(760px 560px at 92% 92%, rgba(192, 38, 211, 0.045), transparent 62%);
+  --t-bg: radial-gradient(900px 620px at 8% 6%, rgba(139, 92, 246, 0.18), transparent 62%),
+    radial-gradient(700px 520px at 55% 45%, rgba(117, 69, 214, 0.08), transparent 66%),
+    radial-gradient(800px 600px at 92% 92%, rgba(192, 38, 211, 0.10), transparent 62%);
 }
 @media (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
     /* Obsidian Amethyst en vidrio: cristal oscuro ahumado; violeta solo como luz ambiental muy suave. */
-    --t-card-bg: rgba(48, 37, 62, 0.76);
+    --t-card-bg: rgb(44 28 70 / calc(var(--t-glass-alpha, 0.68) + var(--t-glass-boost, 0)));
     --t-muted: #cbbfdc;
     --t-card-bg-soft: rgba(212, 187, 242, 0.06);
     --t-card-border: rgba(212, 187, 242, 0.18);
     --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.11), inset 0 0 0 1px rgba(212, 187, 242, 0.04), 0 24px 60px -28px rgba(8, 4, 16, 0.8);
     --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(212, 187, 242, 0.02) 30%, rgba(255, 255, 255, 0) 55%);
-    --t-glass-dialog: rgba(58, 44, 75, 0.94);
-    --t-glass-input: rgba(23, 18, 35, 0.55);
-    --t-bg: radial-gradient(900px 620px at 8% 6%, rgba(139, 92, 246, 0.20), transparent 62%),
-      radial-gradient(800px 600px at 92% 92%, rgba(209, 107, 232, 0.10), transparent 62%),
-      linear-gradient(180deg, #1b1529 0%, #171223 60%);
+    --t-glass-dialog: rgba(52, 34, 80, 0.94);
+    --t-glass-input: rgba(21, 12, 36, 0.6);
+    --t-bg: radial-gradient(900px 620px at 8% 6%, rgba(139, 92, 246, 0.36), transparent 62%),
+      radial-gradient(700px 520px at 55% 45%, rgba(109, 40, 217, 0.16), transparent 66%),
+      radial-gradient(800px 600px at 92% 92%, rgba(209, 107, 232, 0.20), transparent 62%),
+      linear-gradient(180deg, #1c1032 0%, #150c24 60%);
   }
 }
 html[data-glass="on"][data-glass-area][data-theme="dark"] body {
   /* Obsidian Amethyst en vidrio: cristal oscuro ahumado; violeta solo como luz ambiental muy suave. */
-  --t-card-bg: rgba(48, 37, 62, 0.76);
+  --t-card-bg: rgb(44 28 70 / calc(var(--t-glass-alpha, 0.68) + var(--t-glass-boost, 0)));
   --t-muted: #cbbfdc;
   --t-card-bg-soft: rgba(212, 187, 242, 0.06);
   --t-card-border: rgba(212, 187, 242, 0.18);
   --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.11), inset 0 0 0 1px rgba(212, 187, 242, 0.04), 0 24px 60px -28px rgba(8, 4, 16, 0.8);
   --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(212, 187, 242, 0.02) 30%, rgba(255, 255, 255, 0) 55%);
-  --t-glass-dialog: rgba(58, 44, 75, 0.94);
-  --t-glass-input: rgba(23, 18, 35, 0.55);
-  --t-bg: radial-gradient(900px 620px at 8% 6%, rgba(139, 92, 246, 0.20), transparent 62%),
-    radial-gradient(800px 600px at 92% 92%, rgba(209, 107, 232, 0.10), transparent 62%),
-    linear-gradient(180deg, #1b1529 0%, #171223 60%);
+  --t-glass-dialog: rgba(52, 34, 80, 0.94);
+  --t-glass-input: rgba(21, 12, 36, 0.6);
+  --t-bg: radial-gradient(900px 620px at 8% 6%, rgba(139, 92, 246, 0.36), transparent 62%),
+      radial-gradient(700px 520px at 55% 45%, rgba(109, 40, 217, 0.16), transparent 66%),
+    radial-gradient(800px 600px at 92% 92%, rgba(209, 107, 232, 0.20), transparent 62%),
+    linear-gradient(180deg, #1c1032 0%, #150c24 60%);
 }
 
 /* Intensidad del vidrio: sutil (más sólido y rápido), elegante (normal) o premium (más transparente). */
-html[data-glass="on"][data-glass-area][data-glass-level="subtle"] body { --t-glass-blur: 8px; --t-glass-sat: 115%; --t-card-bg: color-mix(in oklab, var(--t-bg-base) 88%, transparent); }
-html[data-glass="on"][data-glass-area][data-glass-level="premium"] body { --t-glass-blur: 20px; --t-glass-sat: 140%; }
+html[data-glass="on"][data-glass-area] body { --t-glass-alpha: 0.68; }
+html[data-glass="on"][data-glass-area][data-glass-level="subtle"] body { --t-glass-alpha: 0.86; --t-glass-blur: 8px; --t-glass-sat: 115%; }
+html[data-glass="on"][data-glass-area][data-glass-level="elegant"] body { --t-glass-alpha: 0.68; --t-glass-blur: 16px; --t-glass-sat: 135%; }
+html[data-glass="on"][data-glass-area][data-glass-level="premium"] body { --t-glass-alpha: 0.5; --t-glass-blur: 24px; --t-glass-sat: 150%; }
 
 /* Tarjetas dentro de tarjetas (listas, filas, tablas): sin segundo desenfoque ni reflejo.
    Se leen mejor y no se acumula el color; el vidrio queda en los paneles de primer nivel. */
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft)::before {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft)::before {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft):not(input, textarea, select) {
   background-image: none !important;
   box-shadow: none;
 }
@@ -1279,15 +1284,15 @@ html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl,
 /* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo).
    El desenfoque va en una capa ::before detrás del contenido y NO en la tarjeta: si la tarjeta tuviera backdrop-filter,
    las ventanas «fixed» que se abren dentro (historial, menús…) quedarían encerradas en ella. */
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"]) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft):not(input, textarea, select, [class*="before:"]) {
   isolation: isolate;
   background-image: var(--t-glass-sheen) !important;
   box-shadow: var(--t-glass-edge);
 }
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"], .fixed, .absolute, .sticky) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft):not(input, textarea, select, [class*="before:"], .fixed, .absolute, .sticky) {
   position: relative;
 }
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"])::before {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft):not(input, textarea, select, [class*="before:"])::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1305,7 +1310,7 @@ html[data-glass="on"][data-glass-area] :is(.glass, .glass-soft) {
 }
 
 /* Cada tarjeta es su propia capa: si tiene un menú abierto o el foco, sube para que el menú no quede debajo de la siguiente. */
-html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select, [class*="before:"]):is(:focus-within, :has([open], [aria-expanded="true"])) {
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav):is([style*="--t-card-bg"], [class*="bg-[color:var(--t-card-bg)]"]), .glass, .glass-soft):not(input, textarea, select, [class*="before:"]):is(:focus-within, :has([open], [aria-expanded="true"])) {
   z-index: 30;
 }
 
@@ -1330,24 +1335,14 @@ html[data-glass="on"][data-glass-area="soft"] body {
 
 /* Celulares: menos desenfoque (más fluido y gasta menos batería). */
 @media (pointer: coarse) {
-  html[data-glass="on"][data-glass-area="full"] body {
+  html[data-glass="on"][data-glass-area="full"] body,
+  html[data-glass="on"][data-glass-area="full"][data-glass-level] body {
     --t-glass-blur: 12px;
     --t-glass-sat: 140%;
   }
-  /* Más denso que en computador: en pantalla pequeña las listas largas se leen mejor. (Un tema personal trae lo suyo.) */
+  /* Un poco más denso que en computador: en pantalla pequeña las listas largas se leen mejor. */
   html[data-glass="on"][data-glass-area="full"]:not([data-user-theme]) body {
-    --t-card-bg: rgba(255, 255, 255, 0.9);
-  }
-}
-/* Celular en oscuro: cristal ahumado más sólido. */
-@media (pointer: coarse) and (prefers-color-scheme: dark) {
-  html[data-glass="on"][data-glass-area="full"]:not([data-theme="light"]):not([data-user-theme]) body {
-    --t-card-bg: rgba(44, 34, 58, 0.92);
-  }
-}
-@media (pointer: coarse) {
-  html[data-glass="on"][data-glass-area="full"][data-theme="dark"]:not([data-user-theme]) body {
-    --t-card-bg: rgba(44, 34, 58, 0.92);
+    --t-glass-boost: 0.1;
   }
 }
 
@@ -1428,11 +1423,11 @@ select option:checked {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) select { color-scheme: dark; }
   :root:not([data-theme="light"]) select option,
-  :root:not([data-theme="light"]) select optgroup { background-color: #30253e; color: #f8f5ff; }
-  :root:not([data-theme="light"]) select option:checked { background-color: #3a2c4b; color: #ffffff; }
+  :root:not([data-theme="light"]) select optgroup { background-color: #2c1d44; color: #f8f5ff; }
+  :root:not([data-theme="light"]) select option:checked { background-color: #3a2758; color: #ffffff; }
 }
 :root[data-theme="dark"] select { color-scheme: dark; }
 :root[data-theme="dark"] select option,
-:root[data-theme="dark"] select optgroup { background-color: #30253e; color: #f8f5ff; }
-:root[data-theme="dark"] select option:checked { background-color: #3a2c4b; color: #ffffff; }
+:root[data-theme="dark"] select optgroup { background-color: #2c1d44; color: #f8f5ff; }
+:root[data-theme="dark"] select option:checked { background-color: #3a2758; color: #ffffff; }
 select option:disabled { color: #9ca3af; }

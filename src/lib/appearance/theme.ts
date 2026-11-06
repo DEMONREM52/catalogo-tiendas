@@ -54,10 +54,10 @@ export const OBSIDIAN: ThemeConfig = {
   // Obsidian Aurora Glass: grafito ciruela, cristal ahumado con matices amatista (ni negro ni violeta saturado).
   colors: {
     accent: "#a98af0", accent2: "#8f6fe6", accent3: "#d16be8",
-    bg: "#171223", surface: "#2c223a", menu: "#241b32", dialog: "#3a2c4b", input: "#241b32",
-    text: "#f8f5ff", muted: "#c7b9d9",
+    bg: "#150c24", surface: "#26193a", menu: "#1f1431", dialog: "#34224f", input: "#1d1230",
+    text: "#f8f5ff", muted: "#c9b8e6",
   },
-  background: { kind: "glow", from: "#30253e", to: "#171223", angle: 160, intensity: 45 },
+  background: { kind: "glow", from: "#2c1d44", to: "#150c24", angle: 160, intensity: 50 },
   glass: { level: "elegant", opacity: 76, blur: 14, saturation: 125, border: 18, shadow: 60, sheen: 35 },
   layout: { radius: 16, density: "normal", fontScale: 100, dividers: 11 },
   effects: { ambient: 30, halo: true, hover: true },

@@ -107,3 +107,23 @@ La versión grafito quedó demasiado negra y plana. Obsidian pasó a un punto me
 - **Pearl Amethyst:** no cambió.
 - **Temas personales guardados:** no cambian. Conservan sus colores, y los v1 conservan además sus fórmulas.
 - **Contraste:** se revisa en `tests/appearance/theme.test.ts` con `isReadable(OBSIDIAN)`.
+
+## Vidrio que se nota y Obsidian en morado oscuro (2026-11-06)
+
+- **Por qué el vidrio no hacía nada:**
+  - las tarjetas quedaban al 76 % con vidrio y al 97 % sin vidrio, una diferencia invisible sobre un fondo casi uniforme;
+  - la intensidad solo cambiaba el desenfoque;
+  - en el celular quedaba al 90 %;
+  - las superficies con clase (Productos) no recibían el efecto.
+- **Cómo quedó:**
+  - La opacidad sale de `--t-glass-alpha`: Sutil 0,86, Elegante 0,68 y Premium 0,50. El desenfoque es de 8, 16 y 24 px.
+  - En el celular se suma `--t-glass-boost: 0.1` y el desenfoque se limita a 12 px.
+  - Con vidrio, detrás del cristal hay luces de aurora violeta, y esa es la diferencia que se ve.
+  - El selector de vidrio también acepta `[class*="bg-[color:var(--t-card-bg)]"]`.
+- **Obsidian en morado oscuro:**
+  - fondo `#150C24`, con un degradado desde `#1C1032`;
+  - tarjetas `#26193A`;
+  - campos `#1D1230`;
+  - bordes lavanda al 22 %;
+  - texto secundario `#C9B8E6`.
+- **Pearl con vidrio:** las luces de fondo subieron a 18 %, 8 % y 10 %, para que el cristal blanco se perciba.
