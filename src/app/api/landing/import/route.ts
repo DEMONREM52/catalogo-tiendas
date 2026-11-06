@@ -95,9 +95,17 @@ export async function POST(request: Request) {
           const img = await safeFetch(src, MAX_IMG, "image/avif,image/webp,image/*");
           const type = img.res?.headers.get("content-type") ?? "";
           if (!img.body || !/^image\/(jpeg|png|webp|avif)/.test(type) || img.body.length < 2000 || img.body.length >= MAX_IMG) return src;
-          const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : type.includes("avif") ? "avif" : "jpg";
+          // WebP de máx. 1600 px (como las demás subidas): menos Cached Egress en cada visita. Si no se puede, va la original.
+          let body: Buffer | Uint8Array = img.body;
+          let outType = type;
+          try {
+            const { default: sharp } = await import("sharp");
+            const out = await sharp(Buffer.from(img.body)).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+            if (out.length < img.body.length) { body = out; outType = "image/webp"; }
+          } catch { /* se sube la original */ }
+          const ext = outType.includes("webp") ? "webp" : outType.includes("png") ? "png" : outType.includes("avif") ? "avif" : "jpg";
           const path = `${ctx.userId}/landing/import-${Date.now()}-${i}.${ext}`;
-          const { error } = await admin.storage.from("product-images").upload(path, img.body, { contentType: type, upsert: true, cacheControl: "31536000" });
+          const { error } = await admin.storage.from("product-images").upload(path, body, { contentType: outType, upsert: true, cacheControl: "31536000" });
           return error ? src : admin.storage.from("product-images").getPublicUrl(path).data.publicUrl;
         } catch {
           return src;
