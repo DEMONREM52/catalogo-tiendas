@@ -435,38 +435,29 @@ function BurgerButton({
         outline: "none",
       }}
     >
-      <span className="relative h-5 w-5">
-        <span
-          className={cx(
-            "absolute left-0 top-[2px] h-[2px] w-5 rounded-full",
-            "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            open && "top-[9px] rotate-45",
-          )}
-          style={{
-            background: "color-mix(in oklab, var(--t-text) 92%, transparent)",
-          }}
-        />
-        <span
-          className={cx(
-            "absolute left-0 top-[9px] h-[2px] w-5 rounded-full",
-            "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            open && "opacity-0 scale-x-75",
-          )}
-          style={{
-            background: "color-mix(in oklab, var(--t-text) 92%, transparent)",
-          }}
-        />
-        <span
-          className={cx(
-            "absolute left-0 top-[16px] h-[2px] w-5 rounded-full",
-            "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            open && "top-[9px] -rotate-45",
-          )}
-          style={{
-            background: "color-mix(in oklab, var(--t-text) 92%, transparent)",
-          }}
-        />
-      </span>
+      {/* Una hamburguesa de verdad. Al abrir el menú, la tapa se levanta y se inclina. */}
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden className="overflow-visible transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
+        {/* Pan de arriba con ajonjolí */}
+        <g className="transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ transformOrigin: "26px 12px", transform: open ? "translate(1px,-5px) rotate(18deg)" : "none" }}>
+          <path d="M5 13.2C5 7.6 10 4 16 4s11 3.6 11 9.2c0 .8-.6 1.3-1.3 1.3H6.3c-.7 0-1.3-.5-1.3-1.3Z" fill="#e9a23b" />
+          <path d="M7.5 10.5C8.6 7.2 12 5.4 16 5.4" stroke="#f7c873" strokeWidth="1.3" strokeLinecap="round" fill="none" opacity=".8" />
+          <ellipse cx="11.5" cy="9.2" rx="1" ry=".55" fill="#fff4d6" transform="rotate(-20 11.5 9.2)" />
+          <ellipse cx="16" cy="7.6" rx="1" ry=".55" fill="#fff4d6" />
+          <ellipse cx="20.5" cy="9.4" rx="1" ry=".55" fill="#fff4d6" transform="rotate(20 20.5 9.4)" />
+          <ellipse cx="15" cy="11.4" rx=".9" ry=".5" fill="#fff4d6" />
+          <ellipse cx="19.6" cy="12" rx=".9" ry=".5" fill="#fff4d6" />
+        </g>
+        {/* Lechuga */}
+        <path d="M4.5 16.2c1.2-1.4 2.3 0 3.5-1.1 1.2 1.1 2.3-.3 3.5 1.1 1.2-1.4 2.3 0 3.5-1.1 1.2 1.1 2.3-.3 3.5 1.1 1.2-1.4 2.3 0 3.5-1.1 1.2 1.1 2.3-.3 3.5 1.1v.9H4.5Z" fill="#5fbf4a" />
+        {/* Queso derretido */}
+        <path d="M5 17.3h22l-2.6 2.4-1.6-1.2-2.8 2.6-2.2-1.6-3 2.3-2.2-2-2.5 1.7-1.6-1.6Z" fill="#ffd23f" />
+        {/* Carne */}
+        <rect x="4.5" y="18.6" width="23" height="4.4" rx="2.2" fill="#6b3a22" />
+        <path d="M7 20.2h3M13 21.2h2.5M19 20.1h3" stroke="#8d5233" strokeWidth=".9" strokeLinecap="round" />
+        {/* Pan de abajo */}
+        <path d="M5.5 24h21c0 2.3-1.9 4-4.2 4H9.7c-2.3 0-4.2-1.7-4.2-4Z" fill="#dd9131" />
+        <path d="M8 25.6h16" stroke="#f0b866" strokeWidth=".9" strokeLinecap="round" opacity=".7" />
+      </svg>
     </button>
   );
 }
