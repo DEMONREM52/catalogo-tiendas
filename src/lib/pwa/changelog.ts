@@ -365,6 +365,17 @@ export const RELEASES: Release[] = [
       { icon: "✍️", text: "Firmar «Preparó» deja el pedido tomado y en preparación" },
     ],
   },
+  {
+    id: 34, date: "2026-11-06", title: "Notificaciones más cómodas",
+    summary: "La campana abre un panel completo (en el celular sube desde abajo y ya no se corta), con filtros de urgentes y nuevas.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🔔", text: "Toca la campana" },
+      { icon: "📱", text: "En el celular el panel sube desde abajo, completo" },
+      { icon: "🔴", text: "Filtra: Todas · Nuevas · Urgentes · Atención" },
+      { icon: "👆", text: "Toca un aviso para ir directo; queda como visto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

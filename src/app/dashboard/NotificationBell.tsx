@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -8,6 +9,8 @@ import {
   Box,
   CalendarClock,
   CheckCheck,
+  ChevronRight,
+  X,
   FileX,
   Hash,
   Landmark,
@@ -89,9 +92,33 @@ export function useStoreAlerts(storeId: string | null | undefined) {
   return alerts;
 }
 
-export function AlertRow({ alert, onNavigate }: { alert: StoreAlert; onNavigate?: () => void }) {
+export function AlertRow({ alert, onNavigate, unseen, compact }: { alert: StoreAlert; onNavigate?: () => void; unseen?: boolean; compact?: boolean }) {
   const Icon = ICONS[alert.icon] ?? Bell;
   const severity = SEVERITY[alert.severity];
+  if (compact) {
+    return (
+      <Link
+        href={alert.href}
+        onClick={onNavigate}
+        className="group relative flex items-start gap-3 overflow-hidden rounded-2xl border p-3 pl-3.5 transition active:scale-[0.99] hover:-translate-y-px"
+        style={{ borderColor: unseen ? `color-mix(in oklab, ${severity.color} 45%, var(--t-card-border))` : "var(--t-card-border)", background: unseen ? `color-mix(in oklab, ${severity.color} 7%, var(--t-card-bg))` : "var(--t-card-bg)" }}
+      >
+        <span className="absolute inset-y-0 left-0 w-1" style={{ background: severity.color, opacity: unseen ? 1 : 0.4 }} />
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: `color-mix(in oklab, ${severity.color} 16%, transparent)`, color: severity.color }}>
+          <Icon size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: severity.color }}>
+            {severity.label}
+            {unseen ? <span className="rounded-full px-1.5 py-px text-[9px] text-white" style={{ background: "var(--t-accent)" }}>Nueva</span> : null}
+          </span>
+          <span className="mt-0.5 block text-sm font-bold leading-snug" style={{ color: "var(--t-text)" }}>{alert.title}</span>
+          <span className="mt-0.5 block text-xs leading-snug" style={{ color: "var(--t-muted)" }}>{alert.body}</span>
+        </span>
+        <ChevronRight size={16} className="mt-3 shrink-0 opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-80" />
+      </Link>
+    );
+  }
   return (
     <Link
       href={alert.href}
@@ -115,6 +142,9 @@ export default function NotificationBell({ storeId }: { storeId: string | null |
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState<string[]>([]);
   const boxRef = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState<"all" | "new" | "urgent" | "attention">("all");
+  const [top, setTop] = useState(64);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const storageKey = `remhub_seen_alerts_${storeId ?? ""}`;
 
   useEffect(() => {
@@ -128,19 +158,26 @@ export default function NotificationBell({ storeId }: { storeId: string | null |
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(event.target as Node)) setOpen(false);
-    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  function toggle() {
+    // En computador el panel sale justo debajo de la campana.
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (rect) setTop(Math.round(rect.bottom + 10));
+    setOpen((v) => !v);
+  }
+
+  function markSeen(key: string) {
+    if (seen.includes(key)) return;
+    const next = [...seen, key];
+    setSeen(next);
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* sin almacenamiento */ }
+  }
 
   const unseen = useMemo(() => alerts.filter((a) => !seen.includes(a.key)), [alerts, seen]);
   const urgent = unseen.some((a) => a.severity === "critical" || a.severity === "serious");
@@ -155,6 +192,20 @@ export default function NotificationBell({ storeId }: { storeId: string | null |
     }
   }
 
+  const counts = {
+    all: alerts.length,
+    new: unseen.length,
+    urgent: alerts.filter((a) => a.severity === "critical" || a.severity === "serious").length,
+    attention: alerts.filter((a) => a.severity === "warning" || a.severity === "info").length,
+  };
+  const shown = alerts.filter((a) =>
+    filter === "all" ? true
+      : filter === "new" ? !seen.includes(a.key)
+        : filter === "urgent" ? a.severity === "critical" || a.severity === "serious"
+          : a.severity === "warning" || a.severity === "info");
+  // Las nuevas primero dentro de cada gravedad.
+  const ordered = [...shown].sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order || Number(seen.includes(a.key)) - Number(seen.includes(b.key)));
+
   if (!storeId) return null;
 
   return (
@@ -162,7 +213,7 @@ export default function NotificationBell({ storeId }: { storeId: string | null |
       <motion.button
         type="button"
         whileTap={{ scale: 0.94 }}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="relative grid h-9 w-9 place-items-center rounded-xl border backdrop-blur-xl"
         style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)", color: "var(--t-text)" }}
         aria-label={`Notificaciones${unseen.length ? `: ${unseen.length} nuevas` : ""}`}
@@ -185,39 +236,77 @@ export default function NotificationBell({ storeId }: { storeId: string | null |
           ) : null}
         </AnimatePresence>
       </motion.button>
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.16 }}
-            className="absolute right-0 z-[70] mt-2 w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border shadow-2xl"
-            style={{ background: "var(--t-bg-base)", borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
-          >
-            <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
-              <p className="text-sm font-bold">Notificaciones</p>
-              {alerts.length ? (
-                <button type="button" onClick={markAllSeen} className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--t-accent)" }}>
-                  <CheckCheck size={14} /> Marcar como vistas
-                </button>
-              ) : null}
-            </div>
-            <div className="max-h-[60vh] overflow-y-auto p-2">
-              {alerts.length ? (
-                alerts.map((alert) => (
-                  <div key={alert.key} className="relative">
-                    {!seen.includes(alert.key) ? <span className="absolute right-3 top-3 h-2 w-2 rounded-full" style={{ background: "var(--t-accent)" }} /> : null}
-                    <AlertRow alert={alert} onNavigate={() => setOpen(false)} />
+      {mounted ? createPortal(
+        <AnimatePresence>
+          {open ? (
+            <motion.div key="bell" className="fixed inset-0 z-[140]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+              <button type="button" aria-label="Cerrar notificaciones" onClick={() => setOpen(false)} className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-[2px] sm:bg-black/10 sm:backdrop-blur-0" />
+              <motion.section
+                role="dialog"
+                aria-label="Notificaciones"
+                initial={{ y: 40, opacity: 0.6 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[28px] border shadow-2xl sm:bottom-auto sm:left-auto sm:right-4 sm:top-[var(--bell-top)] sm:max-h-[min(75dvh,42rem)] sm:w-[26rem] sm:rounded-3xl"
+                style={{ background: "var(--t-bg-base)", borderColor: "var(--t-card-border)", color: "var(--t-text)", ["--bell-top" as string]: `${top}px` }}
+              >
+                <span className="mx-auto mt-2 h-1.5 w-11 shrink-0 rounded-full sm:hidden" style={{ background: "color-mix(in oklab, var(--t-text) 18%, transparent)" }} aria-hidden />
+                <header className="shrink-0 px-4 pb-2 pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: "color-mix(in oklab, var(--t-accent) 15%, transparent)", color: "var(--t-accent)" }}><Bell size={17} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-black leading-tight">Notificaciones</p>
+                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+                        {alerts.length ? <>{counts.urgent ? <b style={{ color: SEVERITY.critical.color }}>{counts.urgent} urgentes</b> : "Nada urgente"} · {unseen.length ? `${unseen.length} nuevas` : "todo visto"}</> : "Todo en orden"}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={15} /></button>
                   </div>
-                ))
-              ) : (
-                <p className="px-3 py-8 text-center text-sm" style={{ color: "var(--t-muted)" }}>Todo en orden. No hay avisos pendientes. ✨</p>
-              )}
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+                  {alerts.length ? (
+                    <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+                      {([["all", "Todas"], ["new", "Nuevas"], ["urgent", "Urgentes"], ["attention", "Atención"]] as const).map(([k, label]) => (
+                        counts[k] || k === "all" ? (
+                          <button key={k} type="button" onClick={() => setFilter(k)}
+                            className="shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition"
+                            style={filter === k
+                              ? { background: k === "urgent" ? SEVERITY.critical.color : "var(--t-accent)", borderColor: "transparent", color: "#fff" }
+                              : { borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                            {label} <span className="opacity-75">{counts[k]}</span>
+                          </button>
+                        ) : null
+                      ))}
+                      {unseen.length ? (
+                        <button type="button" onClick={markAllSeen} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-bold" style={{ color: "var(--t-accent)" }}>
+                          <CheckCheck size={14} /> Marcar vistas
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </header>
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-1">
+                  {!alerts.length ? (
+                    <div className="px-3 py-10 text-center">
+                      <p className="text-4xl">✨</p>
+                      <p className="mt-2 text-sm font-bold">Todo en orden</p>
+                      <p className="text-xs" style={{ color: "var(--t-muted)" }}>No hay avisos pendientes.</p>
+                    </div>
+                  ) : !ordered.length ? (
+                    <p className="px-3 py-8 text-center text-sm" style={{ color: "var(--t-muted)" }}>Nada en este filtro. 👌</p>
+                  ) : (
+                    ordered.map((alert, i) => (
+                      <motion.div key={alert.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.025 }}>
+                        <AlertRow compact alert={alert} unseen={!seen.includes(alert.key)} onNavigate={() => { markSeen(alert.key); setOpen(false); }} />
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </motion.section>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>,
+        document.body,
+      ) : null}
     </div>
   );
 }
