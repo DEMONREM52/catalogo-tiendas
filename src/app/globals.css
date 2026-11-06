@@ -30,7 +30,7 @@
   /* Cards / glass */
   --t-card-bg: rgba(255, 255, 255, 0.96);
   --t-card-bg-soft: rgba(32, 25, 46, 0.045);
-  --t-card-border: rgba(115, 90, 155, 0.16);
+  --t-card-border: rgba(100, 80, 140, 0.12);
 
   /* Accents (Amethyst) */
   --t-accent: #7545d6;
@@ -86,48 +86,54 @@
     color-scheme: light;
     --t-text: #20192e !important;
     --t-muted: #625b70 !important;
-    --t-border: rgba(32, 25, 46, 0.14) !important;
-    --t-card-bg: rgba(255, 255, 255, 0.96) !important;
-    --t-card-bg-soft: rgba(32, 25, 46, 0.045) !important;
-    --t-card-border: rgba(115, 90, 155, 0.16) !important;
+    --t-border: rgba(70, 55, 95, 0.10) !important;
+    --t-card-bg: rgba(255, 255, 255, 0.97) !important;
+    --t-card-bg-soft: rgba(70, 55, 95, 0.035) !important;
+    --t-card-border: rgba(100, 80, 140, 0.12) !important;
     --t-bg-base: #f8f9fd !important;
-    --t-vignette: rgba(32, 25, 46, 0.05) !important;
+    --t-vignette: rgba(32, 25, 46, 0.035) !important;
     --t-store-bg-opacity: 0.08 !important;
     --t-accent: #7545d6;
     --t-accent2: #8b5cf6;
     --t-accent3: #c026d3;
-    --t-menu-bg: rgba(251, 250, 254, 0.92);
-    --t-input-bg: #f5f1fa;
-    --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.09), transparent 64%),
-      radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.05), transparent 64%) !important;
-    --t-shadow: 0 24px 70px rgba(32, 25, 46, 0.12);
+    --t-accent-soft: rgba(117, 69, 214, 0.08);
+    --t-on-accent: #ffffff;
+    --t-menu-bg: rgba(255, 255, 255, 0.92);
+    --t-input-bg: #f7f7fb;
+    --t-popover: rgba(255, 255, 255, 0.94);
+    --t-popover-border: rgba(100, 80, 140, 0.14);
+    --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.06), transparent 64%),
+      radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.03), transparent 64%) !important;
+    --t-shadow: 0 18px 50px -24px rgba(32, 25, 46, 0.18);
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --t-text: #f7f5ff !important;
-    --t-muted: #b5abc8 !important;
-    --t-border: rgba(255, 255, 255, 0.14) !important;
-    --t-card-bg: rgba(23, 18, 37, 0.96) !important;
-    --t-card-bg-soft: rgba(247, 245, 255, 0.065) !important;
-    --t-card-border: rgba(255, 255, 255, 0.12) !important;
-    --t-bg-base: #090711 !important;
-    --t-vignette: rgba(0, 0, 0, 0.24) !important;
-    --t-store-bg-opacity: 0.18 !important;
+    --t-text: #f7f6fc !important;
+    --t-muted: #aaa5bb !important;
+    --t-border: rgba(255, 255, 255, 0.07) !important;
+    --t-card-bg: rgba(20, 19, 31, 0.97) !important;
+    --t-card-bg-soft: rgba(255, 255, 255, 0.035) !important;
+    --t-card-border: rgba(255, 255, 255, 0.09) !important;
+    --t-bg-base: #09090f !important;
+    --t-vignette: rgba(0, 0, 0, 0.28) !important;
+    --t-store-bg-opacity: 0.14 !important;
     --t-accent: #a78bfa;
     --t-accent2: #8b5cf6;
     --t-accent3: #d946ef;
-    --t-menu-bg: rgba(18, 14, 29, 0.92);
-    --t-input-bg: #1b1528;
+    --t-accent-soft: rgba(167, 139, 250, 0.12);
+    --t-on-accent: #14101f;
+    --t-menu-bg: rgba(13, 13, 22, 0.92);
+    --t-input-bg: #0d0d16;
+    --t-popover: rgba(20, 19, 31, 0.94);
+    --t-popover-border: rgba(255, 255, 255, 0.12);
     --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
-  --t-glow: 60;
     --t-glow: 60;
-    --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
-      radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.08), transparent 64%),
-      radial-gradient(900px 700px at 60% 40%, rgba(52, 32, 80, 0.35), transparent 70%) !important;
-    --t-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.07), transparent 64%),
+      radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.035), transparent 64%) !important;
+    --t-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -136,45 +142,53 @@ html.light {
   color-scheme: light;
   --t-text: #20192e !important;
   --t-muted: #625b70 !important;
-  --t-border: rgba(32, 25, 46, 0.14) !important;
-  --t-card-bg: rgba(255, 255, 255, 0.96) !important;
-  --t-card-bg-soft: rgba(32, 25, 46, 0.045) !important;
-  --t-card-border: rgba(115, 90, 155, 0.16) !important;
+  --t-border: rgba(70, 55, 95, 0.10) !important;
+  --t-card-bg: rgba(255, 255, 255, 0.97) !important;
+  --t-card-bg-soft: rgba(70, 55, 95, 0.035) !important;
+  --t-card-border: rgba(100, 80, 140, 0.12) !important;
   --t-bg-base: #f8f9fd !important;
-  --t-vignette: rgba(32, 25, 46, 0.05) !important;
+  --t-vignette: rgba(32, 25, 46, 0.035) !important;
   --t-store-bg-opacity: 0.08 !important;
   --t-accent: #7545d6;
   --t-accent2: #8b5cf6;
   --t-accent3: #c026d3;
-  --t-menu-bg: rgba(251, 250, 254, 0.92);
-  --t-input-bg: #f5f1fa;
-  --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.09), transparent 64%),
-    radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.05), transparent 64%) !important;
-  --t-shadow: 0 24px 70px rgba(32, 25, 46, 0.12);
+  --t-accent-soft: rgba(117, 69, 214, 0.08);
+  --t-on-accent: #ffffff;
+  --t-menu-bg: rgba(255, 255, 255, 0.92);
+  --t-input-bg: #f7f7fb;
+  --t-popover: rgba(255, 255, 255, 0.94);
+  --t-popover-border: rgba(100, 80, 140, 0.14);
+  --t-bg: radial-gradient(900px 600px at 12% 0%, rgba(139, 92, 246, 0.06), transparent 64%),
+    radial-gradient(820px 640px at 96% 100%, rgba(192, 38, 211, 0.03), transparent 64%) !important;
+  --t-shadow: 0 18px 50px -24px rgba(32, 25, 46, 0.18);
 }
 
 :root[data-theme="dark"],
 html.dark {
   color-scheme: dark;
-  --t-text: #f7f5ff !important;
-  --t-muted: #b5abc8 !important;
-  --t-border: rgba(255, 255, 255, 0.14) !important;
-  --t-card-bg: rgba(23, 18, 37, 0.96) !important;
-  --t-card-bg-soft: rgba(247, 245, 255, 0.065) !important;
-  --t-card-border: rgba(255, 255, 255, 0.12) !important;
-  --t-bg-base: #090711 !important;
-  --t-vignette: rgba(0, 0, 0, 0.24) !important;
-  --t-store-bg-opacity: 0.18 !important;
+  --t-text: #f7f6fc !important;
+  --t-muted: #aaa5bb !important;
+  --t-border: rgba(255, 255, 255, 0.07) !important;
+  --t-card-bg: rgba(20, 19, 31, 0.97) !important;
+  --t-card-bg-soft: rgba(255, 255, 255, 0.035) !important;
+  --t-card-border: rgba(255, 255, 255, 0.09) !important;
+  --t-bg-base: #09090f !important;
+  --t-vignette: rgba(0, 0, 0, 0.28) !important;
+  --t-store-bg-opacity: 0.14 !important;
   --t-accent: #a78bfa;
   --t-accent2: #8b5cf6;
   --t-accent3: #d946ef;
-  --t-menu-bg: rgba(18, 14, 29, 0.92);
-  --t-input-bg: #1b1528;
+  --t-accent-soft: rgba(167, 139, 250, 0.12);
+  --t-on-accent: #14101f;
+  --t-menu-bg: rgba(13, 13, 22, 0.92);
+  --t-input-bg: #0d0d16;
+  --t-popover: rgba(20, 19, 31, 0.94);
+  --t-popover-border: rgba(255, 255, 255, 0.12);
   --t-success: #4ade80; --t-warning: #fbbf24; --t-danger: #f87171; --t-info: #60a5fa;
-  --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.16), transparent 64%),
-    radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.08), transparent 64%),
-    radial-gradient(900px 700px at 60% 40%, rgba(52, 32, 80, 0.35), transparent 70%) !important;
-  --t-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  --t-glow: 60;
+  --t-bg: radial-gradient(900px 620px at 12% 0%, rgba(139, 92, 246, 0.07), transparent 64%),
+    radial-gradient(820px 640px at 96% 100%, rgba(217, 70, 239, 0.035), transparent 64%) !important;
+  --t-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7);
 }
 
 /* Tema personal: tamaño de letra/densidad y sin movimiento al pasar el mouse si así lo eligió. */
@@ -192,13 +206,19 @@ html[data-reduce-motion="on"] *::after {
 
 .theme-control-trigger,
 .theme-control-menu {
-  border-color: var(--t-card-border);
-  background: var(--t-card-bg);
+  border-color: var(--t-popover-border, var(--t-card-border));
+  background: var(--t-popover, var(--t-card-bg));
   color: var(--t-text);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
 }
 
 .theme-control-trigger {
-  box-shadow: 0 12px 36px rgba(15, 10, 30, 0.18);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.35);
+}
+
+.theme-control-menu {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .theme-control-logo {
@@ -1194,55 +1214,63 @@ html.dark .viz-root,
    ========================================================= */
 html[data-glass="on"][data-glass-area] body {
   /* Sobre vidrio el texto gris pierde contraste: un poco más fuerte que el normal. */
-  /* Pearl Amethyst en vidrio: cristal blanco perla, lavanda solo en los reflejos. */
-  --t-muted: #574f66;
-  --t-glass-blur: 18px;
-  --t-glass-sat: 160%;
-  --t-card-bg: rgba(255, 255, 255, 0.62);
-  --t-card-bg-soft: rgba(117, 69, 214, 0.06);
-  --t-card-border: rgba(255, 255, 255, 0.85);
-  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(115, 90, 155, 0.10), 0 12px 34px -16px rgba(80, 55, 140, 0.28);
-  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.14) 38%, rgba(255, 255, 255, 0) 62%, rgba(234, 229, 245, 0.35) 100%);
-  --t-glass-dialog: rgba(255, 255, 255, 0.82);
-  --t-glass-input: rgba(245, 241, 250, 0.85);
-  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.22), transparent 62%),
-    radial-gradient(760px 560px at 92% 10%, rgba(192, 38, 211, 0.12), transparent 62%),
-    radial-gradient(900px 640px at 70% 96%, rgba(117, 69, 214, 0.16), transparent 62%);
+  /* Pearl Amethyst en vidrio: cristal blanco translúcido, gris frío y sombras delicadas. */
+  --t-muted: #5a5368;
+  --t-glass-blur: 14px;
+  --t-glass-sat: 120%;
+  --t-card-bg: rgba(255, 255, 255, 0.82);
+  --t-card-bg-soft: rgba(70, 55, 95, 0.035);
+  --t-card-border: rgba(100, 80, 140, 0.12);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 18px 48px -24px rgba(32, 25, 46, 0.22);
+  --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 42%);
+  --t-glass-dialog: rgba(255, 255, 255, 0.92);
+  --t-glass-input: rgba(247, 247, 251, 0.9);
+  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.09), transparent 62%),
+    radial-gradient(760px 560px at 92% 92%, rgba(192, 38, 211, 0.045), transparent 62%);
 }
 @media (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area]:not([data-theme="light"]) body {
-    /* Obsidian Amethyst en vidrio: cristal oscuro ahumado, violeta en bordes y reflejos. */
-    --t-card-bg: rgba(29, 22, 44, 0.62);
-    --t-muted: #c3bad4;
-    --t-card-bg-soft: rgba(167, 139, 250, 0.07);
-    --t-card-border: rgba(255, 255, 255, 0.12);
-    --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(167, 139, 250, 0.10), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 26px -16px rgba(139, 92, 246, 0.35);
-    --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 35%, rgba(255, 255, 255, 0) 60%, rgba(139, 92, 246, 0.08) 100%);
-    --t-glass-dialog: rgba(33, 25, 50, 0.86);
-    --t-glass-input: rgba(255, 255, 255, 0.055);
-    --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.26), transparent 62%),
-      radial-gradient(760px 560px at 92% 10%, rgba(217, 70, 239, 0.12), transparent 62%),
-      radial-gradient(900px 640px at 70% 96%, rgba(52, 32, 80, 0.55), transparent 62%);
+    /* Obsidian Amethyst en vidrio: cristal oscuro ahumado; violeta solo como luz ambiental muy suave. */
+    --t-card-bg: rgba(25, 23, 36, 0.80);
+    --t-muted: #b3aec4;
+    --t-card-bg-soft: rgba(255, 255, 255, 0.035);
+    --t-card-border: rgba(255, 255, 255, 0.09);
+    --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 60px -28px rgba(0, 0, 0, 0.8);
+    --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 42%);
+    --t-glass-dialog: rgba(27, 25, 41, 0.94);
+    --t-glass-input: rgba(9, 9, 15, 0.6);
+    --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.10), transparent 62%),
+      radial-gradient(760px 560px at 92% 92%, rgba(217, 70, 239, 0.05), transparent 62%);
   }
 }
 html[data-glass="on"][data-glass-area][data-theme="dark"] body {
-  /* Obsidian Amethyst en vidrio: cristal oscuro ahumado, violeta en bordes y reflejos. */
-  --t-card-bg: rgba(29, 22, 44, 0.62);
-  --t-muted: #c3bad4;
-  --t-card-bg-soft: rgba(167, 139, 250, 0.07);
-  --t-card-border: rgba(255, 255, 255, 0.12);
-  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(167, 139, 250, 0.10), 0 14px 40px -16px rgba(0, 0, 0, 0.75), 0 0 26px -16px rgba(139, 92, 246, 0.35);
-  --t-glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 35%, rgba(255, 255, 255, 0) 60%, rgba(139, 92, 246, 0.08) 100%);
-  --t-glass-dialog: rgba(33, 25, 50, 0.86);
-  --t-glass-input: rgba(255, 255, 255, 0.055);
-  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.26), transparent 62%),
-    radial-gradient(760px 560px at 92% 10%, rgba(217, 70, 239, 0.12), transparent 62%),
-    radial-gradient(900px 640px at 70% 96%, rgba(52, 32, 80, 0.55), transparent 62%);
+  /* Obsidian Amethyst en vidrio: cristal oscuro ahumado; violeta solo como luz ambiental muy suave. */
+  --t-card-bg: rgba(25, 23, 36, 0.80);
+  --t-muted: #b3aec4;
+  --t-card-bg-soft: rgba(255, 255, 255, 0.035);
+  --t-card-border: rgba(255, 255, 255, 0.09);
+  --t-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 60px -28px rgba(0, 0, 0, 0.8);
+  --t-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 42%);
+  --t-glass-dialog: rgba(27, 25, 41, 0.94);
+  --t-glass-input: rgba(9, 9, 15, 0.6);
+  --t-bg: radial-gradient(820px 580px at 8% 6%, rgba(139, 92, 246, 0.10), transparent 62%),
+    radial-gradient(760px 560px at 92% 92%, rgba(217, 70, 239, 0.05), transparent 62%);
 }
 
 /* Intensidad del vidrio: sutil (más sólido y rápido), elegante (normal) o premium (más transparente). */
-html[data-glass="on"][data-glass-area][data-glass-level="subtle"] body { --t-glass-blur: 10px; --t-glass-sat: 130%; }
-html[data-glass="on"][data-glass-area][data-glass-level="premium"] body { --t-glass-blur: 28px; --t-glass-sat: 195%; }
+html[data-glass="on"][data-glass-area][data-glass-level="subtle"] body { --t-glass-blur: 8px; --t-glass-sat: 115%; --t-card-bg: color-mix(in oklab, var(--t-bg-base) 88%, transparent); }
+html[data-glass="on"][data-glass-area][data-glass-level="premium"] body { --t-glass-blur: 20px; --t-glass-sat: 140%; }
+
+/* Tarjetas dentro de tarjetas (listas, filas, tablas): sin segundo desenfoque ni reflejo.
+   Se leen mejor y no se acumula el color; el vidrio queda en los paneles de primer nivel. */
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft)::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-glass="on"][data-glass-area="full"] :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft) :is(:is(.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[28px\], section, aside, header, nav)[style*="--t-card-bg"], .glass, .glass-soft):not(input, textarea, select) {
+  background-image: none !important;
+  box-shadow: none;
+}
 
 /* Tarjetas y paneles grandes: vidrio esmerilado con reflejo de luz en diagonal (el color de cada tarjeta se conserva debajo).
    El desenfoque va en una capa ::before detrás del contenido y NO en la tarjeta: si la tarjeta tuviera backdrop-filter,
@@ -1304,18 +1332,18 @@ html[data-glass="on"][data-glass-area="soft"] body {
   }
   /* Más denso que en computador: en pantalla pequeña las listas largas se leen mejor. (Un tema personal trae lo suyo.) */
   html[data-glass="on"][data-glass-area="full"]:not([data-user-theme]) body {
-    --t-card-bg: rgba(255, 255, 255, 0.8);
+    --t-card-bg: rgba(255, 255, 255, 0.9);
   }
 }
 /* Celular en oscuro: cristal ahumado más sólido. */
 @media (pointer: coarse) and (prefers-color-scheme: dark) {
   html[data-glass="on"][data-glass-area="full"]:not([data-theme="light"]):not([data-user-theme]) body {
-    --t-card-bg: rgba(29, 22, 44, 0.8);
+    --t-card-bg: rgba(20, 19, 31, 0.9);
   }
 }
 @media (pointer: coarse) {
   html[data-glass="on"][data-glass-area="full"][data-theme="dark"]:not([data-user-theme]) body {
-    --t-card-bg: rgba(29, 22, 44, 0.8);
+    --t-card-bg: rgba(20, 19, 31, 0.9);
   }
 }
 
@@ -1396,11 +1424,11 @@ select option:checked {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) select { color-scheme: dark; }
   :root:not([data-theme="light"]) select option,
-  :root:not([data-theme="light"]) select optgroup { background-color: #211932; color: #f7f5ff; }
-  :root:not([data-theme="light"]) select option:checked { background-color: #342050; color: #ffffff; }
+  :root:not([data-theme="light"]) select optgroup { background-color: #1b1929; color: #f7f6fc; }
+  :root:not([data-theme="light"]) select option:checked { background-color: #2a2540; color: #ffffff; }
 }
 :root[data-theme="dark"] select { color-scheme: dark; }
 :root[data-theme="dark"] select option,
-:root[data-theme="dark"] select optgroup { background-color: #211932; color: #f7f5ff; }
-:root[data-theme="dark"] select option:checked { background-color: #342050; color: #ffffff; }
+:root[data-theme="dark"] select optgroup { background-color: #1b1929; color: #f7f6fc; }
+:root[data-theme="dark"] select option:checked { background-color: #2a2540; color: #ffffff; }
 select option:disabled { color: #9ca3af; }

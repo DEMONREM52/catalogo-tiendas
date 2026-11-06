@@ -64,7 +64,7 @@ export function ThemeControl() {
     <div className="theme-control fixed bottom-4 left-4 z-[80]">
       <button type="button" aria-label="Apariencia" aria-expanded={open} onClick={() => setOpen((v) => !v)}
         className="theme-control-trigger inline-flex h-11 items-center gap-2 rounded-full border px-3 shadow-lg backdrop-blur-xl transition hover:scale-[1.02]">
-        <span className="theme-control-logo grid h-7 w-7 place-items-center rounded-full text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--t-accent3, #d946ef), var(--t-accent2, #8b5cf6))" }}>
+        <span className="theme-control-logo grid h-7 w-7 place-items-center rounded-full text-white shadow-sm" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, #8b5cf6))" }}>
           <Icon size={15} />
         </span>
         <span className="hidden max-w-32 truncate text-xs font-bold sm:inline">{label}</span>
@@ -73,7 +73,7 @@ export function ThemeControl() {
       {open ? (
         <>
           <button type="button" aria-label="Cerrar" className="fixed inset-0 -z-10 cursor-default" onClick={() => setOpen(false)} />
-          <div role="menu" className="theme-control-menu absolute bottom-14 left-0 max-h-[min(78dvh,40rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-3xl border p-2 shadow-2xl backdrop-blur-2xl">
+          <div role="menu" className="theme-control-menu absolute bottom-14 left-0 max-h-[min(calc(100dvh-6rem),40rem)] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[22px] border p-1.5">
             <p className="px-2 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: "var(--t-muted)" }}>Apariencia</p>
 
             <Section title="Tema oficial">
@@ -115,7 +115,7 @@ export function ThemeControl() {
                   {([["subtle", "Sutil"], ["elegant", "Elegante"], ["premium", "Premium"]] as Array<[Intensity, string]>).map(([k, l]) => (
                     <button key={k} type="button" role="radio" aria-checked={p.intensity === k} onClick={() => void updatePrefs({ intensity: k })}
                       className="rounded-lg px-1 py-1 text-[11px] font-bold transition"
-                      style={p.intensity === k ? { background: "var(--t-accent)", color: "var(--t-on-accent, #fff)" } : { color: "var(--t-text)" }}>{l}</button>
+                      style={p.intensity === k ? { background: "var(--t-accent-soft, transparent)", color: "var(--t-accent)", boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--t-accent) 35%, transparent)" } : { color: "var(--t-muted)" }}>{l}</button>
                   ))}
                 </div>
               ) : null}
@@ -123,11 +123,11 @@ export function ThemeControl() {
               <Switch icon="🐢" label="Reducir animaciones" title="Quita movimientos y transiciones (también lo respeta si tu equipo lo pide)" on={p.reducedMotion} onToggle={() => void updatePrefs({ reducedMotion: !p.reducedMotion })} />
             </Section>
 
-            <div className="mt-1 grid grid-cols-2 gap-1.5 border-t px-1 pt-2" style={{ borderColor: "var(--t-card-border)" }}>
-              <button type="button" disabled={!s.userId} onClick={() => openStudio({ view: "manager" })} className="inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-bold disabled:opacity-50" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5 border-t px-1 pt-2" style={{ borderColor: "color-mix(in oklab, var(--t-text) 7%, transparent)" }}>
+              <button type="button" disabled={!s.userId} onClick={() => openStudio({ view: "manager" })} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold disabled:opacity-50" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 30%, var(--t-card-border))", background: "var(--t-accent-soft, transparent)", color: "var(--t-accent)" }}>
                 <Settings2 size={14} /> Personalizar
               </button>
-              <button type="button" onClick={() => void restoreDefaults()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }} title="Automático, vidrio elegante y fondo animado (no borra tus temas)">
+              <button type="button" onClick={() => void restoreDefaults()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }} title="Automático, vidrio elegante y fondo animado (no borra tus temas)">
                 <Sparkles size={14} /> Restaurar
               </button>
             </div>
@@ -157,9 +157,9 @@ export function ThemesTip({ onManage }: { onManage: () => void }) {
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mt-1.5">
+    <div className="mt-1.5 border-t pt-1.5 first-of-type:border-t-0" style={{ borderColor: "color-mix(in oklab, var(--t-text) 7%, transparent)" }}>
       <div className="flex items-center justify-between px-2 pb-0.5">
-        <p className="text-[11px] font-bold" style={{ color: "var(--t-muted)" }}>{title}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{title}</p>
         {action}
       </div>
       {children}
@@ -170,8 +170,8 @@ function Section({ title, action, children }: { title: string; action?: React.Re
 function Option({ icon, label, hint, active, onClick }: { icon: React.ReactNode; label: string; hint?: string; active: boolean; onClick: () => void }) {
   return (
     <button type="button" role="menuitemradio" aria-checked={active} onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-sm font-semibold transition hover:bg-[color:var(--t-card-bg-soft)]"
-      style={active ? { background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" } : undefined}>
+      className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-[13px] font-semibold transition hover:bg-[color:var(--t-card-bg-soft)]"
+      style={active ? { background: "var(--t-accent-soft, color-mix(in oklab, var(--t-accent) 12%, transparent))", boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--t-accent) 30%, transparent)" } : undefined}>
       <span className="grid h-7 w-7 shrink-0 place-items-center" style={{ color: "var(--t-accent)" }}>{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate">{label}</span>
@@ -196,10 +196,10 @@ export function Dots({ colors, size = 28 }: { colors: string[]; size?: number })
 function Switch({ icon, label, title, on, onToggle }: { icon: string; label: string; title: string; on: boolean; onToggle: () => void }) {
   return (
     <button type="button" role="switch" aria-checked={on} onClick={onToggle} title={title}
-      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-semibold transition hover:bg-[color:var(--t-card-bg-soft)]">
+      className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left text-[13px] font-semibold transition hover:bg-[color:var(--t-card-bg-soft)]">
       <span aria-hidden className="grid h-7 w-7 place-items-center">{icon}</span>
       {label}
-      <span className="ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition" style={{ background: on ? "var(--t-accent)" : "var(--t-card-border)" }}>
+      <span className="ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition" style={{ background: on ? "var(--t-accent)" : "color-mix(in oklab, var(--t-text) 16%, transparent)" }}>
         <span className="h-4 w-4 rounded-full bg-white shadow transition" style={{ transform: on ? "translateX(16px)" : "none" }} />
       </span>
     </button>

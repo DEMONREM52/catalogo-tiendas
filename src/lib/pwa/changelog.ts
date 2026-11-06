@@ -388,6 +388,15 @@ export const RELEASES: Release[] = [
       { icon: "👁️", text: "Míralo en vivo; «Cancelar» deja todo como estaba" },
       { icon: "📱", text: "Tu tema aparece al entrar desde otro celular o computador" },
     ],
+  },  {
+    id: 36, date: "2026-11-06", title: "Obsidian y Pearl más elegantes",
+    summary: "Menos morado: superficies grafito (oscuro) o blanco perla (claro), vidrio más limpio y el violeta solo en lo que importa.",
+    paths: ["/dashboard", "/admin"],
+    demo: [
+      { icon: "🖤", text: "Obsidian: negro y grafito con cristal ahumado" },
+      { icon: "🤍", text: "Pearl: blanco perla con cristal claro" },
+      { icon: "💜", text: "El violeta queda en botones principales y lo seleccionado" },
+    ],
   },
 ];
 

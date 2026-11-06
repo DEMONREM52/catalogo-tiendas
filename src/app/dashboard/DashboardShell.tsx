@@ -282,16 +282,16 @@ export function ModuleNav({ canOpen, isAdmin, at }: { canOpen: (permission: stri
   const current = activeTab(path, tabs);
   return (
     <nav className="mb-3 -mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" aria-label="Secciones del módulo">
-      <div className="inline-flex min-w-full gap-1 rounded-2xl border p-1 sm:min-w-0" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+      <div className="inline-flex min-w-full gap-1 rounded-2xl border p-1 sm:min-w-0" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
         {tabs.map((t) => {
           const on = current?.href === t.href;
           return (
             <Link key={t.href} href={t.href} prefetch={false} aria-current={on ? "page" : undefined}
               className="relative flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition sm:flex-none sm:px-4"
-              style={{ color: on ? "#fff" : "color-mix(in oklab, var(--t-text) 72%, transparent)" }}>
+              style={{ color: on ? "var(--t-text)" : "var(--t-muted)" }}>
               {on ? (
                 <motion.span layoutId="module-tab" className="absolute inset-0 rounded-xl" transition={{ type: "spring", stiffness: 460, damping: 36 }}
-                  style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))", boxShadow: "0 8px 22px color-mix(in oklab, var(--t-accent) 35%, transparent)" }} />
+                  style={{ background: "var(--t-accent-soft, color-mix(in oklab, var(--t-accent) 14%, transparent))", boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--t-accent) 38%, transparent), 0 6px 18px -10px color-mix(in oklab, var(--t-accent) 45%, transparent)" }} />
               ) : null}
               <span className="relative text-sm leading-none">{t.icon}</span>
               <span className="relative">

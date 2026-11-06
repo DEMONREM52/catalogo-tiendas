@@ -47,3 +47,42 @@ Todo el panel ya usaba `--t-*` en sus estilos. El motor calcula esos mismos toke
 4. **Opcional:**
    - Aplicar la densidad a cada componente; hoy se aplica escalando la letra.
    - Hacer que el fondo animado lea la intensidad del tema.
+
+## Corrección visual (2026-11-06): cristal neutro
+
+Qué causaba el exceso de morado y cómo se corrigió en el origen:
+
+- **Fondo de la página.** Tenía luces violetas con 26–55 % de opacidad detrás de todo. Ahora son de 7–10 % y solo en las esquinas.
+- **Vidrio oscuro.** Las tarjetas tenían tinte morado (`rgba(29,22,44,.62)`), una saturación de 160–195 % que multiplicaba el violeta de atrás y un halo violeta en cada borde. Ahora:
+  - las tarjetas son grafito `rgba(25,23,36,.80)`;
+  - la saturación es de 115–140 %;
+  - el reflejo superior es blanco tenue;
+  - la sombra es neutra.
+- **Superficies de Obsidian.** Las base eran violeta (`#171225`). Ahora son `#14131F`, el fondo es `#09090F` y los campos `#0D0D16`, más oscuros que la tarjeta.
+- **Pearl.** Tarjetas blancas, campos `#F7F7FB`, bordes `rgba(100,80,140,.12)` y luces de 6–9 %.
+- **Tarjetas dentro de tarjetas.** Antes se desenfocaban dos veces y acumulaban el color. Ahora no tienen segundo desenfoque ni reflejo.
+- **Celular.** Las tarjetas son casi sólidas (90 %) y neutras.
+- **Tokens nuevos:**
+  - `--t-accent-soft` (para lo seleccionado);
+  - `--t-popover` y `--t-popover-border` (menús flotantes);
+  - `--t-on-accent` en oscuro es casi negro, porque blanco sobre `#A78BFA` no pasa el contraste AA.
+- **Pestañas de módulo y menú Apariencia.** Lo activo es un fondo suave con borde fino de acento, ya no un degradado magenta con brillo.
+- **Productos.** Ya no usa clases fijas (`bg-white/70`, `dark:bg-white/5`, fucsia); usa los tokens. Cada botón tiene su papel:
+  - Crear es la acción principal (acento lleno);
+  - Editar y Ver son neutros;
+  - Activar e Inactivar son semánticos (ámbar o verde);
+  - Eliminar es peligro (rojo).
+
+### Compatibilidad
+
+`THEME_SCHEMA_VERSION = 2`. Los temas guardados con `v: 1` conservan sus fórmulas y niveles de vidrio de antes (prueba en `tests/appearance/theme.test.ts`). Los temas nuevos nacen en v2. No hace falta ninguna migración de la base.
+
+### Validación visual
+
+Se tomaron capturas con Chrome sin ventana, sobre una página de prueba que carga el CSS compilado de RemHub con el mismo marcado que el menú lateral, las pestañas, Productos y Apariencia. Se probaron cuatro casos: oscuro con vidrio, oscuro sin vidrio, claro con vidrio y claro sin vidrio, más el celular. El panel real requiere sesión, así que hay que revisarlo en el navegador:
+
+1. Productos, en Obsidian con y sin vidrio.
+2. Productos, en Pearl con y sin vidrio.
+3. El menú Apariencia abierto.
+4. Facturación y POS.
+5. El celular y la PWA instalada.

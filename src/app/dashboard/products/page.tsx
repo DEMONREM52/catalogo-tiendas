@@ -52,40 +52,23 @@ type LandingFilter = "all" | "landing" | "no-landing";
 type ImageFilter = "all" | "with-image" | "without-image";
 
 /* ========= UI ========= */
+// Todo con los tokens del tema (Pearl, Obsidian o el personal): sin colores fijos.
 function clsWrap() {
-  return [
-    "rounded-xl border backdrop-blur-xl",
-    "border-slate-200/70 bg-white/70 text-slate-900",
-    "dark:border-white/10 dark:bg-white/5 dark:text-white",
-  ].join(" ");
+  return "rounded-2xl border border-[color:var(--t-card-border)] bg-[color:var(--t-card-bg)] text-[color:var(--t-text)] shadow-[var(--t-shadow)]";
 }
 function clsInput() {
-  return [
-    "w-full rounded-xl border p-3 text-sm outline-none backdrop-blur-xl",
-    "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400",
-    "dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40",
-  ].join(" ");
+  return "w-full rounded-xl border border-[color:var(--t-card-border)] bg-[color:var(--t-input-bg)] p-3 text-sm text-[color:var(--t-text)] outline-none placeholder:text-[color:var(--t-muted)]";
 }
 function clsBtnSoft() {
-  return [
-    "rounded-xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
-    "border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
-    "dark:border-white/10 dark:bg-white/5 dark:text-white/90 dark:hover:bg-white/10",
-  ].join(" ");
+  // Neutro (Editar, Ver, Recargar).
+  return "rounded-xl border border-[color:var(--t-card-border)] bg-[color:var(--t-card-bg-soft)] px-4 py-2 text-sm font-semibold text-[color:var(--t-text)] transition hover:border-[color:color-mix(in_oklab,var(--t-text)_22%,transparent)] disabled:opacity-60";
 }
 function clsBtnPrimary() {
-  return [
-    "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    "border-fuchsia-300 bg-fuchsia-100 text-slate-900 hover:bg-fuchsia-200",
-    "dark:border-fuchsia-400/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-100 dark:hover:bg-fuchsia-500/25",
-    "dark:shadow-[0_0_22px_rgba(217,70,239,0.15)]",
-  ].join(" ");
+  // Acción principal (Crear): el único botón con acento lleno.
+  return "rounded-xl border border-transparent bg-[color:var(--t-accent)] px-4 py-2 text-sm font-bold text-[color:var(--t-on-accent)] shadow-[0_8px_22px_-12px_var(--t-accent)] transition hover:brightness-110 disabled:opacity-60";
 }
 function clsChipBase() {
-  return [
-    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold",
-    "text-slate-900 dark:text-white",
-  ].join(" ");
+  return "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold text-[color:var(--t-text)]";
 }
 
 function money(n: number) {
@@ -712,14 +695,14 @@ export default function ProductsListPage() {
   }
 
   return (
-    <main className="min-w-0 px-4 py-3 text-slate-900 dark:text-white sm:px-6 sm:py-4 md:px-8">
+    <main className="min-w-0 px-4 py-3 text-[color:var(--t-text)] sm:px-6 sm:py-4 md:px-8">
       <div className="space-y-4">
         <div className={`${clsWrap()} p-3.5 sm:p-5`}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h1 className="text-lg font-bold leading-tight sm:text-2xl">Productos</h1>
-                <p className="text-[11px] text-slate-600 sm:text-sm dark:text-white/70">
-                  <b className="text-slate-900 dark:text-white/90">{filtered.length}</b> de <b className="text-slate-900 dark:text-white/90">{products.length}</b> cargados
+                <p className="text-[11px] text-[color:var(--t-muted)] sm:text-sm">
+                  <b className="text-[color:var(--t-text)]">{filtered.length}</b> de <b className="text-[color:var(--t-text)]">{products.length}</b> cargados
                   {searching ? <span className="ml-1">· <b>Buscando…</b></span> : null}
                 </p>
               </div>
@@ -746,11 +729,11 @@ export default function ProductsListPage() {
                 <details className="relative md:hidden">
                   <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border text-lg font-black [&::-webkit-details-marker]:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Más opciones">⋯</summary>
                   <div role="menu" className="absolute right-0 z-30 mt-2 grid w-60 gap-1 rounded-2xl border p-1.5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-                    <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); void reloadAll(); }} disabled={loading || loadingMore || searching} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-fuchsia-500/10 disabled:opacity-50">🔄 Recargar</button>
-                    <Link role="menuitem" href="/dashboard/products/importar" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-fuchsia-500/10">📥 Importar Excel</Link>
-                    <Link role="menuitem" href="/dashboard/datos" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-fuchsia-500/10">📦 Exportar / importar todo</Link>
+                    <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); void reloadAll(); }} disabled={loading || loadingMore || searching} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)] disabled:opacity-50">🔄 Recargar</button>
+                    <Link role="menuitem" href="/dashboard/products/importar" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">📥 Importar Excel</Link>
+                    <Link role="menuitem" href="/dashboard/datos" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">📦 Exportar / importar todo</Link>
                     {canDelete && storeId ? (
-                      <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); setCleaning(true); }} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-fuchsia-500/10">🧹 Limpiar sin movimientos</button>
+                      <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); setCleaning(true); }} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">🧹 Limpiar sin movimientos</button>
                     ) : null}
                   </div>
                 </details>
@@ -760,17 +743,17 @@ export default function ProductsListPage() {
               </div>
             </div>
 
-            <section className="mt-3 md:mt-4 md:rounded-2xl md:border md:border-slate-200 md:bg-slate-50/80 md:p-4 md:dark:border-white/10 md:dark:bg-black/15">
+            <section className="mt-3 md:mt-4 md:rounded-2xl md:border md:border-[color:var(--t-card-border)] md:bg-[color:var(--t-card-bg-soft)] md:p-4">
               <div className="hidden flex-wrap items-center justify-between gap-2 md:flex">
                 <div>
                   <h2 className="text-sm font-bold">Búsqueda y filtros</h2>
-                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-white/55">
+                  <p className="mt-0.5 text-[11px] text-[color:var(--t-muted)]">
                     Encuentra y organiza los productos de tu tienda.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {activeFilterCount ? (
-                    <span className="rounded-full border border-fuchsia-300 bg-fuchsia-100 px-2.5 py-1 text-[11px] font-bold text-fuchsia-800 dark:border-fuchsia-400/25 dark:bg-fuchsia-500/10 dark:text-fuchsia-200">
+                    <span className="rounded-full border border-[color:color-mix(in_oklab,var(--t-accent)_35%,transparent)] bg-[color:var(--t-accent-soft)] px-2.5 py-1 text-[11px] font-bold text-[color:var(--t-accent)]">
                       {activeFilterCount} {activeFilterCount === 1 ? "filtro activo" : "filtros activos"}
                     </span>
                   ) : null}
@@ -778,7 +761,7 @@ export default function ProductsListPage() {
                     type="button"
                     onClick={clearFilters}
                     disabled={activeFilterCount === 0}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+                    className="rounded-lg border border-[color:var(--t-card-border)] bg-[color:var(--t-card-bg-soft)] px-3 py-1.5 text-xs font-semibold text-[color:var(--t-text)] transition disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     Limpiar
                   </button>
@@ -849,21 +832,21 @@ export default function ProductsListPage() {
                 <option value="none">Social: Sin publicaciones</option>
               </select>
             </div>
-            <details className="mt-3 rounded-xl border border-slate-200 bg-white/75 p-3 dark:border-white/10 dark:bg-white/[0.035]">
+            <details className="mt-3 rounded-xl border border-[color:var(--t-card-border)] bg-[color:var(--t-card-bg-soft)] p-3">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-bold">
                 <span>Filtros avanzados</span>
-                <span className="text-slate-500 dark:text-white/50">Precio · ficha · fotos · fechas</span>
+                <span className="text-[color:var(--t-muted)]">Precio · ficha · fotos · fechas</span>
               </summary>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Precio mínimo
                   <MoneyInput allowEmpty className={`${clsInput()} mt-1`} placeholder="$ 0" value={minPrice === "" ? null : Number(minPrice)} onValueChange={(v) => setMinPrice(v === null ? "" : String(v))} />
                 </label>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Precio máximo
                   <MoneyInput allowEmpty className={`${clsInput()} mt-1`} placeholder="Sin límite" value={maxPrice === "" ? null : Number(maxPrice)} onValueChange={(v) => setMaxPrice(v === null ? "" : String(v))} />
                 </label>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Ficha del producto
                   <select className={`${clsInput()} mt-1`} value={landingFilter} onChange={(event) => setLandingFilter(event.target.value as LandingFilter)}>
                     <option value="all">Todas las fichas</option>
@@ -871,7 +854,7 @@ export default function ProductsListPage() {
                     <option value="no-landing">Sin ficha pública</option>
                   </select>
                 </label>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Fotos
                   <select className={`${clsInput()} mt-1`} value={imageFilter} onChange={(event) => setImageFilter(event.target.value as ImageFilter)}>
                     <option value="all">Con o sin fotos</option>
@@ -879,11 +862,11 @@ export default function ProductsListPage() {
                     <option value="without-image">Sin fotos</option>
                   </select>
                 </label>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Creado desde
                   <DateField value={createdFrom} onChange={(v) => setCreatedFrom(v)} max={createdTo || undefined} className="mt-1" />
                 </label>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-white/65">
+                <label className="text-[11px] font-semibold text-[color:var(--t-muted)]">
                   Creado hasta
                   <DateField value={createdTo} onChange={(v) => setCreatedTo(v)} min={createdFrom || undefined} className="mt-1" />
                 </label>
@@ -905,7 +888,7 @@ export default function ProductsListPage() {
             ) : null}
             </div>
 
-            <p className="mt-2 hidden text-[11px] text-slate-600 sm:text-xs md:block dark:text-white/60">
+            <p className="mt-2 hidden text-[11px] text-[color:var(--t-muted)] sm:text-xs md:block">
               {isSearchMode
                 ? "Búsqueda PRO: corrige palabras, permite varias palabras y rankea resultados. (50 por página)"
                 : `(Cargando en bloques de ${PAGE_SIZE}. Usa “Cargar más” al final)`}
@@ -921,7 +904,7 @@ export default function ProductsListPage() {
         ) : filtered.length === 0 ? (
           <div className={`${clsWrap()} p-6`}>
             <p className="font-semibold">No hay resultados</p>
-            <p className="mt-1 text-sm text-slate-600 dark:text-white/70">
+            <p className="mt-1 text-sm text-[color:var(--t-muted)]">
               {hasMoreSearch || hasMore
                 ? "No hay coincidencias en los productos cargados. Puedes cargar más o ajustar los filtros."
                 : "Prueba cambiando filtros o la búsqueda."}
@@ -944,7 +927,7 @@ export default function ProductsListPage() {
               const letter = firstLetter(p.name);
 
               return (
-                <div key={p.id} className="border-b border-slate-200/50 transition-colors hover:bg-slate-50/60 dark:border-white/[0.07] dark:hover:bg-white/[0.025]">
+                <div key={p.id} className="border-b border-[color:var(--t-border)] transition-colors last:border-b-0 hover:bg-[color:var(--t-card-bg-soft)]">
                   {/* Celular: foto y nombre a todo lo ancho; las acciones bajan a su propia fila. */}
                   <div className="flex w-full flex-wrap items-start gap-x-3 gap-y-2 px-3 py-3 sm:flex-nowrap sm:items-center">
                     {/* Miniatura */}
@@ -965,12 +948,12 @@ export default function ProductsListPage() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="min-w-0 whitespace-normal break-words text-sm font-semibold leading-snug [overflow-wrap:anywhere] sm:text-base">
                           {p.name}
-                          {p.sku ? <span className="ml-1.5 whitespace-nowrap rounded-md bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-slate-500 dark:bg-white/10 dark:text-white/55">Cód. {p.sku}</span> : null}
+                          {p.sku ? <span className="ml-1.5 whitespace-nowrap rounded-md bg-[color:var(--t-card-bg-soft)] px-1.5 py-0.5 align-middle text-[10px] font-bold text-[color:var(--t-muted)]">Cód. {p.sku}</span> : null}
                         </p>
 
                         {!p.active ? (
                           <span
-                            className={`${clsChipBase()} border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-white/70`}
+                            className={`${clsChipBase()} border-[color:var(--t-card-border)] bg-[color:var(--t-card-bg-soft)] text-[color:var(--t-muted)]`}
                           >
                             Inactivo
                           </span>
@@ -987,14 +970,14 @@ export default function ProductsListPage() {
                         </span>
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-white/70">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--t-muted)]">
                         {([p.price_1, p.price_2, p.price_3, p.price_4, p.price_5] as Array<number | null | undefined>).map((v, i) => (
-                          <span key={i} className={`${i === 1 || i === 2 ? "" : "hidden sm:inline"} rounded-md border border-slate-300 px-1.5 py-0.5 dark:border-white/15`} title={`Precio ${i + 1}${i === 1 ? " (mayor)" : i === 2 ? " (detal)" : ""}`}>
-                            P{i + 1}: <b className="text-slate-900 dark:text-white/90">{money(Number(v ?? 0))}</b>
+                          <span key={i} className={`${i === 1 || i === 2 ? "" : "hidden sm:inline"} rounded-md border border-[color:var(--t-card-border)] px-1.5 py-0.5`} title={`Precio ${i + 1}${i === 1 ? " (mayor)" : i === 2 ? " (detal)" : ""}`}>
+                            P{i + 1}: <b className="text-[color:var(--t-text)]">{money(Number(v ?? 0))}</b>
                           </span>
                         ))}
-                        <span className="hidden text-slate-300 sm:inline dark:text-white/30">·</span>
-                        <span className="hidden text-slate-500 sm:inline dark:text-white/60">{formatDate(p.created_at)}</span>
+                        <span className="hidden text-[color:var(--t-muted)] opacity-50 sm:inline">·</span>
+                        <span className="hidden text-[color:var(--t-muted)] sm:inline">{formatDate(p.created_at)}</span>
                       </div>
                     </div>
 
@@ -1081,14 +1064,14 @@ export default function ProductsListPage() {
                     {searching ? "Cargando…" : "Cargar más resultados"}
                   </button>
                 ) : (
-                  <div className="text-xs text-slate-500 dark:text-white/50">No hay más resultados de búsqueda.</div>
+                  <div className="text-xs text-[color:var(--t-muted)]">No hay más resultados de búsqueda.</div>
                 )
               ) : hasMore ? (
                 <button className={clsBtnPrimary()} type="button" onClick={loadMore} disabled={loadingMore}>
                   {loadingMore ? "Cargando…" : "Cargar más"}
                 </button>
               ) : (
-                <div className="text-xs text-slate-500 dark:text-white/50">
+                <div className="text-xs text-[color:var(--t-muted)]">
                   {storeId ? "No hay más productos por cargar." : "Detectando tienda…"}
                 </div>
               )}

@@ -7,7 +7,7 @@ import {
 } from "../../src/lib/appearance/theme";
 
 test("los temas oficiales usan la paleta pedida y se leen bien (AA)", () => {
-  assert.equal(OBSIDIAN.colors.bg, "#090711");
+  assert.equal(OBSIDIAN.colors.bg, "#09090f");
   assert.equal(OBSIDIAN.colors.accent, "#a78bfa");
   assert.equal(PEARL.colors.bg, "#f8f9fd");
   assert.equal(PEARL.colors.accent, "#7545d6");
@@ -71,4 +71,18 @@ test("exportar e importar devuelve el mismo tema; un archivo ajeno se rechaza", 
   assert.throws(() => importTheme("no es json"), /JSON/);
   assert.throws(() => importTheme(JSON.stringify({ hola: 1 })), /no es un tema/);
   assert.equal(importTheme(JSON.stringify({ remhub_theme: 1, name: "<b>X</b>", config: {} })).name, "bX/b");
+});
+
+test("compatibilidad: un tema guardado con v1 se pinta igual que antes; lo nuevo nace en v2", async () => {
+  const { effectiveGlass, THEME_SCHEMA_VERSION } = await import("../../src/lib/appearance/theme");
+  const v1 = normalizeTheme({ v: 1, base: "dark", glass: { level: "elegant" } });
+  assert.equal(v1.v, 1);
+  assert.equal(effectiveGlass(v1).blur, 18);
+  assert.equal(effectiveGlass(v1).saturation, 160);
+  const fresh = normalizeTheme({ base: "dark", glass: { level: "elegant" } });
+  assert.equal(fresh.v, THEME_SCHEMA_VERSION);
+  assert.equal(effectiveGlass(fresh).saturation, 125);
+  // v2: sin halo violeta en el borde del vidrio.
+  assert.ok(!/139, 92, 246|167, 139, 250/.test(themeTokens(OBSIDIAN)["--t-glass-edge"]));
+  assert.equal(OBSIDIAN.colors.surface, "#14131f");
 });

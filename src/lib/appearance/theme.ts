@@ -8,7 +8,11 @@
  * Los mismos límites se revisan en la base (erp__theme_config_valid, migración 20261284).
  */
 
-export const THEME_SCHEMA_VERSION = 1;
+/**
+ * 2 = paleta «cristal neutro» (2026-11-06): superficies grafito/perla, violeta solo en acentos.
+ * Los temas guardados con v1 se siguen pintando EXACTAMENTE como antes (sus fórmulas y niveles de vidrio se conservan).
+ */
+export const THEME_SCHEMA_VERSION = 2;
 /** Tamaño máximo de una configuración (protección técnica; la cantidad de temas no tiene límite). */
 export const MAX_CONFIG_BYTES = 6000;
 
@@ -45,31 +49,31 @@ const HEX = /^#[0-9a-f]{6}$/;
 /* ------------------------------------------------------------------ temas oficiales (no se pueden borrar ni cambiar) */
 
 export const OBSIDIAN: ThemeConfig = {
-  v: 1,
+  v: 2,
   base: "dark",
   colors: {
     accent: "#a78bfa", accent2: "#8b5cf6", accent3: "#d946ef",
-    bg: "#090711", surface: "#171225", menu: "#120e1d", dialog: "#211932", input: "#1b1528",
-    text: "#f7f5ff", muted: "#b5abc8",
+    bg: "#09090f", surface: "#14131f", menu: "#0d0d16", dialog: "#1b1929", input: "#0d0d16",
+    text: "#f7f6fc", muted: "#aaa5bb",
   },
-  background: { kind: "glow", from: "#342050", to: "#090711", angle: 160, intensity: 38 },
-  glass: { level: "elegant", opacity: 78, blur: 18, saturation: 160, border: 12, shadow: 55, sheen: 30 },
-  layout: { radius: 16, density: "normal", fontScale: 100, dividers: 12 },
-  effects: { ambient: 40, halo: true, hover: true },
+  background: { kind: "glow", from: "#1b1929", to: "#09090f", angle: 160, intensity: 30 },
+  glass: { level: "elegant", opacity: 80, blur: 14, saturation: 125, border: 9, shadow: 60, sheen: 25 },
+  layout: { radius: 16, density: "normal", fontScale: 100, dividers: 7 },
+  effects: { ambient: 30, halo: true, hover: true },
 };
 
 export const PEARL: ThemeConfig = {
-  v: 1,
+  v: 2,
   base: "light",
   colors: {
     accent: "#7545d6", accent2: "#8b5cf6", accent3: "#c026d3",
-    bg: "#f8f9fd", surface: "#ffffff", menu: "#fbfafe", dialog: "#ffffff", input: "#f5f1fa",
+    bg: "#f8f9fd", surface: "#ffffff", menu: "#ffffff", dialog: "#ffffff", input: "#f7f7fb",
     text: "#20192e", muted: "#625b70",
   },
-  background: { kind: "glow", from: "#eae5f5", to: "#f8f9fd", angle: 160, intensity: 30 },
-  glass: { level: "elegant", opacity: 82, blur: 16, saturation: 150, border: 14, shadow: 30, sheen: 45 },
+  background: { kind: "glow", from: "#efeaf8", to: "#f8f9fd", angle: 160, intensity: 25 },
+  glass: { level: "elegant", opacity: 82, blur: 14, saturation: 120, border: 12, shadow: 25, sheen: 35 },
   layout: { radius: 16, density: "normal", fontScale: 100, dividers: 10 },
-  effects: { ambient: 30, halo: true, hover: true },
+  effects: { ambient: 25, halo: true, hover: true },
 };
 
 export const OFFICIAL_THEMES: Array<ThemeMeta & { config: ThemeConfig; official: true }> = [
@@ -164,7 +168,8 @@ export function normalizeTheme(input: unknown): ThemeConfig {
   const d = officialFor(base);
   const c = obj(raw.colors), bg = obj(raw.background), g = obj(raw.glass), l = obj(raw.layout), e = obj(raw.effects);
   return {
-    v: THEME_SCHEMA_VERSION,
+    // Se conserva la versión con la que se guardó (v1 se pinta como antes); lo nuevo nace en la actual.
+    v: raw.v === 1 ? 1 : THEME_SCHEMA_VERSION,
     base,
     colors: {
       accent: color(c.accent, d.colors.accent), accent2: color(c.accent2, d.colors.accent2), accent3: color(c.accent3, d.colors.accent3),
@@ -192,14 +197,24 @@ export function normalizeTheme(input: unknown): ThemeConfig {
 }
 
 /** Niveles de vidrio prearmados (el «personalizado» usa los números del tema). */
-export const GLASS_PRESETS: Record<Exclude<GlassLevel, "custom">, Pick<ThemeConfig["glass"], "opacity" | "blur" | "saturation" | "sheen">> = {
+type GlassPreset = Record<Exclude<GlassLevel, "custom">, Pick<ThemeConfig["glass"], "opacity" | "blur" | "saturation" | "sheen">>;
+/** v2: desenfoque moderado y poca saturación (la saturación alta pintaba de morado todo lo que había detrás). */
+export const GLASS_PRESETS: GlassPreset = {
+  off: { opacity: 100, blur: 0, saturation: 100, sheen: 0 },
+  subtle: { opacity: 92, blur: 8, saturation: 115, sheen: 15 },
+  elegant: { opacity: 82, blur: 14, saturation: 125, sheen: 25 },
+  premium: { opacity: 70, blur: 20, saturation: 140, sheen: 40 },
+};
+/** v1 (temas guardados antes del 2026-11-06): se conservan tal cual. */
+const GLASS_PRESETS_V1: GlassPreset = {
   off: { opacity: 100, blur: 0, saturation: 100, sheen: 0 },
   subtle: { opacity: 90, blur: 10, saturation: 130, sheen: 20 },
   elegant: { opacity: 80, blur: 18, saturation: 160, sheen: 35 },
   premium: { opacity: 66, blur: 26, saturation: 190, sheen: 55 },
 };
 export function effectiveGlass(t: ThemeConfig) {
-  return t.glass.level === "custom" ? t.glass : { ...t.glass, ...GLASS_PRESETS[t.glass.level] };
+  if (t.glass.level === "custom") return t.glass;
+  return { ...t.glass, ...(t.v < 2 ? GLASS_PRESETS_V1 : GLASS_PRESETS)[t.glass.level] };
 }
 
 /* ------------------------------------------------------------------ revisión de accesibilidad */
@@ -243,11 +258,14 @@ export function fixReadability(t: ThemeConfig): ThemeConfig {
 export function themeTokens(input: ThemeConfig): Record<string, string> {
   const t = normalizeTheme(input);
   const c = t.colors, g = effectiveGlass(t), dark = t.base === "dark";
+  const legacy = t.v < 2;
   const alpha = g.opacity / 100;
   const amb = t.background.intensity / 100;
+  // Luces de fondo: en v2 son muy suaves (el violeta va en los acentos, no detrás de cada tarjeta).
+  const glowA = legacy ? [(dark ? 0.28 : 0.16) * 1.6, (dark ? 0.16 : 0.1) * 1.6, 0.5] : [dark ? 0.34 : 0.26, dark ? 0.16 : 0.12, 0.9];
   const bgImage = t.background.kind === "solid" ? "none"
     : t.background.kind === "gradient" ? `linear-gradient(${t.background.angle}deg, ${rgba(t.background.from, 0.35 + amb * 0.65)}, ${rgba(t.background.to, 0.35 + amb * 0.65)})`
-      : `radial-gradient(900px 620px at 12% 0%, ${rgba(c.accent2, (dark ? 0.28 : 0.16) * amb * 1.6)}, transparent 64%), radial-gradient(820px 640px at 96% 100%, ${rgba(c.accent3, (dark ? 0.16 : 0.1) * amb * 1.6)}, transparent 64%), radial-gradient(900px 700px at 60% 40%, ${rgba(t.background.from, 0.5 * amb)}, transparent 70%)`;
+      : `radial-gradient(900px 620px at 12% 0%, ${rgba(c.accent2, glowA[0] * amb)}, transparent 64%), radial-gradient(820px 640px at 96% 100%, ${rgba(c.accent3, glowA[1] * amb)}, transparent 64%), radial-gradient(900px 700px at 60% 40%, ${rgba(t.background.from, glowA[2] * amb)}, transparent 70%)`;
   const divider = t.layout.dividers / 100;
   const shadowA = (t.glass.shadow / 100) * (dark ? 0.7 : 0.22);
   const sheenA = g.sheen / 100;
@@ -284,11 +302,22 @@ export function themeTokens(input: ThemeConfig): Record<string, string> {
     "--t-glass-blur": `${g.blur}px`,
     "--t-glass-sat": `${g.saturation}%`,
     "--t-glass-card": rgba(c.surface, alpha),
-    "--t-glass-border": rgba(dark ? "#ffffff" : c.accent, (t.glass.border / 100) * (dark ? 1 : 1.2)),
-    "--t-glass-edge": `inset 0 1px 0 ${rgba("#ffffff", dark ? 0.08 + sheenA * 0.12 : 0.6 + sheenA * 0.35)}, 0 14px 38px -16px ${dark ? `rgba(0, 0, 0, ${(0.4 + shadowA * 0.5).toFixed(2)})` : rgba(c.accent, 0.12 + shadowA)}`,
-    "--t-glass-sheen": `linear-gradient(135deg, ${rgba("#ffffff", (dark ? 0.09 : 0.5) * sheenA)} 0%, ${rgba("#ffffff", (dark ? 0.02 : 0.1) * sheenA)} 40%, transparent 62%, ${rgba(c.accent2, 0.1 * sheenA)} 100%)`,
+    ...(legacy ? {
+      "--t-glass-border": rgba(dark ? "#ffffff" : c.accent, (t.glass.border / 100) * (dark ? 1 : 1.2)),
+      "--t-glass-edge": `inset 0 1px 0 ${rgba("#ffffff", dark ? 0.08 + sheenA * 0.12 : 0.6 + sheenA * 0.35)}, 0 14px 38px -16px ${dark ? `rgba(0, 0, 0, ${(0.4 + shadowA * 0.5).toFixed(2)})` : rgba(c.accent, 0.12 + shadowA)}`,
+      "--t-glass-sheen": `linear-gradient(135deg, ${rgba("#ffffff", (dark ? 0.09 : 0.5) * sheenA)} 0%, ${rgba("#ffffff", (dark ? 0.02 : 0.1) * sheenA)} 40%, transparent 62%, ${rgba(c.accent2, 0.1 * sheenA)} 100%)`,
+    } : {
+      // v2: borde fino translúcido, reflejo delicado arriba y sombra amplia neutra (sin halo violeta).
+      "--t-glass-border": rgba(dark ? "#ffffff" : mix(c.text, c.accent, 0.4), t.glass.border / 100),
+      "--t-glass-edge": `inset 0 1px 0 ${rgba("#ffffff", dark ? 0.05 + sheenA * 0.08 : 0.75 + sheenA * 0.2)}, 0 18px 48px -22px ${dark ? `rgba(0, 0, 0, ${(0.45 + shadowA * 0.35).toFixed(2)})` : rgba(c.text, 0.08 + shadowA * 0.5)}`,
+      "--t-glass-sheen": `linear-gradient(180deg, ${rgba("#ffffff", (dark ? 0.05 : 0.55) * sheenA)} 0%, ${rgba("#ffffff", 0)} 42%)`,
+    }),
     "--t-glass-dialog": rgba(c.dialog, Math.max(alpha, 0.88)),
     "--t-glass-input": rgba(c.input, Math.max(alpha, 0.8)),
+    "--t-accent-soft": rgba(c.accent, dark ? 0.12 : 0.08),
+    // Menús flotantes (Apariencia, notificaciones…): cristal casi sólido.
+    "--t-popover": rgba(c.dialog, 0.94),
+    "--t-popover-border": dark ? "rgba(255, 255, 255, 0.12)" : rgba(c.text, 0.12),
   };
 }
 
