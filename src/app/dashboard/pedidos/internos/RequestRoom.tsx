@@ -261,6 +261,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Un mensaje nuevo del otro borra el «escribiendo…».
   useEffect(() => { setTyping(null); }, [messageCount]);
 
+  // Quien tiene permiso de traslados puede anular el traslado en camino (y con él, el pedido).
+  const [canVoidTransfer, setCanVoidTransfer] = useState(false);
+  const permStore = data?.request.store_id ?? null;
+  useEffect(() => {
+    if (!permStore) return;
+    let alive = true;
+    void supabaseBrowser().rpc("erp_can", { p_store: permStore, p_perm: "transfers" }).then(({ data: ok }) => { if (alive) setCanVoidTransfer(ok === true); });
+    return () => { alive = false; };
+  }, [permStore]);
+
   async function run(fn: string, args: Record<string, unknown>, ok: string) {
     setBusy(true);
     if (requestId) markOwnAction(requestId);
@@ -342,6 +352,19 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     const res = await Swal.fire({ ...swal, icon: "warning", title: action === "reject" ? "Rechazar pedido" : "Cancelar pedido", input: "text", inputPlaceholder: "Motivo (se verá en el chat)", showCancelButton: true, confirmButtonText: action === "reject" ? "Rechazar" : "Cancelar pedido", cancelButtonText: "Volver", confirmButtonColor: "#ef4444", inputValidator: (v) => (v.trim() ? null : "Escribe el motivo.") });
     if (!res.isConfirmed) return;
     await run("erp_stock_request_close", { p_request: data.request.id, p_action: action, p_reason: res.value }, action === "reject" ? "Pedido rechazado" : "Pedido cancelado");
+  }
+
+  /** Anula el traslado en camino: la mercancía vuelve a quien la envió y el pedido queda cancelado (20261282). */
+  async function voidTransfer() {
+    if (!data?.transfer) return;
+    const res = await Swal.fire({ ...swal, icon: "warning", title: `Anular pedido y traslado #${data.transfer.number}`,
+      html: `Las unidades vuelven al inventario de <b>${data.request.from_name ?? "quien las envió"}</b> y el pedido queda cancelado.<br><small>Hazlo solo si la mercancía no salió o ya regresó.</small>`,
+      input: "text", inputPlaceholder: "Motivo (se verá en el chat)", showCancelButton: true, confirmButtonText: "Anular", cancelButtonText: "Volver", confirmButtonColor: "#ef4444",
+      inputValidator: (v) => (v.trim() ? null : "Escribe el motivo.") });
+    if (!res.isConfirmed) return;
+    const reason = String(res.value).trim();
+    const done = await run("erp_cancel_transfer", { p_transfer: data.transfer.id, p_reason: reason }, "Pedido y traslado anulados");
+    if (done !== null) void supabaseBrowser().rpc("erp_stock_request_message", { p_request: data.request.id, p_body: `Motivo de la anulación: ${reason}` }).then(() => void load());
   }
 
   // "Recibió" se firma antes de recibir: sin firma no se confirma.
@@ -647,6 +670,11 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         {canAttend ? (
           <button type="button" disabled={busy} onClick={() => void close("reject")} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-semibold text-red-400" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }}>
             <Ban size={14} /> Rechazar
+          </button>
+        ) : null}
+        {r.status === "dispatched" && data.transfer?.status === "in_transit" && canVoidTransfer ? (
+          <button type="button" disabled={busy} onClick={() => void voidTransfer()} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-semibold text-red-400" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }}>
+            <Ban size={14} /> Anular pedido y traslado
           </button>
         ) : null}
         {canCancel ? (

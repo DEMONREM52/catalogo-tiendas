@@ -330,6 +330,17 @@ export const RELEASES: Release[] = [
       { icon: "📦", text: "Cada pedido muestra qué producto coincidió" },
     ],
   },
+  {
+    id: 31, date: "2026-11-06", title: "Anular pedido y traslado juntos",
+    summary: "Si se anula el traslado de un pedido interno, el pedido queda cancelado y deja de salir «En camino». Quien tiene permiso de traslados lo puede anular desde el mismo pedido.",
+    paths: ["/dashboard/pedidos", "/dashboard/inventario"],
+    demo: [
+      { icon: "🚚", text: "Abre el pedido que está «En camino»" },
+      { icon: "🚫", text: "Toca «Anular pedido y traslado» y escribe el motivo" },
+      { icon: "↩️", text: "La mercancía vuelve a quien la envió" },
+      { icon: "💬", text: "El chat del pedido lo deja anotado" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

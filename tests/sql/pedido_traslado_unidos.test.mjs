@@ -1,4 +1,4 @@
-// Pruebas de 20261280: recibir el traslado (por el panel o el enlace) también cierra su pedido interno.
+// Pruebas de 20261280 y 20261282: recibir el traslado (por el panel o el enlace) también cierra su pedido interno.
 import { makeDb } from "./setup.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -148,5 +148,31 @@ ok(typeof tooMany === "string" && /origen solo tiene/.test(tooMany) && (await ra
 const neg = await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [T8, JSON.stringify([{ product_id: Q, received_qty: -1 }])]).then(() => null).catch((e) => e.message);
 ok(typeof neg === "string" && /no es válida/.test(neg), "Cantidades negativas siguen sin aceptarse", neg);
 
-console.log(`\n${pass} bien, ${fail} mal`);
+// 9) 20261282: anular el traslado anula su pedido (y arregla los que ya quedaron colgados).
+const nine = await requestWithTransfer(9);
+const ten = await requestWithTransfer(10);
+await as(OWNER, "select public.erp_cancel_transfer($1, 'no salió')", [ten.T]); // anulado ANTES de la migración: queda colgado
+ok((await raw("select status from erp_stock_requests where id = $1", [ten.R]))[0].status === "dispatched", "Antes de 20261282 el pedido quedaba «En camino» con el traslado anulado");
+const M3 = fs.readFileSync(path.join(MIG, "20261282_anular_traslado_anula_pedido.sql"), "utf8");
+await db.exec(M3);
+await db.exec(M3);
+const fixed = (await raw("select status, closed_at from erp_stock_requests where id = $1", [ten.R]))[0];
+ok(fixed.status === "cancelled" && fixed.closed_at, "La migración cancela los pedidos que ya estaban colgados", fixed);
+ok(Number((await raw("select count(*) n from erp_stock_request_messages where request_id = $1 and body like '🚫%'", [ten.R]))[0].n) === 1, "Y lo deja una sola vez en el chat (aunque se corra dos veces)");
+const before = Number((await raw("select coalesce(sum(qty), 0) q from erp_stock_levels where warehouse_id = $1 and product_id = $2", [B1, P]))[0].q);
+await as(OWNER, "select public.erp_cancel_transfer($1, 'se equivocaron')", [nine.T]);
+const r9 = (await raw("select status, closed_at from erp_stock_requests where id = $1", [nine.R]))[0];
+ok(r9.status === "cancelled" && r9.closed_at, "Al anular el traslado, el pedido queda cancelado", r9);
+const after = Number((await raw("select coalesce(sum(qty), 0) q from erp_stock_levels where warehouse_id = $1 and product_id = $2", [B1, P]))[0].q);
+ok(after === before + 5, "La mercancía vuelve al origen como siempre", { before, after });
+const msg9 = await raw("select body from erp_stock_request_messages where request_id = $1 and kind = 'system' and body like '🚫%'", [nine.R]);
+ok(msg9.length === 1 && /traslado #/.test(msg9[0].body), "Queda la constancia en el chat del pedido", msg9);
+const denied = await as(STRANGER, "select public.erp_cancel_transfer($1, 'x')", [(await requestWithTransfer(11)).T]).then(() => null).catch((e) => e.message);
+ok(typeof denied === "string", "Sin permiso de traslados no se puede anular", denied);
+const twelve = await requestWithTransfer(12);
+await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [twelve.T, JSON.stringify([{ product_id: P, received_qty: 5 }, { product_id: Q, received_qty: 3 }])]);
+ok((await raw("select status from erp_stock_requests where id = $1", [twelve.R]))[0].status === "received", "Recibir sigue cerrando el pedido como «Recibido»");
+
 process.exit(fail ? 1 : 0);
+
+console.log(`\n${pass} bien, ${fail} mal`);
