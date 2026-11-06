@@ -298,6 +298,17 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "El chat del pedido lo dice" },
     ],
   },
+  {
+    id: 28, date: "2026-11-06", title: "Más espacio para el chat del pedido",
+    summary: "En el celular, el encabezado del pedido ocupa una sola línea y el chat se ve mucho más grande.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "📏", text: "Número, ruta, llamar y cerrar en una fila" },
+      { icon: "⋯", text: "Videollamada, buscar, silenciar y avisos en ⋯" },
+      { icon: "👆", text: "Toca la ruta para ver todo el detalle" },
+      { icon: "⌨️", text: "Las respuestas rápidas se esconden al escribir" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

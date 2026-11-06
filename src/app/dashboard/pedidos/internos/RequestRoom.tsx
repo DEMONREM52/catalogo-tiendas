@@ -672,7 +672,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           Suelta aquí fotos, videos o audios
         </div>
       ) : null}
-      <div className="flex items-center gap-1.5 pb-1">
+      <div className="hidden items-center gap-1.5 pb-1 md:flex">
         <button type="button" onClick={() => kit.setSearching(!kit.searching)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)" }}><Search size={12} /> Buscar</button>
         <button type="button" onClick={async () => { if (requestId && (await muteChat("sr", requestId, ex?.muted_until ?? null))) void kit.reload(); }} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)", color: ex?.muted_until ? "#f59e0b" : undefined }}>
           <BellOff size={12} /> {ex?.muted_until ? "Silenciado" : "Silenciar"}
@@ -722,9 +722,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               ))}
             </div>
           ) : (
-            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+            <div className={`mb-1.5 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] md:mb-2 md:pb-1 ${text.trim() ? "hidden md:flex" : "flex"}`}>
               {(data.access.attend && !data.access.request ? QUICK.attend : data.access.request && !data.access.attend ? QUICK.request : [...QUICK.attend.slice(0, 2), ...QUICK.request.slice(0, 2)]).map((qr) => (
-                <button key={qr} type="button" disabled={sending} onClick={() => void send(qr)} className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+                <button key={qr} type="button" disabled={sending} onClick={() => void send(qr)} className="shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition hover:-translate-y-0.5 md:px-3 md:py-1 md:text-xs" style={{ borderColor: "var(--t-card-border)" }}>
                   {qr}
                 </button>
               ))}
@@ -762,7 +762,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <input ref={cameraInput} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
                 <input ref={audioInput} type="file" accept="audio/*" hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
               </div>
-              <EmojiButton targetId="composer-sr" value={text} onChange={setText} disabled={sending} />
+              <span className="hidden md:contents"><EmojiButton targetId="composer-sr" value={text} onChange={setText} disabled={sending} /></span>
               <textarea
                 id="composer-sr"
                 value={text}
@@ -779,7 +779,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   if (e.key === "Escape") kit.cancelCompose();
                 }}
                 rows={1}
-                placeholder={kit.edit ? "Corrige el mensaje…" : pending.length ? "Agrega un texto (opcional)…" : "Escribe un mensaje… (@ para mencionar)"}
+                placeholder={kit.edit ? "Corrige el mensaje…" : pending.length ? "Agrega un texto (opcional)…" : "Mensaje… (@ menciona)"}
                 className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
                 style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
               />
@@ -819,24 +819,45 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             exit={{ x: 60, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 34 }}
           >
-            <header className="border-b px-4 py-3 sm:px-5 sm:py-4" style={{ borderColor: "var(--t-card-border)" }}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider sm:gap-2 sm:text-xs sm:tracking-widest" style={{ color: "var(--t-accent)" }}>
-                    <span className="sm:hidden">Pedido {r ? `#${r.number}` : ""}</span><span className="hidden sm:inline">Pedido interno {r ? `#${r.number}` : ""}</span>
-                    {r?.priority === "urgent" ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] text-white">⚡ Urgente</span> : null}
+            <header className="border-b px-3 py-2 sm:px-5 sm:py-4" style={{ borderColor: "var(--t-card-border)" }}>
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <p className="flex shrink-0 items-center gap-1.5 text-[11px] font-black uppercase tracking-wider sm:gap-2 sm:text-xs sm:tracking-widest" style={{ color: "var(--t-accent)" }}>
+                    <span className="sm:hidden">#{r ? r.number : ""}</span><span className="hidden sm:inline">Pedido interno {r ? `#${r.number}` : ""}</span>
+                    {r?.priority === "urgent" ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white" title="Urgente">⚡<span className="hidden sm:inline"> Urgente</span></span> : null}
                   </p>
+                  {/* Celular: la ruta en la misma fila, cortada; al tocar se ve todo. */}
+                  {r ? (
+                    <button type="button" onClick={() => setHeadOpen((v) => !v)} className="min-w-0 flex-1 truncate text-left text-[11px] font-bold sm:hidden" aria-expanded={headOpen}>
+                      <span style={{ color: "#fbbf24" }}>{r.to_name}</span> <span style={{ color: "var(--t-muted)" }}>→</span> <span style={{ color: "#4ade80" }}>{r.from_name}</span>
+                    </button>
+                  ) : null}
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
                   {data && r && data.access.chat && isOpen(r.status) ? (
                     <>
+                      <button type="button" onClick={() => setCallPick({ video: false })} className="grid h-8 w-8 place-items-center rounded-full text-white shadow sm:hidden" style={{ background: "#16a34a" }} aria-label="Llamar"><Phone size={15} /></button>
+                      {/* Celular: avisos, chat aparte, videollamada, buscar y silenciar en ⋯ */}
+                      <details className="relative sm:hidden">
+                        <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full border text-base font-black [&::-webkit-details-marker]:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Más opciones">⋯</summary>
+                        <div className="absolute right-0 top-10 z-40 w-52 overflow-hidden rounded-2xl border p-1 shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}
+                          onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+                          <button type="button" onClick={() => setCallPick({ video: true })} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"><Video size={16} /> Videollamada</button>
+                          <button type="button" onClick={() => { setMobileTab("chat"); kit.setSearching(true); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"><Search size={16} /> Buscar en el chat</button>
+                          <button type="button" onClick={async () => { if (requestId && (await muteChat("sr", requestId, ex?.muted_until ?? null))) void kit.reload(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"><BellOff size={16} /> {ex?.muted_until ? "Quitar silencio" : "Silenciar"}</button>
+                          <button type="button" onClick={() => setPeoplePick("notify")} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"><Bell size={16} /> A quién le llegan avisos</button>
+                          <button type="button" onClick={() => setPeoplePick("chat")} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"><MessageCircle size={16} /> Chat aparte</button>
+                        </div>
+                      </details>
+                      <span className="hidden items-center gap-1.5 sm:flex">
                       <button type="button" onClick={() => setPeoplePick("notify")} className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border px-2.5 text-xs font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} aria-label="Avisos" title="A quién le llegan los avisos de este chat"><Bell size={16} /><span className="hidden sm:inline">Avisos</span></button>
                       <button type="button" onClick={() => setPeoplePick("chat")} className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border px-2.5 text-xs font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }} aria-label="Chat aparte" title="Abrir un chat o grupo aparte"><MessageCircle size={16} /><span className="hidden sm:inline">Chat aparte</span></button>
                       <button type="button" onClick={() => setCallPick({ video: false })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "#16a34a" }} aria-label="Llamar" title="Llamar al otro punto"><Phone size={16} /></button>
                       <button type="button" onClick={() => setCallPick({ video: true })} className="grid h-9 w-9 place-items-center rounded-full text-white shadow transition hover:-translate-y-0.5" style={{ background: "var(--t-accent)" }} aria-label="Videollamada" title="Videollamada con el otro punto"><Video size={16} /></button>
+                      </span>
                     </>
                   ) : null}
-                  <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+                  <button type="button" onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border transition hover:rotate-90 sm:h-10 sm:w-10" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
                     <X size={16} />
                   </button>
                 </div>
@@ -844,20 +865,20 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
               {/* Ruta a todo lo ancho (en celular los botones ya no la aprietan). */}
               {r ? (
                 <h3 role="button" tabIndex={0} aria-expanded={headOpen} onClick={() => setHeadOpen((v) => !v)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHeadOpen((v) => !v); } }}
-                  className={`mt-1 cursor-pointer text-[11px] font-bold leading-snug sm:mt-1.5 sm:cursor-default sm:whitespace-normal sm:text-lg sm:font-black ${headOpen ? "leading-relaxed" : "truncate"}`} title={headOpen ? "Toca para resumir" : "Toca para ver completo"}>
+                  className={`${headOpen ? "block" : "hidden"} mt-1 cursor-pointer sm:block text-[11px] font-bold leading-snug sm:mt-1.5 sm:cursor-default sm:whitespace-normal sm:text-lg sm:font-black ${headOpen ? "leading-relaxed" : "truncate"}`} title={headOpen ? "Toca para resumir" : "Toca para ver completo"}>
                   <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #f59e0b 14%, transparent)", color: "#fbbf24" }}>📤 {r.to_name}</span>
                   <ArrowRight size={12} className="mx-0.5 inline align-middle sm:mx-1" style={{ color: "var(--t-muted)" }} />
                   <span className="rounded-md px-1 py-px sm:rounded-lg sm:px-1.5 sm:py-0.5" style={{ background: "color-mix(in oklab, #22c55e 14%, transparent)", color: "#4ade80", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>📥 {r.from_name}</span>
                 </h3>
               ) : <div className="mt-1 h-6 w-56 animate-pulse rounded" style={{ background: "var(--t-card-bg)" }} />}
               {r ? (
-                <p onClick={() => setHeadOpen((v) => !v)} className={`mt-0.5 cursor-pointer text-[10px] sm:mt-1 sm:cursor-default sm:whitespace-normal sm:text-xs ${headOpen ? "" : "truncate"}`} style={{ color: "var(--t-muted)" }}>
+                <p onClick={() => setHeadOpen((v) => !v)} className={`${headOpen ? "block" : "hidden"} mt-0.5 cursor-pointer sm:block text-[10px] sm:mt-1 sm:cursor-default sm:whitespace-normal sm:text-xs ${headOpen ? "" : "truncate"}`} style={{ color: "var(--t-muted)" }}>
                   Pidió <b style={{ color: "var(--t-text)" }}>{r.requested_by_name ?? "—"}</b> · {timeAgo(r.created_at)}{r.handled_by_name ? <> · Atiende <b style={{ color: "var(--t-text)" }}>{r.handled_by_name}</b></> : null}{r.needed_by ? ` · Para el ${new Date(`${r.needed_by}T12:00:00`).toLocaleDateString("es-CO")}` : ""}
                 </p>
               ) : null}
               {r && st ? (
                 st.step >= 0 ? (
-                  <div className="mt-2.5 grid grid-cols-4 gap-1.5 sm:mt-3">
+                  <div className="mt-1.5 grid grid-cols-4 gap-1 sm:mt-3 sm:gap-1.5" onClick={() => setHeadOpen((v) => !v)} title={st.label}>
                     {SR_STEPS.map((s, idx) => {
                       const meta = SR_STATUS[s];
                       const done = idx <= st.step;
@@ -866,7 +887,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                           <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
                             <motion.div className="h-full rounded-full" initial={{ width: 0 }} animate={{ width: done ? "100%" : "0%" }} transition={{ duration: 0.5, delay: idx * 0.08 }} style={{ background: meta.color }} />
                           </div>
-                          <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: done ? meta.color : "var(--t-muted)" }}>{meta.icon} {meta.short}</p>
+                          <p className={`${headOpen ? "block" : "hidden"} mt-1 truncate text-[11px] font-semibold sm:block`} style={{ color: done ? meta.color : "var(--t-muted)" }}>{meta.icon} {meta.short}</p>
                         </div>
                       );
                     })}
@@ -883,9 +904,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
             {data ? (
               <>
-                <div className="flex gap-1 border-b p-2 md:hidden" style={{ borderColor: "var(--t-card-border)" }}>
+                <div className="flex gap-1 border-b px-2 py-1 md:hidden" style={{ borderColor: "var(--t-card-border)" }}>
                   {([["chat", `💬 Chat (${data.messages.filter((m) => m.kind === "message").length})`], ["items", `📦 Productos (${data.items.length})`]] as const).map(([k, l]) => (
-                    <button key={k} type="button" onClick={() => setMobileTab(k)} className="flex-1 rounded-full px-3 py-1.5 text-xs font-bold" style={mobileTab === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
+                    <button key={k} type="button" onClick={() => setMobileTab(k)} className="flex-1 rounded-full px-3 py-1 text-xs font-bold" style={mobileTab === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
                       {l}
                     </button>
                   ))}
@@ -894,7 +915,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   <div className={`min-h-0 overflow-y-auto overscroll-contain p-4 md:block md:border-r ${mobileTab === "items" ? "block" : "hidden"}`} style={{ borderColor: "var(--t-card-border)" }}>
                     {itemsPanel}
                   </div>
-                  <div className={`min-h-0 flex-col p-3 md:flex ${mobileTab === "chat" ? "flex" : "hidden"}`}>
+                  <div className={`min-h-0 flex-col px-2 pb-2 pt-1 md:flex md:p-3 ${mobileTab === "chat" ? "flex" : "hidden"}`}>
                     <p className="mb-1 hidden items-center gap-2 px-1 text-xs font-bold uppercase tracking-wide md:flex" style={{ color: "var(--t-muted)" }}>
                       <MessageCircle size={13} /> Conversación del pedido
                     </p>
