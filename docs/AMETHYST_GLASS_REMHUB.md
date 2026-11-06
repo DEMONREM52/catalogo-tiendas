@@ -86,3 +86,24 @@ Se tomaron capturas con Chrome sin ventana, sobre una página de prueba que carg
 3. El menú Apariencia abierto.
 4. Facturación y POS.
 5. El celular y la PWA instalada.
+
+## Obsidian Aurora Glass (2026-11-06)
+
+La versión grafito quedó demasiado negra y plana. Obsidian pasó a un punto medio, con estos valores:
+
+| Capa | Antes (grafito) | Ahora (Aurora) |
+|---|---|---|
+| Fondo de la app | `#09090F` | `#171223`, con un degradado suave hacia `#1B1529` arriba |
+| Tarjetas y contenedores | `#14131F` | `#2C223A` (al 97 %) |
+| Filtros y paneles internos | blanco al 3,5 % | lavanda al 6 %, apenas elevado |
+| Campos | `#0D0D16`, casi negro | `#241B32`: se distingue de la tarjeta sin quedar negro |
+| Bordes y divisores | blanco al 9 % y al 7 % | `rgba(178,145,213,.20)` y `rgba(194,172,220,.11)` |
+| Texto secundario | `#AAA5BB` | `#C7B9D9` |
+| Acento | `#A78BFA` | `#A98AF0`; el suave es `rgba(169,138,240,.14)` |
+| Vidrio | `rgba(25,23,36,.80)` | `rgba(48,37,62,.76)`, borde `rgba(212,187,242,.18)`, reflejo superior blanco al 7–11 % |
+| Menú Apariencia | `rgba(20,19,31,.94)` | `rgba(48,37,62,.94)`, borde lavanda al 18 % |
+| Fondo animado | red al 55 % y luz del mouse al 18 % | red al 38 % y luz al 12 % |
+
+- **Pearl Amethyst:** no cambió.
+- **Temas personales guardados:** no cambian. Conservan sus colores, y los v1 conservan además sus fórmulas.
+- **Contraste:** se revisa en `tests/appearance/theme.test.ts` con `isReadable(OBSIDIAN)`.

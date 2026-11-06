@@ -397,6 +397,15 @@ export const RELEASES: Release[] = [
       { icon: "🤍", text: "Pearl: blanco perla con cristal claro" },
       { icon: "💜", text: "El violeta queda en botones principales y lo seleccionado" },
     ],
+  },  {
+    id: 37, date: "2026-11-06", title: "Obsidian Aurora: oscuro con más vida",
+    summary: "El modo oscuro pasa a grafito ciruela con cristal ahumado: ya no es casi negro y cada capa se distingue mejor.",
+    paths: ["/dashboard", "/admin"],
+    demo: [
+      { icon: "🌌", text: "Fondo ciruela oscuro en vez de negro" },
+      { icon: "🪟", text: "Contenedores, filtros y filas con tonos distintos" },
+      { icon: "✨", text: "Vidrio con bordes iluminados y reflejo suave" },
+    ],
   },
 ];
 

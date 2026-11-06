@@ -272,8 +272,8 @@ export function PanelBackdrop() {
   }, [coarse]);
   return (
     <>
-      <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.55} interval={coarse ? 90 : 45} density={coarse ? 0.55 : 0.85} />
-      {coarse ? null : <div ref={light} aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ background: "radial-gradient(560px circle at var(--mx, -999px) var(--my, -999px), rgba(168,85,247,.18), rgba(236,72,153,.06) 30%, transparent 55%)" }} />}
+      <NeuralCanvas className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen" dim={0.38} interval={coarse ? 90 : 45} density={coarse ? 0.55 : 0.85} />
+      {coarse ? null : <div ref={light} aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ background: "radial-gradient(560px circle at var(--mx, -999px) var(--my, -999px), rgba(168,85,247,.12), rgba(236,72,153,.04) 30%, transparent 55%)" }} />}
     </>
   );
 }

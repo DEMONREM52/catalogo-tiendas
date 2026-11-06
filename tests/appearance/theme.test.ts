@@ -7,8 +7,8 @@ import {
 } from "../../src/lib/appearance/theme";
 
 test("los temas oficiales usan la paleta pedida y se leen bien (AA)", () => {
-  assert.equal(OBSIDIAN.colors.bg, "#09090f");
-  assert.equal(OBSIDIAN.colors.accent, "#a78bfa");
+  assert.equal(OBSIDIAN.colors.bg, "#171223");
+  assert.equal(OBSIDIAN.colors.accent, "#a98af0");
   assert.equal(PEARL.colors.bg, "#f8f9fd");
   assert.equal(PEARL.colors.accent, "#7545d6");
   assert.ok(isReadable(OBSIDIAN), JSON.stringify(accessibilityReport(OBSIDIAN)));
@@ -84,5 +84,5 @@ test("compatibilidad: un tema guardado con v1 se pinta igual que antes; lo nuevo
   assert.equal(effectiveGlass(fresh).saturation, 125);
   // v2: sin halo violeta en el borde del vidrio.
   assert.ok(!/139, 92, 246|167, 139, 250/.test(themeTokens(OBSIDIAN)["--t-glass-edge"]));
-  assert.equal(OBSIDIAN.colors.surface, "#14131f");
+  assert.equal(OBSIDIAN.colors.surface, "#2c223a");
 });

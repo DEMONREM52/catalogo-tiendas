@@ -51,14 +51,15 @@ const HEX = /^#[0-9a-f]{6}$/;
 export const OBSIDIAN: ThemeConfig = {
   v: 2,
   base: "dark",
+  // Obsidian Aurora Glass: grafito ciruela, cristal ahumado con matices amatista (ni negro ni violeta saturado).
   colors: {
-    accent: "#a78bfa", accent2: "#8b5cf6", accent3: "#d946ef",
-    bg: "#09090f", surface: "#14131f", menu: "#0d0d16", dialog: "#1b1929", input: "#0d0d16",
-    text: "#f7f6fc", muted: "#aaa5bb",
+    accent: "#a98af0", accent2: "#8f6fe6", accent3: "#d16be8",
+    bg: "#171223", surface: "#2c223a", menu: "#241b32", dialog: "#3a2c4b", input: "#241b32",
+    text: "#f8f5ff", muted: "#c7b9d9",
   },
-  background: { kind: "glow", from: "#1b1929", to: "#09090f", angle: 160, intensity: 30 },
-  glass: { level: "elegant", opacity: 80, blur: 14, saturation: 125, border: 9, shadow: 60, sheen: 25 },
-  layout: { radius: 16, density: "normal", fontScale: 100, dividers: 7 },
+  background: { kind: "glow", from: "#30253e", to: "#171223", angle: 160, intensity: 45 },
+  glass: { level: "elegant", opacity: 76, blur: 14, saturation: 125, border: 18, shadow: 60, sheen: 35 },
+  layout: { radius: 16, density: "normal", fontScale: 100, dividers: 11 },
   effects: { ambient: 30, halo: true, hover: true },
 };
 
