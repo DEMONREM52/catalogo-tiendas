@@ -341,6 +341,17 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "El chat del pedido lo deja anotado" },
     ],
   },
+  {
+    id: 32, date: "2026-11-06", title: "Arrastrar la foto en la búsqueda por foto",
+    summary: "En todos los buscadores por foto (POS, productos, lista y catálogo) puedes soltar la imagen en cualquier parte de la ventana, aunque ya haya resultados.",
+    paths: ["/dashboard", "/admin"],
+    demo: [
+      { icon: "📷", text: "Abre la búsqueda por foto" },
+      { icon: "🖱️", text: "Arrastra la foto desde una carpeta u otra página" },
+      { icon: "📥", text: "Suéltala en cualquier parte de la ventana" },
+      { icon: "📋", text: "O pégala con Ctrl+V, incluso en «Nombre o código»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

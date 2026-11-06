@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
+import { DROP_BLOCKED_MSG, imageFileFrom as imageFrom, imageFromDroppedUrl as imageFromUrl } from "@/lib/image-drop";
 
 type Props = {
   label: string;
@@ -18,37 +19,6 @@ function typingTarget(el: EventTarget | null) {
   const node = el as HTMLElement | null;
   if (!node) return false;
   return node.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName);
-}
-
-/** Primera imagen de un portapapeles o de lo que se arrastró. */
-function imageFrom(data: DataTransfer | null): File | null {
-  if (!data) return null;
-  for (const f of Array.from(data.files ?? [])) if (f.type.startsWith("image/")) return f;
-  for (const item of Array.from(data.items ?? [])) {
-    if (item.kind === "file" && item.type.startsWith("image/")) {
-      const f = item.getAsFile();
-      if (f) return f;
-    }
-  }
-  return null;
-}
-
-/** Imagen arrastrada desde otra página: viene como enlace. Se intenta descargar (si esa página lo permite). */
-async function imageFromUrl(data: DataTransfer | null): Promise<File | null> {
-  const html = data?.getData("text/html") ?? "";
-  const fromHtml = /<img[^>]+src=["']([^"']+)["']/i.exec(html)?.[1];
-  const raw = fromHtml || (data?.getData("text/uri-list") ?? "").split(/\r?\n/).find((l) => l && !l.startsWith("#")) || "";
-  if (!raw) return null;
-  if (raw.startsWith("data:image/")) {
-    const blob = await (await fetch(raw)).blob();
-    return new File([blob], "imagen", { type: blob.type });
-  }
-  if (!/^https?:\/\//i.test(raw)) return null;
-  const res = await fetch(raw, { mode: "cors" });
-  if (!res.ok) throw new Error("no se pudo descargar");
-  const blob = await res.blob();
-  if (!blob.type.startsWith("image/")) return null;
-  return new File([blob], "imagen", { type: blob.type });
 }
 
 export function ImageUpload({
@@ -175,7 +145,7 @@ export function ImageUpload({
       if (remote) return upload(remote);
       setMsg("❌ Eso no es una imagen.");
     } catch {
-      setMsg("❌ Esa página no deja copiar la foto arrastrándola. Guárdala en el computador o usa clic derecho → Copiar imagen y luego Ctrl+V aquí.");
+      setMsg("❌ " + DROP_BLOCKED_MSG);
     }
   }
 

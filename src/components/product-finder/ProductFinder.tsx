@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Check, ChevronRight, ImagePlus, Loader2, Plus, RotateCcw, ScanSearch, ScanText, Search, Type, X } from "lucide-react";
 import { embedImageBlob, imageSearchSupported, onEmbedProgress, warmUpImageSearch, type EmbedProgress } from "@/lib/image-search/embed";
 import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";
+import { DROP_BLOCKED_MSG, dragHasImage, imageFileFrom, imageFromDrop } from "@/lib/image-drop";
 
 export type FinderHit = {
   id: string;
@@ -165,12 +166,15 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
     writeSaved(storageKey, { mode, q, photoHits, terms, photoUrl: photoUrl?.startsWith("data:") ? photoUrl : null });
   }, [storageKey, mode, q, photoHits, photoUrl, terms]);
 
-  // Pegar una imagen (Ctrl+V) en modo foto.
+  // Pegar una imagen (Ctrl+V) en cualquier pestaña: cambia a «Foto» y busca.
   useEffect(() => {
-    if (mode !== "photo") return;
+    if (!photoOk) return;
     const onPaste = (e: ClipboardEvent) => {
-      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/"));
-      if (file) void searchByPhoto(file);
+      const file = imageFileFrom(e.clipboardData);
+      if (!file) return;
+      e.preventDefault();
+      setMode("photo");
+      void searchByPhoto(file);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -249,6 +253,38 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
     void changeTerms([...(terms ?? []), word]);
   }
 
+  // Arrastrar y soltar en TODA la ventana (no solo en el recuadro vacío).
+  const dragDepth = useRef(0);
+  function onSheetDragEnter(e: React.DragEvent) {
+    if (!photoOk || !dragHasImage(e.dataTransfer)) return;
+    e.preventDefault();
+    dragDepth.current++;
+    setDragging(true);
+  }
+  function onSheetDragOver(e: React.DragEvent) {
+    if (!photoOk || !dragHasImage(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+  function onSheetDragLeave() {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (!dragDepth.current) setDragging(false);
+  }
+  async function onSheetDrop(e: React.DragEvent) {
+    if (!photoOk) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    setMode("photo");
+    try {
+      const file = await imageFromDrop(e.dataTransfer);
+      if (file) void searchByPhoto(file);
+      else setPhotoMsg("Eso no es una imagen. Arrastra una foto del producto.");
+    } catch {
+      setPhotoMsg(DROP_BLOCKED_MSG);
+    }
+  }
+
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -271,7 +307,18 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 60, opacity: 0, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        onDragEnter={onSheetDragEnter}
+        onDragOver={onSheetDragOver}
+        onDragLeave={onSheetDragLeave}
+        onDrop={(e) => void onSheetDrop(e)}
       >
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-2 z-50 grid place-items-center rounded-[22px] border-2 border-dashed" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-bg-base) 70%, transparent)" }}>
+            <span className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black shadow-xl" style={{ background: "var(--t-accent)", color: "#fff" }}>
+              <Camera size={18} /> Suelta la foto para buscar
+            </span>
+          </div>
+        ) : null}
         <span className="mx-auto mt-2 h-1.5 w-11 shrink-0 rounded-full sm:hidden short:hidden" style={{ background: "color-mix(in oklab, var(--t-text) 18%, transparent)" }} aria-hidden />
         <header className="flex shrink-0 items-start justify-between gap-3 px-4 pb-3 pt-2.5 sm:px-6 sm:pt-5 short:pb-2 short:pt-2">
           <div className="min-w-0">
@@ -344,14 +391,6 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
               <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
               {!photoUrl && !busyPhoto ? (
                 <div
-                  onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragging(false);
-                    const file = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/"));
-                    if (file) void searchByPhoto(file);
-                  }}
                   className="mx-auto max-w-xl rounded-3xl border-2 border-dashed p-5 text-center transition sm:p-8"
                   style={{ borderColor: dragging ? "var(--t-accent)" : "var(--t-card-border)", background: dragging ? "color-mix(in oklab, var(--t-accent) 8%, transparent)" : "transparent" }}
                 >
@@ -370,7 +409,8 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                       <ImagePlus size={17} /> Elegir imagen
                     </button>
                   </div>
-                  <p className="mt-3 hidden text-[11px] sm:block" style={{ color: "var(--t-muted)" }}>También puedes arrastrar una imagen aquí o pegarla con Ctrl + V.</p>
+                  <p className="mt-3 hidden text-[11px] sm:block" style={{ color: "var(--t-muted)" }}>También puedes arrastrar una imagen a esta ventana (de una carpeta o de otra página) o pegarla con Ctrl + V.</p>
+                  {photoMsg ? <p className="mt-3 rounded-2xl border p-3 text-xs leading-5" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>ℹ️ {photoMsg}</p> : null}
                 </div>
               ) : (
                 <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-5 short:grid short:grid-cols-[14rem_minmax(0,1fr)] short:items-start short:gap-3">
