@@ -1434,17 +1434,17 @@ select option:disabled { color: #9ca3af; }
 
 /* Luz que sigue al mouse (panel): encima de todo, sin bloquear clics. En oscuro ilumina («screen»); en claro, un tinte suave. */
 .mouse-glow {
-  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(117, 69, 214, 0.07), rgba(192, 38, 211, 0.025) 35%, transparent 60%);
+  background: radial-gradient(300px circle at var(--mx, -999px) var(--my, -999px), rgba(117, 69, 214, 0.11), rgba(192, 38, 211, 0.04) 40%, transparent 65%);
 }
 html.dark .mouse-glow,
 :root[data-theme="dark"] .mouse-glow {
   mix-blend-mode: screen;
-  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(169, 138, 240, 0.11), rgba(209, 107, 232, 0.04) 35%, transparent 60%);
+  background: radial-gradient(300px circle at var(--mx, -999px) var(--my, -999px), rgba(169, 138, 240, 0.18), rgba(209, 107, 232, 0.06) 40%, transparent 65%);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .mouse-glow {
     mix-blend-mode: screen;
-    background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(169, 138, 240, 0.11), rgba(209, 107, 232, 0.04) 35%, transparent 60%);
+    background: radial-gradient(300px circle at var(--mx, -999px) var(--my, -999px), rgba(169, 138, 240, 0.18), rgba(209, 107, 232, 0.06) 40%, transparent 65%);
   }
 }
 @media print { .mouse-glow { display: none !important; } }
