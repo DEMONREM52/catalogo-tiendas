@@ -439,6 +439,17 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "Resumen: qué verá y qué no podrá hacer" },
     ],
   },
+  {
+    id: 41, date: "2026-11-07", title: "Anticipos en las liquidaciones",
+    summary: "Si un punto entrega dinero antes de liquidar, regístralo como anticipo: otra persona lo aprueba y se descuenta solo en la próxima liquidación, de un beneficiario o de todo el pozo.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "💸", text: "Registra el anticipo con fecha, forma y soporte" },
+      { icon: "✅", text: "Otra persona lo aprueba" },
+      { icon: "🧮", text: "Se descuenta solo en la próxima liquidación" },
+      { icon: "📄", text: "Queda en el informe PDF y en Excel" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

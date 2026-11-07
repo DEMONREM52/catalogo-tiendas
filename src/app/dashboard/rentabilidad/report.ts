@@ -10,9 +10,10 @@ export type ReportDetail = {
     id: string; number: number; cutoff: string; status: string; pool_total: number; carried_total: number; assigned_total: number; unassigned_total: number;
     point_name: string | null; created_by_name: string | null; created_at: string; submitted_by_name?: string | null; decided_by_name: string | null;
     decision_note: string | null; revert_reason: string | null; notes: string | null; split_version: number | null;
-    gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean;
+    gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean; advances_total?: number | null;
   };
-  lines: Array<{ id: string; name: string; document: string | null; pct: number; share_amount: number; carried_amount: number; amount: number; paid: number }>;
+  lines: Array<{ id: string; name: string; document: string | null; pct: number; share_amount: number; carried_amount: number; advance_amount?: number; amount: number; paid: number }>;
+  advances?: Array<{ number: number; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; created_by_name: string | null; decided_by_name: string | null }>;
   payments: Array<{ line_id: string; amount: number; method: string; reference: string | null; paid_at: string; created_by_name: string | null; voided: boolean; void_reason: string | null }>;
 };
 type Line = { name: string; sku: string | null; qty: number; revenue: number; cost: number; profit: number; mother: number; point: number; cost_source: string };
@@ -116,16 +117,22 @@ export async function openSettlementReport(d: ReportDetail): Promise<string | nu
     <div class="box"><div class="k">Ventas</div><div class="v">${esc(cop(sales))}</div><div class="m">${units} und. · ${b.orders.length} venta(s)</div></div>
     <div class="box"><div class="k">Costo de lo vendido</div><div class="v">${esc(cop(cost))}</div></div>
     <div class="box"><div class="k">Ganancia</div><div class="v">${esc(cop(profit))}</div><div class="m">margen ${pct(profit, sales)}</div></div>
-    <div class="box"><div class="k">A repartir</div><div class="v">${esc(cop(n(s.pool_total) + n(s.carried_total)))}</div></div>
+    <div class="box"><div class="k">A pagar</div><div class="v">${esc(cop(n(s.pool_total) + n(s.carried_total) - n(s.advances_total)))}</div>${n(s.advances_total) ? `<div class="m">anticipos −${esc(cop(s.advances_total))}</div>` : ""}</div>
   </div>
-  <div class="formula">Ganancia del período <b>${esc(cop(gross))}</b>${s.deducted || n(s.expenses_total) ? ` − gastos y nómina <b>${esc(cop(s.expenses_total))}</b>` : ""}${n(s.carried_total) ? ` + saldo traído <b>${esc(cop(s.carried_total))}</b>` : ""} = <b>${esc(cop(n(s.pool_total) + n(s.carried_total)))}</b> a repartir${n(s.unassigned_total) ? ` · sin asignar ${esc(cop(s.unassigned_total))}` : ""}</div>
+  <div class="formula">Ganancia del período <b>${esc(cop(gross))}</b>${s.deducted || n(s.expenses_total) ? ` − gastos y nómina <b>${esc(cop(s.expenses_total))}</b>` : ""}${n(s.carried_total) ? ` + saldo traído <b>${esc(cop(s.carried_total))}</b>` : ""}${n(s.advances_total) ? ` − anticipos <b>${esc(cop(s.advances_total))}</b>` : ""} = <b>${esc(cop(n(s.pool_total) + n(s.carried_total) - n(s.advances_total)))}</b> a pagar${n(s.unassigned_total) ? ` · sin asignar ${esc(cop(s.unassigned_total))}` : ""}</div>
   ${b.mode !== "total" ? `<p class="m" style="margin-top:6px">Ganancia total ${esc(cop(profit))} = parte de la madre ${esc(cop(lines.reduce((t, l) => t + n(l.mother), 0)))} + parte del punto ${esc(cop(lines.reduce((t, l) => t + n(l.point), 0)))}.</p>` : ""}
 
   <h2>Reparto entre beneficiarios</h2>
-  <table><thead><tr><th>Beneficiario</th><th>Documento</th><th class="r">%</th><th class="r">Del período</th><th class="r">Saldo traído</th><th class="r">Total</th><th class="r">Pagado</th><th class="r">Pendiente</th></tr></thead><tbody>
-    ${d.lines.map((l) => `<tr><td><b>${esc(l.name)}</b></td><td>${esc(l.document ?? "")}</td><td class="r">${n(l.pct)} %</td><td class="r">${esc(cop(l.share_amount))}</td><td class="r">${esc(cop(l.carried_amount))}</td><td class="r"><b>${esc(cop(l.amount))}</b></td><td class="r">${esc(cop(paidBy(l.id)))}</td><td class="r">${esc(cop(Math.max(0, n(l.amount) - paidBy(l.id))))}</td></tr>`).join("")}
-    <tr class="tot"><td colspan="5">Total</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + n(l.amount), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + paidBy(l.id), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + Math.max(0, n(l.amount) - paidBy(l.id)), 0)))}</td></tr>
+  <table><thead><tr><th>Beneficiario</th><th>Documento</th><th class="r">%</th><th class="r">Del período</th><th class="r">Saldo traído</th><th class="r">Anticipo</th><th class="r">Total</th><th class="r">Pagado</th><th class="r">Pendiente</th></tr></thead><tbody>
+    ${d.lines.map((l) => `<tr><td><b>${esc(l.name)}</b></td><td>${esc(l.document ?? "")}</td><td class="r">${n(l.pct)} %</td><td class="r">${esc(cop(l.share_amount))}</td><td class="r">${esc(cop(l.carried_amount))}</td><td class="r">${n(l.advance_amount) ? "−" + esc(cop(l.advance_amount)) : ""}</td><td class="r"><b>${esc(cop(l.amount))}</b></td><td class="r">${esc(cop(paidBy(l.id)))}</td><td class="r">${esc(cop(Math.max(0, n(l.amount) - paidBy(l.id))))}</td></tr>`).join("")}
+    <tr class="tot"><td colspan="6">Total</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + n(l.amount), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + paidBy(l.id), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + Math.max(0, n(l.amount) - paidBy(l.id)), 0)))}</td></tr>
   </tbody></table>
+
+  ${d.advances?.length ? `<h2>Anticipos descontados</h2>
+  <table><thead><tr><th>N.º</th><th>Salió el</th><th>De quién</th><th>Para qué</th><th>Forma</th><th>Registró / aprobó</th><th class="r">Valor</th></tr></thead><tbody>
+    ${d.advances.map((a) => `<tr><td>#${a.number}</td><td>${esc(dt(a.given_at))}</td><td>${esc(a.name ?? "Todo el pozo (según los %)")}</td><td>${esc(a.note)}</td><td>${esc(METHODS[a.method] ?? a.method)}${a.reference ? ` · ${esc(a.reference)}` : ""}</td><td>${esc(a.created_by_name ?? "—")} / ${esc(a.decided_by_name ?? "—")}</td><td class="r"><b>−${esc(cop(a.amount))}</b></td></tr>`).join("")}
+    <tr class="tot"><td colspan="6">Total descontado</td><td class="r">−${esc(cop(d.advances.reduce((t, a) => t + n(a.amount), 0)))}</td></tr>
+  </tbody></table>` : ""}
 
   ${d.payments.length ? `<h2>Pagos registrados</h2>
   <table><thead><tr><th>Fecha</th><th>Beneficiario</th><th>Forma</th><th>Referencia</th><th>Registró</th><th class="r">Valor</th></tr></thead><tbody>
