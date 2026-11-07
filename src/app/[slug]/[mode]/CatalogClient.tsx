@@ -1453,7 +1453,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           <section
             ref={carouselRef}
             aria-label="Campañas y productos destacados"
-            className="mx-auto w-full max-w-screen-2xl px-6 pt-6 sm:px-8 lg:px-12"
+            className="mx-auto w-full max-w-screen-2xl px-3 pt-4 sm:px-8 sm:pt-6 lg:px-12"
             style={{ contentVisibility: "auto", containIntrinsicSize: "auto 720px" }}
             onMouseEnter={() => setCampaignCarouselHovered(true)}
             onMouseLeave={() => setCampaignCarouselHovered(false)}
@@ -1581,14 +1581,15 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           </section>
         );
       })() : store.banner_url ? (
-        <div className="mx-auto w-full max-w-screen-2xl px-6 pt-6 sm:px-8 lg:px-12">
-          <div className="relative overflow-hidden rounded-[24px] border shadow-xl" style={{ borderColor: "var(--t-border)", background: "var(--t-bg-base)" }}>
+        <div className="mx-auto w-full max-w-screen-2xl px-3 pt-4 sm:px-8 sm:pt-6 lg:px-12">
+          {/* La portada se muestra con su proporción real: sin franjas vacías arriba y abajo en el celular. */}
+          <div className={cx("relative flex justify-center overflow-hidden rounded-2xl border shadow-xl sm:rounded-[24px]", !imgLoaded && "min-h-[9rem] sm:min-h-[16rem]")} style={{ borderColor: "var(--t-border)", background: "var(--t-bg-base)" }}>
             <img
               src={store.banner_url}
               alt={`Portada de ${store.name}`}
               fetchPriority="high"
               decoding="async"
-              className={cx("h-72 w-full object-contain transition-opacity duration-500 sm:h-80 md:h-[26rem] lg:h-[30rem]", imgLoaded ? "opacity-100" : "opacity-0")}
+              className={cx("block h-auto max-h-[22rem] w-full object-contain transition-opacity duration-500 md:max-h-[26rem] lg:max-h-[30rem]", imgLoaded ? "opacity-100" : "opacity-0")}
               onLoad={() => setImgLoaded(true)}
               ref={(el) => {
                 if (el?.complete && el.naturalWidth && !imgLoaded) setImgLoaded(true);
