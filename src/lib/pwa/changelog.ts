@@ -417,6 +417,17 @@ export const RELEASES: Release[] = [
       { icon: "🪄", text: "El nombre queda bien escrito automáticamente" },
     ],
   },
+  {
+    id: 39, date: "2026-11-07", title: "Tarjeta para compartir, a tu gusto",
+    summary: "La tarjeta para estados e historias ahora trae 8 estilos listos o tus colores, 3 formatos, productos elegidos por ti, etiqueta y vista previa en vivo.",
+    paths: ["/dashboard/social"],
+    demo: [
+      { icon: "🎨", text: "Elige un estilo o tus propios colores" },
+      { icon: "📐", text: "Historia, publicación vertical o cuadrada" },
+      { icon: "🛍️", text: "Toca los productos que quieres mostrar" },
+      { icon: "📤", text: "Compártela directo a WhatsApp" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
