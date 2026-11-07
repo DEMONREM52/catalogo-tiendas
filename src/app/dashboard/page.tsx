@@ -42,7 +42,7 @@ const MODULES: Module[] = [
   { permission: "orders", key: "orders", href: "/dashboard/pedidos", icon: Receipt, title: "Pedidos", description: "Revisa pedidos de clientes y actualiza su estado." },
   { permission: "stock_requests", key: "stock_requests", href: "/dashboard/pedidos?tab=internos", icon: Repeat, title: "Pedidos internos", description: "Pide mercancía a otros puntos o bodegas y coordina por chat hasta recibirla." },
   { permission: "products", key: "products", href: "/dashboard/products", icon: Boxes, title: "Productos", description: "Administra productos, precios, costos e imágenes." },
-  { permission: "products", key: "social", href: "/dashboard/social", icon: LayoutGrid, title: "Catálogos y campañas", description: "Catálogos con su precio, diseño, contactos y campañas." },
+  { permission: "catalogs", key: "social", href: "/dashboard/social", icon: LayoutGrid, title: "Catálogos y campañas", description: "Catálogos con su precio, diseño, contactos y campañas." },
   { permission: "clients", key: "clients", href: "/dashboard/clientes", icon: Users, title: "Terceros y cartera", description: "Clientes, proveedores, trabajadores y vendedores; créditos, cupos y cartera." },
   { permission: "receivables", key: "receivables", href: "/dashboard/clientes?tab=cartera", icon: Wallet, title: "Cartera", description: "Lo que te deben: vencidas, próximas a vencer, abonos y estados de cuenta." },
   { permission: "categories", key: "categories", href: "/dashboard/categories", icon: FolderTree, title: "Categorías", description: "Organiza los productos de la tienda." },
@@ -54,9 +54,9 @@ const MODULES: Module[] = [
 
 const QUICK_ACTIONS: Array<{ permission: string; href: string; icon: LucideIcon; label: string }> = [
   { permission: "pos", href: "/dashboard/pos", icon: CreditCard, label: "Vender" },
-  { permission: "products", href: "/dashboard/products/crear", icon: PackagePlus, label: "Nuevo producto" },
+  { permission: "products_create", href: "/dashboard/products/crear", icon: PackagePlus, label: "Nuevo producto" },
   { permission: "purchases", href: "/dashboard/inventario", icon: Truck, label: "Ingresar factura" },
-  { permission: "products", href: "/dashboard/social", icon: Megaphone, label: "Catálogos" },
+  { permission: "catalogs", href: "/dashboard/social", icon: Megaphone, label: "Catálogos" },
   { permission: "orders", href: "/dashboard/pedidos", icon: Receipt, label: "Pedidos" },
   { permission: "stock_requests", href: "/dashboard/pedidos?tab=internos", icon: Repeat, label: "Pedir mercancía" },
 ];

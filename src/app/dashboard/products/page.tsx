@@ -175,7 +175,9 @@ export default function ProductsListPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [updatingProductStatusId, setUpdatingProductStatusId] = useState<string | null>(null);
   // Eliminar productos que no se han vendido (20261260 y 20261263): permiso «Productos»; la base exige además ser de la madre.
-  const canDelete = useCan("products");
+  const canDelete = useCan("products_delete");
+  const canImport = useCan("products_import");
+  const canCreate = useCan("products_create");
   const [cleaning, setCleaning] = useState(false);
 
   // paginación normal
@@ -718,9 +720,11 @@ export default function ProductsListPage() {
                       🧹 Limpiar
                     </button>
                   ) : null}
-                  <Link href="/dashboard/products/importar" className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Subir muchos productos de una vez desde Excel">
-                    📥 Importar Excel
-                  </Link>
+                  {canImport ? (
+                    <Link href="/dashboard/products/importar" className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Subir muchos productos de una vez desde Excel">
+                      📥 Importar Excel
+                    </Link>
+                  ) : null}
                   <Link href="/dashboard/datos" className="rounded-xl border px-2.5 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }} title="Exportar o importar productos, terceros, cartera, inventario y más">
                     🔄 Exportar / importar todo
                   </Link>
@@ -730,16 +734,18 @@ export default function ProductsListPage() {
                   <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border text-lg font-black [&::-webkit-details-marker]:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Más opciones">⋯</summary>
                   <div role="menu" className="absolute right-0 z-30 mt-2 grid w-60 gap-1 rounded-2xl border p-1.5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
                     <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); void reloadAll(); }} disabled={loading || loadingMore || searching} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)] disabled:opacity-50">🔄 Recargar</button>
-                    <Link role="menuitem" href="/dashboard/products/importar" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">📥 Importar Excel</Link>
+                    {canImport ? <Link role="menuitem" href="/dashboard/products/importar" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">📥 Importar Excel</Link> : null}
                     <Link role="menuitem" href="/dashboard/datos" className="rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">📦 Exportar / importar todo</Link>
                     {canDelete && storeId ? (
                       <button type="button" role="menuitem" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); setCleaning(true); }} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg-soft)]">🧹 Limpiar sin movimientos</button>
                     ) : null}
                   </div>
                 </details>
-                <Link href="/dashboard/products/crear" className={clsBtnPrimary()} style={{ padding: "9px 14px", fontSize: 13 }}>
-                  + Crear
-                </Link>
+                {canCreate ? (
+                  <Link href="/dashboard/products/crear" className={clsBtnPrimary()} style={{ padding: "9px 14px", fontSize: 13 }}>
+                    + Crear
+                  </Link>
+                ) : null}
               </div>
             </div>
 

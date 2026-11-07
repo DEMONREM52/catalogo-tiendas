@@ -129,3 +129,59 @@ no le devuelve un permiso a quien el dueño se lo quitó.
 - `tests/sql/editar_ingreso_punto.test.mjs` · 16/16: SARA edita su ingreso (inventario y cuenta por pagar ajustan la diferencia); no edita los de otro punto o de la madre; nada se mueve si se rechaza.
 - `tests/sql/permisos_costos.test.mjs` · 42/42: sobre las funciones reales de producción (con saltos de línea de Windows).
 - `tests/sql/permisos.test.mjs` · 7/7: `exports` se conserva, no se duplica y un vendedor de POS no lo recibe; las cuentas por pagar se filtran por punto.
+
+## 7. Desglose de 20261285 (2026-11-07)
+
+| Permiso nuevo | Salió de | Dónde se exige |
+|---|---|---|
+| `products_create` Crear productos | `products` | Menú, ruta `/dashboard/products/crear`, botones |
+| `products_import` Importar productos (Excel) | `products` | Menú, ruta `/dashboard/products/importar`, botones |
+| `products_delete` Eliminar productos | `products` | Botones y **base** (`erp__product_delete_allowed`) |
+| `catalogs` Catálogos y campañas | `products` | Menú y ruta `/dashboard/social` |
+| `landing` Landing pages | `products` | Menú y ruta `/dashboard/landing` |
+| `users_passwords` Cambiar contraseñas del equipo | `users` | Botones y **servidor** (PATCH `new_password`) |
+| `users_delete` Eliminar usuarios | `users` | Botones y **servidor** (DELETE) |
+| `security` Copias y seguridad | `users` | Menú y ruta `/dashboard/seguridad` |
+| `messages` Mensajes y llamadas | (era de todos) | Menú y ruta `/dashboard/mensajes` |
+
+**Compatibilidad.** Nadie pierde nada:
+
+- **La migración** agrega estos permisos a quien tenía el permiso grande y «Mensajes» a todos. También marca cada lista con `perm_v2`.
+- **Antes de correrla**, una lista sin `perm_v2` hereda los permisos nuevos en la app (`expandLegacyPermissions`, que también usan el servidor y el menú).
+- **Al guardar** desde la pantalla de usuarios, el servidor pone la marca.
+
+`catalogs` y `landing` necesitan además `products`, porque las tablas de catálogos y landing todavía revisan `products` en la base. Por eso hoy restringen, pero no abren acceso por sí solos.
+
+## 8. Siguientes desgloses propuestos
+
+Cada uno necesita una migración que cambie las funciones y las políticas de la base, no solo la pantalla.
+
+1. **Catálogos y landing independientes de productos.** Que las políticas de `store_catalogs`, campañas y landings acepten `catalogs` y `landing`, para dar marketing sin dejar editar productos.
+2. **POS fino:**
+   - dar descuentos;
+   - vender a crédito;
+   - reimprimir;
+   - apartados y cotizaciones aparte de facturar;
+   - ver ventas de otros vendedores.
+3. **Terceros:**
+   - ver datos de contacto;
+   - crear sin editar;
+   - exportar terceros.
+4. **Inventario:**
+   - ver existencias de otros puntos;
+   - recibir traslados aparte de enviarlos;
+   - conteos físicos.
+5. **Informes por tipo:**
+   - ventas;
+   - vendedores;
+   - productos;
+   - inventario valorizado (este con «Ver costos»).
+6. **Pedidos de catálogo:**
+   - cambiar estado;
+   - cancelar;
+   - ver datos del cliente.
+7. **Mi tienda:** separar logo y apariencia, redes y contactos, dominio y medición, y el plan.
+
+Pruebas: `tests/sql/permisos_desglosados.test.mjs` · 14/14 (nadie pierde nada, dos corridas no cambian lo quitado, eliminar productos exige su permiso) y `tests/permissions/catalog.test.ts` (catálogo, plantillas y herencia).
+
+Pantalla: `src/app/dashboard/store/users` — asistente por pasos (`UserEditor`), matriz por áreas con riesgo (`PermissionMatrix`) y mapa de permisos del equipo. Ahora son 67 permisos en 15 áreas.

@@ -1,4 +1,5 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { expandLegacyPermissions } from "@/lib/permissions";
 import { isNetworkError, reportNetworkError } from "@/lib/net/status";
 import { cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
 import { resilientUser } from "@/lib/supabase/offline-session";
@@ -168,6 +169,6 @@ export function hasStorePermission(
   return (
     access.isOwner ||
     access.membership?.role === "store_admin" ||
-    Boolean(access.membership?.permissions?.includes(permission))
+    expandLegacyPermissions(access.membership?.permissions).includes(permission)
   );
 }

@@ -4,11 +4,13 @@ import {
   displayStoreUsername,
   isValidStoreUsername,
   normalizeStoreUsername,
+  PERMISSIONS_V2_MARK,
   STORE_MENU_PERMISSIONS,
   STORE_STAFF_MIN_PASSWORD,
   storeStaffAuthEmail,
   storeStaffAuthPassword,
 } from "@/lib/store-user-auth";
+import { expandLegacyPermissions } from "@/lib/permissions";
 
 /** Patrón ilike que solo coincide con ese texto exacto (sin distinguir mayúsculas): escapa % y _. */
 function likeExact(value: string) {
@@ -125,7 +127,8 @@ async function requireStoreManager(
     isOwner: false,
     isAdmin: false,
     role: membership.role,
-    permissions: membership.permissions ?? [],
+    // Si se guardó antes del desglose (20261285), hereda los permisos nuevos de su permiso grande.
+    permissions: expandLegacyPermissions(membership.permissions),
     pointId: membership.role === "store_admin" ? null : (membership.point_id as string | null) ?? null,
   };
 }
@@ -151,9 +154,15 @@ async function resolvePointIds(admin: SupabaseClient, storeId: string, value: un
 
 function assertCanGrantPermissions(manager: ManagerAccess, permissions: string[]) {
   if (manager.isOwner || manager.role === "store_admin") return;
-  if (permissions.some((permission) => !manager.permissions.includes(permission))) {
+  if (permissions.some((permission) => permission !== PERMISSIONS_V2_MARK && !manager.permissions.includes(permission))) {
     throw new ApiError("No puedes asignar permisos que tú no tienes en esta tienda.", 403);
   }
+}
+
+/** Acciones delicadas dentro de «Usuarios» (20261285): el dueño y los administradores siempre pueden. */
+function assertSubPermission(manager: ManagerAccess, permission: string, message: string) {
+  if (manager.isOwner || manager.isAdmin || manager.role === "store_admin") return;
+  if (!manager.permissions.includes(permission)) throw new ApiError(message, 403);
 }
 
 function respondWithError(error: unknown) {
@@ -163,13 +172,14 @@ function respondWithError(error: unknown) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
+/** Solo permisos conocidos, sin repetir, y con la marca de la versión desglosada (lo guardado ya no hereda). */
 function normalizePermissions(value: unknown) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return [PERMISSIONS_V2_MARK];
   return [...new Set(value.filter(
     (permission): permission is string =>
       typeof permission === "string" &&
       STORE_MENU_PERMISSIONS.includes(permission as (typeof STORE_MENU_PERMISSIONS)[number]),
-  ))];
+  )), PERMISSIONS_V2_MARK];
 }
 
 async function resolvePointId(admin: SupabaseClient, storeId: string, value: unknown) {
@@ -235,7 +245,7 @@ export async function POST(request: Request) {
 
     const manager = await requireStoreManager(admin, userId, storeId);
     const permissions =
-      requestedRole === "store_admin" ? [...STORE_MENU_PERMISSIONS] : requestedPermissions;
+      requestedRole === "store_admin" ? [...STORE_MENU_PERMISSIONS, PERMISSIONS_V2_MARK] : requestedPermissions;
     assertCanGrantPermissions(manager, permissions);
     if (requestedRole === "store_admin" && !manager.isOwner && !manager.isAdmin) {
       throw new ApiError("Solo el dueño o administrador global puede crear otro administrador de tienda.", 403);
@@ -326,6 +336,7 @@ export async function DELETE(request: Request) {
     const targetUserId = String(body.user_id ?? "");
     if (!storeId || !targetUserId) throw new ApiError("Faltan datos del usuario.", 400);
     const manager = await requireStoreManager(admin, userId, storeId);
+    assertSubPermission(manager, "users_delete", "Necesitas el permiso «Eliminar usuarios». Puedes desactivarlo en su lugar.");
     if (targetUserId === userId) throw new ApiError("No puedes eliminar tu propio usuario.", 400);
     if (manager.store.owner_id === targetUserId) throw new ApiError("No se puede eliminar al dueño de la tienda.", 400);
 
@@ -421,6 +432,7 @@ export async function PATCH(request: Request) {
       patch.role = body.role;
     }
     const newPassword = body.new_password === undefined ? null : String(body.new_password);
+    if (newPassword !== null) assertSubPermission(manager, "users_passwords", "Necesitas el permiso «Cambiar contraseñas del equipo».");
     if (newPassword !== null && newPassword.length < STORE_STAFF_MIN_PASSWORD) {
       throw new ApiError(`La nueva contraseña debe tener al menos ${STORE_STAFF_MIN_PASSWORD} caracteres.`, 400);
     }

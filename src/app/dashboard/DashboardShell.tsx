@@ -34,6 +34,7 @@ import { PriceApprovalWatcher } from "./pos/PriceApprovalWatcher";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PermissionChangeWatcher } from "./PermissionChangeWatcher";
 import { setPermissionRuntime } from "@/lib/permission-runtime";
+import { expandLegacyPermissions } from "@/lib/permissions";
 import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, type Simulation } from "./AccessGuard";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
@@ -240,7 +241,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
     { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
     { href: "/dashboard/datos", icon: "🔄", label: "Importar y exportar", short: "Datos", permissions: ["exports", "products", "clients", "receivables", "payables", "suppliers", "categories", "inventory_adjust"] },
-    { href: "/dashboard/seguridad", icon: "🛡️", label: "Copias y seguridad", short: "Seguridad", permissions: ["users"] },
+    { href: "/dashboard/seguridad", icon: "🛡️", label: "Copias y seguridad", short: "Seguridad", permissions: ["security"] },
   ],
 };
 
@@ -515,7 +516,7 @@ export default function DashboardShell({
         const access = await getDashboardStore();
         setAccessCachedAt(access.cachedAt ?? null);
         setStore(access.store);
-        setStorePermissions(access.membership?.permissions ?? []);
+        setStorePermissions(expandLegacyPermissions(access.membership?.permissions));
         setStoreIsOwner(access.isOwner);
         setStoreMemberRole(access.membership?.role ?? null);
 
@@ -646,10 +647,14 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/pos") ? "pos" :
       pathname.startsWith("/dashboard/caja") ? "cash" :
       pathname.startsWith("/dashboard/clientes") ? "clients" :
+      pathname.startsWith("/dashboard/products/crear") ? "products_create" :
+      pathname.startsWith("/dashboard/products/importar") ? "products_import" :
       pathname.startsWith("/dashboard/products") ? "products" :
       pathname.startsWith("/dashboard/lista-productos") ? "products_view" :
-      pathname.startsWith("/dashboard/social") ? "products" :
-      pathname.startsWith("/dashboard/landing") ? "products" :
+      pathname.startsWith("/dashboard/social") ? "catalogs" :
+      pathname.startsWith("/dashboard/landing") ? "landing" :
+      pathname.startsWith("/dashboard/mensajes") ? "messages" :
+      pathname.startsWith("/dashboard/seguridad") ? "security" :
       pathname.startsWith("/dashboard/categories") ? "categories" :
       pathname.startsWith("/dashboard/pedidos") ? "orders" :
       pathname.startsWith("/dashboard/inventario") ? "inventory" :
@@ -790,7 +795,7 @@ export default function DashboardShell({
           { href: "/dashboard", emoji: "📊", label: "Inicio e informes", show: true },
           { href: firstOf("billing"), emoji: "💳", label: "Facturación", hint: hintOf("billing"), show: store && anyOf("billing"), module: "billing" },
           { href: "/dashboard/pedidos", emoji: "🧾", label: "Pedidos", hint: "Catálogos e internos", show: store && ["orders", "stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)) },
-          { href: "/dashboard/mensajes", emoji: "💬", label: dmUnread ? `Mensajes (${dmUnread > 99 ? "99+" : dmUnread})` : "Mensajes", hint: dmUnread ? `${dmUnread} sin leer · chat y llamadas con el equipo` : "Chat y llamadas con el equipo", show: store },
+          { href: "/dashboard/mensajes", emoji: "💬", label: dmUnread ? `Mensajes (${dmUnread > 99 ? "99+" : dmUnread})` : "Mensajes", hint: dmUnread ? `${dmUnread} sin leer · chat y llamadas con el equipo` : "Chat y llamadas con el equipo", show: store && canOpen("messages") },
           { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", hint: "Documentos y movimientos", show: store && ["orders", "pos", "transfers", "stock_requests", "inventory"].some((p) => canOpen(p)) },
         ],
       },
@@ -799,8 +804,8 @@ export default function DashboardShell({
         items: [
           { href: firstOf("inventory"), emoji: "🏭", label: "Inventario", hint: hintOf("inventory"), show: store && anyOf("inventory"), module: "inventory" },
           { href: "/dashboard/clientes", emoji: "👥", label: "Terceros y cartera", hint: "Clientes, proveedores, créditos", show: store && ["clients", "receivables", "credit"].some((p) => canOpen(p)) },
-          { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("products") },
-          { href: "/dashboard/landing", emoji: "🚀", label: "Landing pages", hint: "Pauta, ventas y ganancia aparte", show: store && canOpen("products") },
+          { href: "/dashboard/social", emoji: "🛍️", label: "Catálogos y campañas", show: store && canOpen("catalogs") },
+          { href: "/dashboard/landing", emoji: "🚀", label: "Landing pages", hint: "Pauta, ventas y ganancia aparte", show: store && canOpen("landing") },
         ],
       },
       {
@@ -824,8 +829,8 @@ export default function DashboardShell({
     add({ href: "/dashboard/pos", emoji: "💳", label: "Nueva venta (POS)", keywords: "vender facturar remision caja" }, canOpen("pos"));
     add({ href: "/dashboard/inventario?tab=transfers", emoji: "🚚", label: "Nuevo traslado", keywords: "enviar mercancia bodega punto" }, canOpen("transfers") || canOpen("inventory"));
     add({ href: "/dashboard/inventario?tab=purchases", emoji: "🛒", label: "Ingresar factura de compra", keywords: "proveedor compra ingreso" }, canOpen("purchases"));
-    add({ href: "/dashboard/products/crear", emoji: "✨", label: "Nuevo producto", keywords: "crear articulo" }, canOpen("products"));
-    add({ href: "/dashboard/products/importar", emoji: "📥", label: "Importar productos desde Excel", keywords: "excel csv subir masivo plantilla" }, canOpen("products"));
+    add({ href: "/dashboard/products/crear", emoji: "✨", label: "Nuevo producto", keywords: "crear articulo" }, canOpen("products_create"));
+    add({ href: "/dashboard/products/importar", emoji: "📥", label: "Importar productos desde Excel", keywords: "excel csv subir masivo plantilla" }, canOpen("products_import"));
     add({ href: "/dashboard/pedidos?tab=internos", emoji: "📨", label: "Nuevo pedido interno", keywords: "pedir mercancia punto bodega" }, ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)));
     for (const g of menu) for (const i of g.items) add({ href: i.href, emoji: i.emoji, label: i.label, hint: i.hint ?? g.title }, true);
     for (const tabs of Object.values(MODULE_TABS)) for (const t of tabs) add({ href: t.href, emoji: t.icon, label: t.label }, t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || storeIsOwner || isStoreAdmin));

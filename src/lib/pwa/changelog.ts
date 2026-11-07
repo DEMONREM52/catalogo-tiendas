@@ -428,6 +428,17 @@ export const RELEASES: Release[] = [
       { icon: "📤", text: "Compártela directo a WhatsApp" },
     ],
   },
+  {
+    id: 40, date: "2026-11-07", title: "Usuarios y permisos, nuevos",
+    summary: "Crear y editar usuarios ahora es un asistente por pasos con 67 permisos en 15 áreas, nivel de riesgo, plantillas, resumen de lo que verá y un mapa de permisos de todo el equipo.",
+    paths: ["/dashboard/store/users"],
+    demo: [
+      { icon: "🧑‍💼", text: "Persona: nombre, usuario y contraseña" },
+      { icon: "📍", text: "Acceso: punto donde trabaja o administrador" },
+      { icon: "🛡️", text: "Permisos por área, con riesgo y plantillas" },
+      { icon: "📋", text: "Resumen: qué verá y qué no podrá hacer" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

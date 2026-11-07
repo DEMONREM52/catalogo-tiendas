@@ -101,6 +101,15 @@ const PERMISSION_LABELS: Record<StoreMenuPermission, string> = {
   fiscal_numbering: "Resoluciones y numeración",
   fiscal_provider: "Proveedor tecnológico",
   fiscal_audit: "Auditoría fiscal",
+  products_create: "Crear productos",
+  products_delete: "Eliminar productos",
+  products_import: "Importar productos (Excel)",
+  catalogs: "Catálogos y campañas",
+  landing: "Landing pages",
+  messages: "Mensajes y llamadas",
+  security: "Copias y seguridad",
+  users_passwords: "Cambiar contraseñas del equipo",
+  users_delete: "Eliminar usuarios",
 };
 
 /** =========================

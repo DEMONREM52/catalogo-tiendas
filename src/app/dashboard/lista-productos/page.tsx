@@ -13,6 +13,7 @@ import { NewStockRequest, type PointOption, type PrefillLine } from "../pedidos/
 import { Badge, Button, EmptyState, ErrorBox, Skeleton, fmtMoney, fmtNumber, inputCls, inputStyle } from "../fiscal/ui";
 import { PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
+import { useCan } from "@/lib/permission-runtime";
 
 type StockFilter = "all" | "has" | "missing" | "elsewhere";
 type StatusFilter = "active" | "inactive" | "all";
@@ -71,6 +72,7 @@ const shortName = (name: string) => name.replace(/^(sede|punto|bodega)\s+/i, "")
 export default function ProductListPage() {
   const router = useRouter();
   const [store, setStore] = useState<DashboardStore | null>(null);
+  const canCreate = useCan("products_create");
   const [fatal, setFatal] = useState<string | null>(null);
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
@@ -238,9 +240,9 @@ export default function ProductListPage() {
             {data.can_edit ? (
               <>
                 <Badge tone="good"><Pencil size={12} /> Puedes editar</Badge>
-                <Link href="/dashboard/products/crear" className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+                {canCreate ? <Link href="/dashboard/products/crear" className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
                   <Plus size={16} /> Nuevo producto
-                </Link>
+                </Link> : null}
               </>
             ) : (
               <Badge tone="info" title="Tu usuario puede ver la lista, pero no crear, editar ni desactivar productos"><Eye size={12} /> Solo lectura</Badge>

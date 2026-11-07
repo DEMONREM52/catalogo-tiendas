@@ -57,7 +57,23 @@ export const STORE_MENU_PERMISSIONS = [
   "payroll_approve",
   "payroll_pay",
   "payroll_electronic",
+  // 20261285: permisos desglosados (antes venían dentro de «products» o «users»; los mensajes eran de todos).
+  "products_create",
+  "products_delete",
+  "products_import",
+  "catalogs",
+  "landing",
+  "messages",
+  "security",
+  "users_passwords",
+  "users_delete",
 ] as const;
+
+/**
+ * Marca de la versión de permisos. Un usuario sin la marca se guardó antes de desglosar: hereda los permisos
+ * nuevos de su permiso grande (como funcionaba) hasta que se corra la migración 20261285 o se le vuelvan a guardar.
+ */
+export const PERMISSIONS_V2_MARK = "perm_v2";
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];
 
