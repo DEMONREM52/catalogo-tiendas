@@ -61,12 +61,20 @@ export function ImageUpload({
       }
 
       const sb = supabaseBrowser(); // ✅ importante
-      const filePath = `${pathPrefix}${fileName}`;
+      let filePath = `${pathPrefix}${fileName}`;
       const bucketName = bucket ?? "store-assets";
+      const opts = { cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType };
 
-      const { error: upErr } = await sb.storage
-        .from(bucketName)
-        .upload(filePath, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
+      let { error: upErr } = await sb.storage.from(bucketName).upload(filePath, prepared.blob, { ...opts, upsert: true });
+      // Reemplazar un archivo que subió otra persona (o el script de optimización) lo bloquea la regla de Storage
+      // («solo el dueño del archivo lo cambia»). En ese caso se guarda como archivo nuevo, que sí está permitido.
+      if (upErr && /row-level security|unauthorized|403/i.test(upErr.message ?? "")) {
+        const dot = fileName.lastIndexOf(".");
+        const base = dot > 0 ? fileName.slice(0, dot) : fileName;
+        const ext = dot > 0 ? fileName.slice(dot) : "";
+        filePath = `${pathPrefix}${base}-${Date.now().toString(36)}${ext}`;
+        ({ error: upErr } = await sb.storage.from(bucketName).upload(filePath, prepared.blob, { ...opts, upsert: false }));
+      }
 
       if (upErr) throw upErr;
 
