@@ -7,20 +7,11 @@ import { Globe, ImagePlus, Link2, Loader2, MapPin, MessageCircle, Phone, Plus, T
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
 import { STORE_CONTACT_ICONS } from "@/lib/store-contacts";
+import { SocialLinksEditor } from "@/components/SocialLinksEditor";
 import { newLocalId, type CatalogLink, type CatalogLocation, type StoreCatalog } from "@/lib/catalogs";
 import { Field, Section, Switch, ToggleRow, errorText, inputCls, inputStyle, softBox } from "./ui";
 
 type Channel = { id: string; label: string; phone: string; icon: string; active: boolean };
-
-const LINK_TYPES: Array<[string, string]> = [
-  ["instagram", "Instagram"],
-  ["facebook", "Facebook"],
-  ["tiktok", "TikTok"],
-  ["youtube", "YouTube"],
-  ["whatsapp", "WhatsApp"],
-  ["website", "Sitio web"],
-  ["other", "Otro"],
-];
 
 function asChannels(value: unknown): Channel[] {
   if (!Array.isArray(value)) return [];
@@ -216,20 +207,13 @@ export function ContactTab({
           onChange={(next) => patch({ links: next ? (storeLinks.length ? storeLinks : [{ id: newLocalId("link"), type: "instagram", label: "Instagram", url: "" }]) : [] })}
         />
         {draft.links.length ? (
-          <div className="mt-3 space-y-2">
-            {draft.links.map((l) => (
-              <div key={l.id} className="grid gap-2 rounded-2xl border p-3 sm:grid-cols-[150px_minmax(0,1fr)_minmax(0,1.4fr)_auto]" style={softBox}>
-                <select className="rounded-lg border px-2 py-2 text-xs" style={inputStyle} value={l.type} onChange={(e) => patchLink(l.id, { type: e.target.value })}>
-                  {LINK_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <input className={inputCls} style={inputStyle} value={l.label ?? ""} placeholder="Texto visible" onChange={(e) => patchLink(l.id, { label: e.target.value })} />
-                <input className={inputCls} style={inputStyle} value={l.url} placeholder="https://…" onChange={(e) => patchLink(l.id, { url: e.target.value })} />
-                <button type="button" onClick={() => patch({ links: draft.links.filter((x) => x.id !== l.id) })} className="grid h-9 w-9 place-items-center rounded-lg border text-rose-500" style={softBox} aria-label="Quitar enlace"><Trash2 size={14} /></button>
-              </div>
-            ))}
-            <button type="button" onClick={() => patch({ links: [...draft.links, { id: newLocalId("link"), type: "instagram", label: "", url: "" }] })} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold" style={softBox}>
-              <Plus size={14} /> Agregar enlace
-            </button>
+          <div className="mt-3">
+            <SocialLinksEditor
+              links={draft.links}
+              onPatch={(id, change) => patchLink(id, change)}
+              onRemove={(link) => patch({ links: draft.links.filter((x) => x.id !== link.id) })}
+              onAdd={(type, label) => patch({ links: [...draft.links, { id: newLocalId("link"), type, label, url: "" }] })}
+            />
           </div>
         ) : null}
       </Section>

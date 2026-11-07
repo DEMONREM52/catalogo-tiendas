@@ -1,4 +1,4 @@
-import { SocialIcon } from "@/lib/supabase/socialIcons";
+import { SocialBadge, linkDisplayName, linkVisualType, socialBrand } from "@/lib/supabase/socialIcons";
 
 export function SocialIconRow({
   links,
@@ -13,32 +13,33 @@ export function SocialIconRow({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {links.map((l) => (
-        <a
-          key={l.id}
-          href={l.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5"
-          style={{
-            borderColor: "var(--t-border)",
-            background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)",
-            color: "var(--t-text)",
-          }}
-          title={l.label ?? l.type}
-        >
-          {l.type === "other" && l.icon_url ? (
-            <img
-              src={l.icon_url}
-              alt={l.label ?? "icono"}
-              className="h-5 w-5 rounded"
-            />
-          ) : (
-            <SocialIcon type={l.type} />
-          )}
-          <span className="opacity-90">{l.label ?? l.type}</span>
-        </a>
-      ))}
+      {links.map((l) => {
+        const type = linkVisualType(l.type, l.url);
+        const name = linkDisplayName(l.type, l.url, l.label);
+        return (
+          <a
+            key={l.id}
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            className="group inline-flex items-center gap-2 rounded-2xl border py-1.5 pl-1.5 pr-3.5 text-sm font-semibold transition hover:-translate-y-0.5 hover:shadow-lg"
+            style={{
+              borderColor: "var(--t-border)",
+              background: "color-mix(in oklab, var(--t-card-bg) 82%, transparent)",
+              color: "var(--t-text)",
+            }}
+            title={`${name} · ${socialBrand(type).name}`}
+          >
+            {type === "other" && l.icon_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={l.icon_url} alt="" className="h-8 w-8 rounded-[10px] object-cover" />
+            ) : (
+              <span className="transition group-hover:scale-110 group-hover:-rotate-6"><SocialBadge type={type} size={32} rounded={10} /></span>
+            )}
+            <span className="opacity-95">{name}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }

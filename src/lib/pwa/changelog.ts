@@ -407,6 +407,16 @@ export const RELEASES: Release[] = [
       { icon: "✨", text: "Vidrio con bordes iluminados y reflejo suave" },
     ],
   },
+  {
+    id: 38, date: "2026-11-07", title: "Redes con sus iconos y colores",
+    summary: "Las redes del catálogo se eligen tocando su icono, el nombre se escribe solo (sin errores) y al pegar el enlace se reconoce la red.",
+    paths: ["/dashboard/social", "/dashboard/store"],
+    demo: [
+      { icon: "📲", text: "Toca + TikTok o + Instagram para agregarla" },
+      { icon: "🔗", text: "Pega el enlace: la red se reconoce sola" },
+      { icon: "🪄", text: "El nombre queda bien escrito automáticamente" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

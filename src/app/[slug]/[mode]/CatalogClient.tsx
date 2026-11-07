@@ -14,6 +14,7 @@ import { StoreContactIcon } from "@/components/StoreContactIcon";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { buildProductShareText, hasProductLanding } from "@/lib/product-details";
 import { SocialIconRow } from "./socials";
+import { SocialBadge, linkDisplayName, linkVisualType } from "@/lib/supabase/socialIcons";
 import { useCart } from "@/lib/cart/CartProvider";
 import { CartDrawer } from "@/lib/cart/CartDrawer";
 import { normalizeStoreContactChannels, whatsappUrl } from "@/lib/store-contacts";
@@ -1274,7 +1275,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                           className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold transition hover:brightness-110"
                           style={{ borderColor: "var(--t-border)", background: "color-mix(in srgb, var(--t-bg-base) 90%, var(--t-text) 10%)", color: "var(--t-text)" }}
                         >
-                          <span className="min-w-0 truncate">{link.label || link.type}</span><span aria-hidden="true" style={{ color: "var(--t-muted)" }}>↗</span>
+                          <span className="flex min-w-0 items-center gap-2.5"><SocialBadge type={linkVisualType(link.type, link.url)} size={30} rounded={9} /><span className="min-w-0 truncate">{linkDisplayName(link.type, link.url, link.label)}</span></span><span aria-hidden="true" style={{ color: "var(--t-muted)" }}>↗</span>
                         </a>
                       ))}
                     </section>

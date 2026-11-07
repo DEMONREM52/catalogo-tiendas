@@ -16,6 +16,8 @@ import { EditableNickname, useNicknameUpdates } from "../Nickname";
 import { BackupPanel } from "./BackupPanel";
 import { LoyaltyPanel, QrPanel } from "./SalesSettings";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { SocialLinksEditor } from "@/components/SocialLinksEditor";
+import { linkDisplayName, linkVisualType } from "@/lib/supabase/socialIcons";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
 
 type StoreProfileDraft = {
@@ -71,16 +73,6 @@ const QUICK_ACCESS_OPTIONS = [
   ["users", "Usuarios", "🔐"],
   ["inventory", "Inventario y compras", "🏭"],
 ] as const;
-
-const LINK_TYPES = [
-  ["instagram", "Instagram"],
-  ["facebook", "Facebook"],
-  ["tiktok", "TikTok"],
-  ["youtube", "YouTube"],
-  ["whatsapp", "WhatsApp"],
-  ["website", "Sitio web"],
-  ["other", "Otro enlace"],
-];
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -506,11 +498,11 @@ export default function StoreSettings() {
     setLinks((current) => current.map((link) => link.id === id ? { ...link, ...patch } : link));
   }
 
-  function addLink() {
+  function addLink(type = "instagram", label = "Instagram") {
     setLinks((current) => [...current, {
       id: `new-${newId()}`,
-      type: "instagram",
-      label: "",
+      type,
+      label,
       url: "",
       active: true,
       sort_order: current.length,
@@ -565,7 +557,7 @@ export default function StoreSettings() {
       return;
     }
     const invalidLink = links.find((link) => {
-      if (!link.label.trim() || !link.url.trim()) return true;
+      if (!link.url.trim()) return true;
       try {
         const url = new URL(/^https?:\/\//i.test(link.url) ? link.url : `https://${link.url}`);
         return !["http:", "https:"].includes(url.protocol);
@@ -574,7 +566,7 @@ export default function StoreSettings() {
       }
     });
     if (invalidLink) {
-      await Swal.fire({ icon: "warning", title: "Revisa los enlaces", text: "Cada red debe tener un nombre y una dirección web válida.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+      await Swal.fire({ icon: "warning", title: "Revisa los enlaces", text: "Cada red debe tener una dirección web válida.", background: "var(--t-bg-base)", color: "var(--t-text)" });
       return;
     }
     const cleanLocations = profile.locations.map((location) => ({
@@ -671,8 +663,8 @@ export default function StoreSettings() {
       for (const [index, link] of links.entries()) {
         const url = /^https?:\/\//i.test(link.url.trim()) ? link.url.trim() : `https://${link.url.trim()}`;
         const values = {
-          type: link.type,
-          label: link.label.trim(),
+          type: linkVisualType(link.type, url),
+          label: linkDisplayName(link.type, url, link.label),
           url,
           active: link.active,
           sort_order: index,
@@ -1034,22 +1026,13 @@ export default function StoreSettings() {
 
         <Panel title="Encuéntranos" description="Estos enlaces se mostrarán en el botón fijo “Encuéntranos” del catálogo.">
           <div className="space-y-3">
-            {links.map((link) => (
-              <div key={link.id} className="grid gap-3 rounded-2xl border p-4 md:grid-cols-[160px_minmax(0,1fr)_minmax(0,1.4fr)_auto]" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-                <Field label="Plataforma">
-                  <select className={inputClass()} style={inputStyle} value={link.type} onChange={(event) => patchLink(link.id, { type: event.target.value })}>
-                    {LINK_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Nombre visible"><input className={inputClass()} style={inputStyle} maxLength={48} value={link.label} onChange={(event) => patchLink(link.id, { label: event.target.value })} placeholder="Ej: Instagram oficial" /></Field>
-                <Field label="Enlace"><input className={inputClass()} style={inputStyle} type="url" value={link.url} onChange={(event) => patchLink(link.id, { url: event.target.value })} placeholder="https://..." /></Field>
-                <div className="flex items-end gap-3 pb-1">
-                  <label className="flex h-10 items-center gap-2 text-xs font-semibold"><input className="h-4 w-4 accent-fuchsia-600" type="checkbox" checked={link.active} onChange={(event) => patchLink(link.id, { active: event.target.checked })} /> Visible</label>
-                  <button type="button" className="btn-soft grid h-10 w-10 place-items-center rounded-xl text-rose-600 dark:text-rose-300" aria-label={`Eliminar enlace ${link.label || link.type}`} onClick={() => removeLink(link)}><Trash2 size={16} /></button>
-                </div>
-              </div>
-            ))}
-            <button type="button" onClick={addLink} className="btn-soft inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold"><Plus size={16} /> Agregar red o enlace</button>
+            <SocialLinksEditor
+              links={links}
+              disabled={!canEdit}
+              onPatch={(id, change) => patchLink(id, { ...change, ...(change.label !== undefined ? { label: change.label ?? "" } : {}) } as Partial<StoreLinkDraft>)}
+              onRemove={(link) => removeLink(link)}
+              onAdd={(type, label) => addLink(type, label)}
+            />
           </div>
         </Panel>
 
