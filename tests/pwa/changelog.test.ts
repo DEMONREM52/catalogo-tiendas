@@ -16,7 +16,11 @@ test("novedades: solo avisan en su página", () => {
   assert.equal(releaseTouches(r, "/dashboard/pedidosx"), false);
   assert.equal(releaseTouches(r, "/dashboard/products"), false);
   assert.equal(releaseTouches({ ...r, paths: [] }, "/dashboard/pedidos"), false);
-  assert.equal(releaseTouches({ ...r, paths: [], important: true }, "/cualquier"), true);
+  assert.equal(releaseTouches({ ...r, paths: [], important: true }, "/dashboard/caja"), true);
+  // Fuera del panel (catálogo, landings, producto) nunca hay aviso, ni siquiera de una novedad importante.
+  assert.equal(releaseTouches({ ...r, paths: [], important: true }, "/"), false);
+  assert.equal(releaseTouches({ ...r, paths: ["/dashboard"], important: true }, "/producto/abc"), false);
+  assert.equal(releaseTouches({ ...r, paths: ["/"], important: true }, "/catalogo"), false);
 });
 
 test("novedades: las que avisan traen qué cambió", () => {

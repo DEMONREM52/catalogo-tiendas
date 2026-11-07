@@ -412,8 +412,15 @@ export const RELEASES: Release[] = [
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
 export const BUILD_RELEASE = RELEASES.reduce((m, r) => Math.max(m, r.id), 0);
 
-/** ¿La novedad toca esta ruta? */
+/** Rutas del panel interno: solo ahí se avisa de novedades. Catálogos, landings y páginas públicas nunca ven el aviso. */
+const PANEL_PATHS = ["/dashboard", "/admin", "/traslado"];
+export function isPanelPath(pathname: string) {
+  return PANEL_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/** ¿La novedad toca esta ruta? (Una «importante» se muestra en todo el panel, pero nunca fuera de él.) */
 export function releaseTouches(r: Release, pathname: string) {
+  if (!isPanelPath(pathname)) return false;
   if (r.important) return true;
   return r.paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
