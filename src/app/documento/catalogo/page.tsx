@@ -34,6 +34,10 @@ function CatalogPdf() {
   const [desc, setDesc] = useState(false);
   const [qr, setQr] = useState<Record<string, string>>({});
   const [withQr, setWithQr] = useState(true);
+  const [loadWarn, setLoadWarn] = useState("");
+  const [qrProgress, setQrProgress] = useState(0);
+  const [category, setCategory] = useState("");
+  const [printing, setPrinting] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -42,14 +46,27 @@ function CatalogPdf() {
       const p = (e ? null : data) as CatalogPayload | null;
       if (!p || p.status !== "ok") return setError(p?.status === "locked" ? "Ese catálogo es privado: abre el enlace con su clave." : "No se encontró el catálogo.");
       setPayload(p);
+      // La base entrega como máximo 60 por página: se piden todas las páginas hasta completar el total.
+      const PAGE = 60;
       const all: ProductRow[] = [];
-      for (let offset = 0; offset < 3000; offset += 100) {
-        setProgress(`Cargando productos… ${all.length}`);
-        const { data: page, error: pe } = await sb.rpc("catalog_public_products", { p_store: p.store.slug, p_catalog: p.catalog.slug, p_key: key, p_category: null, p_q: null, p_limit: 100, p_offset: offset });
-        if (pe) break;
-        const rows = ((page as { items?: ProductRow[] } | null)?.items ?? []);
-        all.push(...rows);
-        if (rows.length < 100) break;
+      const seen = new Set<string>();
+      let total = 0;
+      for (let offset = 0, guard = 0; offset < 20000 && guard < 400; guard++) {
+        setProgress(total ? `Cargando productos… ${all.length} de ${total}` : `Cargando productos… ${all.length}`);
+        let page: unknown = null;
+        let pe: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          ({ data: page, error: pe } = await sb.rpc("catalog_public_products", { p_store: p.store.slug, p_catalog: p.catalog.slug, p_key: key, p_category: null, p_q: null, p_limit: PAGE, p_offset: offset }));
+          if (!pe) break;
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        }
+        if (pe) { setLoadWarn(`Se cargaron ${all.length} de ${total || "?"} productos (falló la conexión). Recarga para intentar de nuevo.`); break; }
+        const res = page as { items?: ProductRow[]; total?: number } | null;
+        total = Number(res?.total) || total;
+        const rows = res?.items ?? [];
+        for (const r of rows) if (!seen.has(r.id)) { seen.add(r.id); all.push(r); }
+        offset += rows.length;
+        if (!rows.length || (total && offset >= total)) break;
       }
       setItems(all);
     })();
@@ -62,15 +79,44 @@ function CatalogPdf() {
     void (async () => {
       const QR = (await import("qrcode")).default;
       const out: Record<string, string> = {};
+      let n = 0;
       for (const p of items) {
+        if (!alive) return;
         out[p.id] = await QR.toDataURL(`${window.location.origin}/${payload.store.slug}/producto/${p.id}`, { margin: 0, width: 120, errorCorrectionLevel: "L" });
+        // Con más de mil productos se muestra el avance y se deja respirar la página.
+        if (++n % 60 === 0) { setQrProgress(n); setQr({ ...out }); await new Promise((r) => setTimeout(r, 0)); }
       }
-      if (alive) setQr(out);
+      if (alive) { setQr(out); setQrProgress(n); }
     })();
     return () => { alive = false; };
   }, [payload, items, withQr]);
 
-  const shown = useMemo(() => items.filter((p) => p.active !== false && (!onlyStock || p.stock === null || Number(p.stock) > 0)), [items, onlyStock]);
+  const shown = useMemo(() => items.filter((p) => p.active !== false && (!onlyStock || p.stock === null || Number(p.stock) > 0) && (!category || (p.category_id ?? "") === category)), [items, onlyStock, category]);
+  const usedCats = useMemo(() => {
+    if (!payload) return [] as Array<{ id: string; name: string; n: number }>;
+    const count = new Map<string, number>();
+    for (const p of items) if (p.active !== false && (!onlyStock || p.stock === null || Number(p.stock) > 0)) count.set(p.category_id ?? "", (count.get(p.category_id ?? "") ?? 0) + 1);
+    const list = [...payload.categories].sort((a, b) => a.sort_order - b.sort_order).filter((c) => count.has(c.id)).map((c) => ({ id: c.id, name: c.name, n: count.get(c.id) ?? 0 }));
+    return list;
+  }, [items, onlyStock, payload]);
+
+  /** Antes de imprimir espera a que todas las fotos estén cargadas (si no, el PDF sale con huecos). */
+  async function printAll() {
+    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>(".paper img"));
+    let done = imgs.filter((i) => i.complete).length;
+    if (done < imgs.length) {
+      setPrinting(`Cargando fotos… ${done} de ${imgs.length}`);
+      await Promise.race([
+        Promise.all(imgs.filter((i) => !i.complete).map((i) => new Promise<void>((r) => {
+          const fin = () => { done++; setPrinting(`Cargando fotos… ${done} de ${imgs.length}`); r(); };
+          i.addEventListener("load", fin, { once: true }); i.addEventListener("error", fin, { once: true });
+        }))),
+        new Promise((r) => setTimeout(r, 90000)),
+      ]);
+    }
+    setPrinting("");
+    window.print();
+  }
   const sections = useMemo(() => {
     if (!group || !payload) return [{ title: "", rows: shown }];
     const byCat = new Map<string, ProductRow[]>();
@@ -80,7 +126,7 @@ function CatalogPdf() {
   }, [shown, group, payload]);
 
   if (error) return <p style={{ padding: 32, textAlign: "center", fontFamily: "system-ui" }}>🔒 {error}</p>;
-  if (!payload || !items.length) return <p style={{ padding: 32, textAlign: "center", fontFamily: "system-ui" }}>{progress}</p>;
+  if (!payload || !items.length) return <p style={{ padding: 32, textAlign: "center", fontFamily: "system-ui" }}>{payload && !loadWarn && progress.startsWith("Cargando") ? progress : loadWarn || progress}</p>;
 
   const st = payload.store;
   const btn = (on: boolean): React.CSSProperties => ({ padding: "7px 12px", borderRadius: 10, border: "1px solid #d1d5db", background: on ? "#111827" : "#fff", color: on ? "#fff" : "#111827", fontWeight: 600, fontSize: 13, cursor: "pointer" });
@@ -113,8 +159,18 @@ function CatalogPdf() {
         <button type="button" style={btn(wholesale)} onClick={() => setWholesale((v) => !v)}>{wholesale ? "✓ " : ""}Precio por mayor</button>
         <button type="button" style={btn(desc)} onClick={() => setDesc((v) => !v)}>{desc ? "✓ " : ""}Descripción</button>
         <button type="button" style={btn(withQr)} onClick={() => setWithQr((v) => !v)}>{withQr ? "✓ " : ""}QR</button>
-        <button type="button" onClick={() => window.print()} style={{ ...btn(true), background: "#7c3aed", borderColor: "#7c3aed" }}>📄 Guardar PDF / imprimir ({shown.length})</button>
-        <span style={{ width: "100%", textAlign: "center", fontSize: 12, color: "#6b7280" }}>En la ventana de impresión elige «Guardar como PDF» y mándalo por WhatsApp.</span>
+        {usedCats.length > 1 ? (
+          <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...btn(!!category), appearance: "auto" }} aria-label="Categoría">
+            <option value="">Todas las categorías</option>
+            {usedCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.n})</option>)}
+          </select>
+        ) : null}
+        <button type="button" disabled={!!printing} onClick={() => void printAll()} style={{ ...btn(true), background: "#7c3aed", borderColor: "#7c3aed", opacity: printing ? 0.7 : 1 }}>📄 {printing || `Guardar PDF / imprimir (${shown.length})`}</button>
+        <span style={{ width: "100%", textAlign: "center", fontSize: 12, color: "#6b7280" }}>
+          {items.length} productos cargados{withQr && qrProgress < items.length ? ` · preparando QR ${qrProgress} de ${items.length}` : ""} · En la ventana de impresión elige «Guardar como PDF» y mándalo por WhatsApp.
+          {shown.length > 300 ? " Con tantos productos el PDF pesa: puedes elegir una categoría o 4 por fila." : ""}
+        </span>
+        {loadWarn ? <span style={{ width: "100%", textAlign: "center", fontSize: 12, color: "#b45309", fontWeight: 700 }}>⚠️ {loadWarn}</span> : null}
       </div>
       <div style={{ padding: 16, display: "flex", justifyContent: "center" }}>
         <div className="paper" style={{ width: "205mm", background: "#fff", padding: "10mm", boxShadow: "0 1px 4px rgba(0,0,0,.15)" }}>
@@ -135,7 +191,7 @@ function CatalogPdf() {
                   return (
                     <div key={p.id} className="card">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {p.image_url ? <img className="photo" src={p.image_url} alt="" loading="eager" /> : <div className="photo" style={{ aspectRatio: 1, background: "#f3f4f6", borderRadius: "2mm" }} />}
+                      {p.image_url ? <img className="photo" src={p.image_url} alt="" loading="eager" decoding="async" /> : <div className="photo" style={{ aspectRatio: 1, background: "#f3f4f6", borderRadius: "2mm" }} />}
                       <div className="nm">{p.name}</div>
                       {desc && p.description ? <RichText compact text={p.description} className="ds" /> : null}
                       <div className="row">
