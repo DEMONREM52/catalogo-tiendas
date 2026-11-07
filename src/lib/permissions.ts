@@ -1,4 +1,4 @@
-import { PERMISSIONS_V2_MARK, type StoreMenuPermission } from "@/lib/store-user-auth";
+import { PERMISSIONS_V2_MARK, STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";
 
 /** Qué tanto daño puede hacer un permiso en manos equivocadas. */
 export type PermissionRisk = "low" | "medium" | "high" | "critical";
@@ -256,6 +256,7 @@ export function riskScore(perms: readonly string[]) {
 
 /** Plantillas para asignar permisos con un clic (luego se pueden ajustar). */
 export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: string; hint: string; permissions: StoreMenuPermission[] }> = [
+  { key: "admin", label: "Administrador", icon: "👑", hint: "Todos los permisos (luego puedes quitar alguno)", permissions: [...STORE_MENU_PERMISSIONS] },
   { key: "seller", label: "Vendedor", icon: "🛒", hint: "Vende, atiende pedidos y clientes", permissions: ["pos", "cash", "clients", "orders", "stock_requests", "products_view", "messages"] },
   { key: "cashier", label: "Cajero", icon: "💵", hint: "Vende, cobra, anula sin confirmar y emite", permissions: ["pos", "cash", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal", "fiscal_send", "products_view", "messages"] },
   { key: "collector", label: "Cartera", icon: "📒", hint: "Cobra, maneja créditos e informes", permissions: ["clients", "receivables", "credit", "reports", "exports", "messages"] },

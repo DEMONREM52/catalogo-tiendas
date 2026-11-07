@@ -35,7 +35,7 @@ export default function StoreUsersPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [view, setView] = useState<"team" | "map">("team");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [status, setStatus] = useState<"all" | "active" | "inactive" | "admins">("all");
   const [pointFilter, setPointFilter] = useState("any");
   const [permFilter, setPermFilter] = useState("");
   const [sort, setSort] = useState<Sort>("name");
@@ -107,6 +107,7 @@ export default function StoreUsersPage() {
     const list = members.filter((m) => {
       if (status === "active" && !m.active) return false;
       if (status === "inactive" && m.active) return false;
+      if (status === "admins" && m.role !== "store_admin") return false;
       if (pointFilter !== "any" && (m.point_id ?? "") !== pointFilter) return false;
       if (permFilter && !effective(m).includes(permFilter)) return false;
       if (!term) return true;
@@ -204,7 +205,7 @@ export default function StoreUsersPage() {
           </button>
         </div>
         <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {([["Usuarios", stats.total, "var(--t-text)", "all"], ["Activos", stats.active, "#10b981", "active"], ["Desactivados", stats.inactive, "#ef4444", "inactive"], ["Administradores", stats.admins, "var(--t-accent)", null], ["Con permisos críticos", stats.critical, "#f59e0b", null]] as Array<[string, number, string, "all" | "active" | "inactive" | null]>).map(([label, value, color, f]) => (
+          {([["Usuarios", stats.total, "var(--t-text)", "all"], ["Activos", stats.active, "#10b981", "active"], ["Desactivados", stats.inactive, "#ef4444", "inactive"], ["Administradores", stats.admins, "var(--t-accent)", "admins"], ["Con permisos críticos", stats.critical, "#f59e0b", null]] as Array<[string, number, string, "all" | "active" | "inactive" | "admins" | null]>).map(([label, value, color, f]) => (
             <button key={label} type="button" disabled={!f} onClick={() => f && setStatus(f)} className="rounded-2xl border px-3 py-2.5 text-left transition enabled:hover:-translate-y-0.5" style={{ borderColor: f && status === f ? "var(--t-accent)" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 55%, transparent)" }}>
               <p className="text-2xl font-black tabular-nums" style={{ color }}>{loading ? "…" : value}</p>
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{label}</p>
@@ -242,7 +243,7 @@ export default function StoreUsersPage() {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar persona, usuario o punto…" className="w-full rounded-full border py-2 pl-9 pr-3 text-base outline-none sm:text-sm" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 55%, transparent)", color: "var(--t-text)" }} />
           </span>
           <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="rounded-full border px-3 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} aria-label="Estado">
-            <option value="all">Todos</option><option value="active">Activos</option><option value="inactive">Desactivados</option>
+            <option value="all">Todos</option><option value="active">Activos</option><option value="inactive">Desactivados</option><option value="admins">👑 Administradores</option>
           </select>
           <select value={pointFilter} onChange={(e) => setPointFilter(e.target.value)} className="rounded-full border px-3 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} aria-label="Punto">
             <option value="any">Cualquier punto</option><option value="">🌐 Todos los puntos (madre)</option>

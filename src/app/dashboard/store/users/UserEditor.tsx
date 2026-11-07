@@ -170,7 +170,9 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
         if (changePassword && password) body.new_password = password;
         if (roleChanged) body.role = admin ? "store_admin" : "seller";
         if (!admin && (permsChanged || roleChanged)) body.permissions = cleanPermissions(perms);
-        if (pointChanged || extraChanged) { body.point_id = pointId || null; body.point_ids = pointId ? extraPoints.filter((x) => x !== pointId) : []; }
+        // Un administrador completo trabaja en todos los puntos: se le quita el punto asignado.
+        if (admin && roleChanged) { body.point_id = null; body.point_ids = []; }
+        else if (pointChanged || extraChanged) { body.point_id = pointId || null; body.point_ids = pointId ? extraPoints.filter((x) => x !== pointId) : []; }
         if (Object.keys(body).length <= 2) { onClose(); return; }
         const res = await fetch("/api/store-team/users", { method: "PATCH", headers, body: JSON.stringify(body) });
         const out = await res.json().catch(() => ({}));
@@ -287,15 +289,16 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
 
                   {step === "access" ? (
                     <div className="mx-auto max-w-3xl space-y-5">
-                      {isOwner ? (
+                      {(
                         <div>
                           <p className="mb-2 text-sm font-black">Tipo de acceso</p>
+                          {!isOwner ? <p className="mb-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>👑 Solo el dueño de la tienda puede nombrar administradores. Tú puedes darle la plantilla «Administrador» en Permisos (todos los permisos que tú tienes).</p> : null}
                           <div className="grid gap-2 sm:grid-cols-2">
                             {[
                               { on: !admin, icon: <ShieldCheck size={18} />, title: "Personalizado", text: "Solo lo que marques en Permisos. Lo recomendado.", set: () => setAdmin(false) },
                               { on: admin, icon: <Crown size={18} />, title: "Administrador de la tienda", text: "Todo, en todos los puntos, como el dueño (menos cambiarte a ti).", set: () => setAdmin(true) },
                             ].map((o) => (
-                              <button key={o.title} type="button" onClick={o.set} className="flex items-start gap-3 rounded-2xl border p-3 text-left transition"
+                              <button key={o.title} type="button" onClick={o.set} disabled={!isOwner && !o.on} className="flex items-start gap-3 rounded-2xl border p-3 text-left transition disabled:opacity-45"
                                 style={o.on ? { borderColor: "var(--t-accent)", background: "var(--t-accent-soft, color-mix(in oklab, var(--t-accent) 12%, transparent))" } : { borderColor: "var(--t-card-border)" }}>
                                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: o.on ? "var(--t-accent)" : "var(--t-card-bg-soft)", color: o.on ? "#fff" : "var(--t-text)" }}>{o.icon}</span>
                                 <span><b className="text-sm">{o.title}</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>{o.text}</span></span>
@@ -303,7 +306,7 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
                             ))}
                           </div>
                         </div>
-                      ) : null}
+                      )}
                       {!admin ? (
                         <>
                           <div>
@@ -348,9 +351,21 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
 
                   {step === "permissions" ? (
                     admin ? (
-                      <p className="mx-auto max-w-3xl rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--t-card-border)" }}>👑 Es administrador de la tienda: tiene todos los permisos. Para escogerlos uno por uno, cámbialo a «Personalizado» en el paso Acceso.</p>
+                      <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                        <span className="min-w-0 flex-1">👑 Es <b>administrador de la tienda</b>: tiene todos los permisos, en todos los puntos.</span>
+                        {isOwner ? <button type="button" onClick={() => setAdmin(false)} className="rounded-xl border px-3 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Escoger permisos uno por uno</button> : null}
+                      </div>
                     ) : (
+                      <>
+                      {isOwner ? (
+                        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 7%, transparent)" }}>
+                          <Crown size={18} style={{ color: "var(--t-accent)" }} />
+                          <p className="min-w-0 flex-1 text-xs"><b className="text-sm">¿Debe manejar todo?</b><span className="block" style={{ color: "var(--t-muted)" }}>Hazlo <b>administrador de la tienda</b>: tiene todos los permisos en todos los puntos, también los que se agreguen en el futuro.</span></p>
+                          <button type="button" onClick={() => setAdmin(true)} className="rounded-xl px-3 py-2 text-xs font-bold text-white" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>👑 Hacer administrador</button>
+                        </div>
+                      ) : null}
                       <PermissionMatrix value={perms} onChange={setPerms} disabled={saving} storeId={store.id} copyFrom={copyFrom} original={editing ? original : undefined} grantable={grantable} initialArea={startArea} />
+                      </>
                     )
                   ) : null}
 
