@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Database, Eye, EyeOff, Gift, Globe2, Info, Link2, MapPin, Megaphone, MessageCircle, Palette, Plus, Power, Save, ShieldCheck, Star, Store, Trash2, Zap } from "lucide-react";
 import { SettingsSections, SubCard } from "./SettingsSections";
+import { TeamCodeCard } from "./TeamCodeCard";
 import Swal from "sweetalert2";
 import { ImageUpload } from "./ImageUpload";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
@@ -806,6 +807,7 @@ export default function StoreSettings() {
               </label>
             ))}
           </div>
+                <TeamCodeCard storeId={store.id} canEdit={canEdit} />
               </>
             ),
           },

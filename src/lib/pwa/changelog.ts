@@ -638,6 +638,16 @@ export const RELEASES: Release[] = [
       { icon: "🏆", text: "Mira el podio de productos y tus días más fuertes" },
     ],
   },
+  {
+    id: 61, date: "2026-11-08", title: "Código de tienda para el equipo",
+    summary: "Ahora tu equipo entra desde el mismo inicio de sesión: toca «Equipo», escribe el código de la tienda y luego su usuario y contraseña. El código lo pones en Mi tienda → Identidad.",
+    paths: ["/dashboard/store"],
+    demo: [
+      { icon: "🔑", text: "Mi tienda → Identidad → Código de la tienda" },
+      { icon: "🎲", text: "Toca «Generar» y guarda" },
+      { icon: "👥", text: "Compártelo con tu equipo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
