@@ -108,5 +108,14 @@ ok(bJ.can_manage && bJ.points.length >= 3, "La madre ve todos los puntos");
 ok((await as(VEND, "select public.erp_cash_board($1) r", [A]))[0].r.ok === false, "Sin permiso no ve cajas");
 ok(/permission denied/.test((await err(CAJERA, "select * from erp_cash_sessions")) ?? ""), "Las tablas no se leen directo");
 
+console.log("Exportar a Excel (20261300)");
+await db.exec(fs.readFileSync(path.join(here, "migraciones/20261300_exportar_caja.sql"), "utf8"));
+const today = new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10);
+const ex = (await as(OWNER, "select public.erp_cash_export($1, $2::date - 1, $2::date) r", [A, today]))[0].r;
+ok(ex.sessions.length >= 3 && ex.sessions.every((x) => x.point), "Exporta las cajas del rango con su punto", ex.sessions.length);
+ok(Array.isArray(ex.moves), "Y sus movimientos", ex.moves.length);
+ok(/Caja/.test((await err(VEND, "select public.erp_cash_export($1, current_date, current_date)", [A])) ?? ""), "Sin «Caja» no exporta");
+ok((await as(OWNER, "select public.erp_cash_export($1, $2::date + 1, $2::date + 2) r", [A, today]))[0].r.sessions.length === 0, "Fuera del rango no sale nada");
+
 console.log(`\n${pass} ok · ${fail} fallas`);
 process.exit(fail ? 1 : 0);

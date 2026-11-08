@@ -275,14 +275,19 @@ export const EXPORTS: ExportDef[] = [
     key: "gastos", icon: "💸", title: "Gastos", detail: "Cada gasto con categoría, punto, a quién se le pagó y si está pagado.",
     perms: ["expenses"], usesRange: true,
     async build({ storeId, range, step }) {
-      step("Gastos…");
-      const { point } = await lookups(storeId);
-      const cats = await all((a, b) => sb().from("erp_expense_categories").select("id,name").eq("store_id", storeId).range(a, b));
-      const cat = new Map(cats.map((c) => [String(c.id), String(c.name)]));
-      const rows = await all((a, b) => sb().from("erp_expenses").select("number,category_id,point_id,description,payee_name,reference,amount,paid,incurred_on,due_on,status,notes,created_by_name")
-        .eq("store_id", storeId).gte("incurred_on", range.from).lte("incurred_on", range.to).order("incurred_on").range(a, b));
+      // Por la función de la pantalla de Gastos (la tabla no se lee directo): 200 por vuelta.
+      const rows: Row[] = [];
+      for (let offset = 0; offset < 100000; offset += 200) {
+        step(`Gastos… ${rows.length}`);
+        const { data, error } = await sb().rpc("erp_expenses_list", { p_store: storeId, p_point: null, p_from: range.from, p_to: range.to, p_status: "all", p_category: null, p_query: null, p_limit: 200, p_offset: offset });
+        if (error) throw new Error(error.message);
+        const page = ((data as { rows?: Row[] } | null)?.rows ?? []) as Row[];
+        rows.push(...page);
+        if (page.length < 200) break;
+      }
+      rows.sort((a, b) => String(a.incurred_on).localeCompare(String(b.incurred_on)) || Number(a.number) - Number(b.number));
       return [{ name: "Gastos", head: ["Fecha", "Número", "Categoría", "Punto", "Descripción", "Pagado a", "Referencia", "Valor", "Pagado", "Vence", "Estado", "Notas", "Registró"],
-        rows: rows.map((r) => [xDate(r.incurred_on), n(r.number), cat.get(String(r.category_id)) ?? "", point.get(String(r.point_id)) ?? "General", s(r.description), s(r.payee_name), s(r.reference),
+        rows: rows.map((r) => [xDate(r.incurred_on), n(r.number), s(r.category_name), s(r.point_name) || "General", s(r.description), s(r.payee_name), s(r.reference),
           n(r.amount), n(r.paid), xDate(r.due_on), s(r.status), s(r.notes), s(r.created_by_name)]) }];
     },
   },
@@ -291,17 +296,18 @@ export const EXPORTS: ExportDef[] = [
     perms: ["cash", "cash_manage"], usesRange: true,
     async build({ storeId, range, step }) {
       step("Caja…");
-      const { point } = await lookups(storeId);
-      const rows = await all((a, b) => sb().from("erp_cash_sessions").select("id,point_id,number,status,opening_amount,opened_by_name,opened_at,expected_amount,counted_amount,difference,closed_by_name,closed_at,closing_note")
-        .eq("store_id", storeId).gte("opened_at", startOf(range.from)).lte("opened_at", endOf(range.to)).order("opened_at").range(a, b));
-      const moves = await byIds("erp_cash_moves", "session_id,kind,amount,reason,created_by_name,created_at", "session_id", rows.map((r) => String(r.id)), step, "Movimientos de caja");
+      // Por la función de exportación (20261300): la tabla no se lee directo.
+      const { data, error } = await sb().rpc("erp_cash_export", { p_store: storeId, p_from: range.from, p_to: range.to });
+      if (error) throw new Error(/Could not find|schema cache/i.test(error.message) ? "falta correr en Supabase la migración 20261300_exportar_caja.sql" : error.message);
+      const rows = ((data as { sessions?: Row[] } | null)?.sessions ?? []) as Row[];
+      const moves = ((data as { moves?: Row[] } | null)?.moves ?? []) as Row[];
       const ses = new Map(rows.map((r) => [String(r.id), r]));
       return [
         { name: "Cajas", head: ["Punto", "Número", "Abrió", "Apertura", "Base", "Esperado", "Contado", "Diferencia", "Cerró", "Cierre", "Estado", "Nota"],
-          rows: rows.map((r) => [point.get(String(r.point_id)) ?? "", n(r.number), s(r.opened_by_name), xDate(r.opened_at, true), n(r.opening_amount), n(r.expected_amount), n(r.counted_amount),
+          rows: rows.map((r) => [s(r.point), n(r.number), s(r.opened_by_name), xDate(r.opened_at, true), n(r.opening_amount), n(r.expected_amount), n(r.counted_amount),
             n(r.difference), s(r.closed_by_name), xDate(r.closed_at, true), r.status === "open" ? "abierta" : "cerrada", s(r.closing_note)]) },
         { name: "Movimientos de caja", head: ["Fecha", "Punto", "Caja", "Tipo", "Valor", "Motivo", "Registró"],
-          rows: moves.map((m) => { const c = ses.get(String(m.session_id)); return [xDate(m.created_at, true), point.get(String(c?.point_id)) ?? "", n(c?.number), s(m.kind), n(m.amount), s(m.reason), s(m.created_by_name)]; }) },
+          rows: moves.map((m) => { const c = ses.get(String(m.session_id)); return [xDate(m.created_at, true), s(c?.point), n(c?.number), s(m.kind), n(m.amount), s(m.reason), s(m.created_by_name)]; }) },
       ];
     },
   },
@@ -328,8 +334,12 @@ export const EXPORTS: ExportDef[] = [
     perms: ["payroll"],
     async build({ storeId }) {
       const { point } = await lookups(storeId);
-      const rows = await all((a, b) => sb().from("erp_employees").select("full_name,document_type,document,position,contract_type,base_salary,pay_frequency,transport_aid,hired_on,terminated_on,active,phone,email,bank_name,bank_account,point_id")
-        .eq("store_id", storeId).is("deleted_at", null).order("full_name").range(a, b));
+      // Por el catálogo de nómina (la tabla no se lee directo).
+      const { data, error } = await sb().rpc("erp_finance_catalog", { p_store: storeId });
+      if (error) throw new Error(error.message);
+      const rows = (((data as { employees?: Row[] | null } | null)?.employees ?? []) as Row[])
+        .filter((e) => !e.deleted_at)
+        .sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
       return [{ name: "Trabajadores", head: ["Nombre", "Tipo doc.", "Documento", "Cargo", "Punto", "Contrato", "Salario base", "Pago", "Auxilio de transporte", "Ingreso", "Retiro", "Activo", "Celular", "Correo", "Banco", "Cuenta"],
         rows: rows.map((e) => [s(e.full_name), s(e.document_type), s(e.document), s(e.position), point.get(String(e.point_id)) ?? "", s(e.contract_type), n(e.base_salary), s(e.pay_frequency),
           e.transport_aid ? "Sí" : "No", xDate(e.hired_on), xDate(e.terminated_on), yes(e.active), s(e.phone), s(e.email), s(e.bank_name), s(e.bank_account)]) }];
