@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Chip, Modal } from "./dialog";
+import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { Btn, errorMessage, money, toast } from "./shared";
 import type { PdfCharge, PdfMove } from "./valuationPdf";
 
@@ -232,7 +233,12 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
     }
   }
 
-  const tabs: Array<[Tab, string]> = [["summary", "Resumen"], ["products", `Productos (${allLines.length})`], ["compare", "Comparar listas"], ["alerts", `⚠️ Pérdidas (${losses.length})`]];
+  const tabs: SectionTab<Tab>[] = [
+    { key: "summary", label: "Resumen", icon: "📊", color: "#8b5cf6" },
+    { key: "products", label: "Productos", icon: "📦", color: "#0ea5e9", badge: allLines.length },
+    { key: "compare", label: "Comparar listas", icon: "⚖️", color: "#14b8a6" },
+    { key: "alerts", label: "Pérdidas", icon: "⚠️", color: "#ef4444", badge: losses.length, alert: losses.length > 0 },
+  ];
 
   return (
     <Modal
@@ -254,11 +260,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
           </>
         ) : null}
       </div>
-      <div className="flex gap-1 overflow-x-auto rounded-full border p-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
-        {tabs.map(([k, l]) => (
-          <button key={k} type="button" onClick={() => setTab(k)} className="shrink-0 rounded-full px-3 py-1.5" style={tab === k ? { background: k === "alerts" ? "#ef4444" : "var(--t-accent)", color: "#fff" } : { color: k === "alerts" && losses.length ? "#ef4444" : "var(--t-muted)" }}>{l}</button>
-        ))}
-      </div>
+      <SectionTabs variant="pills" items={tabs} value={tab} onChange={setTab} layoutId="valuacion-tabs" label="Liquidación del punto" />
 
       {error ? <p className="rounded-xl border p-3 text-sm" style={{ borderColor: "#ef4444", color: "#ef4444" }}>{error}</p> : null}
       {!data && !error ? <p style={{ color: "var(--t-muted)" }}>Calculando las 5 listas…</p> : null}

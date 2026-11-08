@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { HandCoins, LayoutDashboard, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
+import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { Overview } from "./Overview";
@@ -66,14 +67,14 @@ export default function GastosPage() {
   }
   const can = cat.can;
   const payroll = can.payroll || can.payroll_approve || can.payroll_pay;
-  const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode; show: boolean }> = [
-    { key: "overview", label: "Resumen", icon: <LayoutDashboard size={15} />, show: true },
-    { key: "expenses", label: "Gastos", icon: <Receipt size={15} />, show: can.expenses || can.pay },
-    { key: "recurring", label: "Gastos fijos", icon: <Repeat size={15} />, show: can.expenses || can.budgets },
-    { key: "budgets", label: "Presupuestos", icon: <Target size={15} />, show: can.budgets || can.expenses },
-    { key: "payroll", label: "Nómina", icon: <Users size={15} />, show: payroll },
-    { key: "loans", label: "Vales y préstamos", icon: <HandCoins size={15} />, show: payroll },
-    { key: "reserves", label: "Reservas", icon: <PiggyBank size={15} />, show: can.budgets },
+  const tabs: SectionTab<Tab>[] = [
+    { key: "overview", label: "Resumen", hint: "Cómo vas este mes", icon: <LayoutDashboard />, color: "#8b5cf6" },
+    { key: "expenses", label: "Gastos", hint: "Lo que sale y lo que falta pagar", icon: <Receipt />, color: "#f43f5e", hidden: !(can.expenses || can.pay) },
+    { key: "recurring", label: "Gastos fijos", hint: "Arriendo, servicios, cada mes", icon: <Repeat />, color: "#f97316", hidden: !(can.expenses || can.budgets) },
+    { key: "budgets", label: "Presupuestos", hint: "Topes por categoría", icon: <Target />, color: "#0ea5e9", hidden: !(can.budgets || can.expenses) },
+    { key: "payroll", label: "Nómina", hint: "Empleados y pagos", icon: <Users />, color: "#10b981", hidden: !payroll },
+    { key: "loans", label: "Vales y préstamos", hint: "Adelantos al equipo", icon: <HandCoins />, color: "#f59e0b", hidden: !payroll },
+    { key: "reserves", label: "Reservas", hint: "Ahorro para lo que viene", icon: <PiggyBank />, color: "#ec4899", hidden: !can.budgets },
   ];
 
   return (
@@ -85,13 +86,7 @@ export default function GastosPage() {
           <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>Lo que sale, lo que falta pagar, presupuestos, nómina y reservas{can.madre ? " de la madre y sus puntos" : " de tu punto"}.</p>
         </div>
       </header>
-      <nav className="flex w-full gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {tabs.filter((t) => t.show).map((t) => (
-          <button key={t.key} type="button" onClick={() => setTab(t.key)} className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 transition" style={tab === t.key ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </nav>
+      <SectionTabs items={tabs} value={tab} onChange={setTab} layoutId="gastos-tabs" label="Secciones de gastos y nómina" />
       {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}
 
       {tab === "overview" ? <Overview key={refresh} storeId={storeId} points={points} cat={cat} onOpenExpense={(id) => { setTab("expenses"); setOpenExpense(id); }} /> : null}

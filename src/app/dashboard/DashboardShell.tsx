@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TAB_COLORS } from "@/components/ui/SectionTabs";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
@@ -285,17 +286,18 @@ export function ModuleNav({ canOpen, isAdmin, at }: { canOpen: (permission: stri
   return (
     <nav className="mb-3 -mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" aria-label="Secciones del módulo">
       <div className="inline-flex min-w-full gap-1 rounded-2xl border p-1 sm:min-w-0" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-        {tabs.map((t) => {
+        {tabs.map((t, i) => {
           const on = current?.href === t.href;
+          const c = TAB_COLORS[i % TAB_COLORS.length];
           return (
             <Link key={t.href} href={t.href} prefetch={false} aria-current={on ? "page" : undefined}
-              className="relative flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition sm:flex-none sm:px-4"
+              className="relative flex flex-1 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl py-1.5 pl-1.5 pr-3 text-xs font-bold transition hover:-translate-y-px sm:flex-none sm:pr-4"
               style={{ color: on ? "var(--t-text)" : "var(--t-muted)" }}>
               {on ? (
                 <motion.span layoutId="module-tab" className="absolute inset-0 rounded-xl" transition={{ type: "spring", stiffness: 460, damping: 36 }}
-                  style={{ background: "var(--t-accent-soft, color-mix(in oklab, var(--t-accent) 14%, transparent))", boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--t-accent) 38%, transparent), 0 6px 18px -10px color-mix(in oklab, var(--t-accent) 45%, transparent)" }} />
+                  style={{ background: `color-mix(in oklab, ${c} 20%, var(--t-card-bg))`, boxShadow: `inset 0 0 0 1.5px color-mix(in oklab, ${c} 70%, transparent), 0 6px 18px -10px ${c}` }} />
               ) : null}
-              <span className="relative text-sm leading-none">{t.icon}</span>
+              <span className="relative grid h-7 w-7 place-items-center rounded-lg text-sm leading-none" style={{ background: on ? c : `color-mix(in oklab, ${c} 16%, transparent)` }}>{t.icon}</span>
               <span className="relative">
                 <span className="sm:hidden">{t.short ?? t.label}</span>
                 <span className="hidden sm:inline">{t.label}</span>

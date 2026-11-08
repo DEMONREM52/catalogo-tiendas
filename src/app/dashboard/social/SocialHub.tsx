@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { LayoutGrid, Megaphone, Rocket } from "lucide-react";
+import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import CatalogsManager from "./catalogs/CatalogsManager";
 import SocialDashboard from "./SocialDashboard";
 import Link from "next/link";
@@ -10,10 +10,10 @@ import { ShareCard } from "./ShareCard";
 
 type Tab = "catalogs" | "campaigns" | "landing";
 
-const TABS: Array<{ key: Tab; label: string; hint: string; icon: React.ReactNode }> = [
-  { key: "catalogs", label: "Catálogos", hint: "Precios, diseño, productos y contactos", icon: <LayoutGrid size={16} /> },
-  { key: "campaigns", label: "Campañas", hint: "Carrusel y promociones por catálogo", icon: <Megaphone size={16} /> },
-  { key: "landing", label: "Landing pages", hint: "Una página por producto para tus anuncios", icon: <Rocket size={16} /> },
+const TABS: SectionTab<Tab>[] = [
+  { key: "catalogs", label: "Catálogos", hint: "Precios, diseño, productos y contactos", icon: <LayoutGrid />, color: "#8b5cf6" },
+  { key: "campaigns", label: "Campañas", hint: "Carrusel y promociones por catálogo", icon: <Megaphone />, color: "#f97316" },
+  { key: "landing", label: "Landing pages", hint: "Una página por producto para tus anuncios", icon: <Rocket />, color: "#f43f5e" },
 ];
 
 export default function SocialHub() {
@@ -35,30 +35,7 @@ export default function SocialHub() {
   return (
     <div className="space-y-4">
       <ShareCard />
-      <nav className="grid gap-2 sm:grid-cols-3 lg:max-w-4xl" aria-label="RemHub Social">
-        {TABS.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => choose(t.key)}
-              className="relative flex items-center gap-3 overflow-hidden rounded-2xl border p-3 text-left transition"
-              style={{ borderColor: active ? "transparent" : "var(--t-card-border)", color: active ? "#fff" : "var(--t-text)" }}
-              aria-pressed={active}
-            >
-              {active ? <motion.span layoutId="social-hub-tab" className="absolute inset-0" style={{ background: "var(--t-cta)" }} transition={{ type: "spring", stiffness: 380, damping: 32 }} /> : null}
-              <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: active ? "rgba(255,255,255,0.18)" : "color-mix(in oklab, var(--t-accent) 14%, transparent)" }}>
-                {t.icon}
-              </span>
-              <span className="relative min-w-0">
-                <span className="block text-sm font-bold">{t.label}</span>
-                <span className="block truncate text-xs" style={{ opacity: 0.8 }}>{t.hint}</span>
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+      <SectionTabs items={TABS} value={tab} onChange={choose} layoutId="social-hub-tab" label="RemHub Social" />
       {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <SocialDashboard /> : (
         <div className="rounded-3xl p-6 text-white" style={{ background: "linear-gradient(135deg, #e11d48, #9333ea 55%, #2563eb)" }}>
           <h2 className="text-2xl font-black">🚀 Landing pages</h2>

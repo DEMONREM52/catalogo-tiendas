@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BarChart3, Calculator, HandCoins, Package, ShieldCheck, Store, Tags, TrendingUp } from "lucide-react";
+import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { Simulator } from "./Simulator";
@@ -58,14 +59,14 @@ export default function RentabilidadPage() {
     );
   }
 
-  const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode; show: boolean }> = [
-    { key: "summary", label: "Resumen", icon: <BarChart3 size={15} />, show: perm.view },
-    { key: "points", label: "Puntos", icon: <Store size={15} />, show: perm.view },
-    { key: "products", label: "Por producto", icon: <Package size={15} />, show: perm.view },
-    { key: "rules", label: "Precios por punto", icon: <Tags size={15} />, show: perm.view || perm.rules || perm.approve },
-    { key: "limits", label: "Límites de precio", icon: <ShieldCheck size={15} />, show: perm.view || perm.rules || perm.price },
-    { key: "settle", label: "Repartos y liquidaciones", icon: <HandCoins size={15} />, show: perm.settle || perm.view },
-    { key: "sim", label: "Simulador", icon: <Calculator size={15} />, show: canCosts },
+  const tabs: SectionTab<Tab>[] = [
+    { key: "summary", label: "Resumen", hint: "Ventas, costo y ganancia", icon: <BarChart3 />, color: "#8b5cf6", hidden: !perm.view },
+    { key: "points", label: "Puntos", hint: "Cada punto mes a mes", icon: <Store />, color: "#0ea5e9", hidden: !perm.view },
+    { key: "products", label: "Por producto", hint: "Qué deja más ganancia", icon: <Package />, color: "#10b981", hidden: !perm.view },
+    { key: "rules", label: "Precios por punto", hint: "Reglas de % por punto", icon: <Tags />, color: "#f59e0b", hidden: !(perm.view || perm.rules || perm.approve) },
+    { key: "limits", label: "Límites de precio", hint: "Mínimos y aprobaciones", icon: <ShieldCheck />, color: "#f43f5e", hidden: !(perm.view || perm.rules || perm.price) },
+    { key: "settle", label: "Repartos y liquidaciones", hint: "Pozos, anticipos y firmas", icon: <HandCoins />, color: "#14b8a6", hidden: !(perm.settle || perm.view) },
+    { key: "sim", label: "Simulador", hint: "¿Qué pasa si cambio el precio?", icon: <Calculator />, color: "#6366f1", hidden: !canCosts },
   ];
   const current: Tab = tab ?? (perm.view ? "summary" : perm.rules || perm.approve ? "rules" : perm.price ? "limits" : "settle");
 
@@ -81,13 +82,8 @@ export default function RentabilidadPage() {
         </div>
       </header>
 
-      <nav className="flex w-full gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {tabs.filter((t) => t.show).map((t) => (
-          <button key={t.key} type="button" onClick={() => { setTab(t.key); const url = new URL(window.location.href); url.searchParams.set("tab", t.key); window.history.replaceState(null, "", url.toString()); window.dispatchEvent(new Event("remhub-tab-change")); }} className="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 transition" style={current === t.key ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </nav>
+      <SectionTabs items={tabs} value={current} layoutId="rentabilidad-tabs" label="Secciones de rentabilidad"
+        onChange={(k) => { setTab(k); const url = new URL(window.location.href); url.searchParams.set("tab", k); window.history.replaceState(null, "", url.toString()); window.dispatchEvent(new Event("remhub-tab-change")); }} />
 
       {current === "summary" && perm.view ? <Summary storeId={storeId} points={points} myPoints={settings?.my_points ?? null} /> : null}
       {current === "points" && perm.view ? <PointsBoard storeId={storeId} /> : null}

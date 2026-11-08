@@ -4,6 +4,7 @@ import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Printer, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
+import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import {
@@ -62,17 +63,16 @@ export function PayrollTab({ storeId, points, cat, onChanged }: { storeId: strin
 
   const shownRuns = runs.filter((r) => showVoid || r.status !== "void");
   const voided = runs.length - runs.filter((r) => r.status !== "void").length;
-  const tabs: Array<[typeof view, string, React.ReactNode]> = [["runs", "Nóminas", <FileSpreadsheet key="r" size={14} />], ["people", `Empleados (${employees.filter((e) => e.active).length})`, <Users key="p" size={14} />]];
-  if (cat.can.payroll_approve && cat.can.madre) tabs.push(["concepts", "Conceptos", <Settings2 key="c" size={14} />]);
+  const tabs: SectionTab<typeof view>[] = [
+    { key: "runs", label: "Nóminas", icon: <FileSpreadsheet />, color: "#10b981" },
+    { key: "people", label: "Empleados", icon: <Users />, color: "#0ea5e9", badge: employees.filter((e) => e.active).length },
+    { key: "concepts", label: "Conceptos", icon: <Settings2 />, color: "#f59e0b", hidden: !(cat.can.payroll_approve && cat.can.madre) },
+  ];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-full border p-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
-          {tabs.map(([k, l, icon]) => (
-            <button key={k} type="button" onClick={() => setView(k)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={view === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>{icon}{l}</button>
-          ))}
-        </div>
+        <SectionTabs variant="pills" items={tabs} value={view} onChange={setView} layoutId="nomina-vista" label="Nómina" />
         <span className="flex-1" />
         {view === "runs" && runs.length ? <button type="button" onClick={() => setReporting(true)} className={ghostBtn} style={{ borderColor: "var(--t-card-border)" }}><Printer size={13} /> Informe del periodo</button> : null}
         {view === "runs" && cat.can.payroll ? <button type="button" onClick={() => setCreating(true)} className={primaryBtn} style={primaryBg}><FileSpreadsheet size={16} /> Nueva nómina</button> : null}

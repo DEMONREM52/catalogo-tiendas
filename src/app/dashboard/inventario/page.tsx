@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench } from "lucide-react";
+import { SectionTabs } from "@/components/ui/SectionTabs";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AdjustmentsTab, AuditTab, KardexTab } from "./OperationsTabs";
@@ -18,29 +20,29 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 
 type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry";
 
-const TABS: Array<{ key: TabKey; icon: string; label: string; permissions: string[] }> = [
-  { key: "overview", icon: "📊", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
-  { key: "stock", icon: "📦", label: "Existencias", permissions: ["inventory"] },
-  { key: "warehouses", icon: "🏬", label: "Puntos y bodegas", permissions: ["inventory"] },
-  { key: "transfers", icon: "🚚", label: "Traslados", permissions: ["transfers", "inventory"] },
-  { key: "adjustments", icon: "🛠️", label: "Ajustes", permissions: ["inventory_adjust", "inventory"] },
-  { key: "kardex", icon: "📒", label: "Kardex", permissions: ["inventory"] },
-  { key: "stale", icon: "💤", label: "Sin movimiento", permissions: ["inventory", "reports"] },
-  { key: "expiry", icon: "📅", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
-  { key: "purchases", icon: "🛒", label: "Ingreso de factura", permissions: ["purchases"] },
-  { key: "suppliers", icon: "🏭", label: "Proveedores", permissions: ["suppliers", "purchases"] },
-  { key: "payables", icon: "💸", label: "Cuentas por pagar", permissions: ["payables"] },
-  { key: "internal", icon: "🤝", label: "Cuenta con puntos", permissions: ["internal_credit", "internal_credit_manage"] },
-  { key: "manifests", icon: "📄", label: "Manifiestos", permissions: ["inventory", "purchases"] },
-  { key: "audit", icon: "🛡️", label: "Auditoría", permissions: ["audit"] },
+const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; permissions: string[] }> = [
+  { key: "overview", icon: <BarChart3 />, color: "#8b5cf6", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
+  { key: "stock", icon: <Boxes />, color: "#0ea5e9", label: "Existencias", permissions: ["inventory"] },
+  { key: "warehouses", icon: <WarehouseIcon />, color: "#6366f1", label: "Puntos y bodegas", permissions: ["inventory"] },
+  { key: "transfers", icon: <Truck />, color: "#f97316", label: "Traslados", permissions: ["transfers", "inventory"] },
+  { key: "adjustments", icon: <Wrench />, color: "#f59e0b", label: "Ajustes", permissions: ["inventory_adjust", "inventory"] },
+  { key: "kardex", icon: <BookOpen />, color: "#14b8a6", label: "Kardex", permissions: ["inventory"] },
+  { key: "stale", icon: <Hourglass />, color: "#64748b", label: "Sin movimiento", permissions: ["inventory", "reports"] },
+  { key: "expiry", icon: <CalendarClock />, color: "#f43f5e", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
+  { key: "purchases", icon: <Receipt />, color: "#10b981", label: "Ingreso de factura", permissions: ["purchases"] },
+  { key: "suppliers", icon: <Factory />, color: "#0ea5e9", label: "Proveedores", permissions: ["suppliers", "purchases"] },
+  { key: "payables", icon: <BadgeDollarSign />, color: "#f43f5e", label: "Cuentas por pagar", permissions: ["payables"] },
+  { key: "internal", icon: <Handshake />, color: "#8b5cf6", label: "Cuenta con puntos", permissions: ["internal_credit", "internal_credit_manage"] },
+  { key: "manifests", icon: <FileText />, color: "#6366f1", label: "Manifiestos", permissions: ["inventory", "purchases"] },
+  { key: "audit", icon: <ShieldCheck />, color: "#14b8a6", label: "Auditoría", permissions: ["audit"] },
 ];
 
 // Las pestañas se agrupan en secciones: primero se elige la sección y debajo salen solo sus pestañas.
 type GroupKey = "stock" | "buy" | "control";
-const GROUPS: Array<{ key: GroupKey; icon: string; label: string; hint: string; tabs: TabKey[] }> = [
-  { key: "stock", icon: "📦", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "kardex"] },
-  { key: "buy", icon: "🧾", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "suppliers", "payables", "internal"] },
-  { key: "control", icon: "🔎", label: "Control", hint: "Lo quieto, lo que vence, manifiestos y auditoría", tabs: ["stale", "expiry", "manifests", "audit"] },
+const GROUPS: Array<{ key: GroupKey; icon: ReactNode; color: string; label: string; hint: string; tabs: TabKey[] }> = [
+  { key: "stock", icon: <Boxes />, color: "#0ea5e9", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "kardex"] },
+  { key: "buy", icon: <Receipt />, color: "#10b981", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "suppliers", "payables", "internal"] },
+  { key: "control", icon: <PackageSearch />, color: "#f59e0b", label: "Control", hint: "Lo quieto, lo que vence, manifiestos y auditoría", tabs: ["stale", "expiry", "manifests", "audit"] },
 ];
 const groupOf = (k: TabKey) => GROUPS.find((g) => g.tabs.includes(k))?.key ?? "stock";
 
@@ -123,50 +125,12 @@ export default function InventarioPage() {
         </p>
       </section>
 
-      {/* 1. Sección (Inventario · Compras y pagos · Control) */}
-      <nav className="grid gap-2 sm:grid-cols-3" aria-label="Secciones del módulo">
-        {groups.map((g) => {
-          const selected = groupOf(current.key) === g.key;
-          return (
-            <button
-              key={g.key}
-              type="button"
-              onClick={() => { if (!selected) open(g.visible[0].key); }}
-              className="rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5"
-              style={
-                selected
-                  ? { background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2))", color: "var(--t-cta-text, #fff)", borderColor: "transparent" }
-                  : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
-              }
-            >
-              <span className="block text-sm font-bold">{g.icon} {g.label} <span className="font-normal opacity-75">· {g.visible.length}</span></span>
-              <span className="block text-xs" style={{ opacity: selected ? 0.85 : 0.6 }}>{g.hint}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* 2. Pestañas de esa sección (sin barra de desplazamiento: bajan a otra línea si no caben) */}
-      <nav className="flex flex-wrap gap-2" aria-label="Pestañas de la sección">
-        {(groups.find((g) => g.key === groupOf(current.key))?.visible ?? []).map((t) => {
-          const selected = t.key === current.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => open(t.key)}
-              className="rounded-full border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5"
-              style={
-                selected
-                  ? { background: "color-mix(in oklab, var(--t-accent) 22%, var(--t-card-bg))", color: "var(--t-text)", borderColor: "var(--t-accent)" }
-                  : { background: "var(--t-card-bg)", color: "var(--t-text)", borderColor: "var(--t-card-border)" }
-              }
-            >
-              <span className="mr-1.5">{t.icon}</span>{t.label}
-            </button>
-          );
-        })}
-      </nav>
+      {/* 1. Sección (Inventario · Compras y pagos · Control) y 2. sus pestañas */}
+      <SectionTabs layoutId="inventario-grupos" label="Secciones del módulo" value={groupOf(current.key)}
+        items={groups.map((g) => ({ key: g.key, label: g.label, hint: g.hint, icon: g.icon, color: g.color, badge: g.visible.length }))}
+        onChange={(k) => { const g = groups.find((x) => x.key === k); if (g && groupOf(current.key) !== k) open(g.visible[0].key); }} />
+      <SectionTabs variant="pills" layoutId="inventario-pestanas" label="Pestañas de la sección" value={current.key} onChange={open}
+        items={(groups.find((g) => g.key === groupOf(current.key))?.visible ?? []).map((t) => ({ key: t.key, label: t.label, icon: t.icon, color: t.color }))} />
 
       {current.key === "overview" ? <OverviewTab ctx={ctx} /> : null}
       {current.key === "stock" ? <StockBrowser ctx={ctx} warehouses={warehouses} /> : null}

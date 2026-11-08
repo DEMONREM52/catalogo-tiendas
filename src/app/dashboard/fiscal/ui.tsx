@@ -2,6 +2,7 @@
 
 // Piezas visuales del módulo fiscal y de puntos (mismo estilo del resto del panel).
 import { useEffect, useState, useSyncExternalStore, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from "react";
+import { SectionTabs } from "@/components/ui/SectionTabs";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Loader2, X } from "lucide-react";
@@ -100,34 +101,11 @@ export function Button({ variant = "soft", icon, busy = false, children, classNa
 
 export type TabItem<T extends string> = { value: T; label: string; icon?: ReactNode; badge?: number | string | null; hidden?: boolean };
 
+/** Pestañas de Fiscal y de la ficha del punto: usan las pestañas comunes del panel (ícono con color propio). */
 export function Tabs<T extends string>({ value, onChange, items, layoutId = "tabs" }: { value: T; onChange: (v: T) => void; items: TabItem<T>[]; layoutId?: string }) {
   return (
-    <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" aria-label="Secciones">
-      {items.filter((i) => !i.hidden).map((item) => {
-        const on = item.value === value;
-        return (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => onChange(item.value)}
-            className="relative shrink-0 rounded-full border px-3.5 py-2 text-xs font-bold transition sm:text-sm"
-            style={{ borderColor: on ? "transparent" : "var(--t-card-border)", color: on ? "#fff" : "var(--t-text)" }}
-            aria-current={on ? "page" : undefined}
-          >
-            {on ? (
-              <motion.span layoutId={layoutId} className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />
-            ) : null}
-            <span className="relative inline-flex items-center gap-1.5">
-              {item.icon}
-              {item.label}
-              {item.badge ? (
-                <span className="rounded-full px-1.5 text-[10px] font-black" style={{ background: on ? "rgba(255,255,255,.25)" : TONE.bad.bg, color: on ? "#fff" : TONE.bad.fg }}>{item.badge}</span>
-              ) : null}
-            </span>
-          </button>
-        );
-      })}
-    </nav>
+    <SectionTabs value={value} onChange={onChange} layoutId={layoutId}
+      items={items.map((i) => ({ key: i.value, label: i.label, icon: i.icon, badge: i.badge, alert: Boolean(i.badge), hidden: i.hidden }))} />
   );
 }
 
