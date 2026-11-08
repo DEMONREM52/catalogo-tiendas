@@ -530,6 +530,15 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Cóbralo: queda en la cuenta con la bodega" },
     ],
   },
+  {
+    id: 50, date: "2026-11-08", title: "Mercancía del punto igual en todas partes",
+    summary: "«Mercancía en el punto» de la cuenta con puntos ahora suma todo lo que tiene el punto (también su inventario inicial), igual que la liquidación a precio de bodega.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📦", text: "Mira «Mercancía en el punto» en la tarjeta" },
+      { icon: "📊", text: "Abre la liquidación: el precio de bodega es el mismo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
