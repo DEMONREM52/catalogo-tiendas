@@ -259,6 +259,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
               </div>
               <RevaluePanel storeId={storeId} pointId={pointId} onApplied={() => setReload((x) => x + 1)} />
               <OpeningFromPurchase storeId={storeId} pointId={pointId} onApplied={() => setReload((x) => x + 1)} />
+              <ReconcilePanel storeId={storeId} pointId={pointId} onApplied={() => setReload((x) => x + 1)} />
             </section>
           ) : (
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Este punto no tiene cuenta con la bodega: los valores de bodega son de referencia (costo + % de la bodega).</p>
@@ -600,6 +601,68 @@ function OpeningFromPurchase({ storeId, pointId, onApplied }: { storeId: string;
           <div className="flex gap-2">
             <Btn onClick={() => void apply()} disabled={busy || n(pv.total) <= 0}>{busy ? "Aplicando…" : pv.replaces ? `♻️ Recalcular: cobrar ${money(pv.total)} y anular #${pv.replaces.number}` : `Cobrar ${money(pv.total)} como deuda inicial`}</Btn>
           </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type Reconcile = {
+  applied: boolean; nothing?: boolean; balance_before: number; stock: number; stock_cost: number; pending_cost: number; open_settlement_cost: number;
+  settled_cost_without_payment: number; target: number; diff: number; pct: number; reval_lines: number; balance_after?: number;
+};
+
+/**
+ * Cuadrar la deuda con el costo (20261299): deja la deuda en la mercancía que tiene (a precio de bodega)
+ * + el costo de lo vendido que todavía no se liquida. Lo ya liquidado se da por pagado.
+ */
+function ReconcilePanel({ storeId, pointId, onApplied }: { storeId: string; pointId: string; onApplied: () => void }) {
+  const [pv, setPv] = useState<Reconcile | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function check() {
+    setBusy(true); setMsg(null);
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_reconcile", { p_store: storeId, p_point: pointId, p_apply: false });
+    setBusy(false);
+    if (error) return setMsg(/Could not find|schema cache/i.test(error.message) ? "Ejecuta en Supabase la migración 20261299_deuda_a_costo_y_abono_liquidacion.sql." : errorMessage(error));
+    setPv(data as Reconcile);
+  }
+  async function apply() {
+    setBusy(true);
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_reconcile", { p_store: storeId, p_point: pointId, p_apply: true });
+    setBusy(false);
+    if (error) return setMsg(errorMessage(error));
+    const r = data as Reconcile;
+    setMsg(r.nothing ? "✅ Ya estaba cuadrada." : `✅ Cuadrada: ahora debe ${money(r.balance_after ?? r.target)}.`);
+    setPv(null);
+    onApplied();
+  }
+
+  const row = (label: string, value: number, strong = false, color?: string) => (
+    <div className="flex justify-between gap-2"><span>{label}</span><span className={`tabular-nums ${strong ? "font-bold" : ""}`} style={color ? { color } : undefined}>{money(value)}</span></div>
+  );
+  return (
+    <div className="mt-2 space-y-2 rounded-2xl border p-3 text-xs" style={{ borderColor: "var(--t-card-border)" }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1"><b>⚖️ Cuadrar la deuda con el costo.</b> Deja la deuda en lo que el punto debe hoy: la mercancía que tiene a precio de bodega + el costo de lo vendido que todavía no se liquida. Al aprobar cada liquidación, el costo de lo vendido se abona solo.</p>
+        <Btn variant="ghost" onClick={() => void check()} disabled={busy}>{busy && !pv ? "Calculando…" : "Cuadrar"}</Btn>
+      </div>
+      {msg ? <p className="font-semibold">{msg}</p> : null}
+      {pv ? (
+        <div className="space-y-2">
+          {n(pv.pct) > 0 ? <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">⚠️ Este punto tiene <b>{n(pv.pct)} %</b> de bodega. Si debe solo el costo, primero ponlo en 0 % con ⚙️ en su tarjeta (la deuda de lo que tiene se recalcula sola).</p> : null}
+          <div className="space-y-1 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)" }}>
+            {row("Mercancía que tiene (precio de bodega)", pv.stock)}
+            {row("+ Costo de lo vendido sin liquidar", n(pv.pending_cost) + n(pv.open_settlement_cost))}
+            {row("= Debería deber", pv.target, true)}
+            {row("Debe hoy", pv.balance_before)}
+            {row(n(pv.diff) < 0 ? "Nota crédito (le baja la deuda)" : "Cargo (le sube la deuda)", Math.abs(n(pv.diff)), true, n(pv.diff) < 0 ? "#10b981" : "#ef4444")}
+          </div>
+          <p style={{ color: "var(--t-muted)" }}>Lo vendido en liquidaciones ya aprobadas se da por pagado a la bodega en esas liquidaciones. {n(pv.reval_lines) > 0 ? `Antes se revalúan ${n(pv.reval_lines)} producto(s) al último costo.` : ""}</p>
+          {Math.abs(n(pv.diff)) < 1 ? <p>✅ Ya está cuadrada.</p> : (
+            <div className="flex gap-2"><Btn onClick={() => void apply()} disabled={busy}>{busy ? "Aplicando…" : `Cuadrar: dejar en ${money(pv.target)}`}</Btn><Btn variant="ghost" onClick={() => setPv(null)}>Cancelar</Btn></div>
+          )}
         </div>
       ) : null}
     </div>

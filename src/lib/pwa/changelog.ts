@@ -558,6 +558,16 @@ export const RELEASES: Release[] = [
       { icon: "♻️", text: "Toca «Recalcular»: la deuda cambia solo la diferencia" },
     ],
   },
+  {
+    id: 53, date: "2026-11-08", title: "La liquidación abona la deuda con la bodega",
+    summary: "Al aprobar la liquidación de un punto, el costo de lo vendido se abona solo a su cuenta con la bodega. Cambiar el % de la bodega recalcula la deuda sola, y «Cuadrar» deja la deuda en lo que de verdad debe.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "✅", text: "Aprueba la liquidación: el abono a la bodega queda solo" },
+      { icon: "⚙️", text: "Cambia el % de la bodega: la deuda se recalcula" },
+      { icon: "⚖️", text: "Usa «Cuadrar» en la liquidación del punto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
