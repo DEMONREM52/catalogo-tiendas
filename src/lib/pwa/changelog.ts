@@ -520,6 +520,16 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "Mira el historial en la liquidación del punto" },
     ],
   },
+  {
+    id: 49, date: "2026-11-08", title: "Cobrar el inventario inicial como deuda",
+    summary: "Si un punto recibió su inventario inicial como factura propia, ahora se puede cobrar como deuda inicial con la bodega: solo lo que todavía tiene, a último costo + % de la bodega, con vista previa por producto.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📥", text: "Abre la liquidación del punto" },
+      { icon: "🧾", text: "Escoge el ingreso inicial y revisa la vista previa" },
+      { icon: "✅", text: "Cóbralo: queda en la cuenta con la bodega" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
