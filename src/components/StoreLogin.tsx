@@ -15,20 +15,13 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain } from "@/lib/store-space";
 import { RemhubMark, SmartLogo } from "@/components/ui/SmartLogo";
-import { AnimatedNumber, AreaSpark } from "@/app/dashboard/reports/charts";
+import { SalesMock } from "@/components/landing/SalesMock";
 
 type TeamStore = { id: string; slug: string; name: string; logo_url: string | null };
 type Mode = "owner" | "team";
 const TEAM_KEY = "remhub:team-store";
 
 const ROTATING = ["ventas", "inventario", "catálogos", "pedidos", "ganancias"];
-const LIVE = [
-  { icon: "🛒", text: "Nueva venta", amount: "$ 45.000", color: "#10b981" },
-  { icon: "📦", text: "Traslado recibido", amount: "12 und.", color: "#0ea5e9" },
-  { icon: "💬", text: "Pedido por WhatsApp", amount: "$ 128.000", color: "#22c55e" },
-  { icon: "🧾", text: "Factura de compra", amount: "$ 2,4 M", color: "#f59e0b" },
-  { icon: "🎉", text: "Meta del día cumplida", amount: "110 %", color: "#ec4899" },
-];
 const FEATURES: Array<[typeof Store, string, string, string]> = [
   [Store, "Catálogos y pedidos", "Un enlace para cada público", "#8b5cf6"],
   [CreditCard, "POS y caja", "Vende en cada punto", "#10b981"],
@@ -57,13 +50,11 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [word, setWord] = useState(0);
-  const [live, setLive] = useState(0);
 
   // Palabra que cambia y avisos «en vivo» del panel de muestra.
   useEffect(() => {
     const a = window.setInterval(() => setWord((w) => (w + 1) % ROTATING.length), 2200);
-    const b = window.setInterval(() => setLive((l) => (l + 1) % LIVE.length), 2600);
-    return () => { window.clearInterval(a); window.clearInterval(b); };
+    return () => window.clearInterval(a);
   }, []);
 
   // En el espacio de la tienda (lavitrina.remhub.co/login): se muestra a qué tienda se entra.
@@ -241,37 +232,12 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             Catálogos con tu enlace, pedidos por WhatsApp, POS, inventario por punto y tus números al día.
           </p>
 
-          {/* Panel de muestra (animado) */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="relative mt-7 hidden max-w-lg overflow-hidden rounded-3xl border p-4 shadow-2xl backdrop-blur-xl sm:block"
-            style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 70%, transparent)" }}>
-            <div className="flex items-center justify-between">
-              <p className="flex items-center gap-2 text-xs font-bold" style={{ color: "var(--t-muted)" }}><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Ventas de hoy · en vivo</p>
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-black text-emerald-500" style={{ background: "color-mix(in oklab, #10b981 15%, transparent)" }}>▲ 18 %</span>
-            </div>
-            <p className="mt-1 text-3xl font-black"><AnimatedNumber value={2847500} format={(v) => `$ ${Math.round(v).toLocaleString("es-CO")}`} /></p>
-            <AreaSpark values={[3, 4, 3.6, 5, 4.4, 6, 5.5, 7.2, 6.4, 8, 7.6, 9.4]} height={70} />
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-              {[["Pedidos", 46, "#0ea5e9"], ["Ticket", 61900, "#f59e0b"], ["Margen %", 27, "#10b981"]].map(([l, v, c]) => (
-                <div key={String(l)} className="rounded-xl border px-2 py-1.5" style={{ borderColor: "var(--t-card-border)" }}>
-                  <p className="text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>{String(l)}</p>
-                  <p className="text-sm font-black" style={{ color: String(c) }}><AnimatedNumber value={Number(v)} format={(x) => (l === "Ticket" ? `$${Math.round(x / 1000)}k` : String(Math.round(x)))} /></p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 h-10">
-              <AnimatePresence mode="wait">
-                <motion.div key={live} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.35 }}
-                  className="flex items-center gap-2.5 rounded-2xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-                  <span className="grid h-7 w-7 place-items-center rounded-lg text-base" style={{ background: `color-mix(in oklab, ${LIVE[live].color} 18%, transparent)` }}>{LIVE[live].icon}</span>
-                  <span className="min-w-0 flex-1 truncate font-semibold">{LIVE[live].text}</span>
-                  <b className="tabular-nums" style={{ color: LIVE[live].color }}>{LIVE[live].amount}</b>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </motion.div>
+          {/* El mismo panel animado de la página principal (ventas en vivo, rentabilidad y movimientos). */}
+          <div className="mt-7 hidden max-w-lg sm:block">
+            <SalesMock />
+          </div>
 
-          <ul className="mt-6 grid max-w-lg grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <ul className="mt-6 grid max-w-lg grid-cols-2 sm:mt-12 gap-2.5 sm:grid-cols-3">
             {FEATURES.map(([I, title, text, color], i) => (
               <motion.li key={title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }} whileHover={{ y: -3 }}
                 className="flex flex-col gap-1.5 rounded-2xl border p-3 backdrop-blur-xl" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 55%, transparent)" }}>
