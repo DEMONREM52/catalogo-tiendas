@@ -270,3 +270,21 @@ export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: strin
   { key: "point_admin", label: "Administrador de punto", icon: "📍", hint: "Todo lo del día a día de su punto", permissions: ["pos", "cash", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "internal_credit", "reports", "audit", "fiscal", "fiscal_send", "fiscal_download", "expenses", "messages"] },
   { key: "manager", label: "Supervisor", icon: "🧭", hint: "Ventas, inventario, compras y precios", permissions: ["pos", "cash", "cash_manage", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "products_create", "products_prices", "costs_view", "categories", "inventory", "transfers", "purchases", "purchases_void", "suppliers", "reports", "audit", "stock_requests", "stock_requests_manage", "notifications_config", "catalogs", "messages"] },
 ];
+
+/**
+ * Nombre del rol de una persona según sus permisos (para el encabezado del panel):
+ * el rol guardado de la tienda o la plantilla con exactamente esos permisos; con todos los permisos,
+ * «Administrador»; si no coincide con ninguno, «Rol personalizado».
+ */
+export function roleLabelFor(
+  perms: readonly string[] | null | undefined,
+  templates: ReadonlyArray<{ name: string; icon?: string | null; permissions: readonly string[] }> = [],
+): { icon: string; label: string } {
+  const norm = (p: readonly string[] | null | undefined) => new Set(cleanPermissions(expandLegacyPermissions(p ?? [])));
+  const mine = norm(perms);
+  const same = (other: readonly string[]) => { const o = norm(other); return o.size === mine.size && [...o].every((x) => mine.has(x)); };
+  for (const t of templates) if (same(t.permissions)) return { icon: t.icon || "🧩", label: t.name };
+  if (STORE_MENU_PERMISSIONS.every((p) => mine.has(p))) return { icon: "👑", label: "Administrador" };
+  for (const p of PERMISSION_PRESETS) if (same(p.permissions)) return { icon: p.icon, label: p.label };
+  return { icon: "🧩", label: "Rol personalizado" };
+}

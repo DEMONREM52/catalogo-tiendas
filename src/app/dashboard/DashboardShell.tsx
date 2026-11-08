@@ -35,7 +35,7 @@ import { PriceApprovalWatcher } from "./pos/PriceApprovalWatcher";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PermissionChangeWatcher } from "./PermissionChangeWatcher";
 import { setPermissionRuntime } from "@/lib/permission-runtime";
-import { expandLegacyPermissions } from "@/lib/permissions";
+import { expandLegacyPermissions, roleLabelFor } from "@/lib/permissions";
 import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, type Simulation } from "./AccessGuard";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
@@ -475,6 +475,8 @@ export default function DashboardShell({
   const [storePermissions, setStorePermissions] = useState<string[]>([]);
   const [storeIsOwner, setStoreIsOwner] = useState(false);
   const [storeMemberRole, setStoreMemberRole] = useState<string | null>(null);
+  // Roles guardados de la tienda (para mostrar el nombre del rol en el encabezado).
+  const [roleTemplates, setRoleTemplates] = useState<Array<{ name: string; icon: string | null; permissions: string[] }>>([]);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [staffUsername, setStaffUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -523,6 +525,10 @@ export default function DashboardShell({
         setStorePermissions(expandLegacyPermissions(access.membership?.permissions));
         setStoreIsOwner(access.isOwner);
         setStoreMemberRole(access.membership?.role ?? null);
+        if (access.store && access.membership && !access.isOwner) {
+          void supabaseBrowser().from("erp_role_templates").select("name,icon,permissions").eq("store_id", access.store.id)
+            .then(({ data }) => setRoleTemplates(((data ?? []) as Array<{ name: string; icon: string | null; permissions: string[] }>)));
+        }
 
         if (access.profileRole === "admin") {
           setRole("admin");
@@ -956,7 +962,7 @@ export default function DashboardShell({
                   <span className="truncate font-semibold" style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{displayName || (email ? email.split("@")[0] : "")}</span>
                   {role ? (
                     <span className="shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)", color: "var(--t-text)" }}>
-                      {role === "admin" ? "Admin RemHub" : storeIsOwner ? "👑 Dueño" : isStoreAdmin ? "Administrador" : "Equipo"}
+                      {role === "admin" ? "Admin RemHub" : storeIsOwner ? "👑 Dueño" : isStoreAdmin ? "👑 Administrador" : (() => { const r = roleLabelFor(storePermissions, roleTemplates); return `${r.icon} ${r.label}`; })()}
                     </span>
                   ) : null}
                 </p>
