@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, X } from "lucide-react";
+import { ArrowUp, ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { useRunOnChange } from "../inventario/shared";
@@ -82,6 +82,14 @@ export default function ProductListPage() {
   const [stock, setStock] = useState<StockFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("active");
   const [sort, setSort] = useState<SortKey>("name");
+  // En el celular los filtros (punto, categoría, orden, estado) van plegados para que se vea la lista.
+  const [showFilters, setShowFilters] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 600);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const [data, setData] = useState<BrowseResult | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,6 +190,7 @@ export default function ProductListPage() {
   const others = points.filter((p) => p.id !== pointId);
   const pointLabel = (id: string) => points.find((p) => p.id === id)?.name ?? "Otro";
   const filtersOn = Boolean(q || category || stock !== "all" || status !== "active" || sort !== "name");
+  const extraFilters = [category, sort !== "name", status !== "active", point && point !== data?.point_id].filter(Boolean).length;
 
   function resetFilters() {
     setQInput("");
@@ -227,12 +236,12 @@ export default function ProductListPage() {
 
   return (
     <main className={`space-y-4 ${selected.size ? "pb-28" : ""}`}>
-      <section className="relative overflow-hidden rounded-[28px] border p-5 sm:p-6" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
+      <section className="relative overflow-hidden rounded-[28px] border p-4 sm:p-6" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }} />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--t-accent)" }}>{store.name} · todos los puntos</p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-black sm:text-3xl"><ClipboardList size={26} /> Lista general de productos</h1>
+            <p className="hidden text-xs font-bold uppercase tracking-[0.2em] sm:block" style={{ color: "var(--t-accent)" }}>{store.name} · todos los puntos</p>
+            <h1 className="flex items-center gap-2 text-xl font-black sm:mt-1 sm:text-3xl"><ClipboardList size={22} /> Lista general de productos</h1>
             <p className="hidden sm:block mt-1 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
               Mira todo lo que maneja la tienda y cuánto hay en cada punto o bodega. Filtra lo que falta en tu sede y pídelo en un clic.
             </p>
@@ -252,9 +261,10 @@ export default function ProductListPage() {
         </div>
       </section>
 
-      <section className="sticky top-0 z-20 -mx-1 space-y-2.5 rounded-[22px] border p-3 backdrop-blur-md sm:p-4" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
+      <section className="sticky top-0 z-20 -mx-1 space-y-2 rounded-[22px] border p-2.5 backdrop-blur-md sm:space-y-2.5 sm:p-4" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 90%, transparent)" }}>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_14rem_12rem_11rem]">
-          <div className="relative">
+          <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
             <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 opacity-60" />
             <input
               ref={searchRef}
@@ -287,7 +297,14 @@ export default function ProductListPage() {
               }}
             />
           </div>
-          <label className="relative block" title="El punto con el que se comparan las existencias">
+          <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters}
+            className="relative inline-flex shrink-0 items-center gap-1.5 rounded-2xl border px-3 text-xs font-bold sm:hidden"
+            style={showFilters || extraFilters ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>
+            <SlidersHorizontal size={15} /> Filtros
+            {extraFilters ? <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] text-white" style={{ background: "var(--t-accent)" }}>{extraFilters}</span> : null}
+          </button>
+          </div>
+          <label className={`relative ${showFilters ? "block" : "hidden"} sm:block`} title="El punto con el que se comparan las existencias">
             <span className="pointer-events-none absolute left-3 top-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>Ver existencias en</span>
             <select value={pointId} onChange={(e) => setPoint(e.target.value)} className={`${inputCls} pb-1.5 pt-4`} style={inputStyle}>
               {points.map((p) => (
@@ -295,11 +312,11 @@ export default function ProductListPage() {
               ))}
             </select>
           </label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls} style={inputStyle} aria-label="Categoría">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputCls} ${showFilters ? "" : "hidden"} sm:block`} style={inputStyle} aria-label="Categoría">
             <option value="">Todas las categorías</option>
             {data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={inputCls} style={inputStyle} aria-label="Ordenar">
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={`${inputCls} ${showFilters ? "" : "hidden"} sm:block`} style={inputStyle} aria-label="Ordenar">
             <option value="name">Orden: nombre</option>
             <option value="here">Menos existencias aquí</option>
             <option value="elsewhere">Más en otros puntos</option>
@@ -307,24 +324,36 @@ export default function ProductListPage() {
           </select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="-mx-2.5 flex items-center gap-1.5 overflow-x-auto px-2.5 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           {STOCK_CHIPS.map((chip) => (
             <Chip key={chip.value} active={stock === chip.value} onClick={() => setStock(chip.value)} title={chip.hint} count={data.counts?.[chip.value]} tone={chip.value === "missing" ? "bad" : chip.value === "elsewhere" ? "warn" : chip.value === "has" ? "good" : undefined}>
               {chip.label(shortName(pointName))}
             </Chip>
           ))}
           <span className="mx-1 hidden h-5 w-px sm:block" style={{ background: "var(--t-card-border)" }} />
-          {STATUS_CHIPS.map((chip) => (
-            <Chip key={chip.value} active={status === chip.value} onClick={() => setStatus(chip.value)} small>
-              {chip.label}
-            </Chip>
-          ))}
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            {STATUS_CHIPS.map((chip) => (
+              <Chip key={chip.value} active={status === chip.value} onClick={() => setStatus(chip.value)} small>
+                {chip.label}
+              </Chip>
+            ))}
+          </span>
           {filtersOn ? (
-            <button type="button" onClick={resetFilters} className="ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold opacity-75 transition hover:opacity-100">
+            <button type="button" onClick={resetFilters} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold opacity-75 transition hover:opacity-100">
               <RotateCcw size={12} /> Quitar filtros
             </button>
           ) : null}
         </div>
+        {showFilters ? (
+          <div className="flex items-center gap-1.5 sm:hidden">
+            <span className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>Mostrar:</span>
+            {STATUS_CHIPS.map((chip) => (
+              <Chip key={chip.value} active={status === chip.value} onClick={() => setStatus(chip.value)} small>
+                {chip.label}
+              </Chip>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <div className="flex items-center justify-between gap-2 px-1 text-xs" style={{ color: "var(--t-muted)" }}>
@@ -367,6 +396,17 @@ export default function ProductListPage() {
           <Button onClick={() => void loadMore()} busy={loadingMore}>Cargar más ({fmtNumber(data.total - items.length)} restantes)</Button>
         </div>
       ) : null}
+
+      <AnimatePresence>
+        {scrolled ? (
+          <motion.button key="top" type="button" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className={`fixed right-4 z-30 grid h-12 w-12 place-items-center rounded-full text-white shadow-xl ${selected.size ? "bottom-28" : "bottom-5"}`}
+            style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }} aria-label="Volver arriba" title="Volver arriba">
+            <ArrowUp size={20} />
+          </motion.button>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selected.size ? (
@@ -466,10 +506,10 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, s
   const hereTone = here > 0 ? "#16a34a" : "#dc2626";
   const body = (
     <>
-      <Thumb src={item.image_url} size={52} />
+      <Thumb src={item.image_url} size={48} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 text-sm font-bold leading-snug">{item.name}</p>
+          <p className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-snug">{item.name}</p>
           {!item.active ? <Badge tone="neutral" className="shrink-0">Inactivo</Badge> : null}
         </div>
         <p className="mt-0.5 truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
@@ -477,9 +517,9 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, s
           {" · "}<span className="font-semibold" style={{ color: "var(--t-text)" }}>{fmtMoney(item.price)}</span>
           {showCost && item.cost != null ? <> · costo {fmtMoney(item.cost)}</> : null}
         </p>
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-1.5 flex gap-1 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible">
           {elsewhere.length ? elsewhere.slice(0, 4).map(([wh, qty]) => (
-            <span key={wh} className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>
+            <span key={wh} className="shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>
               {shortName(pointLabel(wh))} <b className="tabular-nums">{fmtNumber(qty)}</b>
             </span>
           )) : (
@@ -510,7 +550,7 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, s
       }}
     >
       {selectable ? (
-        <button type="button" onClick={onToggle} aria-pressed={selected} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left" title={selected ? "Quitar del pedido" : "Agregar al pedido"}>
+        <button type="button" onClick={onToggle} aria-pressed={selected} className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 text-left sm:gap-3 sm:p-3" title={selected ? "Quitar del pedido" : "Agregar al pedido"}>
           <span
             className="grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-black text-white transition"
             style={{ borderColor: selected ? "var(--t-accent)" : "var(--t-card-border)", background: selected ? "var(--t-accent)" : "transparent" }}
@@ -521,7 +561,7 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, s
           {body}
         </button>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-3 p-3">{body}</div>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 sm:gap-3 sm:p-3">{body}</div>
       )}
       {canEdit ? (
         <Link

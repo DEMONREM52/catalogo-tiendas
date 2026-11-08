@@ -608,6 +608,16 @@ export const RELEASES: Release[] = [
       { icon: "⚡", text: "Enter para buscar de una vez" },
     ],
   },
+  {
+    id: 58, date: "2026-11-08", title: "Lista de productos más cómoda en el celular",
+    summary: "Arriba solo queda el buscador y una fila de filtros que se desliza; el punto, la categoría y el orden se abren con «Filtros». Cada producto ocupa menos y hay un botón para volver arriba.",
+    paths: ["/dashboard/lista-productos"],
+    demo: [
+      { icon: "🔎", text: "Busca arriba; la lista se ve casi completa" },
+      { icon: "⚙️", text: "Toca «Filtros» para punto, categoría y orden" },
+      { icon: "⬆️", text: "Botón flotante para volver arriba" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
