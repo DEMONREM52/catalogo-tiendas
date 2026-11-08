@@ -28,7 +28,8 @@ export function ImageUpload({
   fileName,
   onUploaded,
   bucket,
-}: Props) {
+  compact = false,
+}: Props & { /** Solo la foto y los botones, sin textos (ficha del producto). */ compact?: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -167,7 +168,7 @@ export function ImageUpload({
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
       onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }}
       onDrop={onDrop}
-      className="relative rounded-2xl border p-4 outline-none transition focus-visible:ring-2"
+      className={`relative rounded-2xl border outline-none transition focus-visible:ring-2 ${compact ? "p-2" : "p-4"}`}
       style={{
         borderColor: dragging ? "var(--t-accent)" : "var(--t-card-border)",
         borderStyle: dragging ? "dashed" : "solid",
@@ -175,17 +176,29 @@ export function ImageUpload({
         color: "var(--t-text)",
       }}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="font-semibold">{label}</h3>
-          <p className="text-sm" style={{ color: "var(--t-muted)" }}>Arrastra la foto aquí o pégala con Ctrl+V.</p>
-        </div>
+      {compact ? (
+        <label className="block cursor-pointer" title="Toca para subir, arrastra la foto o pégala con Ctrl+V">
+          {currentUrl ? (
+            <img src={currentUrl} alt={label} className="aspect-square w-full rounded-xl object-cover" />
+          ) : (
+            <span className="grid aspect-square w-full place-items-center rounded-xl text-4xl" style={{ background: "color-mix(in oklab, var(--t-accent) 10%, transparent)" }}>📷</span>
+          )}
+          <input className="hidden" type="file" accept="image/*" onChange={handleFile} />
+        </label>
+      ) : null}
+      <div className={compact ? "mt-2 flex gap-2" : "flex items-start justify-between gap-4"}>
+        {compact ? null : (
+          <div className="min-w-0">
+            <h3 className="font-semibold">{label}</h3>
+            <p className="text-sm" style={{ color: "var(--t-muted)" }}>Arrastra la foto aquí o pégala con Ctrl+V.</p>
+          </div>
+        )}
 
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className={compact ? "grid w-full grid-cols-2 gap-2" : "flex shrink-0 flex-wrap justify-end gap-2"}>
           <button type="button" onClick={pasteFromButton} disabled={uploading} className="btn-soft rounded-xl px-3 py-2 text-sm font-semibold" title="Pegar la imagen que copiaste">
             📋 Pegar
           </button>
-          <label className="btn-soft cursor-pointer rounded-xl px-4 py-2 font-semibold">
+          <label className={`btn-soft cursor-pointer rounded-xl font-semibold ${compact ? "px-2 py-2 text-center text-sm" : "px-4 py-2"}`}>
             {uploading ? "Subiendo..." : "Subir"}
             <input
               className="hidden"
@@ -197,7 +210,7 @@ export function ImageUpload({
         </div>
       </div>
 
-      {currentUrl ? (
+      {compact ? null : currentUrl ? (
         <div className="mt-4">
           <img
             src={currentUrl}

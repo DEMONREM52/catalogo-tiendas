@@ -22,7 +22,7 @@ import { fetchProductCosts } from "@/lib/profit/costs";
 import { PricingPanel, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { BadgeDollarSign, FileText, Images, ListChecks, Package, ScanBarcode, Store, Warehouse } from "lucide-react";
+import { BadgeDollarSign, FileText, Images, ListChecks, Package, Store, Warehouse } from "lucide-react";
 import { Field, ProductEditorLayout, ProductPreviewCard, inputCls, inputStyle, type EditorSection } from "../ProductEditorLayout";
 
 type Category = { id: string; name: string };
@@ -336,7 +336,7 @@ export default function EditProductPage() {
   const mainCategory = categories.find((c) => c.id === categoryIds[0])?.name ?? null;
   const sections: EditorSection[] = [
     {
-      key: "basic", label: "Lo básico", icon: <Package />, color: "#8b5cf6", hint: "Foto, nombre y dónde aparece. Es lo único indispensable.",
+      key: "basic", label: "Lo básico", icon: <Package />, color: "#8b5cf6", hint: "Foto, nombre, códigos y dónde aparece. Solo el nombre es indispensable.",
       done: Boolean(d.name.trim()),
       content: (
         <>
@@ -345,7 +345,7 @@ export default function EditProductPage() {
               <p className="mb-1.5 text-sm font-bold">📸 Foto principal</p>
             <div className="mx-auto max-w-[200px] sm:max-w-none">
               {userId ? (
-                <ImageUpload label="Subir foto" currentUrl={d.image_url} pathPrefix={`${userId}/products/`} fileName={`${d.id}.png`} bucket="product-images"
+                <ImageUpload compact label="Subir foto" currentUrl={d.image_url} pathPrefix={`${userId}/products/`} fileName={`${d.id}.png`} bucket="product-images"
                   onUploaded={(url) => setDraft({ ...d, image_url: url })} />
               ) : <Skeleton className="aspect-square w-full rounded-2xl" />}
               </div>
@@ -359,6 +359,20 @@ export default function EditProductPage() {
               <Field label="Descripción corta" icon="💬" help="Una o dos frases que salen debajo del nombre.">
                 <RichTextEditor value={d.description ?? ""} onChange={(v) => setDraft({ ...d, description: v })} placeholder="Ej: Resistente al agua, batería de 7 días y más de 100 modos deportivos." minHeight={90} />
               </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Código del producto" icon="🔖" help={<>{d.product_no ? <>N.º interno <b>#{d.product_no}</b> (no cambia). </> : null}Si lo dejas vacío se usa el número interno.</>}>
+                <input className={`${inputCls} uppercase`} style={inputStyle} value={d.sku ?? ""} maxLength={40} placeholder={d.product_no ? String(d.product_no) : "Ej: OLL-01"}
+                  onChange={(e) => { const el = e.target; const at = el.selectionStart; setDraft({ ...d, sku: el.value.toUpperCase() }); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
+              </Field>
+              <Field label="Código de barras" icon="📊" help="El que trae el empaque. Escanéalo o escríbelo.">
+                <input className={inputCls} style={inputStyle} value={d.barcode ?? ""} maxLength={60} inputMode="numeric" placeholder="Opcional" onChange={(e) => setDraft({ ...d, barcode: e.target.value })} />
+              </Field>
+              <details className="sm:col-span-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                <summary className="cursor-pointer font-semibold">Datos técnicos</summary>
+                <p className="mt-1">ID del producto: <span className="font-mono">{d.id}</span></p>
+              </details>
+            </div>
+
             </div>
           </div>
         </>
@@ -413,25 +427,6 @@ export default function EditProductPage() {
       key: "features", label: "Características", icon: <ListChecks />, color: "#6366f1", hint: "Lo que lo hace especial y sus datos técnicos (color, talla, material…).", optional: true,
       done: det.highlights.length > 0 || det.specifications.length > 0,
       content: <ProductDetailsFields bare parts={["highlights", "specs"]} details={det} onChange={(product_details) => setDraft({ ...d, product_details })} userId={userId} productId={d.id} />,
-    },
-    {
-      key: "codes", label: "Códigos", icon: <ScanBarcode />, color: "#64748b", hint: "Para buscarlo rápido y leerlo con la pistola de códigos.", optional: true,
-      done: Boolean((d.sku ?? "").trim() || (d.barcode ?? "").trim()),
-      content: (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Código del producto" icon="🔖" help={<>{d.product_no ? <>N.º interno <b>#{d.product_no}</b> (no cambia). </> : null}Si lo dejas vacío se usa el número interno.</>}>
-            <input className={`${inputCls} uppercase`} style={inputStyle} value={d.sku ?? ""} maxLength={40} placeholder={d.product_no ? String(d.product_no) : "Ej: OLL-01"}
-              onChange={(e) => { const el = e.target; const at = el.selectionStart; setDraft({ ...d, sku: el.value.toUpperCase() }); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
-          </Field>
-          <Field label="Código de barras" icon="📊" help="El que trae el empaque. Escanéalo o escríbelo.">
-            <input className={inputCls} style={inputStyle} value={d.barcode ?? ""} maxLength={60} inputMode="numeric" placeholder="Opcional" onChange={(e) => setDraft({ ...d, barcode: e.target.value })} />
-          </Field>
-          <details className="sm:col-span-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
-            <summary className="cursor-pointer font-semibold">Datos técnicos</summary>
-            <p className="mt-1">ID del producto: <span className="font-mono">{d.id}</span></p>
-          </details>
-        </div>
-      ),
     },
     ...(storeId ? [{
       key: "catalogs", label: "Catálogos", icon: <Store />, color: "#14b8a6", hint: "En qué catálogos aparece y con qué precio.", optional: true, done: false,

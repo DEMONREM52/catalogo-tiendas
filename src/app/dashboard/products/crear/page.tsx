@@ -19,7 +19,7 @@ import { checkProductCode, cleanProductCode } from "../product-code";
 import { PricingPanel, loadDefaultMarkup, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { BadgeDollarSign, FileText, Images, ListChecks, Package, ScanBarcode } from "lucide-react";
+import { BadgeDollarSign, FileText, Images, ListChecks, Package } from "lucide-react";
 import { Field, ProductEditorLayout, ProductPreviewCard, inputCls, inputStyle, type EditorSection } from "../ProductEditorLayout";
 
 type Category = { id: string; name: string };
@@ -230,7 +230,7 @@ export default function CreateProductPage() {
             <p className="mb-1.5 text-sm font-bold">📸 Foto principal</p>
             <div className="mx-auto max-w-[200px] sm:max-w-none">
             {userId ? (
-              <ImageUpload label="Subir foto" currentUrl={imageUrl} pathPrefix={`${userId}/products/`} fileName={`new-${Date.now()}.png`} bucket="product-images" onUploaded={(url) => setImageUrl(url)} />
+              <ImageUpload compact label="Subir foto" currentUrl={imageUrl} pathPrefix={`${userId}/products/`} fileName={`new-${Date.now()}.png`} bucket="product-images" onUploaded={(url) => setImageUrl(url)} />
             ) : <Skeleton className="aspect-square w-full rounded-2xl" />}
             </div>
             <p className="mt-1 text-center text-[11px] sm:text-left" style={{ color: "var(--t-muted)" }}>Opcional, pero ayuda a vender.</p>
@@ -243,6 +243,11 @@ export default function CreateProductPage() {
             <Field label="Descripción corta" icon="💬" help="Una o dos frases que salen debajo del nombre.">
               <RichTextEditor value={description} onChange={setDescription} placeholder="Ej: Resistente al agua, batería de 7 días y más de 100 modos deportivos." minHeight={90} />
             </Field>
+            <Field label="Código del producto" icon="🔖" help="Vacío = se usa el número interno. El código de barras se agrega después al editarlo.">
+              <input className={`${inputCls} uppercase`} style={inputStyle} value={code} maxLength={40} placeholder="Ej: OLL-01"
+                onChange={(e) => { const el = e.target; const at = el.selectionStart; setCode(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
+            </Field>
+
           </div>
         </div>
       ),
@@ -278,16 +283,6 @@ export default function CreateProductPage() {
       key: "features", label: "Características", icon: <ListChecks />, color: "#6366f1", hint: "Lo que lo hace especial y sus datos técnicos (color, talla, material…).", optional: true,
       done: productDetails.highlights.length > 0 || productDetails.specifications.length > 0,
       content: <ProductDetailsFields bare parts={["highlights", "specs"]} details={productDetails} onChange={setProductDetails} userId={userId} />,
-    },
-    {
-      key: "codes", label: "Código", icon: <ScanBarcode />, color: "#64748b", hint: "Para buscarlo rápido. Si lo dejas vacío, se le pone un número (1, 2, 3…).", optional: true,
-      done: Boolean(code.trim()),
-      content: (
-        <Field label="Código del producto" icon="🔖" help="Vacío = se usa el número interno. El código de barras se agrega después al editarlo.">
-          <input className={`${inputCls} uppercase`} style={inputStyle} value={code} maxLength={40} placeholder="Ej: OLL-01"
-            onChange={(e) => { const el = e.target; const at = el.selectionStart; setCode(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
-        </Field>
-      ),
     },
   ];
 
