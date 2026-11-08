@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Chip, Modal } from "./dialog";
-import { Btn, errorMessage, money } from "./shared";
+import { Btn, errorMessage, money, toast } from "./shared";
+import type { PdfCharge, PdfMove } from "./valuationPdf";
 
 /**
  * Liquidación de un punto: la mercancía que tiene hoy valorizada a costo real, a precio de bodega (lo que debe por ella)
@@ -186,6 +187,51 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
     w.document.close();
   }
 
+  const [pdfBusy, setPdfBusy] = useState(false);
+  /** PDF completo, descargado directo (en el celular se puede compartir por WhatsApp). */
+  async function downloadPdf() {
+    if (!data || !t) return;
+    setPdfBusy(true);
+    try {
+      type St = { ok: boolean; summary?: { balance: number; overdue: number; in_transit: number; paid: number; charged: number; credits?: number; next_due: string | null }; config?: { pct: number | null } | null; moves?: PdfMove[]; charges?: PdfCharge[] };
+      let st: St | null = null;
+      if (data.credit) {
+        const { data: sd } = await supabaseBrowser().rpc("erp_internal_statement", { p_store: storeId, p_point: pointId });
+        st = (sd as St) ?? null;
+        if (!st?.ok) st = null;
+      }
+      const { buildValuationPdf } = await import("./valuationPdf");
+      const realBasis = basis === "auto" ? data.basis : basis;
+      const blob = await buildValuationPdf({
+        pointName, level, costs,
+        basisLabel: realBasis === "last" ? "Último de factura" : "Costo promedio",
+        totals: { products: n(t.products), units: n(t.units), cost, internal, sale },
+        account: st?.summary ? { ...st.summary } : s ? { balance: n(s.balance), overdue: n(s.overdue), in_transit: n(s.in_transit), paid: n(s.paid), charged: n(s.charged), next_due: s.next_due } : null,
+        pct: st?.config?.pct ?? null,
+        moves: st?.moves ?? [], charges: st?.charges ?? [],
+        compare: compare.filter((c): c is NonNullable<typeof c> => !!c),
+        losses: losses.map((l) => ({ ...l, why: why(l, costs) as "below_cost" | "bodega" })),
+        suspects, lines: allLines, money,
+      });
+      const name = `liquidacion-${pointName.replace(/s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const file = new File([blob], name, { type: "application/pdf" });
+      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+      if (/Android|iPhone|iPad/i.test(navigator.userAgent) && nav.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Liquidación · ${pointName}` }).catch(() => undefined);
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }
+    } catch (err) {
+      toast("No se pudo crear el PDF", "error", errorMessage(err));
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   const tabs: Array<[Tab, string]> = [["summary", "Resumen"], ["products", `Productos (${allLines.length})`], ["compare", "Comparar listas"], ["alerts", `⚠️ Pérdidas (${losses.length})`]];
 
   return (
@@ -194,7 +240,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
       title={`📊 Liquidación · ${pointName}`}
       subtitle="La mercancía que hay hoy en el punto: lo que costó, lo que vale para la bodega, lo que vale a precio de venta y lo que gana cada uno."
       onClose={onClose}
-      footer={<>{data ? <><Btn variant="ghost" onClick={exportCsv}>⬇️ Excel (5 listas)</Btn><Btn variant="ghost" onClick={printReport}>📄 PDF</Btn></> : null}<Btn onClick={onClose}>Cerrar</Btn></>}
+      footer={<>{data ? <><Btn variant="ghost" onClick={exportCsv}>⬇️ Excel (5 listas)</Btn><Btn variant="ghost" onClick={printReport}>🖨️ Imprimir</Btn><Btn variant="ghost" onClick={() => void downloadPdf()} disabled={pdfBusy}>{pdfBusy ? "Creando PDF…" : "📄 PDF completo"}</Btn></> : null}<Btn onClick={onClose}>Cerrar</Btn></>}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold" style={{ color: "var(--t-muted)" }}>Precio de venta del punto con la lista:</span>
@@ -222,7 +268,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
           <section>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>📦 La mercancía del punto ({t.units.toLocaleString("es-CO")} unidades · {t.products} productos)</p>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-              {costs ? <Box label="① Costo real" value={money(cost)} sub="Lo que pagó la bodega al proveedor (costo promedio)" help="Unidades × costo de compra de cada producto." /> : null}
+              {costs ? <Box label="① Costo real" value={money(cost)} sub={`Lo que pagó la bodega al proveedor (${(basis === "auto" ? data?.basis : basis) === "last" ? "último de factura" : "costo promedio"})`} help="Unidades × costo de compra de cada producto." /> : null}
               <Box label="② Precio de bodega" value={money(internal)} sub={costs ? `Costo + ${pct(internal - cost, cost)} de la bodega` : "Costo + % de la bodega"} help="Lo que el punto le debe a la bodega por esta mercancía (precio interno congelado al trasladar)." tone="accent" />
               <Box label={`③ A precio de venta (P${level})`} value={money(sale)} sub="Si vende todo a su precio de lista" help="Unidades × precio de venta del punto (con su regla de precio)." />
               {costs ? <Box label="Ganancia de la bodega" value={money(internal - cost)} sub="② − ①" help="Lo que gana la bodega al cobrarle al punto." tone="good" /> : null}

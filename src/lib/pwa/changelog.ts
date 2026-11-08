@@ -568,6 +568,16 @@ export const RELEASES: Release[] = [
       { icon: "⚖️", text: "Usa «Cuadrar» en la liquidación del punto" },
     ],
   },
+  {
+    id: 54, date: "2026-11-08", title: "Informe del punto en PDF completo",
+    summary: "La liquidación del punto se descarga como PDF completo: mercancía, cuenta con la bodega, por pagar, movimientos, comparación de listas, pérdidas, costos para revisar y todos los productos. En el celular se comparte directo.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📊", text: "Abre la liquidación del punto" },
+      { icon: "📄", text: "Toca «PDF completo»" },
+      { icon: "📲", text: "En el celular, compártelo por WhatsApp" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
