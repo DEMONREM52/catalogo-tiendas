@@ -14,6 +14,7 @@ import { forgetStaffAccess, rememberStaffAccess, resumeExistingSession } from "@
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain } from "@/lib/store-space";
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { RemhubMark, SmartLogo } from "@/components/ui/SmartLogo";
 import { SalesMock } from "@/components/landing/SalesMock";
 
@@ -61,13 +62,17 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
 
   // En el espacio de la tienda (lavitrina.remhub.co/login): se muestra a qué tienda se entra.
   const [space, setSpace] = useState<{ name: string; logo_url: string | null } | null>(null);
+  // «Volver a remhub.co»: en el espacio de una tienda, «/» es su catálogo; por eso va a la página de RemHub.
+  const [home, setHome] = useState("/");
   useEffect(() => {
     const sub = currentStoreSubdomain();
     if (!sub) return;
+    const t = window.setTimeout(() => setHome(`${PRODUCTION_ORIGIN}/`), 0);
     void supabaseBrowser().rpc("store_public_home", { p_slug: sub }).then(({ data }) => {
       const home = data as { name?: string; logo_url?: string | null } | null;
       if (home?.name) setSpace({ name: home.name, logo_url: home.logo_url ?? null });
     });
+    return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -234,11 +239,11 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
       <div className="relative mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 py-8 lg:grid-cols-[1.1fr_.9fr] lg:py-12">
         {/* ------------------------------------------------ Lado izquierdo: la marca */}
         <section className="order-2 min-w-0 lg:order-1">
-          <Link href="/" className="inline-flex items-center gap-2.5">
+          <a href={home} className="inline-flex items-center gap-2.5">
             {/* El logo de RemHub es blanco y transparente: va sobre su círculo oscuro (se ve en tema claro). */}
             <RemhubMark size={44} />
             <span className="text-lg font-black tracking-tight">RemHub</span>
-          </Link>
+          </a>
 
           <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="mt-8 text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
             Tu negocio,{" "}
@@ -398,7 +403,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             </div>
           </motion.div>
           <p className="mt-4 text-center text-xs" style={{ color: "var(--t-muted)" }}>
-            <Link href="/" className="hover:underline">← Volver a remhub.co</Link>
+            <a href={home} className="hover:underline">← Volver a remhub.co</a>
           </p>
         </section>
       </div>
