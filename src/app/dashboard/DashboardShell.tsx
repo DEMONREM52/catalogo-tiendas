@@ -59,6 +59,7 @@ type StoreRow = {
   id: string;
   slug: string;
   name: string;
+  logo_url?: string | null;
   whatsapp: string;
 
   // ✅ Temporizador / estado
@@ -927,73 +928,40 @@ export default function DashboardShell({
         <div className="flex flex-wrap items-center gap-2">
           <BurgerButton open={burgerOpen} onClick={toggleDrawer} />
           <div
-            className="rounded-2xl border px-3 py-2 backdrop-blur-xl"
-            style={{
-              borderColor: "var(--t-card-border)",
-              background: "var(--t-card-bg)",
-            }}
+            className="min-w-0 rounded-2xl border py-1.5 pl-1.5 pr-3 backdrop-blur-xl"
+            style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}
+            title={email ? `Sesión: ${email}` : undefined}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-semibold">Dashboard</h1>
-
-              {role ? (
-                <span
-                  className="rounded-full border px-3 py-1 text-xs font-semibold"
-                  style={{
-                    borderColor:
-                      "color-mix(in oklab, var(--t-accent) 45%, transparent)",
-                    background:
-                      "color-mix(in oklab, var(--t-accent) 18%, transparent)",
-                    color: "var(--t-text)",
-                    boxShadow:
-                      "0 0 16px color-mix(in oklab, var(--t-accent) 14%, transparent)",
-                  }}
-                >
-                  {role === "admin" ? "Admin" : "Tienda"}
+            <div className="flex min-w-0 items-center gap-2.5">
+              {/* Logo de la tienda (o su inicial) con el punto de estado */}
+              <span className="relative shrink-0">
+                <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl text-base font-black text-white"
+                  style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {role === "store" && store?.logo_url ? <img src={store.logo_url} alt="" className="h-full w-full object-cover" /> : role === "admin" ? "⚙️" : (store?.name ?? "R").trim().slice(0, 1).toUpperCase()}
                 </span>
-              ) : null}
-
-              {role === "store" && store ? (
-                <span
-                  className="rounded-full border px-3 py-1 text-xs font-semibold"
-                  style={
-                    storeLiveActive
-                      ? {
-                          borderColor: "rgba(16,185,129,0.28)",
-                          background: "rgba(16,185,129,0.10)",
-                          color: "color-mix(in oklab, #047857 70%, var(--t-text))",
-                        }
-                      : {
-                          borderColor: "rgba(239,68,68,0.28)",
-                          background: "rgba(239,68,68,0.10)",
-                          color: "color-mix(in oklab, #b91c1c 65%, var(--t-text))",
-                        }
-                  }
-                  title="Estado de la tienda (manual + temporizador)"
-                >
-                  {storeLiveActive ? "Activa" : "Inactiva"}
-                </span>
-              ) : null}
+                {role === "store" && store ? (
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2" title={storeLiveActive ? "Tienda activa" : "Tienda inactiva"}
+                    style={{ borderColor: "var(--t-card-bg)", background: storeLiveActive ? "#10b981" : "#ef4444", boxShadow: storeLiveActive ? "0 0 8px #10b981" : undefined }} />
+                ) : null}
+              </span>
+              <div className="min-w-0">
+                <h1 className="flex min-w-0 items-center gap-1.5 text-sm font-black leading-tight sm:text-base">
+                  <span className="truncate">{role === "admin" ? "Panel de RemHub" : store?.name ?? "Mi tienda"}</span>
+                  {role === "store" && store && !storeLiveActive ? (
+                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "rgba(239,68,68,0.14)", color: "#ef4444" }}>Inactiva</span>
+                  ) : null}
+                </h1>
+                <p className="flex min-w-0 items-center gap-1.5 text-[11px] leading-tight" style={{ color: "var(--t-muted)" }}>
+                  <span className="truncate font-semibold" style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{displayName || (email ? email.split("@")[0] : "")}</span>
+                  {role ? (
+                    <span className="shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)", color: "var(--t-text)" }}>
+                      {role === "admin" ? "Admin RemHub" : storeIsOwner ? "👑 Dueño" : isStoreAdmin ? "Administrador" : "Equipo"}
+                    </span>
+                  ) : null}
+                </p>
+              </div>
             </div>
-
-            {email ? (
-              <p
-                className="mt-2 hidden text-xs sm:block"
-                style={{
-                  color: "color-mix(in oklab, var(--t-text) 65%, transparent)",
-                }}
-              >
-                {displayName ? `${displayName} · ` : "Sesión: "}
-                <span
-                  style={{
-                    color:
-                      "color-mix(in oklab, var(--t-text) 82%, transparent)",
-                  }}
-                >
-                  {email}
-                </span>
-              </p>
-            ) : null}
 
 
             {role === "store" &&
