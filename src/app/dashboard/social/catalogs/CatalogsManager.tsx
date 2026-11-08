@@ -48,6 +48,7 @@ function shareUrl(storeSlug: string, catalog: Pick<StoreCatalog, "slug" | "acces
   return storeShareUrl(storeSlug, path, SUBDOMAINS, window.location.origin);
 }
 import { Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "./ui";
+import { SmartLogo } from "@/components/ui/SmartLogo";
 
 type Summary = { catalog_id: string; products: number; available: number; without_price: number; orders_30d: number };
 
@@ -408,14 +409,15 @@ export default function CatalogsManager() {
                     </div>
                   </div>
                   <div className="relative px-4 pb-4">
-                    <div className="-mt-8 flex items-end gap-3">
+                    {/* Solo el logo se monta sobre el banner; el nombre va debajo, sobre la tarjeta (se lee en claro y oscuro). */}
+                    <div className="flex items-start gap-3">
                       {logo ? (
-                        <img src={logo} alt="" className="h-16 w-16 rounded-2xl border-4 bg-white object-cover shadow" style={{ borderColor: "var(--t-bg-base)" }} />
+                        <SmartLogo src={logo} size={64} rounded="rounded-2xl" className="-mt-8 shadow" style={{ border: "4px solid var(--t-bg-base)" }} />
                       ) : (
-                        <span className="grid h-16 w-16 place-items-center rounded-2xl border-4 text-2xl shadow" style={{ borderColor: "var(--t-bg-base)", background: "var(--t-card-bg)" }}>🛍️</span>
+                        <span className="-mt-8 grid h-16 w-16 shrink-0 place-items-center rounded-2xl border-4 text-2xl shadow" style={{ borderColor: "var(--t-bg-base)", background: "var(--t-card-bg)" }}>🛍️</span>
                       )}
-                      <div className="min-w-0 pb-1">
-                        <h3 className="truncate text-lg font-black">{catalog.name}</h3>
+                      <div className="min-w-0 pt-2">
+                        <h3 className="line-clamp-2 text-base font-black leading-tight" style={{ color: "var(--t-text)" }}>{catalog.name}</h3>
                         <p className="truncate font-mono text-[11px]" style={{ color: "var(--t-muted)" }}>/{store?.slug}/{catalog.slug}</p>
                       </div>
                     </div>
