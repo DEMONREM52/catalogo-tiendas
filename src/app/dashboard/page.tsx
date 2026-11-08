@@ -37,6 +37,25 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 type Module = { permission: string; key: string; href: string; icon: LucideIcon; title: string; description: string };
 
+/** Color de cada acceso (para reconocerlo de un vistazo). */
+const MODULE_COLOR: Record<string, string> = {
+  pos: "#8b5cf6", orders: "#0ea5e9", stock_requests: "#f97316", products: "#10b981", social: "#ec4899", clients: "#6366f1",
+  receivables: "#f59e0b", categories: "#14b8a6", inventory: "#f97316", billing: "#64748b", store: "#a855f7", users: "#ef4444",
+};
+const ACTION_COLOR = ["#8b5cf6", "#10b981", "#f97316", "#ec4899", "#0ea5e9", "#f59e0b"];
+
+/** Reloj en vivo para el saludo. */
+function LiveClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const t0 = window.setTimeout(() => setNow(new Date()), 0);
+    const t = window.setInterval(() => setNow(new Date()), 20_000);
+    return () => { window.clearTimeout(t0); window.clearInterval(t); };
+  }, []);
+  if (!now) return null;
+  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{now.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}</span>;
+}
+
 const MODULES: Module[] = [
   { permission: "pos", key: "pos", href: "/dashboard/pos", icon: CreditCard, title: "POS / Facturación", description: "Registra ventas, crea documentos y abre comprobantes." },
   { permission: "orders", key: "orders", href: "/dashboard/pedidos", icon: Receipt, title: "Pedidos", description: "Revisa pedidos de clientes y actualiza su estado." },
@@ -169,38 +188,45 @@ export default function DashboardHome() {
 
   return (
     <main className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] border p-5 sm:p-7" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
-        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }} />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
+      <section className="relative overflow-hidden rounded-[28px] border p-5 sm:p-7" style={{ borderColor: "var(--t-card-border)", background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 20%, var(--t-card-bg)) 0%, var(--t-card-bg) 60%)" }}>
+        <motion.div aria-hidden className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, var(--t-accent) 26%, transparent)" }}
+          animate={{ x: [0, 30, 0], y: [0, 20, 0] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
+        <motion.div aria-hidden className="pointer-events-none absolute -bottom-28 right-0 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, #0ea5e9 18%, transparent)" }}
+          animate={{ x: [0, -30, 0], y: [0, -15, 0] }} transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }} />
+        <div className="relative">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] first-letter:uppercase" style={{ color: "var(--t-muted)" }}>{today}</p>
-            <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-              {loading ? <Skeleton className="h-8 w-64 max-w-full" /> : (
+            <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--t-muted)" }}>
+              <span className="first-letter:uppercase">{today}</span>
+              <span className="rounded-full border px-2 py-0.5 tracking-normal" style={{ borderColor: "var(--t-card-border)" }}>🕐 <LiveClock /></span>
+            </p>
+            <h2 className="mt-2 text-2xl font-black sm:text-4xl">
+              {loading ? <Skeleton className="h-9 w-64 max-w-full" /> : (
                 <span className="inline-flex flex-wrap items-center gap-x-2">
                   {greeting()},
-                  <EditableNickname value={name} fallback={fallbackName} onSaved={setName} inputClassName="text-xl font-black sm:text-2xl" />
-                  <span aria-hidden>👋</span>
+                  <EditableNickname value={name} fallback={fallbackName} onSaved={setName} inputClassName="text-xl font-black sm:text-3xl" />
+                  <motion.span aria-hidden className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 18, -8, 18, 0] }} transition={{ duration: 1.6, delay: 0.4 }}>👋</motion.span>
                 </span>
               )}
             </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>
-              {store?.name ? `Esto es lo que pasa hoy en ${store.name}.` : "Tus herramientas de trabajo en un solo lugar."}
+              {store?.name ? <>Esto es lo que pasa hoy en <b style={{ color: "var(--t-text)" }}>{store.name}</b>.</> : "Tus herramientas de trabajo en un solo lugar."}
             </p>
           </motion.div>
           {actions.length || (store && canClose) ? (
-            <div className="flex flex-wrap gap-2">
-              {store && canClose ? <DailyCloseButton storeId={store.id} storeName={store.name} /> : null}
-              {actions.map((a, i) => (
-                <motion.div key={a.href + a.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.05 * i } }}>
-                  <Link
-                    href={a.href}
-                    className="inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5"
-                    style={i === 0 ? { background: "var(--t-cta)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}
-                  >
-                    <a.icon size={16} /> {a.label}
-                  </Link>
-                </motion.div>
-              ))}
+            <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+              {actions.map((a, i) => {
+                const c = ACTION_COLOR[i % ACTION_COLOR.length];
+                return (
+                  <motion.div key={a.href + a.label} initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1, transition: { delay: 0.08 + 0.05 * i } }} whileHover={{ y: -3 }} whileTap={{ scale: 0.95 }}>
+                    <Link href={a.href} className="flex h-full flex-col items-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-xs font-bold transition sm:flex-row sm:px-3.5 sm:py-2.5 sm:text-sm"
+                      style={i === 0 ? { background: `linear-gradient(135deg, ${c}, color-mix(in oklab, ${c} 70%, #000))`, color: "#fff", borderColor: "transparent", boxShadow: `0 10px 24px -12px ${c}` } : { borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 80%, transparent)" }}>
+                      <span className="grid h-9 w-9 place-items-center rounded-xl sm:h-7 sm:w-7" style={i === 0 ? { background: "rgba(255,255,255,.2)" } : { background: `color-mix(in oklab, ${c} 16%, transparent)`, color: c }}><a.icon size={16} /></span>
+                      {a.label}
+                    </Link>
+                  </motion.div>
+                );
+              })}
+              {store && canClose ? <div className="col-span-3 sm:col-span-1"><DailyCloseButton storeId={store.id} storeName={store.name} /></div> : null}
             </div>
           ) : null}
         </div>
@@ -233,7 +259,7 @@ export default function DashboardHome() {
 
       {alerts.length ? (
         <section className="rounded-[28px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
-          <h3 className="mb-2 text-sm font-bold">Lo que necesita tu atención</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "#ef4444" }}>🔔</span> Lo que necesita tu atención <span className="rounded-full px-2 text-[11px]" style={{ background: "color-mix(in oklab, #ef4444 18%, transparent)" }}>{alerts.length}</span></h3>
           <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
             {alerts.slice(0, 6).map((alert) => <AlertRow key={alert.key} alert={alert} />)}
           </div>
@@ -255,7 +281,7 @@ export default function DashboardHome() {
       {!loading && !isAdmin && !accessFailed ? (
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-bold">Accesos rápidos</h3>
+            <h3 className="flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "var(--t-accent)" }}>⚡</span> Accesos rápidos</h3>
             {allowed.some((m) => m.permission === "store") ? (
               <Link href="/dashboard/store" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                 <Settings size={13} /> Personalizar
@@ -275,12 +301,12 @@ export default function DashboardHome() {
                     className="group flex h-full flex-col rounded-[24px] border p-4 transition-shadow hover:shadow-xl"
                     style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}
                   >
-                    <span className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", color: "var(--t-accent)" }}>
-                      <m.icon size={20} />
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-lg transition group-hover:scale-110 group-hover:rotate-3" style={{ background: MODULE_COLOR[m.key] ?? "var(--t-accent)", boxShadow: `0 10px 22px -12px ${MODULE_COLOR[m.key] ?? "var(--t-accent)"}` }}>
+                      <m.icon size={21} />
                     </span>
                     <h4 className="mt-3 font-semibold">{m.title}</h4>
                     <p className="mt-1 flex-1 text-sm" style={{ color: "var(--t-muted)" }}>{m.description}</p>
-                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--t-accent)" }}>
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: MODULE_COLOR[m.key] ?? "var(--t-accent)" }}>
                       Abrir <ArrowRight size={13} className="transition group-hover:translate-x-1" />
                     </span>
                   </Link>

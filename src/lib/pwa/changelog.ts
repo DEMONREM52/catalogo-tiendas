@@ -628,6 +628,16 @@ export const RELEASES: Release[] = [
       { icon: "💾", text: "Guarda desde arriba" },
     ],
   },
+  {
+    id: 60, date: "2026-11-08", title: "Inicio e informes renovados",
+    summary: "El inicio ahora tiene números que se animan, fichas de colores con su tendencia, «Lo que dicen tus números» (tu mejor día, el producto estrella, la proyección del mes y alertas), gráfica de ventas, ganancia o pedidos, dona de canales, tus días más fuertes y el podio de productos.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "💡", text: "Lee «Lo que dicen tus números»" },
+      { icon: "📈", text: "Cambia la gráfica entre ventas, ganancia y pedidos" },
+      { icon: "🏆", text: "Mira el podio de productos y tus días más fuertes" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
