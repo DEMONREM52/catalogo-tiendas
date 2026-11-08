@@ -186,7 +186,7 @@ export default function ProductListPage() {
   const others = points.filter((p) => p.id !== pointId);
   const pointLabel = (id: string) => points.find((p) => p.id === id)?.name ?? "Otro";
   const filtersOn = Boolean(q || category || stock !== "all" || status !== "active" || sort !== "name");
-  const extraFilters = [category, sort !== "name", status !== "active", point && point !== data?.point_id].filter(Boolean).length;
+  const extraFilters = [category, sort !== "name", status !== "active", stock !== "all", point && point !== data?.point_id].filter(Boolean).length;
 
   function resetFilters() {
     setQInput("");
@@ -196,6 +196,34 @@ export default function ProductListPage() {
     setStatus("active");
     setSort("name");
   }
+
+  // La selección para pedir queda guardada en este equipo (si sales por error, sigue ahí al volver).
+  const draftKey = store ? `remhub:lista-pedido:${store.id}` : null;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!draftKey || restored.current) return;
+    restored.current = true;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { items?: Item[]; to?: string; at?: number };
+      // Borradores de más de 7 días se descartan.
+      if (!d.items?.length || (d.at && Date.now() - d.at > 7 * 864e5)) return;
+      window.setTimeout(() => { setSelected(new Map(d.items!.map((i) => [i.id, i]))); if (d.to) setRequestTo(d.to); }, 0);
+    } catch { /* sin almacenamiento */ }
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey || !restored.current) return;
+    try {
+      if (selected.size) window.localStorage.setItem(draftKey, JSON.stringify({ items: [...selected.values()], to: requestTo, at: Date.now() }));
+      else window.localStorage.removeItem(draftKey);
+    } catch { /* sin almacenamiento */ }
+  }, [draftKey, selected, requestTo]);
+  // Con la barra «para pedir» abierta se esconde el botón de tema del celular (se montaba encima).
+  useEffect(() => {
+    document.body.classList.toggle("has-bottom-tray", selected.size > 0);
+    return () => document.body.classList.remove("has-bottom-tray");
+  }, [selected.size]);
 
   function toggle(item: Item) {
     setSelected((cur) => {
@@ -320,7 +348,7 @@ export default function ProductListPage() {
           </select>
         </div>
 
-        <div className="-mx-2.5 flex items-center gap-1.5 overflow-x-auto px-2.5 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <div className="hidden flex-wrap items-center gap-1.5 sm:flex">
           {STOCK_CHIPS.map((chip) => (
             <Chip key={chip.value} active={stock === chip.value} onClick={() => setStock(chip.value)} title={chip.hint} count={data.counts?.[chip.value]} tone={chip.value === "missing" ? "bad" : chip.value === "elsewhere" ? "warn" : chip.value === "has" ? "good" : undefined}>
               {chip.label(shortName(pointName))}
@@ -341,13 +369,22 @@ export default function ProductListPage() {
           ) : null}
         </div>
         {showFilters ? (
-          <div className="flex items-center gap-1.5 sm:hidden">
-            <span className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>Mostrar:</span>
-            {STATUS_CHIPS.map((chip) => (
-              <Chip key={chip.value} active={status === chip.value} onClick={() => setStatus(chip.value)} small>
-                {chip.label}
-              </Chip>
-            ))}
+          <div className="grid grid-cols-2 gap-2 sm:hidden">
+            <select value={stock} onChange={(e) => setStock(e.target.value as StockFilter)} className={inputCls} style={inputStyle} aria-label="Existencias">
+              {STOCK_CHIPS.map((chip) => (
+                <option key={chip.value} value={chip.value}>
+                  {chip.label(shortName(pointName))}{data.counts?.[chip.value] != null ? ` (${fmtNumber(data.counts[chip.value])})` : ""}
+                </option>
+              ))}
+            </select>
+            <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className={inputCls} style={inputStyle} aria-label="Mostrar">
+              {STATUS_CHIPS.map((chip) => <option key={chip.value} value={chip.value}>{chip.value === "all" ? "Activos e inactivos" : chip.label}</option>)}
+            </select>
+            {filtersOn ? (
+              <button type="button" onClick={resetFilters} className="col-span-2 inline-flex items-center justify-center gap-1 rounded-xl py-1.5 text-xs font-semibold opacity-75">
+                <RotateCcw size={12} /> Quitar filtros
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -356,6 +393,8 @@ export default function ProductListPage() {
         <span className="flex items-center gap-2">
           {loading ? <Loader2 size={13} className="animate-spin" /> : null}
           {fmtNumber(data.total)} producto{data.total === 1 ? "" : "s"}
+          {stock !== "all" ? <b className="sm:hidden"> · {STOCK_CHIPS.find((c) => c.value === stock)?.label(shortName(pointName))}</b> : null}
+          {category ? <b className="sm:hidden"> · {data.categories.find((c) => c.id === category)?.name}</b> : null}
           {canRequest ? " · toca un producto para agregarlo al pedido" : ""}
         </span>
         {error ? <span style={{ color: "#dc2626" }}>{error}</span> : null}
@@ -415,7 +454,7 @@ export default function ProductListPage() {
                     {selected.size}
                   </motion.span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black">producto{selected.size === 1 ? "" : "s"} para pedir</p>
+                    <p className="text-sm font-black">producto{selected.size === 1 ? "" : "s"} para pedir <span className="text-[10px] font-semibold" style={{ color: "var(--t-muted)" }}>· guardado</span></p>
                     <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{[...selected.values()].map((i) => i.name).join(" · ")}</p>
                   </div>
                   <button type="button" onClick={() => setSelected(new Map())} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Vaciar selección" title="Vaciar">
@@ -480,7 +519,7 @@ function Chip({ active, onClick, children, count, title, tone, small = false }: 
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`relative inline-flex items-center gap-1.5 rounded-full border font-semibold transition hover:-translate-y-0.5 ${small ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-xs sm:text-sm"}`}
+      className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border font-semibold transition hover:-translate-y-0.5 ${small ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-xs sm:text-sm"}`}
       style={active
         ? { borderColor: color, background: `color-mix(in oklab, ${color} 16%, transparent)`, color }
         : { borderColor: "var(--t-card-border)", background: "transparent", color: "var(--t-text)" }}

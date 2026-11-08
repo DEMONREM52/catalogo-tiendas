@@ -1096,6 +1096,13 @@ select {
   }
 }
 
+/* Con una barra fija abajo (p. ej. «para pedir»), el botón de tema no se monta encima en el celular. */
+@media (max-width: 639px) {
+  body.has-bottom-tray .theme-control {
+    display: none;
+  }
+}
+
 /* ✅ Reduce motion */
 @media (prefers-reduced-motion: reduce) {
   * {
