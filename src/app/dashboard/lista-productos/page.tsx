@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { ScrollButtons } from "@/components/ui/ScrollButtons";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
+import { ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { useRunOnChange } from "../inventario/shared";
@@ -85,12 +86,6 @@ export default function ProductListPage() {
   const [sort, setSort] = useState<SortKey>("name");
   // En el celular los filtros (punto, categoría, orden, estado) van plegados para que se vea la lista.
   const [showFilters, setShowFilters] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 600);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
   const [data, setData] = useState<BrowseResult | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -398,19 +393,11 @@ export default function ProductListPage() {
         </div>
       ) : null}
 
+      {/* Subir y bajar rápido (encima de la barra «para pedir» si está abierta). */}
+      <ScrollButtons bottomOffset={selected.size ? 168 : 20} />
       {/* Fuera del contenedor animado de la página (si no, «fixed» no queda pegado a la pantalla y la barra se va al final). */}
       {typeof document !== "undefined" ? createPortal(
         <>
-          <AnimatePresence>
-            {scrolled ? (
-              <motion.button key="top" type="button" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className={`fixed right-4 z-[60] grid h-12 w-12 place-items-center rounded-full text-white shadow-xl ${selected.size ? "bottom-36 sm:bottom-28" : "bottom-5"}`}
-                style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }} aria-label="Volver arriba" title="Volver arriba">
-                <ArrowUp size={20} />
-              </motion.button>
-            ) : null}
-          </AnimatePresence>
           <AnimatePresence>
             {selected.size ? (
               <motion.div

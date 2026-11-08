@@ -21,6 +21,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
+import { ScrollButtons } from "@/components/ui/ScrollButtons";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -693,6 +694,7 @@ export default function ProductsListPage() {
 
   return (
     <main className="min-w-0 px-4 py-3 text-[color:var(--t-text)] sm:px-6 sm:py-4 md:px-8">
+      <ScrollButtons />
       <div className="space-y-4">
         <div className={`${clsWrap()} p-3.5 sm:p-5`}>
             <div className="flex items-center justify-between gap-2">
