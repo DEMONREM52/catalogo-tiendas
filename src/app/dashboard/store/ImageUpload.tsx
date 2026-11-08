@@ -179,7 +179,7 @@ export function ImageUpload({
       {compact ? (
         <label className="block cursor-pointer" title="Toca para subir, arrastra la foto o pégala con Ctrl+V">
           {currentUrl ? (
-            <img src={currentUrl} alt={label} className="aspect-square w-full rounded-xl object-cover" />
+            <img src={currentUrl} alt={label} className="aspect-square w-full rounded-xl object-cover" style={{ background: "repeating-conic-gradient(rgba(128,128,128,.28) 0 25%, transparent 0 50%) 50% / 16px 16px" }} />
           ) : (
             <span className="grid aspect-square w-full place-items-center rounded-xl text-4xl" style={{ background: "color-mix(in oklab, var(--t-accent) 10%, transparent)" }}>📷</span>
           )}
@@ -216,7 +216,7 @@ export function ImageUpload({
             src={currentUrl}
             alt={label}
             className="max-h-40 rounded-xl border object-contain"
-            style={{ borderColor: "var(--t-card-border)" }}
+            style={{ borderColor: "var(--t-card-border)", background: "repeating-conic-gradient(rgba(128,128,128,.28) 0 25%, transparent 0 50%) 50% / 16px 16px" }}
           />
         </div>
       ) : (

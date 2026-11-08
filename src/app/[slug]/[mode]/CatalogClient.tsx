@@ -29,6 +29,7 @@ import {
   type ProductRow, type PublicCatalog, type StoreLinkRow, type StoreLocation, type StoreProfile, type StoreRow,
 } from "./catalog-data";
 import { searchDelay } from "@/lib/search-timing";
+import { SmartLogo } from "@/components/ui/SmartLogo";
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -1022,7 +1023,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             <>
               <div className="relative mx-auto w-fit">
                 {catalogLock.logoUrl ? (
-                  <img src={catalogLock.logoUrl} alt="" className="h-20 w-20 rounded-3xl border object-cover" style={{ borderColor: "var(--t-border)" }} />
+                  <SmartLogo src={catalogLock.logoUrl} size={80} rounded="rounded-3xl" style={{ border: "1px solid var(--t-border)" }} />
                 ) : (
                   <div className="grid h-20 w-20 place-items-center rounded-3xl text-3xl" style={{ background: "var(--t-cta)" }}>🛍️</div>
                 )}
@@ -1216,12 +1217,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {store.logo_url ? (
-                <img
-                  src={store.logo_url}
-                  alt={store.name}
-                  className="h-10 w-10 rounded-2xl border object-cover"
-                  style={{ borderColor: "var(--t-border)" }}
-                />
+                <SmartLogo src={store.logo_url} alt={store.name} size={40} rounded="rounded-2xl" style={{ border: "1px solid var(--t-border)" }} />
               ) : (
                 <div className="h-10 w-10 rounded-2xl border" style={{ borderColor: "var(--t-border)" }} />
               )}

@@ -10,6 +10,7 @@ import { forgetStaffAccess, resumeExistingSession } from "@/lib/session-resume";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain } from "@/lib/store-space";
+import { RemhubMark, SmartLogo } from "@/components/ui/SmartLogo";
 
 export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   const router = useRouter();
@@ -161,8 +162,8 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
         {/* Lado izquierdo: la marca y lo que hace RemHub */}
         <section className="order-2 min-w-0 lg:order-1">
           <Link href="/" className="inline-flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/remhub-icon-64.png" alt="" className="h-10 w-10 rounded-xl shadow-lg" />
+            {/* El logo de RemHub es blanco y transparente: va sobre su círculo oscuro (se ve en tema claro). */}
+            <RemhubMark size={44} />
             <span className="text-lg font-black tracking-tight">RemHub</span>
           </Link>
 
@@ -207,8 +208,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             <div className="rounded-[calc(28px-1.5px)] p-6 backdrop-blur-2xl sm:p-8" style={{ background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
               <div className="flex items-center gap-3">
                 {space?.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={space.logo_url} alt="" className="h-12 w-12 rounded-2xl object-cover shadow" />
+                  <SmartLogo src={space.logo_url} size={48} rounded="rounded-2xl" className="shadow" />
                 ) : (
                   <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow" style={{ background: "var(--t-cta)" }}><LogIn size={20} /></span>
                 )}

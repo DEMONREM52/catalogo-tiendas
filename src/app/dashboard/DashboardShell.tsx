@@ -48,6 +48,7 @@ import { SkeletonDashboard } from "@/components/ui/Skeleton";
 import nextDynamic from "next/dynamic";
 import { useAnimatedBackground } from "@/components/ThemeControl";
 import { ResponsiveTables } from "@/components/ui/ResponsiveTables";
+import { SmartLogo } from "@/components/ui/SmartLogo";
 
 // Fondo animado (red con pulsos): se descarga aparte y solo si está encendido.
 const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.PanelBackdrop), { ssr: false });
@@ -943,8 +944,8 @@ export default function DashboardShell({
               <span className="relative shrink-0">
                 <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl text-base font-black text-white"
                   style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {role === "store" && store?.logo_url ? <img src={store.logo_url} alt="" className="h-full w-full object-cover" /> : role === "admin" ? "⚙️" : (store?.name ?? "R").trim().slice(0, 1).toUpperCase()}
+                  { }
+                  {role === "store" && store?.logo_url ? <SmartLogo src={store.logo_url} size={40} rounded="rounded-xl" /> : role === "admin" ? "⚙️" : (store?.name ?? "R").trim().slice(0, 1).toUpperCase()}
                 </span>
                 {role === "store" && store ? (
                   <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2" title={storeLiveActive ? "Tienda activa" : "Tienda inactiva"}

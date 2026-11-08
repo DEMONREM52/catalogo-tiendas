@@ -20,6 +20,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { SocialLinksEditor } from "@/components/SocialLinksEditor";
 import { linkDisplayName, linkVisualType } from "@/lib/supabase/socialIcons";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
+import { SmartLogo } from "@/components/ui/SmartLogo";
 
 type StoreProfileDraft = {
   headline: string;
@@ -723,8 +724,8 @@ export default function StoreSettings() {
       <section className="relative overflow-hidden rounded-[24px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 16%, var(--t-card-bg)), var(--t-card-bg))" }}>
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border text-2xl sm:h-16 sm:w-16" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {store.logo_url ? <img src={store.logo_url} alt="" className="h-full w-full object-cover" /> : "🏪"}
+            { }
+            {store.logo_url ? <SmartLogo src={store.logo_url} size={64} rounded="rounded-2xl" /> : "🏪"}
           </span>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-black sm:text-2xl">{store.name || "Mi tienda"}</h1>
