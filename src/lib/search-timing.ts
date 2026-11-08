@@ -6,19 +6,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * Temporizador de los buscadores: no se consulta en cada letra, sino cuando paras de escribir.
  * Mientras más corto lo escrito, más espera (una sola letra casi nunca es lo que buscas):
  *   · vacío            → al instante (vuelve a la lista completa)
- *   · 1 letra          → 900 ms (solo si te detienes; si sigues escribiendo no consulta)
- *   · 2 letras         → 550 ms
- *   · 3 o más          → 400 ms
- *   · número de 6+ cifras (lector de código de barras) → 120 ms
+ *   · 1 letra          → 1.500 ms (solo si te detienes; si sigues escribiendo no consulta)
+ *   · 2 letras         → 1.000 ms
+ *   · 3 o más          → 700 ms
+ *   · número de 6+ cifras (lector de código de barras) → 150 ms
  * Así, escribir «tendedero» rápido hace UNA consulta en vez de nueve.
+ * (2026-11-08: el usuario pidió que espere un poco más que 900/550/400.)
  */
 export function searchDelay(term: string | null | undefined): number {
   const t = String(term ?? "").trim();
   if (!t) return 0;
-  if (/^\d{6,}$/.test(t)) return 120;
-  if (t.length === 1) return 900;
-  if (t.length === 2) return 550;
-  return 400;
+  if (/^\d{6,}$/.test(t)) return 150;
+  if (t.length === 1) return 1500;
+  if (t.length === 2) return 1000;
+  return 700;
 }
 
 /**
