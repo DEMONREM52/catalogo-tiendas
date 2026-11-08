@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  BarChart3,
+  Bell,
+  Zap,
   Boxes,
   ClipboardList,
   CreditCard,
@@ -34,6 +37,7 @@ import ReportsDashboard from "./reports/ReportsDashboard";
 import { AlertRow, useStoreAlerts } from "./NotificationBell";
 import { EditableNickname, useNicknameUpdates } from "./Nickname";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { SectionTabs } from "@/components/ui/SectionTabs";
 
 type Module = { permission: string; key: string; href: string; icon: LucideIcon; title: string; description: string };
 
@@ -114,6 +118,12 @@ export default function DashboardHome() {
   const [accessFailed, setAccessFailed] = useState<"network" | "other" | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const alerts = useStoreAlerts(store?.id);
+  // Pestañas del inicio: primero los informes; pendientes y accesos en sus pestañas. Se recuerda la última.
+  const [homeTabRaw, setHomeTab] = useState<"reports" | "pending" | "shortcuts">("reports");
+  useEffect(() => {
+    try { const t = window.localStorage.getItem("remhub:home-tab"); if (t === "pending" || t === "shortcuts" || t === "reports") { const id = window.setTimeout(() => setHomeTab(t), 0); return () => window.clearTimeout(id); } } catch { /* sin almacenamiento */ }
+  }, []);
+  const chooseHomeTab = (t: "reports" | "pending" | "shortcuts") => { setHomeTab(t); try { window.localStorage.setItem("remhub:home-tab", t); } catch { /* sin almacenamiento */ } };
 
   useEffect(() => {
     let mounted = true;
@@ -183,6 +193,7 @@ export default function DashboardHome() {
     setReloadKey((n) => n + 1);
   }
 
+  const homeTab = homeTabRaw === "reports" && !(store && canReports) && !loading ? "pending" : homeTabRaw;
   const shortcuts = useMemo(() => (quickAccess ? allowed.filter((m) => quickAccess.includes(m.key)) : allowed), [allowed, quickAccess]);
   const today = new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
 
@@ -232,13 +243,6 @@ export default function DashboardHome() {
         </div>
       </section>
 
-      {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
-
-      {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
-      {store && !isAdmin && canMoney ? <CostAlertsCard storeId={store.id} /> : null}
-      {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
-      {store && !isAdmin ? <GoalsCard storeId={store.id} /> : null}
-
       {accessFailed ? (
         <div className="flex flex-wrap items-center gap-3 rounded-[24px] border border-amber-400/40 p-5 text-sm" style={{ background: "color-mix(in oklab, #f59e0b 8%, transparent)" }}>
           <span className="min-w-0 flex-1">
@@ -257,15 +261,6 @@ export default function DashboardHome() {
         <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>
       ) : null}
 
-      {alerts.length ? (
-        <section className="rounded-[28px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "#ef4444" }}>🔔</span> Lo que necesita tu atención <span className="rounded-full px-2 text-[11px]" style={{ background: "color-mix(in oklab, #ef4444 18%, transparent)" }}>{alerts.length}</span></h3>
-          <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
-            {alerts.slice(0, 6).map((alert) => <AlertRow key={alert.key} alert={alert} />)}
-          </div>
-        </section>
-      ) : null}
-
       {isAdmin ? (
         <Link href="/admin" className="flex items-center gap-4 rounded-[24px] border p-5 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
           <span className="grid h-12 w-12 place-items-center rounded-2xl text-white" style={{ background: "var(--t-cta)" }}><ShieldCheck size={22} /></span>
@@ -276,45 +271,80 @@ export default function DashboardHome() {
         </Link>
       ) : null}
 
-      {store && canReports ? <ReportsDashboard storeId={store.id} points={points} /> : null}
+      {!isAdmin && !accessFailed ? (
+        <SectionTabs layoutId="home-tabs" label="Inicio" value={homeTab} onChange={chooseHomeTab}
+          items={[
+            { key: "reports" as const, label: "Informes", hint: "Ventas, productos y gráficas", icon: <BarChart3 />, color: "#8b5cf6", hidden: !(store && canReports) },
+            { key: "pending" as const, label: "Pendientes y alertas", hint: "Lo que necesita tu atención", icon: <Bell />, color: "#ef4444", badge: alerts.length || null, alert: alerts.length > 0 },
+            { key: "shortcuts" as const, label: "Accesos rápidos", hint: "Tus módulos", icon: <Zap />, color: "#0ea5e9" },
+          ]} />
+      ) : null}
 
-      {!loading && !isAdmin && !accessFailed ? (
-        <section>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h3 className="flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "var(--t-accent)" }}>⚡</span> Accesos rápidos</h3>
-            {allowed.some((m) => m.permission === "store") ? (
-              <Link href="/dashboard/store" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-                <Settings size={13} /> Personalizar
-              </Link>
-            ) : null}
-          </div>
-          {allowed.length === 0 ? (
-            <div className="rounded-[24px] border p-5 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-              Tu cuenta todavía no tiene secciones habilitadas. Solicita al administrador de la tienda que te asigne permisos.
+      {homeTab === "reports" && store && canReports ? <ReportsDashboard storeId={store.id} points={points} /> : null}
+
+      {homeTab === "pending" || isAdmin ? (
+        <div className="space-y-5">
+        {store && !isAdmin && (store.owner_id === myId || isStoreAdmin) ? <OnboardingCard storeId={store.id} slug={store.slug} /> : null}
+  
+        {store && !isAdmin ? <MyTasks storeId={store.id} /> : null}
+        {store && !isAdmin && canMoney ? <CostAlertsCard storeId={store.id} /> : null}
+        {store && !isAdmin && canPos ? <PointToday storeId={store.id} hideWhenAllPoints={canReports} /> : null}
+        {store && !isAdmin ? <GoalsCard storeId={store.id} /> : null}
+  
+          {alerts.length ? (
+          <section className="rounded-[28px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "#ef4444" }}>🔔</span> Lo que necesita tu atención <span className="rounded-full px-2 text-[11px]" style={{ background: "color-mix(in oklab, #ef4444 18%, transparent)" }}>{alerts.length}</span></h3>
+            <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
+              {alerts.slice(0, 6).map((alert) => <AlertRow key={alert.key} alert={alert} />)}
             </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {(shortcuts.length ? shortcuts : allowed).map((m, i) => (
-                <motion.div key={m.href} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.03 } }} whileHover={{ y: -3 }}>
-                  <Link
-                    href={m.href}
-                    className="group flex h-full flex-col rounded-[24px] border p-4 transition-shadow hover:shadow-xl"
-                    style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}
-                  >
-                    <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-lg transition group-hover:scale-110 group-hover:rotate-3" style={{ background: MODULE_COLOR[m.key] ?? "var(--t-accent)", boxShadow: `0 10px 22px -12px ${MODULE_COLOR[m.key] ?? "var(--t-accent)"}` }}>
-                      <m.icon size={21} />
-                    </span>
-                    <h4 className="mt-3 font-semibold">{m.title}</h4>
-                    <p className="mt-1 flex-1 text-sm" style={{ color: "var(--t-muted)" }}>{m.description}</p>
-                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: MODULE_COLOR[m.key] ?? "var(--t-accent)" }}>
-                      Abrir <ArrowRight size={13} className="transition group-hover:translate-x-1" />
-                    </span>
-                  </Link>
-                </motion.div>
-              ))}
+          </section>
+        ) : null}
+  
+            {!isAdmin && store && !alerts.length ? <p className="rounded-[24px] border p-5 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>🎉 Nada urgente por ahora.</p> : null}
+        </div>
+      ) : null}
+
+      {homeTab === "shortcuts" ? (
+        <>
+        {!loading && !isAdmin && !accessFailed ? (
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-sm font-bold"><span className="grid h-8 w-8 place-items-center rounded-xl text-white" style={{ background: "var(--t-accent)" }}>⚡</span> Accesos rápidos</h3>
+              {allowed.some((m) => m.permission === "store") ? (
+                <Link href="/dashboard/store" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
+                  <Settings size={13} /> Personalizar
+                </Link>
+              ) : null}
             </div>
-          )}
-        </section>
+            {allowed.length === 0 ? (
+              <div className="rounded-[24px] border p-5 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                Tu cuenta todavía no tiene secciones habilitadas. Solicita al administrador de la tienda que te asigne permisos.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {(shortcuts.length ? shortcuts : allowed).map((m, i) => (
+                  <motion.div key={m.href} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.03 } }} whileHover={{ y: -3 }}>
+                    <Link
+                      href={m.href}
+                      className="group flex h-full flex-col rounded-[24px] border p-4 transition-shadow hover:shadow-xl"
+                      style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}
+                    >
+                      <span className="grid h-12 w-12 place-items-center rounded-2xl text-white shadow-lg transition group-hover:scale-110 group-hover:rotate-3" style={{ background: MODULE_COLOR[m.key] ?? "var(--t-accent)", boxShadow: `0 10px 22px -12px ${MODULE_COLOR[m.key] ?? "var(--t-accent)"}` }}>
+                        <m.icon size={21} />
+                      </span>
+                      <h4 className="mt-3 font-semibold">{m.title}</h4>
+                      <p className="mt-1 flex-1 text-sm" style={{ color: "var(--t-muted)" }}>{m.description}</p>
+                      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: MODULE_COLOR[m.key] ?? "var(--t-accent)" }}>
+                        Abrir <ArrowRight size={13} className="transition group-hover:translate-x-1" />
+                      </span>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+          </>
       ) : null}
     </main>
   );
