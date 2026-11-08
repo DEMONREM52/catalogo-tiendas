@@ -512,8 +512,8 @@ function RevaluePanel({ storeId, pointId, onApplied }: { storeId: string; pointI
 }
 
 type OpPurchase = { id: string; number: number; invoice_ref: string | null; notes: string | null; total: number; created_at: string; charged: boolean };
-type OpRow = { product_id: string; name: string; sku: string | null; purchased: number; stock_now: number; transferred_after: number; qty: number; unit: number | null; total: number };
-type OpPreview = { total: number; cost: number; products: number; rows: OpRow[]; purchase: { number: number; invoice_ref: string | null }; existing_opening: { number: number; amount: number; note: string | null } | null };
+type OpRow = { product_id: string; name: string; sku: string | null; purchased: number; uncharged_in?: number; stock_now: number; transferred_after: number; qty: number; unit: number | null; total: number };
+type OpPreview = { total: number; cost: number; products: number; rows: OpRow[]; purchase: { number: number; invoice_ref: string | null }; existing_opening: { number: number; amount: number; note: string | null } | null; replaces?: { number: number; amount: number } | null };
 
 /**
  * Cobrar como deuda inicial el ingreso de inventario que el punto hizo como factura propia (20261294):
@@ -544,11 +544,13 @@ function OpeningFromPurchase({ storeId, pointId, onApplied }: { storeId: string;
   }
   async function apply() {
     setBusy(true);
-    const { data, error } = await supabaseBrowser().rpc("erp_internal_opening_from_purchase", { p_store: storeId, p_point: pointId, p_purchase: sel, p_apply: true });
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_opening_from_purchase", { p_store: storeId, p_point: pointId, p_purchase: sel, p_apply: true, p_replace: Boolean(pv?.replaces) });
     setBusy(false);
     if (error) return setMsg(errorMessage(error));
-    const r = data as { total: number; products: number };
-    setMsg(`✅ Deuda inicial registrada: ${money(r.total)} por ${r.products} producto(s).`);
+    const r = data as { total: number; products: number; replaced?: { number: number; amount: number } | null };
+    setMsg(r.replaced
+      ? `✅ Recalculado: el cobro #${r.replaced.number} (${money(r.replaced.amount)}) quedó anulado y se registró ${money(r.total)} por ${r.products} producto(s).`
+      : `✅ Deuda inicial registrada: ${money(r.total)} por ${r.products} producto(s).`);
     setPv(null); setSel("");
     void start();
     onApplied();
@@ -562,7 +564,6 @@ function OpeningFromPurchase({ storeId, pointId, onApplied }: { storeId: string;
       </div>
     );
   }
-  const charged = purchases?.find((p) => p.id === sel)?.charged;
   return (
     <div className="mt-2 space-y-2 rounded-2xl border p-3 text-xs" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))" }}>
       <div className="flex flex-wrap items-center gap-2">
@@ -582,13 +583,14 @@ function OpeningFromPurchase({ storeId, pointId, onApplied }: { storeId: string;
       {pv ? (
         <div className="space-y-2">
           {pv.existing_opening ? <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2">⚠️ Este punto ya tiene una deuda inicial (#{pv.existing_opening.number} por {money(pv.existing_opening.amount)}). Revisa que no sea este mismo inventario antes de aplicar.</p> : null}
-          <p>De ese ingreso siguen en el punto <b>{pv.products}</b> producto(s). Se cobrarían <b style={{ color: "var(--t-accent)" }}>{money(pv.total)}</b> (a costo serían {money(pv.cost)}). Se asume que lo primero que se vendió fue lo más viejo, y lo que llegó después por traslado ya está cobrado.</p>
+          <p>De ese ingreso siguen en el punto <b>{pv.products}</b> producto(s). Se cobrarían <b style={{ color: "var(--t-accent)" }}>{money(pv.total)}</b> (a costo serían {money(pv.cost)}). Se suma lo que entró sin cobro (el ingreso y los traslados que llegaron antes de activar el crédito); se asume que lo primero que se vendió fue lo más viejo, y solo se descuenta lo que llegó después en traslados que sí se cobraron.</p>
+          {pv.replaces ? <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-2">♻️ Este ingreso ya se cobró en el documento #{pv.replaces.number} por {money(pv.replaces.amount)}. Al recalcular, ese cobro se anula y queda este nuevo: la deuda cambia en <b>{money(n(pv.total) - n(pv.replaces.amount))}</b>.</p> : null}
           <div className="max-h-60 overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
             <table className="w-full text-[11px]">
-              <thead style={{ color: "var(--t-muted)" }}><tr><th className="px-2 py-1 text-left">Producto</th><th className="px-2 py-1 text-right">Ingresó</th><th className="px-2 py-1 text-right">Hoy</th><th className="px-2 py-1 text-right">Trasladado después</th><th className="px-2 py-1 text-right">Se cobran</th><th className="px-2 py-1 text-right">Precio</th><th className="px-2 py-1 text-right">Total</th></tr></thead>
+              <thead style={{ color: "var(--t-muted)" }}><tr><th className="px-2 py-1 text-left">Producto</th><th className="px-2 py-1 text-right">Ingresó</th><th className="px-2 py-1 text-right">Traslados sin cobro</th><th className="px-2 py-1 text-right">Hoy</th><th className="px-2 py-1 text-right">Cobrado después</th><th className="px-2 py-1 text-right">Se cobran</th><th className="px-2 py-1 text-right">Precio</th><th className="px-2 py-1 text-right">Total</th></tr></thead>
               <tbody>{pv.rows.map((r) => (
                 <tr key={r.product_id} className="border-t" style={{ borderColor: "var(--t-card-border)", opacity: n(r.qty) > 0 ? 1 : 0.5 }}>
-                  <td className="px-2 py-1">{r.name}</td><td className="px-2 py-1 text-right">{n(r.purchased)}</td><td className="px-2 py-1 text-right">{n(r.stock_now)}</td>
+                  <td className="px-2 py-1">{r.name}</td><td className="px-2 py-1 text-right">{n(r.purchased)}</td><td className="px-2 py-1 text-right">{n(r.uncharged_in ?? 0)}</td><td className="px-2 py-1 text-right">{n(r.stock_now)}</td>
                   <td className="px-2 py-1 text-right">{n(r.transferred_after)}</td><td className="px-2 py-1 text-right font-bold">{n(r.qty)}</td>
                   <td className="px-2 py-1 text-right tabular-nums">{money(r.unit)}</td><td className="px-2 py-1 text-right tabular-nums font-bold">{money(r.total)}</td>
                 </tr>
@@ -596,7 +598,7 @@ function OpeningFromPurchase({ storeId, pointId, onApplied }: { storeId: string;
             </table>
           </div>
           <div className="flex gap-2">
-            <Btn onClick={() => void apply()} disabled={busy || charged || n(pv.total) <= 0}>{busy ? "Aplicando…" : `Cobrar ${money(pv.total)} como deuda inicial`}</Btn>
+            <Btn onClick={() => void apply()} disabled={busy || n(pv.total) <= 0}>{busy ? "Aplicando…" : pv.replaces ? `♻️ Recalcular: cobrar ${money(pv.total)} y anular #${pv.replaces.number}` : `Cobrar ${money(pv.total)} como deuda inicial`}</Btn>
           </div>
         </div>
       ) : null}

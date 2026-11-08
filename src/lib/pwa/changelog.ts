@@ -548,6 +548,16 @@ export const RELEASES: Release[] = [
       { icon: "🏷️", text: "Costo real: lo que costó la mercancía" },
     ],
   },
+  {
+    id: 52, date: "2026-11-08", title: "Recalcular la deuda inicial",
+    summary: "«Cobrar ingreso inicial» ahora suma los traslados que llegaron antes de activar el crédito (nunca se cobraron) y deja recalcular un ingreso ya cobrado: anula el cobro anterior y registra el nuevo.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📥", text: "Abre «Cobrar ingreso inicial» y escoge el ingreso" },
+      { icon: "🚚", text: "Mira la columna «Traslados sin cobro»" },
+      { icon: "♻️", text: "Toca «Recalcular»: la deuda cambia solo la diferencia" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
