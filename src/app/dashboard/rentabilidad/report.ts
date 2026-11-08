@@ -13,7 +13,7 @@ export type ReportDetail = {
     gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean; advances_total?: number | null;
   };
   lines: Array<{ id: string; name: string; document: string | null; pct: number; share_amount: number; carried_amount: number; advance_amount?: number; amount: number; paid: number }>;
-  advances?: Array<{ number: number; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; created_by_name: string | null; decided_by_name: string | null }>;
+  advances?: Array<{ number: number; kind?: string; split?: string | null; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; created_by_name: string | null; decided_by_name: string | null }>;
   payments: Array<{ line_id: string; amount: number; method: string; reference: string | null; paid_at: string; created_by_name: string | null; voided: boolean; void_reason: string | null }>;
 };
 type Line = { name: string; sku: string | null; qty: number; revenue: number; cost: number; profit: number; mother: number; point: number; cost_source: string };
@@ -128,9 +128,9 @@ export async function openSettlementReport(d: ReportDetail): Promise<string | nu
     <tr class="tot"><td colspan="6">Total</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + n(l.amount), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + paidBy(l.id), 0)))}</td><td class="r">${esc(cop(d.lines.reduce((t, l) => t + Math.max(0, n(l.amount) - paidBy(l.id)), 0)))}</td></tr>
   </tbody></table>
 
-  ${d.advances?.length ? `<h2>Anticipos descontados</h2>
+  ${d.advances?.length ? `<h2>Anticipos y gastos descontados</h2>
   <table><thead><tr><th>N.º</th><th>Salió el</th><th>De quién</th><th>Para qué</th><th>Forma</th><th>Registró / aprobó</th><th class="r">Valor</th></tr></thead><tbody>
-    ${d.advances.map((a) => `<tr><td>#${a.number}</td><td>${esc(dt(a.given_at))}</td><td>${esc(a.name ?? "Todo el pozo (según los %)")}</td><td>${esc(a.note)}</td><td>${esc(METHODS[a.method] ?? a.method)}${a.reference ? ` · ${esc(a.reference)}` : ""}</td><td>${esc(a.created_by_name ?? "—")} / ${esc(a.decided_by_name ?? "—")}</td><td class="r"><b>−${esc(cop(a.amount))}</b></td></tr>`).join("")}
+    ${d.advances.map((a) => `<tr><td>${a.kind === "expense" ? "Gasto" : "Anticipo"} #${a.number}</td><td>${esc(dt(a.given_at))}</td><td>${esc(a.split === "equal" ? "Mitad y mitad" : a.split === "custom" ? "% propios" : a.name ?? "Según el reparto")}</td><td>${esc(a.note)}</td><td>${esc(METHODS[a.method] ?? a.method)}${a.reference ? ` · ${esc(a.reference)}` : ""}</td><td>${esc(a.created_by_name ?? "—")} / ${esc(a.decided_by_name ?? "—")}</td><td class="r"><b>−${esc(cop(a.amount))}</b></td></tr>`).join("")}
     <tr class="tot"><td colspan="6">Total descontado</td><td class="r">−${esc(cop(d.advances.reduce((t, a) => t + n(a.amount), 0)))}</td></tr>
   </tbody></table>` : ""}
 

@@ -16,19 +16,20 @@ import { openSettlementReport } from "./report";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { AdvancesSection } from "./Advances";
 import { CostBasisPanel } from "./CostBasis";
+import { PendingSummary } from "./PendingSummary";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
 type PreviewLine = { beneficiary_id: string; name: string; pct: number; share_amount: number; carried_amount: number; advance_amount?: number; amount: number };
 /** Anticipo descontado (20261286). */
-type UsedAdvance = { id: string; number: number; beneficiary_id: string | null; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; support_url: string | null; created_by_name: string | null; decided_by_name: string | null };
+type UsedAdvance = { id: string; number: number; beneficiary_id: string | null; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; support_url: string | null; created_by_name: string | null; decided_by_name: string | null; kind?: "advance" | "expense"; split?: string | null; shares?: Array<{ beneficiary_id: string; pct: number }> | null };
 type Overview = {
   beneficiaries: Beneficiary[];
   split: { id: string; version: number; shares: Share[]; total_pct: number; reason: string; created_by_name: string | null; created_at: string } | null;
   split_history: Array<{ version: number; total_pct: number; reason: string; created_by_name: string | null; created_at: string }>;
   pending: {
     pool_total: number; carried_total: number; assigned_total: number; orders: number; lines: PreviewLine[];
-    gross_total?: number; expenses_total?: number; expenses?: number; advances_total?: number; no_cost?: Array<{ order_id: string; product_id: string; name: string; qty: number; revenue: number }>;
+    gross_total?: number; expenses_total?: number; expenses?: number; advances_total?: number; advances?: Array<{ amount: number; kind?: "advance" | "expense" }>; no_cost?: Array<{ order_id: string; product_id: string; name: string; qty: number; revenue: number }>;
   };
   /** Cómo se liquida el pozo (20261208): ganancia total o sobre el precio de la madre, y si se restan gastos. */
   settings?: { mode: "total" | "margin" | "mother"; mode_from: string | null; deduct_expenses: boolean; deduct_from: string | null; updated_by_name: string | null; updated_at: string | null; can_edit: boolean };
@@ -142,16 +143,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
                 <p className="text-xs" style={{ color: "var(--t-muted)" }}>
                   {pending.orders} venta{pending.orders === 1 ? "" : "s"} con movimiento · contado + crédito cobrado{n(pending.carried_total) ? ` · saldo en contra traído ${cop(pending.carried_total)}` : ""}{n(pending.advances_total) ? ` · anticipos −${cop(pending.advances_total)}` : ""}
                 </p>
-                {ov.settings?.deduct_expenses || n(pending.expenses_total) || n(pending.advances_total) ? (
-                  <p className="mt-1 text-sm tabular-nums">
-                    Ganancia <b>{cop(pending.gross_total)}</b>
-                    {ov.settings?.deduct_expenses || n(pending.expenses_total) ? <> − gastos y nómina <b style={{ color: "#e66767" }}>{cop(pending.expenses_total)}</b></> : null}
-                    {n(pending.carried_total) ? <> {n(pending.carried_total) < 0 ? "−" : "+"} saldo traído <b>{cop(Math.abs(n(pending.carried_total)))}</b></> : null}
-                    {n(pending.advances_total) ? <> − anticipos <b style={{ color: "#e66767" }}>{cop(pending.advances_total)}</b></> : null}
-                    {" "}= <b>{cop(n(pending.pool_total) + n(pending.carried_total) - n(pending.advances_total))}</b> a pagar
-                  </p>
-                ) : null}
-                {n(ov.advances_waiting) ? <p className="mt-1 text-xs font-bold text-amber-500">⏳ {ov.advances_waiting} anticipo(s) por aprobar: no se descuentan hasta aprobarlos.</p> : null}
+                {n(ov.advances_waiting) ? <p className="mt-1 text-xs font-bold text-amber-500">⏳ {ov.advances_waiting} anticipo(s) o gasto(s) por aprobar: no se descuentan hasta aprobarlos.</p> : null}
               </div>
               <div className="flex flex-col items-stretch gap-2 sm:items-end">
                 {open ? (
@@ -170,6 +162,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
                 ) : null}
               </div>
             </div>
+            <PendingSummary storeId={storeId} point={point} refreshKey={tick} deduct={Boolean(ov.settings?.deduct_expenses)} pending={pending} />
             {pending.no_cost?.length ? (
               <NoCostWarning storeId={storeId} point={point} items={pending.no_cost} canFix={ov.can.settle} onFixed={() => void load()} />
             ) : null}
@@ -503,12 +496,12 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
 
               {d.advances?.length ? (
                 <section>
-                  <p className={label} style={{ color: "var(--t-muted)" }}>Anticipos descontados</p>
+                  <p className={label} style={{ color: "var(--t-muted)" }}>Anticipos y gastos descontados</p>
                   <ul className="mt-1 space-y-1 text-sm">
                     {d.advances.map((a) => (
                       <li key={a.id} className="flex flex-wrap items-center gap-x-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
-                        <b>#{a.number}</b>
-                        <span>{a.name ?? "Todo el pozo (según los %)"}</span>
+                        <b>{a.kind === "expense" ? "🧾 Gasto" : "💸 Anticipo"} #{a.number}</b>
+                        <span>{a.split === "one" || (!a.split && a.name) ? `Solo ${a.name}` : a.split === "equal" ? "Mitad y mitad" : a.split === "custom" ? (a.shares ?? []).map((x) => `${d.lines.find((l) => l.beneficiary_id === x.beneficiary_id)?.name ?? "—"} ${n(x.pct)} %`).join(" · ") : "Según el reparto"}</span>
                         <span className="text-xs" style={{ color: "var(--t-muted)" }}>salió {when(a.given_at)} · {METHODS[a.method] ?? a.method}{a.reference ? ` · ${a.reference}` : ""} · {a.note} · aprobó {a.decided_by_name ?? "—"}</span>
                         {a.support_url ? <a href={a.support_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline">📎 soporte</a> : null}
                         <b className="ml-auto tabular-nums" style={{ color: "#e66767" }}>−{cop(a.amount)}</b>

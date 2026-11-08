@@ -460,6 +460,16 @@ export const RELEASES: Release[] = [
       { icon: "🪄", text: "Corrige y vuelve a preparar la liquidación" },
     ],
   },
+  {
+    id: 43, date: "2026-11-08", title: "Gastos compartidos y resumen de la liquidación",
+    summary: "Registra gastos del punto (transporte, consumo…) junto a los anticipos y escoge cómo se reparte cada uno: mitad y mitad, según el reparto, otros % o uno solo. «Por liquidar hoy» muestra ventas, costo, ganancia, gastos, anticipos y lo que se paga.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "🧾", text: "Toca «Gasto» y escribe en qué se gastó" },
+      { icon: "⚖️", text: "Escoge mitad y mitad u otros %" },
+      { icon: "📋", text: "Mira el resumen: ventas − costo − gastos − anticipos" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
