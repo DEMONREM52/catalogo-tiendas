@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import StaffLogin from "@/components/StaffLogin";
+import StoreLogin from "@/components/StoreLogin";
 import { previewDb, previewImage, previewMetadata } from "@/lib/share/link-preview";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -42,5 +42,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function StoreAccessPage({ params }: Props) {
   const { slug } = await params;
-  return <StaffLogin storeSlug={slug} />;
+  // Pantalla única de ingreso (dueño o equipo), con la tienda del enlace ya escogida.
+  return <StoreLogin storeSlug={slug} />;
 }

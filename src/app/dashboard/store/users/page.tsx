@@ -86,7 +86,9 @@ export default function StoreUsersPage() {
 
   const loginLink = useMemo(() => {
     if (!store || typeof window === "undefined") return "";
-    const url = new URL(`/acceso/${encodeURIComponent(store.slug)}`, window.location.origin);
+    const url = new URL("/login", window.location.origin);
+    url.searchParams.set("equipo", "1");
+    url.searchParams.set("tienda", store.slug);
     url.searchParams.set("sid", store.id);
     return url.toString();
   }, [store]);
@@ -181,7 +183,9 @@ export default function StoreUsersPage() {
   }
   function memberLink(member: MemberRow) {
     if (!store || !member.username) return "";
-    const url = new URL(`/acceso/${encodeURIComponent(store.slug)}`, window.location.origin);
+    const url = new URL("/login", window.location.origin);
+    url.searchParams.set("equipo", "1");
+    url.searchParams.set("tienda", store.slug);
     url.searchParams.set("sid", store.id);
     url.searchParams.set("usuario", member.username);
     return url.toString();

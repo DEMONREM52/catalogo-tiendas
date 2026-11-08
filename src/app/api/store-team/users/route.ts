@@ -304,7 +304,10 @@ export async function POST(request: Request) {
       throw new ApiError(profileError.message, 500);
     }
 
-    const loginUrl = new URL(`/acceso/${encodeURIComponent(store.slug)}`, request.url);
+    // Pantalla única de ingreso: «Equipo» con la tienda ya escogida.
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("equipo", "1");
+    loginUrl.searchParams.set("tienda", store.slug);
     loginUrl.searchParams.set("sid", storeId);
     loginUrl.searchParams.set("usuario", usernameShown);
 

@@ -1085,7 +1085,7 @@ export default function StoreSettings() {
             {[
               ...(store.catalog_retail ? [["Catálogo detal", `/${store.slug}/detal`]] : []),
               ...(store.catalog_wholesale && store.wholesale_key ? [["Catálogo mayorista", `/${store.slug}/mayor?key=${encodeURIComponent(store.wholesale_key)}`]] : []),
-              ["Acceso de equipo", `/acceso/${encodeURIComponent(store.slug)}?sid=${encodeURIComponent(store.id)}`],
+              ["Acceso de equipo", `/login?equipo=1&tienda=${encodeURIComponent(store.slug)}&sid=${encodeURIComponent(store.id)}`],
             ].map(([label, path]) => (
               <div key={label} className="rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
                 <p className="text-sm font-bold">{label}</p>

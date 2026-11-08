@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { storeStaffAuthEmail, storeStaffAuthPassword, isValidStoreUsername } from "@/lib/store-user-auth";
-import { forgetStaffAccess, resumeExistingSession } from "@/lib/session-resume";
+import { forgetStaffAccess, rememberStaffAccess, resumeExistingSession } from "@/lib/session-resume";
 import { getDashboardStore } from "@/lib/store-utils";
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain } from "@/lib/store-space";
@@ -20,6 +20,9 @@ import { SalesMock } from "@/components/landing/SalesMock";
 type TeamStore = { id: string; slug: string; name: string; logo_url: string | null };
 type Mode = "owner" | "team";
 const TEAM_KEY = "remhub:team-store";
+/** Último usuario del equipo en esta tienda (solo el usuario, nunca la contraseña). */
+const userKey = (storeId: string) => `remhub_staff_user_${storeId}`;
+const savedUser = (storeId: string) => { try { return window.localStorage.getItem(userKey(storeId)) ?? ""; } catch { return ""; } };
 
 const ROTATING = ["ventas", "inventario", "catálogos", "pedidos", "ganancias"];
 const FEATURES: Array<[typeof Store, string, string, string]> = [
@@ -42,7 +45,6 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
     storeSlug ? { slug: storeSlug.trim().toLowerCase(), id: "" } : null,
   );
   const [teamStore, setTeamStore] = useState<TeamStore | null>(null);
-  const [fromLink, setFromLink] = useState(Boolean(storeSlug));
   const [code, setCode] = useState("");
   const [checking, setChecking] = useState(false);
   const [password, setPassword] = useState("");
@@ -94,20 +96,33 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
     if (slug) {
       // Enlace de acceso del equipo (como antes).
       setMode("team");
-      setFromLink(true);
-      setStoreLogin({ slug, id: id ?? "" });
-      setUsername(prefilledUsername);
-      if (!id) setMsg("El enlace de acceso está incompleto. Escribe el código de la tienda o pide el enlace actualizado.");
-      else void fetch(`/api/store-team/login-context?slug=${encodeURIComponent(slug)}&store_id=${encodeURIComponent(id)}`)
-        .then((r) => r.json()).then((c) => { if (c?.store) setTeamStore({ id, slug, name: c.store.name, logo_url: c.store.logo_url ?? null }); }).catch(() => undefined);
+      if (!id) {
+        setMsg("El enlace de acceso está incompleto. Escribe el código de la tienda o pide el enlace actualizado.");
+        return;
+      }
+      setStoreLogin({ slug, id });
+      setUsername(prefilledUsername || savedUser(id));
+      void fetch(`/api/store-team/login-context?slug=${encodeURIComponent(slug)}&store_id=${encodeURIComponent(id)}`)
+        .then((r) => r.json()).then((c) => {
+          if (!c?.store) return;
+          const st = { id, slug, name: c.store.name, logo_url: c.store.logo_url ?? null };
+          setTeamStore(st);
+          try { window.localStorage.setItem(TEAM_KEY, JSON.stringify(st)); } catch { /* sin almacenamiento */ }
+        }).catch(() => undefined);
+      // Sesión ya guardada de alguien de esta tienda (ej. la app instalada del trabajador): entra directo.
+      void resumeExistingSession(id).then((resumed) => {
+        if (!resumed) return;
+        rememberStaffAccess(`/acceso/${slug}?${new URLSearchParams({ sid: id, ...(prefilledUsername ? { usuario: prefilledUsername } : {}) }).toString()}`);
+        router.replace(nextDashboardPath(params.get("next")));
+      });
       return;
     }
     // La última tienda del equipo en este equipo (para no escribir el código cada vez).
     try {
       const saved = JSON.parse(window.localStorage.getItem(TEAM_KEY) ?? "null") as TeamStore | null;
-      if (saved?.id) setTeamStore(saved);
+      if (saved?.id) { setTeamStore(saved); setUsername(savedUser(saved.id)); }
     } catch { /* sin almacenamiento */ }
-  }, [storeSlug]);
+  }, [storeSlug, router]);
 
   async function checkCode(e?: React.FormEvent) {
     e?.preventDefault();
@@ -121,6 +136,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
       const st = j.store as TeamStore & { active: boolean };
       setTeamStore({ id: st.id, slug: st.slug, name: st.name, logo_url: st.logo_url });
       setStoreLogin({ slug: st.slug, id: st.id });
+      setUsername((u) => u || savedUser(st.id));
       try { window.localStorage.setItem(TEAM_KEY, JSON.stringify({ id: st.id, slug: st.slug, name: st.name, logo_url: st.logo_url })); } catch { /* sin almacenamiento */ }
       if (!st.active) setMsg("⚠️ Esta tienda está pausada en este momento.");
     } catch (err) {
@@ -131,7 +147,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
   }
 
   function changeStore() {
-    setTeamStore(null); setStoreLogin(null); setCode(""); setMsg(null); setFromLink(false);
+    setTeamStore(null); setStoreLogin(null); setCode(""); setMsg(null);
     try { window.localStorage.removeItem(TEAM_KEY); } catch { /* sin almacenamiento */ }
   }
 
@@ -177,6 +193,11 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
       }
 
       if (data.session?.access_token) document.cookie = `app_session=${data.session.access_token}; path=/; max-age=604800`;
+      if (team && target) {
+        // Recordar el usuario y dejar la app instalada con el ingreso de esta tienda.
+        try { window.localStorage.setItem(userKey(target.id), username.trim().toLowerCase()); } catch { /* sin almacenamiento */ }
+        rememberStaffAccess(`/acceso/${target.slug}?${new URLSearchParams({ sid: target.id, usuario: username.trim() }).toString()}`);
+      }
       await logSessionEvent("auth.login", target?.id ?? null);
       // Ingreso del dueño (correo): la app del panel abre la tienda madre, no un enlace de trabajador.
       if (!team) forgetStaffAccess();
@@ -261,7 +282,6 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
             className="relative rounded-[28px] p-[1.5px] shadow-2xl" style={{ background: "linear-gradient(140deg, color-mix(in oklab, #d946ef 70%, transparent), color-mix(in oklab, var(--t-card-border) 80%, transparent) 40%, color-mix(in oklab, #6366f1 70%, transparent))" }}>
             <div className="rounded-[calc(28px-1.5px)] p-6 backdrop-blur-2xl sm:p-8" style={{ background: "color-mix(in oklab, var(--t-bg-base) 90%, transparent)" }}>
               {/* Dueño o equipo */}
-              {!fromLink ? (
                 <div className="mb-6 grid grid-cols-2 gap-1 rounded-2xl border p-1" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }} role="tablist" aria-label="Cómo entras">
                   {([["owner", "Dueño", Crown, "Con tu correo"], ["team", "Equipo", Users, "Con el código de la tienda"]] as const).map(([key, label, I, hint]) => {
                     const on = mode === key;
@@ -275,7 +295,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
                     );
                   })}
                 </div>
-              ) : null}
+              
 
               <div className="flex items-center gap-3">
                 {shownStore ? (
@@ -318,7 +338,7 @@ export default function StoreLogin({ storeSlug }: { storeSlug?: string }) {
                 ) : (
                   /* ---------------- Usuario/correo y contraseña */
                   <motion.form key={`creds-${mode}`} onSubmit={handleLogin} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="mt-7 space-y-4">
-                    {mode === "team" && shownStore && !fromLink ? (
+                    {mode === "team" && shownStore ? (
                       <div className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))", background: "color-mix(in oklab, #10b981 8%, transparent)" }}>
                         <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
                         <span className="min-w-0 flex-1 truncate">Tienda: <b>{shownStore.name}</b></span>
