@@ -10,6 +10,7 @@ import { basisCost, priceFromMarkup, uniformMarkup, type PurchasePricing } from 
 import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
+import { searchDelay } from "@/lib/search-timing";
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -99,7 +100,7 @@ export function useProductSearch({
       const rows = (data ?? []) as ProductHit[];
       cache.current.set(key, rows);
       setHits(rows);
-    }, query ? 220 : 0);
+    }, searchDelay(query));
     return () => {
       alive = false;
       window.clearTimeout(timer);

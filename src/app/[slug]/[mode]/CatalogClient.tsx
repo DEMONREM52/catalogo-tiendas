@@ -28,6 +28,7 @@ import {
   type CatalogCampaign, type CatalogInitial, type CatalogLock, type CatalogPayload, type CampaignSlide, type CategoryRow, type Mode,
   type ProductRow, type PublicCatalog, type StoreLinkRow, type StoreLocation, type StoreProfile, type StoreRow,
 } from "./catalog-data";
+import { searchDelay } from "@/lib/search-timing";
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -844,7 +845,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
       } finally {
         if (!cancelled) setLoadingMore(false);
       }
-    }, q.trim() ? 350 : 0);
+    }, searchDelay(q));
 
     return () => {
       cancelled = true;

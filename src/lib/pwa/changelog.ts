@@ -598,6 +598,16 @@ export const RELEASES: Release[] = [
       { icon: "👀", text: "Mira a la derecha cómo queda en el catálogo" },
     ],
   },
+  {
+    id: 57, date: "2026-11-08", title: "Buscadores más livianos",
+    summary: "Los buscadores ya no consultan en cada letra: esperan a que pares de escribir (una sola letra espera más) y una línea debajo muestra cuándo va a buscar. Enter busca de una vez, y lo que buscaste hace poco no se vuelve a consultar.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "⌨️", text: "Escribe en un buscador" },
+      { icon: "⏳", text: "La línea se llena mientras espera" },
+      { icon: "⚡", text: "Enter para buscar de una vez" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

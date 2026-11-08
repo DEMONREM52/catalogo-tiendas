@@ -7,6 +7,8 @@ import { Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { parseQuery, scoreItem } from "@/lib/fuzzy-search";
 import { announceUrlChange } from "@/lib/url-intent";
+import { peekSearch, searchDelay, storeSearch, useSearchValue } from "@/lib/search-timing";
+import { SearchTimer } from "@/components/ui/SearchTimer";
 
 /**
  * Buscador global (Ctrl+K / ⌘K): páginas, cada pestaña de cada módulo, acciones («nuevo vale», «crear factura»),
@@ -62,6 +64,8 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
   const [remote, setRemote] = useState<Hit[]>([]);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
+  // Solo para mostrar la línea del temporizador mientras espera para buscar productos, clientes…
+  const typing = useSearchValue(q);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const requests = useRef<Array<{ id: string; number: number; from_name: string; to_name: string; status: string }> | null>(null);
@@ -104,6 +108,10 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
     const term = clean(q);
     if (!open || !storeId || term.length < 2) { const t = window.setTimeout(() => { setRemote([]); setLoading(false); }, 0); return () => window.clearTimeout(t); }
     let alive = true;
+    // Ya buscado hace poco (borraste y volviste a escribir): sin consultar otra vez.
+    const cacheKey = `palette|${storeId}|${term.toLowerCase()}`;
+    const saved = peekSearch<Hit[]>(cacheKey);
+    if (saved) { const t0 = window.setTimeout(() => { setRemote(saved); setLoading(false); }, 0); return () => window.clearTimeout(t0); }
     const t = window.setTimeout(async () => {
       setLoading(true);
       const sb = supabaseBrowser();
@@ -173,10 +181,11 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
       }
 
       const results = (await Promise.all(jobs.map((j) => j.catch(() => [] as Hit[])))).flat();
+      storeSearch(cacheKey, results);
       if (!alive) return;
       setRemote(results);
       setLoading(false);
-    }, 220);
+    }, searchDelay(term));
     return () => { alive = false; window.clearTimeout(t); };
   }, [q, open, storeId, can]);
 
@@ -214,7 +223,8 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
         <div className="fixed inset-0 z-[200] flex items-start justify-center p-3 pt-[10vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }} style={{ background: "rgba(0,0,0,.55)", backdropFilter: "blur(3px)" }}>
           <div role="dialog" aria-modal="true" aria-label="Buscar en RemHub" className="w-full max-w-xl overflow-hidden rounded-2xl border shadow-2xl"
             style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }}>
-            <div className="flex items-center gap-3 border-b px-4" style={{ borderColor: "var(--t-card-border)" }}>
+            <div className="relative flex items-center gap-3 border-b px-4" style={{ borderColor: "var(--t-card-border)" }}>
+              <SearchTimer pending={typing.pending && clean(q).length >= 2} delay={typing.delay} term={q} />
               <Search size={18} style={{ color: "var(--t-muted)" }} />
               <input
                 ref={inputRef}

@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { DateField } from "@/components/forms/Fields";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Promociones programadas y combos (20261228).
@@ -32,7 +33,7 @@ function useProductSearch(storeId: string | null, q: string) {
     const t = window.setTimeout(() => {
       void supabaseBrowser().from("products").select("id,name,sku,price_3").eq("store_id", storeId).eq("active", true)
         .or(`name.ilike.*${term}*,sku.ilike.*${term}*,barcode.ilike.*${term}*`).order("name").limit(10).then(({ data }) => setHits((data ?? []) as Hit[]));
-    }, 200);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [storeId, q]);
   return hits;

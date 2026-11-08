@@ -8,6 +8,7 @@ import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, tableWr
 import { ExportGate } from "@/components/ExportGate";
 import { logExport, useCan } from "@/lib/permission-runtime";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { searchDelay } from "@/lib/search-timing";
 
 type Row = {
   id: string; name: string; sku: string | null; barcode: string | null; image_url: string | null; active: boolean;
@@ -105,7 +106,7 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       } finally {
         if (id === seq.current) setLoading(false);
       }
-    }, f.q ? 300 : 0);
+    }, searchDelay(f.q));
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.storeId, f, page, warehouse]);

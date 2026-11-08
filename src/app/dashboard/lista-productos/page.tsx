@@ -14,6 +14,7 @@ import { Badge, Button, EmptyState, ErrorBox, Skeleton, fmtMoney, fmtNumber, inp
 import { PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
 import { useCan } from "@/lib/permission-runtime";
+import { searchDelay } from "@/lib/search-timing";
 
 type StockFilter = "all" | "has" | "missing" | "elsewhere";
 type StatusFilter = "active" | "inactive" | "all";
@@ -102,7 +103,7 @@ export default function ProductListPage() {
 
   // Búsqueda con pausa corta para no consultar en cada tecla.
   useEffect(() => {
-    const t = window.setTimeout(() => setQ(qInput.trim()), 280);
+    const t = window.setTimeout(() => setQ(qInput.trim()), searchDelay(qInput));
     return () => window.clearTimeout(t);
   }, [qInput]);
 

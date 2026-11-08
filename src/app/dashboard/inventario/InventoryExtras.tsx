@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField } from "@/components/forms/Fields";
 import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, toast, type ErpCtx, type Warehouse } from "./shared";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Ayudas opcionales de inventario (20261226):
@@ -164,7 +165,7 @@ export function ExpiryTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
     const t = window.setTimeout(() => {
       void supabaseBrowser().from("products").select("id,name,sku").eq("store_id", ctx.storeId).or(`name.ilike.*${term}*,sku.ilike.*${term}*,barcode.ilike.*${term}*`).limit(8)
         .then(({ data: r }) => setHits((r ?? []) as typeof hits));
-    }, 200);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, ctx.storeId]);
 

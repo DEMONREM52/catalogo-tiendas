@@ -19,6 +19,8 @@ import { useCan } from "@/lib/permission-runtime";
 import { CleanupProductsSheet, deleteProductFlow } from "./DeleteProducts";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
+import { useSearchValue } from "@/lib/search-timing";
+import { SearchTimer } from "@/components/ui/SearchTimer";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -104,14 +106,6 @@ function localDateAfterEnd(isoDate: string) {
   nextDay.setDate(nextDay.getDate() + 1);
   return nextDay.toISOString();
 }
-function useDebouncedValue<T>(value: T, delayMs: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
-}
 
 /* ========= Avatar (miniatura + fallback letra) ========= */
 function hashToIndex(seed: string, mod: number) {
@@ -190,7 +184,8 @@ export default function ProductsListPage() {
 
   // filtros
   const [q, setQ] = useState("");
-  const dq = useDebouncedValue(q, 250);
+  // Temporizador: busca cuando paras de escribir (una letra espera más); Enter busca ya.
+  const { value: dq, pending: qPending, delay: qDelay, flush: flushQ } = useSearchValue(q);
   const router = useRouter();
   const finderSource = useErpFinderSource(storeId);
   const isSearchMode = dq.trim().length > 0;
@@ -775,12 +770,17 @@ export default function ProductsListPage() {
               </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_190px] md:mt-3">
               <div className="flex gap-2">
-                <input
-                  className={clsInput()}
-                  placeholder='Nombre o código: "zapatera", "belleza secador", "125"'
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    className={clsInput()}
+                    placeholder='Nombre o código: "zapatera", "belleza secador", "125"'
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") flushQ(); }}
+                    enterKeyHint="search"
+                  />
+                  <SearchTimer pending={qPending} delay={qDelay} term={q} />
+                </div>
                 <PhotoSearchButton
                   source={finderSource}
                   pickLabel="Editar"

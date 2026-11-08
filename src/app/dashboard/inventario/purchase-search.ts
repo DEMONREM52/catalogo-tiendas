@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Buscador del historial de ingresos de factura.
@@ -184,7 +185,7 @@ export function usePurchaseSearch(storeId: string, suppliers: Supplier[]) {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   useEffect(() => {
-    const t = window.setTimeout(() => void run(filters, 0), filters.q.trim() ? 350 : 0);
+    const t = window.setTimeout(() => void run(filters, 0), searchDelay(filters.q));
     return () => window.clearTimeout(t);
   }, [filters, run]);
 

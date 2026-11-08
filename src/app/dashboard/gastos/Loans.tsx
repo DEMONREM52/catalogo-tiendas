@@ -14,6 +14,7 @@ import {
 import type { Loan, LoanPayment as Payment } from "./LoansReport";
 import { LoansReportSheet } from "./LoansReportSheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Vales y préstamos a empleados (20261240): productos que se lleva (salen del inventario) o dinero prestado
@@ -360,7 +361,7 @@ function LoanForm({ storeId, points, employees, initial, onClose, onSaved }: { s
       const like = `%${term.replace(/[%_,()]/g, " ")}%`;
       void supabaseBrowser().from("products").select("id,name,sku,price_1,price_3,image_url").eq("store_id", storeId).eq("active", true).or(`name.ilike.${like},sku.ilike.${like},barcode.ilike.${like}`).order("name").limit(12)
         .then(({ data }) => setHits((data ?? []) as Prod[]));
-    }, 250);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, storeId]);
 

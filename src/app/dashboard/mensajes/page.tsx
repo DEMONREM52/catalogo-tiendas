@@ -9,6 +9,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { Chat, initials, threadName, type Thread } from "./Chat";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Mensajes del equipo (20261271): chats de dos y grupos, sin necesidad de un pedido. Fotos, videos, audios,
@@ -78,7 +79,7 @@ export default function MessagesPage() {
     const t = window.setTimeout(async () => {
       const { data, error } = await supabaseBrowser().rpc("erp_chat_search", { p_store: storeId, p_q: term });
       setHits(error ? [] : ((data ?? []) as Hit[]));
-    }, 300);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, storeId]);
 

@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { DateField } from "@/components/forms/Fields";
+import { searchDelay } from "@/lib/search-timing";
 
 /**
  * Garantías y devoluciones (20261229): qué trajo el cliente, qué falla, a quién se mandó y cómo terminó.
@@ -67,7 +68,7 @@ export default function WarrantiesPage() {
     const t = window.setTimeout(() => {
       void supabaseBrowser().from("products").select("id,name").eq("store_id", store.id).or(`name.ilike.*${term}*,sku.ilike.*${term}*,barcode.ilike.*${term}*`).limit(8)
         .then(({ data }) => setHits((data ?? []) as typeof hits));
-    }, 200);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, store]);
 

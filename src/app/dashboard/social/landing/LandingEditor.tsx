@@ -16,6 +16,7 @@ import { LANDING_TEMPLATES, applyTemplate } from "@/lib/landing/templates";
 import type { LandingData, LandingItem } from "@/app/[slug]/oferta/[page]/LandingView";
 import { Field, Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "../catalogs/ui";
 import { richToPlain } from "@/lib/rich-text";
+import { searchDelay } from "@/lib/search-timing";
 
 export type CatalogOption = { id: string; slug: string; name: string; access_key: string | null; active: boolean; point_id: string | null; point_name?: string | null };
 export type StoreInfo = { id: string; slug: string; name: string; logo_url: string | null; whatsapp: string | null };
@@ -295,7 +296,7 @@ function ProductPicker({ storeId, exclude, onPick, placeholder }: { storeId: str
       const like = `%${term.replace(/[%_]/g, "")}%`;
       const { data } = await supabaseBrowser().from("products").select("id,name,image_url,sku,stock").eq("store_id", storeId).eq("active", true).or(`name.ilike.${like},sku.ilike.${like}`).order("name").limit(20);
       setHits(((data ?? []) as ProductHit[]).filter((p) => !exclude.includes(p.id)));
-    }, 250);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, storeId, exclude]);
   return (

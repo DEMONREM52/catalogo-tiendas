@@ -7,6 +7,8 @@ import { Camera, Check, ChevronRight, ImagePlus, Loader2, Plus, RotateCcw, ScanS
 import { embedImageBlob, imageSearchSupported, onEmbedProgress, warmUpImageSearch, type EmbedProgress } from "@/lib/image-search/embed";
 import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";
 import { DROP_BLOCKED_MSG, dragHasImage, imageFileFrom, imageFromDrop } from "@/lib/image-drop";
+import { searchDelay, useSearchValue } from "@/lib/search-timing";
+import { SearchTimer } from "@/components/ui/SearchTimer";
 
 export type FinderHit = {
   id: string;
@@ -94,6 +96,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
   const photoOk = Boolean(source.searchPhoto) && imageSearchSupported();
   const [mode, setMode] = useState<FinderMode>(() => (initialMode === "photo" && photoOk ? "photo" : initialMode ?? (saved?.mode === "photo" && photoOk ? "photo" : "text")));
   const [q, setQ] = useState(saved?.q ?? "");
+  const typing = useSearchValue(q);
   const [textHits, setTextHits] = useState<FinderHit[] | null>(null);
   const [textLoading, setTextLoading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(saved?.photoUrl ?? null);
@@ -158,7 +161,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
       } finally {
         if (id === reqId.current) setTextLoading(false);
       }
-    }, 240);
+    }, searchDelay(term));
     return () => window.clearTimeout(t);
   }, [q, source]);
 
@@ -373,6 +376,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                     style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", color: "var(--t-text)", paddingLeft: "2.6rem", paddingRight: "2.6rem" }}
                   />
                   {textLoading ? <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin opacity-60" /> : null}
+                  <SearchTimer pending={typing.pending} delay={typing.delay} term={q} />
                 </div>
               </div>
               {textHits === null ? (

@@ -18,6 +18,7 @@ import {
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
 } from "./shared";
 import { TransfersReport } from "./TransfersReport";
+import { searchDelay } from "@/lib/search-timing";
 
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
 type Matrix = Record<string, Record<string, number>>;
@@ -263,7 +264,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [total, setTotal] = useState<number | null>(null);
   const [loadingList, setLoadingList] = useState(false);
   useEffect(() => {
-    const t = window.setTimeout(() => { setTf((cur) => (cur.q === qLive ? cur : { ...cur, q: qLive })); setLimit(30); }, qLive ? 350 : 0);
+    const t = window.setTimeout(() => { setTf((cur) => (cur.q === qLive ? cur : { ...cur, q: qLive })); setLimit(30); }, searchDelay(qLive));
     return () => window.clearTimeout(t);
   }, [qLive]);
   const setTfField = (k: keyof typeof tf, v: string) => { setTf((cur) => ({ ...cur, [k]: v })); setLimit(30); };

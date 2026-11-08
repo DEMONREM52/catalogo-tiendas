@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { searchDelay } from "@/lib/search-timing";
 import { ChevronDown, Download, FolderArchive, Printer, Search } from "lucide-react";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { AUDIT_CATEGORY_INFO, DOC_TYPE_INFO, FISCAL_DOC_TYPES, statusLabel, type AuditRow, type SearchPage } from "@/lib/fiscal/types";
@@ -64,7 +65,7 @@ export function AuditList({ load, initialCategory = "", showStore = false }: {
     void run(false, null);
   }, [run]);
   useEffect(() => {
-    const t = setTimeout(() => setFilters((f) => (f.q === draftQ ? f : { ...f, q: draftQ })), 350);
+    const t = setTimeout(() => setFilters((f) => (f.q === draftQ ? f : { ...f, q: draftQ })), searchDelay(draftQ));
     return () => clearTimeout(t);
   }, [draftQ]);
 

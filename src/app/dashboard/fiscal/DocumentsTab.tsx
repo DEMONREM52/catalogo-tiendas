@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { searchDelay } from "@/lib/search-timing";
 import { Download, Filter, Search } from "lucide-react";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { DOC_TYPE_INFO, FISCAL_DOC_TYPES, STATUS_INFO, FISCAL_STATUSES, docLabel, type FiscalDocumentRow, type SearchPage } from "@/lib/fiscal/types";
@@ -76,7 +77,7 @@ export function DocumentsTab({ access, data, initialQuery, initialStatus, onChan
 
   // Búsqueda con pausa al escribir.
   useEffect(() => {
-    const t = setTimeout(() => setFilters((f) => (f.q === draftQ ? f : { ...f, q: draftQ })), 350);
+    const t = setTimeout(() => setFilters((f) => (f.q === draftQ ? f : { ...f, q: draftQ })), searchDelay(draftQ));
     return () => clearTimeout(t);
   }, [draftQ]);
 
