@@ -450,6 +450,16 @@ export const RELEASES: Release[] = [
       { icon: "📄", text: "Queda en el informe PDF y en Excel" },
     ],
   },
+  {
+    id: 42, date: "2026-11-08", title: "Ganancia con el último costo",
+    summary: "Cada punto puede calcular la ganancia de sus ventas con el último costo (el mismo del precio), sin pérdidas falsas por mercancía vieja más cara, y corregir ventas ya hechas que no estén en liquidaciones aprobadas.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "⚖️", text: "Escoge «Último costo» en el punto" },
+      { icon: "🔎", text: "Revisa qué ventas cambian" },
+      { icon: "🪄", text: "Corrige y vuelve a preparar la liquidación" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

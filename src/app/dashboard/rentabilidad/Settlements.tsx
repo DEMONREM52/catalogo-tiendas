@@ -15,6 +15,7 @@ import { BreakdownSheet } from "./Breakdown";
 import { openSettlementReport } from "./report";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { AdvancesSection } from "./Advances";
+import { CostBasisPanel } from "./CostBasis";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -132,6 +133,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
       {ov && pending ? (
         <>
           {ov.settings ? <PoolSettings storeId={storeId} point={point} settings={ov.settings} hasOpen={Boolean(open)} onSaved={() => void load()} /> : null}
+          {point ? <CostBasisPanel key={point} storeId={storeId} point={point} onChanged={() => void load()} /> : null}
           <section className="rounded-2xl border p-4" style={cardStyle}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1">
