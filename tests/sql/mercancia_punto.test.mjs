@@ -109,5 +109,15 @@ console.log("4. El tablero lo muestra");
 const board = await one(OWNER, "select public.erp_internal_board($1) r", [A]);
 ok(n(board.points.find((p) => p.point_id === Z).stock_value) === n(s.stock_value), "«Mercancía en el punto» en el tablero = liquidación");
 
+console.log("5. A costo real (20261296)");
+await db.exec(fs.readFileSync(path.join(MIG, "20261296_mercancia_punto_a_costo.sql"), "utf8"));
+await db.exec(fs.readFileSync(path.join(MIG, "20261296_mercancia_punto_a_costo.sql"), "utf8"));
+const b2 = await one(OWNER, "select public.erp_internal_board($1) r", [A]);
+const zp = b2.points.find((p) => p.point_id === Z);
+ok(n(zp.stock_cost) === 10 * 10000 + 6 * 20000, "A costo real con último costo: 10 × 10.000 + 6 × 20.000", zp.stock_cost);
+ok(n(zp.stock_value) === 10 * 11500 + 6 * 23000, "Precio de bodega (costo + 15 %) sigue igual", zp.stock_value);
+const b3 = await one(CREDIT_ONLY, "select public.erp_internal_board($1) r", [A]);
+ok(b3.points.every((p) => p.stock_cost === undefined), "Quien no puede ver costos no recibe el costo real", b3.points);
+
 console.log(`\n${pass} ok · ${fail} fallas`);
 process.exit(fail ? 1 : 0);

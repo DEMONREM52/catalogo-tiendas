@@ -17,6 +17,8 @@ type Settings = { default_pct: number; round_step: number; default_term_days: nu
 type Summary = {
   charged: number; paid: number; credits: number; balance: number; overdue: number; due_7: number; next_due: string | null;
   oldest_overdue_days: number | null; in_transit: number; stock_value: number; pending_claims: number;
+  /** Mercancía del punto a costo real (20261296). Solo llega a quien puede ver costos. */
+  stock_cost?: number;
   /** Cuánto le debe a cada bodega (20261126). */
   by_creditor?: Array<{ creditor_id: string; name: string | null; balance: number }>;
 };
@@ -155,6 +157,7 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
   const active = board.points.filter((p) => p.configured);
   const inactive = board.points.filter((p) => !p.configured && !p.is_default);
   const sum = (k: keyof Summary) => active.reduce((s, p) => s + Number(p[k] ?? 0), 0);
+  const hasCost = active.some((p) => p.stock_cost != null);
   const done = () => { void load(); };
 
   return (
@@ -167,11 +170,12 @@ export function InternalCreditTab({ ctx }: { ctx: ErpCtx }) {
         actions={manage ? <Btn variant="ghost" onClick={() => setSettingsOpen(true)}>⚙️ Reglas y %</Btn> : null}
       >
         {manage && active.length ? (
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className={`mb-4 grid grid-cols-2 gap-3 ${hasCost ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
             <Kpi icon="💰" label="Por cobrar a puntos" value={money(sum("balance"))} />
             <Kpi icon="🔴" label="Vencido" value={money(sum("overdue"))} tone={sum("overdue") > 0 ? "bad" : "good"} />
             <Kpi icon="🚚" label="En camino" value={money(sum("in_transit"))} />
-            <Kpi icon="📦" label="Mercancía en puntos" value={money(sum("stock_value"))} />
+            <Kpi icon="📦" label="Mercancía en puntos (precio bodega)" value={money(sum("stock_value"))} />
+            {hasCost ? <Kpi icon="🏷️" label="Mercancía a costo real" value={money(sum("stock_cost"))} /> : null}
           </div>
         ) : null}
 
@@ -265,7 +269,7 @@ function PointCard({ p, settings, manage, onStatement, onPay, onDoc, onConfig, o
       ) : null}
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border px-2.5 py-1.5" style={{ borderColor: "var(--t-card-border)" }}><p style={{ color: "var(--t-muted)" }}>🚚 En camino</p><b className="tabular-nums">{money(p.in_transit)}</b></div>
-        <div className="rounded-xl border px-2.5 py-1.5" style={{ borderColor: "var(--t-card-border)" }}><p style={{ color: "var(--t-muted)" }}>📦 Mercancía en el punto</p><b className="tabular-nums">{money(p.stock_value)}</b></div>
+        <div className="rounded-xl border px-2.5 py-1.5" style={{ borderColor: "var(--t-card-border)" }}><p style={{ color: "var(--t-muted)" }}>📦 Mercancía en el punto</p><b className="tabular-nums">{money(p.stock_value)}</b>{p.stock_cost != null ? <p className="tabular-nums" style={{ color: "var(--t-muted)" }} title="Lo que costó esa mercancía, sin el % de la bodega">a costo real {money(p.stock_cost)}</p> : null}</div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
         <Btn onClick={onStatement}>📄 Estado de cuenta</Btn>

@@ -539,6 +539,15 @@ export const RELEASES: Release[] = [
       { icon: "📊", text: "Abre la liquidación: el precio de bodega es el mismo" },
     ],
   },
+  {
+    id: 51, date: "2026-11-08", title: "Mercancía de los puntos a costo real",
+    summary: "En la cuenta con puntos ahora ves la mercancía de cada punto a precio de bodega (lo que debe) y también a costo real (lo que costó).",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📦", text: "Precio de bodega: costo + % de la bodega" },
+      { icon: "🏷️", text: "Costo real: lo que costó la mercancía" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
