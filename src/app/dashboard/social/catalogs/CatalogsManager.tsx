@@ -6,6 +6,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   BadgeDollarSign,
   Copy,
+  CopyPlus,
+  MoreHorizontal,
+  Package,
+  Search,
+  Share2,
   ExternalLink,
   LayoutGrid,
   Loader2,
@@ -57,6 +62,41 @@ function isMissingTable(error: unknown) {
   return message.includes("store_catalogs") && (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find"));
 }
 
+type MenuItem = { icon: React.ReactNode; label: string; onClick?: () => void; href?: string; disabled?: boolean; danger?: boolean };
+/** Botón con menú (compartir, más opciones): ordena las acciones de la tarjeta. */
+function CardMenu({ label, icon, items, title }: { label: string; icon: React.ReactNode; items: MenuItem[]; title?: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const t = window.setTimeout(() => document.addEventListener("click", close), 0);
+    return () => { window.clearTimeout(t); document.removeEventListener("click", close); };
+  }, [open]);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} title={title ?? label} aria-label={title ?? label} aria-expanded={open}
+        className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:-translate-y-0.5" style={softBox}>
+        {icon}{label ? <span className="hidden sm:inline">{label}</span> : null}
+      </button>
+      <AnimatePresence>
+        {open ? (
+          <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
+            className="absolute bottom-full right-0 z-30 mb-2 w-52 overflow-hidden rounded-2xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
+            {items.map((it) => {
+              const cls = `flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition hover:bg-[color:var(--t-card-bg-soft)] disabled:opacity-50 ${it.danger ? "text-rose-500" : ""}`;
+              return it.href ? (
+                <a key={it.label} href={it.href} target="_blank" rel="noreferrer" className={cls}>{it.icon}{it.label}</a>
+              ) : (
+                <button key={it.label} type="button" disabled={it.disabled} onClick={() => { setOpen(false); it.onClick?.(); }} className={cls}>{it.icon}{it.label}</button>
+              );
+            })}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function CatalogsManager() {
   const [store, setStore] = useState<DashboardStore | null>(null);
   const [qrFor, setQrFor] = useState<StoreCatalog | null>(null);
@@ -74,6 +114,9 @@ export default function CatalogsManager() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Buscar y filtrar cuando hay varios catálogos.
+  const [q, setQ] = useState("");
+  const [show, setShow] = useState<"all" | "active" | "paused">("all");
 
   const load = useCallback(async () => {
     setError("");
@@ -381,9 +424,27 @@ export default function CatalogsManager() {
           ) : null}
         </section>
       ) : (
+        <>
+        {catalogs.length > 3 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative min-w-[200px] flex-1">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar catálogo, punto o enlace…" className={inputCls} style={{ ...inputStyle, paddingLeft: "2.2rem" }} aria-label="Buscar catálogo" />
+            </label>
+            <div className="flex gap-1 rounded-2xl border p-1 text-xs font-bold" style={softBox}>
+              {([["all", `Todos (${catalogs.length})`], ["active", `Activos (${stats.active})`], ["paused", `Pausados (${catalogs.length - stats.active})`]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setShow(k)} className="relative rounded-xl px-3 py-1.5" style={{ color: show === k ? "#fff" : "var(--t-muted)" }}>
+                  {show === k ? <motion.span layoutId="cat-filter" className="absolute inset-0 rounded-xl" style={{ background: "var(--t-cta)" }} /> : null}
+                  <span className="relative">{l}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence initial={false}>
-            {catalogs.map((catalog, index) => {
+            {catalogs.filter((c) => (show === "all" || (show === "active" ? c.active : !c.active))
+              && (!q.trim() || `${c.name} ${c.slug} ${warehouses.find((w) => w.id === c.point_id)?.name ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()))).map((catalog, index) => {
               const summary = summaries[catalog.id];
               const point = warehouses.find((w) => w.id === catalog.point_id);
               const level = PRICE_LEVELS.find((p) => p.level === catalog.price_level);
@@ -397,13 +458,13 @@ export default function CatalogsManager() {
                   animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 6) * 0.04 } }}
                   exit={{ opacity: 0, scale: 0.97 }}
                   whileHover={{ y: -3 }}
-                  className="group overflow-hidden rounded-3xl border shadow-sm transition-shadow hover:shadow-xl"
+                  className="group rounded-3xl border shadow-sm transition-shadow hover:shadow-xl"
                   style={{ ...softBox, opacity: catalog.active ? 1 : 0.72 }}
                 >
-                  <div className="relative h-28 overflow-hidden" style={{ background: "var(--t-cta)" }}>
-                    {banner ? <img src={banner} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : null}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-                    <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-black/40 px-2 py-1 backdrop-blur">
+                  <div className="relative h-24 overflow-hidden rounded-t-3xl" style={{ background: "var(--t-cta)" }}>
+                    {banner ? <img src={banner} alt="" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /> : null}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+                    <div className="absolute right-2.5 top-2.5 flex items-center gap-2 rounded-full bg-black/45 py-1 pl-2.5 pr-1 backdrop-blur">
                       <span className="text-[11px] font-semibold text-white">{catalog.active ? "Activo" : "Pausado"}</span>
                       <Switch checked={catalog.active} onChange={() => void toggleActive(catalog)} label={`Activar ${catalog.name}`} disabled={!canEditCatalog(catalog) || busyId === catalog.id} />
                     </div>
@@ -412,82 +473,57 @@ export default function CatalogsManager() {
                     {/* Solo el logo se monta sobre el banner; el nombre va debajo, sobre la tarjeta (se lee en claro y oscuro). */}
                     <div className="flex items-start gap-3">
                       {logo ? (
-                        <SmartLogo src={logo} size={64} rounded="rounded-2xl" className="-mt-8 shadow" style={{ border: "4px solid var(--t-bg-base)" }} />
+                        <SmartLogo src={logo} size={56} rounded="rounded-2xl" className="-mt-7 shadow-lg" style={{ border: "3px solid var(--t-bg-base)" }} />
                       ) : (
-                        <span className="-mt-8 grid h-16 w-16 shrink-0 place-items-center rounded-2xl border-4 text-2xl shadow" style={{ borderColor: "var(--t-bg-base)", background: "var(--t-card-bg)" }}>🛍️</span>
+                        <span className="-mt-7 grid h-14 w-14 shrink-0 place-items-center rounded-2xl border-[3px] text-2xl shadow-lg" style={{ borderColor: "var(--t-bg-base)", background: "var(--t-card-bg)" }}>🛍️</span>
                       )}
-                      <div className="min-w-0 pt-2">
+                      <div className="min-w-0 flex-1 pt-2">
                         <h3 className="line-clamp-2 text-base font-black leading-tight" style={{ color: "var(--t-text)" }}>{catalog.name}</h3>
-                        <p className="truncate font-mono text-[11px]" style={{ color: "var(--t-muted)" }}>/{store?.slug}/{catalog.slug}</p>
+                        <p className="truncate font-mono text-[11px]" style={{ color: "var(--t-muted)" }}>/{catalog.slug}</p>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      <Pill tone="accent"><BadgeDollarSign size={12} /> {level?.label} · {level?.hint}</Pill>
+                      <Pill tone="accent"><BadgeDollarSign size={12} /> {level?.label}</Pill>
                       {catalog.access_key ? <Pill tone="warn"><Lock size={12} /> Privado</Pill> : <Pill tone="good">Público</Pill>}
-                      {point ? <Pill><MapPin size={12} /> {point.name}</Pill> : <Pill>Inventario total</Pill>}
-                      {catalog.wholesale_rules ? <Pill>Mínimos de mayor</Pill> : null}
+                      <Pill><MapPin size={12} /> {point ? point.name : "Todo el inventario"}</Pill>
+                      {catalog.wholesale_rules ? <Pill>Mínimos</Pill> : null}
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl border px-2 py-2" style={softBox} title={point ? `Productos que se ven: los del catálogo con unidades en ${point.name}` : "Productos que se ven en el catálogo"}>
-                        <p className="text-base font-black">{summary?.available ?? "—"}</p>
-                        <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>{point ? "con unidades" : "disponibles"}</p>
-                      </div>
-                      <div className="rounded-xl border px-2 py-2" style={softBox}>
-                        <p className="text-base font-black">{summary?.orders_30d ?? 0}</p>
-                        <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>pedidos 30 d</p>
-                      </div>
-                      <div className="rounded-xl border px-2 py-2" style={softBox} title="Productos del catálogo sin precio en este nivel">
-                        <p className="text-base font-black">{summary?.without_price ?? 0}</p>
-                        <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>sin precio</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {canEditCatalog(catalog) ? (
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(catalog.id)}
-                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white"
-                          style={{ background: "var(--t-cta)" }}
-                        >
-                          <Pencil size={14} /> Editar
-                        </button>
+                    <div className="mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2 text-xs" style={softBox}>
+                      <span className="flex items-center gap-1.5" title={point ? `Productos con unidades en ${point.name}` : "Productos que se ven"}>
+                        <Package size={14} style={{ color: "#8b5cf6" }} /><b className="tabular-nums">{summary?.available ?? "—"}</b><span style={{ color: "var(--t-muted)" }}>productos</span>
+                      </span>
+                      <span className="h-4 w-px" style={{ background: "var(--t-card-border)" }} />
+                      <span className="flex items-center gap-1.5" title="Pedidos de los últimos 30 días">
+                        <ShoppingBag size={14} style={{ color: "#10b981" }} /><b className="tabular-nums">{summary?.orders_30d ?? 0}</b><span style={{ color: "var(--t-muted)" }}>pedidos</span>
+                      </span>
+                      {Number(summary?.without_price ?? 0) > 0 ? (
+                        <span className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold text-amber-600" style={{ background: "color-mix(in oklab, #f59e0b 16%, transparent)" }} title="Productos sin precio en este nivel">
+                          ⚠️ {summary?.without_price} sin precio
+                        </span>
                       ) : null}
-                      <a
-                        href={store ? catalogPath(store.slug, catalog) : "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="grid h-9 w-9 place-items-center rounded-xl border"
-                        style={softBox}
-                        title="Abrir catálogo"
-                        aria-label="Abrir catálogo"
-                      >
-                        <ExternalLink size={15} />
-                      </a>
-                      <button type="button" onClick={() => void copyLink(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Copiar enlace" aria-label="Copiar enlace">
-                        <Copy size={15} />
-                      </button>
-                      <button type="button" onClick={() => shareWhatsApp(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp">
-                        <MessageCircle size={15} />
-                      </button>
-                      <button type="button" onClick={() => setQrFor(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox} title="Código QR del catálogo" aria-label="Código QR del catálogo">
-                        <QrCode size={15} />
-                      </button>
-                      <a
-                        href={store ? `/documento/catalogo?tienda=${encodeURIComponent(store.slug)}&catalogo=${encodeURIComponent(catalog.slug)}${catalog.access_key ? `&key=${encodeURIComponent(catalog.access_key)}` : ""}` : "#"}
-                        target="_blank" rel="noreferrer" className="grid h-9 w-9 place-items-center rounded-xl border" style={softBox}
-                        title="Catálogo en PDF para WhatsApp o imprimir" aria-label="Catálogo en PDF"
-                      >
-                        <FileDown size={15} />
-                      </a>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1.5">
                       {canEditCatalog(catalog) ? (
-                        <>
-                          <button type="button" disabled={busyId === catalog.id} onClick={() => void duplicate(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border disabled:opacity-50" style={softBox} title="Duplicar" aria-label="Duplicar">
-                            <Sparkles size={15} />
-                          </button>
-                          <button type="button" disabled={busyId === catalog.id} onClick={() => void remove(catalog)} className="grid h-9 w-9 place-items-center rounded-xl border text-rose-500 disabled:opacity-50" style={softBox} title="Eliminar" aria-label="Eliminar">
-                            <Trash2 size={15} />
-                          </button>
-                        </>
+                        <motion.button whileTap={{ scale: 0.96 }} type="button" onClick={() => setEditingId(catalog.id)}
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white shadow-md" style={{ background: "var(--t-cta)" }}>
+                          <Pencil size={14} /> Editar
+                        </motion.button>
+                      ) : null}
+                      <a href={store ? catalogPath(store.slug, catalog) : "#"} target="_blank" rel="noreferrer"
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:-translate-y-0.5 ${canEditCatalog(catalog) ? "" : "flex-1"}`} style={softBox} title="Abrir catálogo">
+                        <ExternalLink size={14} /> Ver
+                      </a>
+                      <CardMenu label="Compartir" icon={<Share2 size={14} />} items={[
+                        { icon: <Copy size={15} />, label: "Copiar enlace", onClick: () => void copyLink(catalog) },
+                        { icon: <MessageCircle size={15} />, label: "Enviar por WhatsApp", onClick: () => shareWhatsApp(catalog) },
+                        { icon: <QrCode size={15} />, label: "Código QR", onClick: () => setQrFor(catalog) },
+                        { icon: <FileDown size={15} />, label: "Catálogo en PDF", href: store ? `/documento/catalogo?tienda=${encodeURIComponent(store.slug)}&catalogo=${encodeURIComponent(catalog.slug)}${catalog.access_key ? `&key=${encodeURIComponent(catalog.access_key)}` : ""}` : "#" },
+                      ]} />
+                      {canEditCatalog(catalog) ? (
+                        <CardMenu label="" icon={<MoreHorizontal size={16} />} title="Más opciones" items={[
+                          { icon: <CopyPlus size={15} />, label: "Duplicar", onClick: () => void duplicate(catalog), disabled: busyId === catalog.id },
+                          { icon: <Trash2 size={15} />, label: "Eliminar", onClick: () => void remove(catalog), disabled: busyId === catalog.id, danger: true },
+                        ]} />
                       ) : null}
                     </div>
                   </div>
@@ -496,6 +532,7 @@ export default function CatalogsManager() {
             })}
           </AnimatePresence>
         </div>
+        </>
       )}
 
       {store ? <ShortLinksPanel key={catalogs.map((c) => c.slug).join()} storeId={store.id} canEdit={canEdit} /> : null}

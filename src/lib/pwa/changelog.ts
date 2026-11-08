@@ -648,6 +648,16 @@ export const RELEASES: Release[] = [
       { icon: "👥", text: "Compártelo con tu equipo" },
     ],
   },
+  {
+    id: 62, date: "2026-11-08", title: "Catálogos y campañas más ordenados",
+    summary: "Arriba las pestañas (Catálogos, Campañas, Imagen para redes y Landing pages). Cada catálogo con sus datos en una línea y tres botones: Editar, Ver y Compartir (enlace, WhatsApp, QR y PDF). Buscador y filtro de activos y pausados. Las campañas con su portada, estado y acciones claras.",
+    paths: ["/dashboard/social"],
+    demo: [
+      { icon: "🛍️", text: "Busca o filtra tus catálogos" },
+      { icon: "📤", text: "Toca «Compartir» para enlace, WhatsApp, QR o PDF" },
+      { icon: "🎯", text: "En Campañas, muestra u oculta con un toque" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LayoutGrid, Megaphone, Rocket } from "lucide-react";
+import { Image as ImageIcon, LayoutGrid, Megaphone, Rocket } from "lucide-react";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import CatalogsManager from "./catalogs/CatalogsManager";
 import SocialDashboard from "./SocialDashboard";
 import Link from "next/link";
 import { ShareCard } from "./ShareCard";
 
-type Tab = "catalogs" | "campaigns" | "landing";
+type Tab = "catalogs" | "campaigns" | "share" | "landing";
 
 const TABS: SectionTab<Tab>[] = [
   { key: "catalogs", label: "Catálogos", hint: "Precios, diseño, productos y contactos", icon: <LayoutGrid />, color: "#8b5cf6" },
   { key: "campaigns", label: "Campañas", hint: "Carrusel y promociones por catálogo", icon: <Megaphone />, color: "#f97316" },
+  { key: "share", label: "Imagen para redes", hint: "Historia, publicación o estado con tus productos", icon: <ImageIcon />, color: "#ec4899" },
   { key: "landing", label: "Landing pages", hint: "Una página por producto para tus anuncios", icon: <Rocket />, color: "#f43f5e" },
 ];
 
@@ -22,7 +23,7 @@ export default function SocialHub() {
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("tab");
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (fromUrl === "campaigns" || fromUrl === "catalogs" || fromUrl === "landing") setTab(fromUrl);
+    if (fromUrl === "campaigns" || fromUrl === "catalogs" || fromUrl === "share" || fromUrl === "landing") setTab(fromUrl);
   }, []);
 
   function choose(next: Tab) {
@@ -34,9 +35,9 @@ export default function SocialHub() {
 
   return (
     <div className="space-y-4">
-      <ShareCard />
+      {/* Primero las pestañas; la imagen para redes va en su propia pestaña (antes ocupaba toda la parte de arriba). */}
       <SectionTabs items={TABS} value={tab} onChange={choose} layoutId="social-hub-tab" label="RemHub Social" />
-      {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <SocialDashboard /> : (
+      {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <SocialDashboard /> : tab === "share" ? <ShareCard /> : (
         <div className="rounded-3xl p-6 text-white" style={{ background: "linear-gradient(135deg, #e11d48, #9333ea 55%, #2563eb)" }}>
           <h2 className="text-2xl font-black">🚀 Landing pages</h2>
           <p className="mt-1 max-w-xl text-sm opacity-90">Tienen su propia administración: cada landing con sus visitas, WhatsApp, pedidos, inversión en pauta y ganancia, aparte del resto de la tienda.</p>

@@ -1,4 +1,5 @@
 "use client";
+import { motion } from "framer-motion";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -6,7 +7,6 @@ import { storeHref } from "@/lib/share/store-path";
 import {
   AlertTriangle,
   Copy,
-  Filter,
   Megaphone,
   Pencil,
   Plus,
@@ -1257,131 +1257,95 @@ export default function SocialDashboard() {
             <Plus size={16} /> Crear
           </button>
         </div>
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-white/10 dark:bg-black/15 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-fuchsia-600 dark:text-fuchsia-300" />
-              <p className="text-sm font-bold">Buscar y filtrar campañas</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setCampaignSearch("");
-                setCampaignVisibilityFilter("all");
-                setCampaignCategoryFilter("all");
-                setCampaignSort("newest");
-              }}
-              disabled={!campaignSearch && campaignVisibilityFilter === "all" && campaignCategoryFilter === "all" && campaignSort === "newest"}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="relative block sm:col-span-2 xl:col-span-1">
-              <span className="sr-only">Buscar campañas</span>
-              <Search size={16} className="absolute left-3 top-3.5 opacity-45" />
-              <input
-                className={`${fieldClass} pl-9`}
-                value={campaignSearch}
-                onChange={(event) => setCampaignSearch(event.target.value)}
-                placeholder="Nombre, descripción o categoría…"
-                type="search"
-              />
-            </label>
-            <label>
-              <span className="sr-only">Filtrar por visibilidad</span>
-              <select className={fieldClass} value={campaignVisibilityFilter} onChange={(event) => setCampaignVisibilityFilter(event.target.value as typeof campaignVisibilityFilter)}>
-                <option value="all">Todas las campañas</option>
-                <option value="visible">Visibles en catálogo</option>
-                <option value="hidden">Ocultas / inactivas</option>
-              </select>
-            </label>
-            <label>
-              <span className="sr-only">Filtrar por categoría</span>
-              <select className={fieldClass} value={campaignCategoryFilter} onChange={(event) => setCampaignCategoryFilter(event.target.value)}>
-                <option value="all">Todas las categorías</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="sr-only">Ordenar campañas</span>
-              <select className={fieldClass} value={campaignSort} onChange={(event) => setCampaignSort(event.target.value as typeof campaignSort)}>
-                <option value="newest">Más recientes</option>
-                <option value="oldest">Más antiguas</option>
-                <option value="name">Nombre A–Z</option>
-              </select>
-            </label>
-          </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto]">
+          <label className="relative block sm:col-span-2 xl:col-span-1">
+            <span className="sr-only">Buscar campañas</span>
+            <Search size={16} className="absolute left-3 top-3.5 opacity-45" />
+            <input
+              className={`${fieldClass} pl-9`}
+              value={campaignSearch}
+              onChange={(event) => setCampaignSearch(event.target.value)}
+              placeholder="Nombre, descripción o categoría…"
+              type="search"
+            />
+          </label>
+          <label>
+            <span className="sr-only">Filtrar por visibilidad</span>
+            <select className={fieldClass} value={campaignVisibilityFilter} onChange={(event) => setCampaignVisibilityFilter(event.target.value as typeof campaignVisibilityFilter)}>
+              <option value="all">Todas las campañas</option>
+              <option value="visible">Visibles en catálogo</option>
+              <option value="hidden">Ocultas / inactivas</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Filtrar por categoría</span>
+            <select className={fieldClass} value={campaignCategoryFilter} onChange={(event) => setCampaignCategoryFilter(event.target.value)}>
+              <option value="all">Todas las categorías</option>
+              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Ordenar campañas</span>
+            <select className={fieldClass} value={campaignSort} onChange={(event) => setCampaignSort(event.target.value as typeof campaignSort)}>
+              <option value="newest">Más recientes</option>
+              <option value="oldest">Más antiguas</option>
+              <option value="name">Nombre A–Z</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => { setCampaignSearch(""); setCampaignVisibilityFilter("all"); setCampaignCategoryFilter("all"); setCampaignSort("newest"); }}
+            disabled={!campaignSearch && campaignVisibilityFilter === "all" && campaignCategoryFilter === "all" && campaignSort === "newest"}
+            className="rounded-xl border border-current/10 px-3 text-xs font-semibold transition hover:bg-fuchsia-500/10 disabled:opacity-40" title="Limpiar filtros">
+            Limpiar
+          </button>
         </div>
         {campaigns.length ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filteredCampaigns.map((campaign) => (
-              <div key={campaign.id} className="group rounded-2xl border border-current/10 bg-white/30 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-fuchsia-500/30 hover:shadow-lg hover:shadow-fuchsia-950/5 dark:bg-white/[0.02]">
-                {campaign.cover_image_url ? (
-                  <img src={campaign.cover_image_url} alt={`Portada de ${campaign.name}`} className="mb-3 aspect-[16/8] w-full rounded-xl object-cover" loading="lazy" />
-                ) : (
-                  <div className="mb-3 grid aspect-[16/8] w-full place-items-center rounded-xl bg-fuchsia-500/10 text-sm opacity-65">Sin portada</div>
-                )}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-bold">{campaign.name}</p>
-                    {campaign.description ? <p className="mt-1 line-clamp-3 text-sm opacity-70">{campaign.description}</p> : <p className="mt-1 text-sm opacity-50">Sin objetivo agregado</p>}
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                      <span className="rounded-full bg-fuchsia-500/10 px-2.5 py-1 font-semibold text-fuchsia-800 dark:text-fuchsia-200">
-                        {categories.find((category) => category.id === campaign.category_id)?.name ?? "Sin categoría"}
+              <motion.div key={campaign.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -3 }}
+                className="group overflow-hidden rounded-3xl border border-current/10 shadow-sm transition-shadow hover:shadow-xl" style={{ background: "var(--t-card-bg)", opacity: campaign.is_public ? 1 : 0.75 }}>
+                <div className="relative aspect-[16/8] overflow-hidden" style={{ background: "var(--t-cta)" }}>
+                  {campaign.cover_image_url ? <img src={campaign.cover_image_url} alt={`Portada de ${campaign.name}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
+                    : <div className="grid h-full place-items-center text-3xl text-white/80">🎯</div>}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                  <span className={`absolute right-2.5 top-2.5 rounded-full px-2.5 py-1 text-[11px] font-bold backdrop-blur ${campaign.is_public ? "bg-emerald-500/85 text-white" : "bg-black/55 text-white/85"}`}>
+                    {campaign.is_public ? "✓ Visible" : "Oculta"}
+                  </span>
+                  <p className="absolute inset-x-3 bottom-2.5 line-clamp-2 text-base font-black leading-tight text-white drop-shadow">{campaign.name}</p>
+                </div>
+                <div className="space-y-3 p-4">
+                  {campaign.description ? <p className="line-clamp-2 text-sm opacity-70">{campaign.description}</p> : null}
+                  <div className="flex flex-wrap gap-1.5 text-[11px]">
+                    <span className="rounded-full bg-fuchsia-500/10 px-2.5 py-1 font-semibold text-fuchsia-800 dark:text-fuchsia-200">
+                      🏷️ {categories.find((category) => category.id === campaign.category_id)?.name ?? "Sin categoría"}
+                    </span>
+                    {catalogOptions.length ? (
+                      <span className="max-w-full truncate rounded-full bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-800 dark:text-violet-200">
+                        🛍️ {campaign.catalog_ids?.length
+                          ? catalogOptions.filter((option) => campaign.catalog_ids?.includes(option.id)).map((option) => option.name).join(", ") || "Catálogo eliminado"
+                          : "Todos los catálogos"}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 font-semibold ${campaign.is_public ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200" : "bg-slate-500/10 opacity-70"}`}>
-                        {campaign.is_public ? "Activa · visible" : "Inactiva · oculta"}
-                      </span>
-                      {catalogOptions.length ? (
-                        <span className="rounded-full bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-800 dark:text-violet-200">
-                          {campaign.catalog_ids?.length
-                            ? catalogOptions.filter((option) => campaign.catalog_ids?.includes(option.id)).map((option) => option.name).join(", ") || "Catálogo eliminado"
-                            : "Todos los catálogos"}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-xs opacity-55">{new Date(campaign.created_at).toLocaleDateString("es-CO")}</p>
+                    ) : null}
+                    <span className="rounded-full bg-current/5 px-2.5 py-1 opacity-60">📅 {new Date(campaign.created_at).toLocaleDateString("es-CO")}</span>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => void toggleCampaignVisibility(campaign)}
-                      disabled={saving || updatingCampaignId !== null}
-                      className={`grid h-9 w-9 place-items-center rounded-xl border transition disabled:cursor-wait disabled:opacity-50 ${
-                        campaign.is_public
-                          ? "border-amber-500/25 text-amber-700 hover:bg-amber-500/10 dark:text-amber-200"
-                          : "border-emerald-500/25 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-200"
-                      }`}
-                      aria-label={`${campaign.is_public ? "Desactivar" : "Activar"} campaña ${campaign.name}`}
-                      title={campaign.is_public ? "Desactivar y ocultar del catálogo" : "Activar y mostrar en el catálogo"}
-                    >
-                      <Power size={16} className={updatingCampaignId === campaign.id ? "animate-pulse" : ""} />
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => void editCampaign(campaign)} disabled={saving}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white shadow-md disabled:opacity-50" style={{ background: "var(--t-cta)" }}
+                      aria-label={`Editar campaña ${campaign.name}`}>
+                      <Pencil size={14} /> Editar
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void editCampaign(campaign)}
-                      disabled={saving}
-                      className="grid h-9 w-9 place-items-center rounded-xl border border-current/10 transition hover:bg-fuchsia-500/10 disabled:opacity-50"
-                      aria-label={`Editar campaña ${campaign.name}`}
-                      title="Editar campaña"
-                    >
-                      <Pencil size={15} />
+                    <button type="button" onClick={() => void toggleCampaignVisibility(campaign)} disabled={saving || updatingCampaignId !== null}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${campaign.is_public ? "border-amber-500/30 text-amber-700 hover:bg-amber-500/10 dark:text-amber-200" : "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-200"}`}
+                      aria-label={`${campaign.is_public ? "Ocultar" : "Mostrar"} campaña ${campaign.name}`} title={campaign.is_public ? "Ocultar del catálogo" : "Mostrar en el catálogo"}>
+                      <Power size={14} className={updatingCampaignId === campaign.id ? "animate-pulse" : ""} /> {campaign.is_public ? "Ocultar" : "Mostrar"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteCampaign(campaign)}
-                      disabled={saving}
-                      className="grid h-9 w-9 place-items-center rounded-xl border border-rose-500/20 text-rose-700 transition hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-200"
-                      aria-label={`Eliminar campaña ${campaign.name}`}
-                      title="Eliminar campaña"
-                    >
+                    <button type="button" onClick={() => void deleteCampaign(campaign)} disabled={saving}
+                      className="grid h-10 w-10 place-items-center rounded-xl border border-rose-500/25 text-rose-600 transition hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300"
+                      aria-label={`Eliminar campaña ${campaign.name}`} title="Eliminar campaña">
                       <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
             {filteredCampaigns.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-current/15 p-5 text-sm opacity-65 sm:col-span-2 lg:col-span-3">
