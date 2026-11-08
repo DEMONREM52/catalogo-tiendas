@@ -49,10 +49,18 @@ export async function openSettlementReport(d: ReportDetail): Promise<string | nu
   const w = window.open("", "_blank");
   if (!w) return "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.";
   w.document.write("<p style='font-family:system-ui;padding:24px'>Preparando el informe…</p>");
-  const [{ data, error }, access] = await Promise.all([
+  const [{ data, error }, access, signsRes] = await Promise.all([
     supabaseBrowser().rpc("erp_settlement_breakdown", { p_store: null, p_point: null, p_cutoff: null, p_settlement: d.settlement.id }),
     getDashboardStore().catch(() => null),
+    supabaseBrowser().rpc("erp_settlement_signs", { p_id: d.settlement.id }).then((r) => r, () => ({ data: null })),
   ]);
+  // Firmas virtuales (20261290): si existen, salen con su imagen, fecha y documento.
+  type Sg = { role: string; beneficiary_id: string | null; name: string; doc: string | null; signature: string; at: string };
+  const sgs = (((signsRes as { data: unknown }).data as { signatures?: Sg[] } | null)?.signatures ?? []);
+  const sg = (role: string, b?: string) => sgs.find((x) => x.role === role && (role !== "beneficiary" || x.beneficiary_id === b));
+  const sigBox = (title: string, x: Sg | undefined, fallback: string) => x
+    ? `<div class="sig"><img src="${x.signature}" style="height:54px;max-width:100%;object-fit:contain;display:block;margin-bottom:2px" alt=""><b>${esc(x.name)}</b><div class="m">${esc(title)}${x.doc ? ` · Doc. ${esc(x.doc)}` : ""} · ${esc(dt(x.at))}</div></div>`
+    : `<div class="sig"><b>${esc(fallback)}</b><div class="m">${esc(title)} · sin firma virtual</div></div>`;
   if (error) { w.close(); return rpcError(error); }
   const b = data as Breakdown;
   const s = d.settlement;
@@ -152,8 +160,9 @@ export async function openSettlementReport(d: ReportDetail): Promise<string | nu
     <tr class="tot"><td>Total restado</td><td class="r">−${esc(cop(expenses))}</td></tr></tbody></table>` : ""}
 
   <div class="sigs">
-    ${d.lines.map((l) => `<div class="sig"><b>${esc(l.name)}</b><div class="m">Recibí conforme · ${esc(cop(l.amount))}</div></div>`).join("")}
-    <div class="sig"><b>${esc(s.decided_by_name ?? "Aprobó")}</b><div class="m">Aprobó la liquidación</div></div>
+    ${sigBox("Preparó la liquidación", sg("prepared"), s.created_by_name ?? "Preparó")}
+    ${sigBox("Aprobó la liquidación", sg("approved"), s.decided_by_name ?? "Aprobó")}
+    ${d.lines.map((l) => sigBox(`Recibí conforme · ${cop(l.amount)}`, sg("beneficiary", (l as { beneficiary_id?: string }).beneficiary_id), l.name)).join("")}
   </div>
 
   <div class="foot">Incluye ventas de contado confirmadas y lo cobrado de ventas a crédito; las ventas anuladas restan si ya se habían liquidado. El costo es el de cada producto al momento de la venta.

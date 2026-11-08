@@ -17,6 +17,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { AdvancesSection } from "./Advances";
 import { CostBasisPanel } from "./CostBasis";
 import { PendingSummary } from "./PendingSummary";
+import { SettlementSigns, notifySettlement } from "./SettlementSigns";
 
 type Beneficiary = { id: string; name: string; kind: string; document: string | null; notes: string | null; active: boolean };
 type Share = { beneficiary_id: string; pct: number };
@@ -360,6 +361,10 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
     if (note === null) return;
     const { error: e } = await supabaseBrowser().rpc("erp_settlement_transition", { p_id: id, p_action: action, p_note: note || null });
     if (e) return fail(e);
+    // Aviso al celular: a quienes aprueban (enviar a revisión) o a quien la preparó (aprobada o rechazada).
+    if (action === "submit") void notifySettlement(id, "submitted");
+    if (action === "approve") void notifySettlement(id, "approved");
+    if (action === "reject") void notifySettlement(id, "rejected");
     await load();
     onChanged();
   }
@@ -466,6 +471,9 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                 {open && can.settle ? <button type="button" onClick={() => void act("discard")} className="rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>Descartar y recalcular después</button> : null}
                 {s.status !== "rejected" && s.status !== "reverted" && !open && can.approve ? <button type="button" onClick={() => void act("revert")} className="inline-flex items-center gap-1 rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}><Undo2 size={14} /> Revertir</button> : null}
               </div>
+
+              <SettlementSigns key={s.status} id={s.id} number={s.number} status={s.status} pointName={s.point_name} preparedBy={s.created_by_name}
+                lines={d.lines.map((l) => ({ beneficiary_id: l.beneficiary_id, name: l.name, amount: n(l.amount) }))} />
 
               <ul className="space-y-2">
                 {d.lines.map((l) => {

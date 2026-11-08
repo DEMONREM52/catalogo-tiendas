@@ -480,6 +480,16 @@ export const RELEASES: Release[] = [
       { icon: "🤝", text: "La ganancia se reparte completa (menos gastos)" },
     ],
   },
+  {
+    id: 45, date: "2026-11-08", title: "Liquidaciones firmadas y aviso de revisión",
+    summary: "Cada liquidación se firma virtualmente: quien preparó, quien aprobó y cada beneficiario, con copia de los valores firmados. Al enviarla a revisión se ve quién la aprueba y le llega aviso al celular.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "📨", text: "Envía a revisión: avisa a quien aprueba" },
+      { icon: "✍️", text: "Firma con el dedo desde el enlace" },
+      { icon: "📄", text: "Las firmas salen en el informe PDF" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
