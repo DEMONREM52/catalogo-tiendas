@@ -12,16 +12,18 @@ import { Btn, errorMessage, money } from "./shared";
  * Necesita 20261209_tablero_puntos.sql.
  */
 
-type Line = { id: string; name: string; sku: string | null; image_url: string | null; qty: number; cost: number | null; internal: number; sale: number };
+type Line = { id: string; name: string; sku: string | null; image_url: string | null; qty: number; cost: number | null; internal: number; sale: number;
+  /** 20261292: costo promedio, último costo de factura y si el precio de bodega quedó fijado al trasladar. */
+  avg_cost?: number | null; last_cost?: number | null; last_cost_at?: string | null; frozen?: boolean };
 type Valuation = {
-  ok: boolean; error?: string; level: number; credit: boolean; can_see_costs: boolean;
+  ok: boolean; error?: string; level: number; credit: boolean; can_see_costs: boolean; basis?: "last" | "average"; point_basis?: "last" | "average";
   point: { id: string; name: string; kind: string };
   summary: { balance: number; overdue: number; in_transit: number; paid: number; charged: number; oldest_overdue_days: number | null; next_due: string | null } | null;
   lines: Line[];
   totals: { products: number; units: number; cost: number | null; internal: number; sale: number; no_cost: number; no_price: number };
 };
 type Tab = "summary" | "products" | "compare" | "alerts";
-type Filter = "all" | "loss" | "below_cost" | "no_price" | "no_cost" | "best";
+type Filter = "all" | "loss" | "below_cost" | "no_price" | "no_cost" | "best" | "suspicious";
 /** Por qué pierde un producto en la lista escogida. */
 type Why = "below_cost" | "bodega" | null;
 
@@ -33,6 +35,12 @@ const pct = (a: number, b: number) => (b > 0 ? `${((a / b) * 100).toLocaleString
 const n = (v: unknown) => Number(v ?? 0);
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const LEVELS = [1, 2, 3, 4, 5] as const;
+
+/** Costo sospechoso: el promedio y el último costo de factura difieren 50 % o más (¿costo mal digitado?). */
+function suspicious(l: Line) {
+  const a = n(l.avg_cost), b = n(l.last_cost);
+  return a > 0 && b > 0 && Math.abs(a - b) / Math.max(a, b) >= 0.5;
+}
 
 function why(l: Line, costs: boolean): Why {
   if (l.sale <= 0 || l.sale >= l.internal) return null;
@@ -53,6 +61,8 @@ function Box({ label, value, sub, tone, help }: { label: string; value: string; 
 
 export function PointValuationModal({ storeId, pointId, pointName, onClose }: { storeId: string; pointId: string; pointName: string; onClose: () => void }) {
   const [level, setLevel] = useState(readLevel);
+  /** Con qué costo valorizar: el que tenga el punto (auto), el último de factura o el promedio. */
+  const [basis, setBasis] = useState<"auto" | "last" | "average">("auto");
   const [all, setAll] = useState<Record<number, Valuation>>({});
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("summary");
@@ -63,7 +73,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
   // Las 5 listas a la vez (para comparar sin esperar al cambiar de lista).
   useEffect(() => {
     let alive = true;
-    void Promise.all(LEVELS.map((lv) => supabaseBrowser().rpc("erp_point_valuation", { p_store: storeId, p_point: pointId, p_level: lv }))).then((res) => {
+    void Promise.all(LEVELS.map((lv) => supabaseBrowser().rpc("erp_point_valuation", { p_store: storeId, p_point: pointId, p_level: lv, ...(basis === "auto" ? {} : { p_basis: basis }) }))).then((res) => {
       if (!alive) return;
       const bad = res.find((r) => r.error);
       if (bad?.error) return setError(/Could not find the function|schema cache/i.test(bad.error.message) ? "Falta ejecutar en Supabase la migración 20261209_tablero_puntos.sql." : errorMessage(bad.error));
@@ -73,7 +83,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
       setAll(map);
     });
     return () => { alive = false; };
-  }, [storeId, pointId]);
+  }, [storeId, pointId, basis]);
   useEffect(() => { try { window.localStorage.setItem(LEVEL_KEY, String(level)); } catch { /* sin almacenamiento */ } }, [level]);
 
   const data = all[level] ?? null;
@@ -88,6 +98,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
   const losses = useMemo(() => allLines.filter((l) => why(l, costs)), [allLines, costs]);
   const belowCost = losses.filter((l) => why(l, costs) === "below_cost");
   const bodegaLoss = losses.filter((l) => why(l, costs) === "bodega");
+  const suspects = useMemo(() => allLines.filter(suspicious), [allLines]);
   const lossTotal = losses.reduce((tt, l) => tt + (l.sale - l.internal) * l.qty, 0);
   const gainTotal = allLines.filter((l) => l.sale >= l.internal).reduce((tt, l) => tt + (l.sale - l.internal) * l.qty, 0);
 
@@ -100,6 +111,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
       if (filter === "no_price") return l.sale <= 0;
       if (filter === "no_cost") return n(l.cost) <= 0;
       if (filter === "best") return l.sale > l.internal;
+      if (filter === "suspicious") return suspicious(l);
       return true;
     });
     const margin = (l: Line) => (l.sale > 0 ? (l.sale - l.internal) / l.sale : -Infinity);
@@ -186,6 +198,14 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold" style={{ color: "var(--t-muted)" }}>Precio de venta del punto con la lista:</span>
         {LEVELS.map((l) => <Chip key={l} on={level === l} onClick={() => setLevel(l)}>P{l}</Chip>)}
+        {costs ? (
+          <>
+            <span className="ml-2 font-semibold" style={{ color: "var(--t-muted)" }}>Costo:</span>
+            <Chip on={(basis === "auto" ? data?.basis : basis) === "last"} onClick={() => setBasis("last")}>Último de factura</Chip>
+            <Chip on={(basis === "auto" ? data?.basis : basis) === "average"} onClick={() => setBasis("average")}>Promedio</Chip>
+            {data?.point_basis ? <span style={{ color: "var(--t-muted)" }}>· el punto liquida con {data.point_basis === "last" ? "el último costo" : "el promedio"}</span> : null}
+          </>
+        ) : null}
       </div>
       <div className="flex gap-1 overflow-x-auto rounded-full border p-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
         {tabs.map(([k, l]) => (
@@ -287,9 +307,16 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
                   <p className="mt-1 font-bold">Pérdida del punto: {money(bodegaLoss.reduce((tt, l) => tt + (l.sale - l.internal) * l.qty, 0))} · Ver productos →</p>
                 </button>
               </div>
+              {suspects.length ? (
+                <button type="button" onClick={() => { setFilter("suspicious"); setTab("products"); }} className="w-full rounded-2xl border p-3 text-left text-xs" style={{ borderColor: "rgba(14,165,233,.5)" }}>
+                  <p className="text-sm font-black" style={{ color: "#0ea5e9" }}>🧾 {suspects.length} con costo sospechoso</p>
+                  <p className="mt-1">El costo promedio y el de la <b>última factura</b> difieren 50 % o más. O la última factura tiene un costo mal digitado (y el precio se recalculó con él), o las unidades viejas entraron con un costo inflado. Revisa su último ingreso. · Ver productos →</p>
+                </button>
+              ) : null}
               <div className="rounded-2xl border p-3 text-xs" style={{ borderColor: "var(--t-card-border)" }}>
                 <p className="font-bold">Cómo arreglarlo</p>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>Si el punto recibió su inventario como <b>factura propia</b> (no por traslado), activa «Último costo» en Rentabilidad → Repartos → el punto, y aquí escoge «Costo: Último de factura».</li>
                   <li>Para ver la ganancia real del punto, usa la lista con que vende de verdad (casi siempre <b>P1</b>, al detal). Compáralas en «Comparar listas».</li>
                   <li>Si el punto vende al por mayor (P2), súbele el % a esa lista o baja el % de la bodega para esos productos.</li>
                   <li>Los vendidos por debajo del costo: revisa su último ingreso. Si la compra nueva salió más barata, el precio ya bajó, pero las unidades viejas quedaron más caras.</li>
@@ -316,7 +343,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
             </select>
           </div>
           <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
-            {([["all", "Todos"], ["loss", `Con pérdida (${losses.length})`], ["below_cost", `Bajo el costo (${belowCost.length})`], ["best", "Con ganancia"], ["no_price", "Sin precio"], ...(costs ? [["no_cost", "Sin costo"]] : [])] as Array<[Filter, string]>).map(([k, l]) => (
+            {([["all", "Todos"], ["loss", `Con pérdida (${losses.length})`], ["below_cost", `Bajo el costo (${belowCost.length})`], ["best", "Con ganancia"], ["suspicious", `Costo sospechoso (${suspects.length})`], ["no_price", "Sin precio"], ...(costs ? [["no_cost", "Sin costo"]] : [])] as Array<[Filter, string]>).map(([k, l]) => (
               <Chip key={k} on={filter === k} onClick={() => setFilter(k)}>{l}</Chip>
             ))}
           </div>
@@ -365,8 +392,17 @@ function ProductTable({ lines, level, costs }: { lines: Line[]; level: number; c
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{l.qty}</td>
-                {costs ? <td className="px-3 py-1.5 text-right tabular-nums">{money(l.cost)}</td> : null}
-                <td className="px-3 py-1.5 text-right tabular-nums">{money(l.internal)}</td>
+                {costs ? (
+                  <td className="px-3 py-1.5 text-right tabular-nums">
+                    {money(l.cost)}
+                    {n(l.avg_cost) > 0 && n(l.last_cost) > 0 && Math.round(n(l.avg_cost)) !== Math.round(n(l.last_cost)) ? (
+                      <span className="block text-[10px]" style={{ color: suspicious(l) ? "#0ea5e9" : "var(--t-muted)" }} title={l.last_cost_at ? `Última factura: ${new Date(l.last_cost_at).toLocaleDateString("es-CO")}` : undefined}>
+                        prom. {money(l.avg_cost)} · últ. {money(l.last_cost)}{suspicious(l) ? " 🧾" : ""}
+                      </span>
+                    ) : null}
+                  </td>
+                ) : null}
+                <td className="px-3 py-1.5 text-right tabular-nums">{money(l.internal)}{l.frozen ? <span className="block text-[10px]" style={{ color: "var(--t-muted)" }} title="Precio fijado cuando se trasladó: es la deuda real">🔒 trasladado</span> : null}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{money(l.sale)}</td>
                 <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{money(l.sale * l.qty)}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: "var(--t-muted)" }}>{l.sale > 0 ? pct(l.sale - l.internal, l.sale) : "—"}</td>

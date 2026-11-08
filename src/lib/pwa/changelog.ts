@@ -500,6 +500,16 @@ export const RELEASES: Release[] = [
       { icon: "⚠️", text: "En la liquidación mira «Pérdidas» y «Comparar listas»" },
     ],
   },
+  {
+    id: 47, date: "2026-11-08", title: "Mercancía del punto con el último costo de factura",
+    summary: "La liquidación del punto puede valorizar con el último costo de factura (y el precio de bodega sobre ese costo), muestra el promedio y el último costo de cada producto y avisa los costos sospechosos.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "🧾", text: "Escoge «Costo: Último de factura»" },
+      { icon: "🔒", text: "Lo trasladado conserva su precio de bodega" },
+      { icon: "⚠️", text: "Revisa los costos sospechosos" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
