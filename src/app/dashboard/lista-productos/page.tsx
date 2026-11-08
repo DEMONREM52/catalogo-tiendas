@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
@@ -235,7 +236,7 @@ export default function ProductListPage() {
   const canRequest = data.can_request && points.length > 1;
 
   return (
-    <main className={`space-y-4 ${selected.size ? "pb-28" : ""}`}>
+    <main className={`space-y-4 ${selected.size ? "pb-40 sm:pb-28" : ""}`}>
       <section className="relative overflow-hidden rounded-[28px] border p-4 sm:p-6" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 94%, transparent)" }}>
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full blur-3xl" style={{ background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" }} />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
@@ -397,43 +398,62 @@ export default function ProductListPage() {
         </div>
       ) : null}
 
-      <AnimatePresence>
-        {scrolled ? (
-          <motion.button key="top" type="button" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className={`fixed right-4 z-30 grid h-12 w-12 place-items-center rounded-full text-white shadow-xl ${selected.size ? "bottom-28" : "bottom-5"}`}
-            style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }} aria-label="Volver arriba" title="Volver arriba">
-            <ArrowUp size={20} />
-          </motion.button>
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selected.size ? (
-          <motion.div
-            key="tray"
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-2xl border p-3 shadow-[0_18px_60px_rgba(0,0,0,0.35)] sm:flex-nowrap"
-            style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, var(--t-card-border))", background: "var(--t-bg-base)", color: "var(--t-text)" }}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black">{selected.size} producto{selected.size === 1 ? "" : "s"} para pedir</p>
-              <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{[...selected.values()].map((i) => i.name).join(" · ")}</p>
-            </div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-              Pedir a
-              <select value={askTo} onChange={(e) => setRequestTo(e.target.value)} className="rounded-xl border px-2 py-2 text-sm" style={inputStyle}>
-                {others.map((p) => <option key={p.id} value={p.id}>{p.kind === "point" ? "📍" : "🏬"} {p.name}</option>)}
-              </select>
-            </label>
-            <Button variant="ghost" onClick={() => setSelected(new Map())} aria-label="Vaciar selección" icon={<X size={15} />} />
-            <Button variant="primary" onClick={() => setRequestKey(Date.now())} icon={<Send size={15} />}>Crear pedido</Button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {/* Fuera del contenedor animado de la página (si no, «fixed» no queda pegado a la pantalla y la barra se va al final). */}
+      {typeof document !== "undefined" ? createPortal(
+        <>
+          <AnimatePresence>
+            {scrolled ? (
+              <motion.button key="top" type="button" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className={`fixed right-4 z-[60] grid h-12 w-12 place-items-center rounded-full text-white shadow-xl ${selected.size ? "bottom-36 sm:bottom-28" : "bottom-5"}`}
+                style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }} aria-label="Volver arriba" title="Volver arriba">
+                <ArrowUp size={20} />
+              </motion.button>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selected.size ? (
+              <motion.div
+                key="tray"
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                className="fixed inset-x-2 z-[60] mx-auto max-w-3xl rounded-2xl border p-2.5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:inset-x-3 sm:flex sm:items-center sm:gap-3 sm:p-3"
+                style={{ bottom: "max(0.5rem, env(safe-area-inset-bottom))", borderColor: "color-mix(in oklab, var(--t-accent) 55%, var(--t-card-border))", background: "var(--t-bg-base)", color: "var(--t-text)" }}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <motion.span key={selected.size} initial={{ scale: 1.4 }} animate={{ scale: 1 }}
+                    className="grid h-10 min-w-10 shrink-0 place-items-center rounded-xl px-2 text-base font-black text-white" style={{ background: "var(--t-accent)" }}>
+                    {selected.size}
+                  </motion.span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black">producto{selected.size === 1 ? "" : "s"} para pedir</p>
+                    <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{[...selected.values()].map((i) => i.name).join(" · ")}</p>
+                  </div>
+                  <button type="button" onClick={() => setSelected(new Map())} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Vaciar selección" title="Vaciar">
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-2 sm:mt-0 sm:shrink-0">
+                  <label className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+                    <span className="pointer-events-none absolute left-3 top-1 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>Pedir a</span>
+                    <select value={askTo} onChange={(e) => setRequestTo(e.target.value)} className="w-full rounded-xl border px-3 pb-1.5 pt-4 text-sm font-bold" style={inputStyle}>
+                      {others.map((p) => <option key={p.id} value={p.id}>{p.kind === "point" ? "📍" : "🏬"} {p.name}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={() => setRequestKey(Date.now())}
+                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-4 text-sm font-black text-white shadow-lg"
+                    style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+                    <Send size={15} /> Crear pedido
+                  </button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </>,
+        document.body,
+      ) : null}
 
       {requestKey !== null ? (
         <NewStockRequest
