@@ -618,6 +618,16 @@ export const RELEASES: Release[] = [
       { icon: "⬆️", text: "Botón flotante para volver arriba" },
     ],
   },
+  {
+    id: 59, date: "2026-11-08", title: "Mi tienda, por secciones",
+    summary: "La configuración de la tienda ahora va por secciones con su ícono y color: Identidad, Apariencia, WhatsApp, Encuéntranos, Enlaces y dominio, Marketing y Google, Clientes, Copias y Acceso rápido. Arriba, el logo, el estado y Guardar.",
+    paths: ["/dashboard/store"],
+    demo: [
+      { icon: "🏪", text: "Abre Mi tienda" },
+      { icon: "👉", text: "Elige una sección a la izquierda (o arriba en el celular)" },
+      { icon: "💾", text: "Guarda desde arriba" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

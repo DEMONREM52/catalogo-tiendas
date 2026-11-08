@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Database, Eye, EyeOff, Globe2, Info, Link2, MapPin, Plus, Power, Save, Star, Trash2, WandSparkles } from "lucide-react";
+import { ChevronDown, Database, Eye, EyeOff, Gift, Globe2, Info, Link2, MapPin, Megaphone, MessageCircle, Palette, Plus, Power, Save, ShieldCheck, Star, Store, Trash2, Zap } from "lucide-react";
+import { SettingsSections, SubCard } from "./SettingsSections";
 import Swal from "sweetalert2";
 import { ImageUpload } from "./ImageUpload";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
@@ -156,26 +157,6 @@ function isMissingStoreSettingsMigration(error: unknown) {
     ["quick_access", "contact_channels", "locations"].some((column) => message.includes(column)) ||
     (["quick_access", "contact_channels", "locations"].some((column) => message.includes(column)) &&
       (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find")));
-}
-
-function Panel({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="glass-soft overflow-hidden rounded-3xl border" style={{ borderColor: "var(--t-card-border)" }}>
-      <div className="border-b px-5 py-4 sm:px-6" style={{ borderColor: "var(--t-card-border)" }}>
-        <h2 className="font-bold">{title}</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{description}</p>
-      </div>
-      <div className="space-y-4 p-5 sm:p-6">{children}</div>
-    </section>
-  );
 }
 
 function Field({
@@ -738,43 +719,32 @@ export default function StoreSettings() {
   };
 
   return (
-    <main className="space-y-5 pb-8">
-      <section className="glass overflow-hidden rounded-3xl border" style={{ borderColor: "var(--t-card-border)" }}>
-        <div className="bg-gradient-to-r from-fuchsia-500/15 via-violet-500/10 to-transparent p-6 sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "var(--t-accent)" }}>
-                <WandSparkles size={15} /> Personaliza tu espacio
-              </p>
-              <h1 className="mt-2 flex flex-wrap items-center gap-x-2 text-2xl font-black sm:text-3xl">
-                <span>Hola,</span>
-                <EditableNickname value={nickname} fallback={nicknameFallback} onSaved={setNickname} inputClassName="text-xl font-black sm:text-2xl" />
-              </h1>
-              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--t-muted)" }}>
-                <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
-                  🏪 Tienda: {store.name}
-                </span>
-                <span className="text-xs">Toca tu nombre para cambiar cómo te llamamos; el nombre de la tienda se edita abajo.</span>
-              </p>
-              <p className="mt-2 max-w-2xl text-sm" style={{ color: "var(--t-muted)" }}>
-                Administra la identidad, los catálogos, los puntos de contacto y lo que aparece en el escaparate público.
-              </p>
+    <main className="space-y-4 pb-8">
+      <section className="relative overflow-hidden rounded-[24px] border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 16%, var(--t-card-bg)), var(--t-card-bg))" }}>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border text-2xl sm:h-16 sm:w-16" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {store.logo_url ? <img src={store.logo_url} alt="" className="h-full w-full object-cover" /> : "🏪"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-black sm:text-2xl">{store.name || "Mi tienda"}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs" style={{ color: "var(--t-muted)" }}>
+              <span className={`rounded-full px-2 py-0.5 font-bold ${store.active ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}>{store.active ? "● Activa" : "● Inactiva"}</span>
+              <span className="inline-flex items-center gap-1">Hola, <EditableNickname value={nickname} fallback={nicknameFallback} onSaved={setNickname} inputClassName="text-xs font-bold" /></span>
             </div>
-            <button
-              type="button"
-              onClick={() => void saveSettings()}
-              disabled={!canEdit || saving}
-              className="btn-cta inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold disabled:opacity-50"
-            >
-              <Save size={16} /> {saving ? "Guardando…" : "Guardar cambios"}
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <a href={`/${store.slug}/detal`} target="_blank" rel="noreferrer" className="btn-soft inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold sm:flex-none"><Eye size={16} /> Ver catálogo</a>
+            <button type="button" onClick={() => void saveSettings()} disabled={!canEdit || saving} className="btn-cta inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold disabled:opacity-50 sm:flex-none">
+              <Save size={16} /> {saving ? "Guardando…" : "Guardar"}
             </button>
           </div>
-          {!canEdit ? (
-            <p role="status" className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200">
-              Tu rol permite consultar esta configuración, pero solo la persona propietaria o una administradora global puede modificarla.
-            </p>
-          ) : null}
         </div>
+        {!canEdit ? (
+          <p role="status" className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200">
+            Tu rol permite consultar esta configuración, pero solo la persona propietaria o una administradora global puede modificarla.
+          </p>
+        ) : null}
       </section>
 
       {settingsMigrationMissing ? (
@@ -797,9 +767,13 @@ export default function StoreSettings() {
         </section>
       ) : null}
 
-      <fieldset disabled={!canEdit || saving} className="space-y-5 disabled:opacity-90">
-        <Panel title="Identidad y acceso" description="Estos datos forman los enlaces públicos y de acceso a tu catálogo.">
-          <div className="grid gap-4 md:grid-cols-2">
+      <fieldset disabled={!canEdit || saving} className="min-w-0 disabled:opacity-90">
+        <SettingsSections sections={[
+          {
+            key: "identidad", label: "Identidad", icon: <Store />, color: "#8b5cf6", hint: "Nombre, dirección web y catálogos",
+            content: (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
             <Field label="Nombre de la tienda">
               <input className={inputClass()} style={inputStyle} value={store.name} onChange={(event) => patchStore({ name: event.target.value })} />
             </Field>
@@ -819,13 +793,42 @@ export default function StoreSettings() {
                 <button type="button" className="btn-soft mt-1 shrink-0 rounded-xl px-3 text-xs font-bold" onClick={generateWholesaleKey}>Generar</button>
               </div>
             </Field>
+                </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              ["catalog_retail", "Catálogo detal", "Permite que tus clientes consulten precios al detal."],
+              ["catalog_wholesale", "Catálogo mayorista", "Permite el acceso mayorista con la llave secreta."],
+            ].map(([key, label, description]) => (
+              <label key={key} className="flex items-start gap-3 rounded-2xl border p-4 transition hover:border-fuchsia-400/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
+                <input className="mt-1 h-4 w-4 accent-fuchsia-600" type="checkbox" checked={store[key as "catalog_retail" | "catalog_wholesale"]} onChange={(event) => patchStore({ [key]: event.target.checked })} />
+                <span><b className="block text-sm">{label}</b><span className="mt-1 block text-xs" style={{ color: "var(--t-muted)" }}>{description}</span></span>
+              </label>
+            ))}
+          </div>
+              </>
+            ),
+          },
+          {
+            key: "apariencia", label: "Apariencia", icon: <Palette />, color: "#ec4899", hint: "Logo, banner, frase y tema",
+            content: (
+              <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ImageUpload label="Logo de tienda" currentUrl={store.logo_url} pathPrefix={`${store.id}/store/`} fileName="logo.png" onUploaded={(logo_url) => patchStore({ logo_url })} />
+            <ImageUpload label="Banner del catálogo" currentUrl={store.banner_url} pathPrefix={`${store.id}/store/`} fileName="banner.png" onUploaded={(banner_url) => patchStore({ banner_url })} />
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Frase de bienvenida"><input className={inputClass()} style={inputStyle} maxLength={180} value={profile.headline} onChange={(event) => setProfile({ ...profile, headline: event.target.value })} placeholder="Ej: Calidad y estilo para cada día" /></Field>
+            <Field label="Ciudad"><input className={inputClass()} style={inputStyle} maxLength={100} value={profile.city} onChange={(event) => setProfile({ ...profile, city: event.target.value })} placeholder="Ciudad" /></Field>
+            <Field label="Dirección"><input className={inputClass()} style={inputStyle} maxLength={180} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} placeholder="Dirección del local" /></Field>
+          </div>
+                <div className="grid gap-4 md:grid-cols-2">
             <Field label="Tema del catálogo" hint="El tema elegido solo cambia el catálogo público de esta tienda.">
               <select className={inputClass()} style={inputStyle} value={store.theme ?? ""} onChange={(event) => patchStore({ theme: event.target.value || null })}>
                 <option value="">Tema predeterminado</option>
                 {themes.map((theme) => <option key={theme.id} value={theme.id}>{theme.name}{theme.active ? "" : " (inactivo)"}</option>)}
               </select>
             </Field>
-          </div>
+                </div>
           <div
             className="overflow-hidden rounded-2xl border p-4 transition-all duration-300"
             style={{ borderColor: preview.border, background: preview.background, color: preview.text }}
@@ -869,32 +872,13 @@ export default function StoreSettings() {
               </div>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ["catalog_retail", "Catálogo detal", "Permite que tus clientes consulten precios al detal."],
-              ["catalog_wholesale", "Catálogo mayorista", "Permite el acceso mayorista con la llave secreta."],
-            ].map(([key, label, description]) => (
-              <label key={key} className="flex items-start gap-3 rounded-2xl border p-4 transition hover:border-fuchsia-400/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-                <input className="mt-1 h-4 w-4 accent-fuchsia-600" type="checkbox" checked={store[key as "catalog_retail" | "catalog_wholesale"]} onChange={(event) => patchStore({ [key]: event.target.checked })} />
-                <span><b className="block text-sm">{label}</b><span className="mt-1 block text-xs" style={{ color: "var(--t-muted)" }}>{description}</span></span>
-              </label>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="Apariencia del catálogo" description="Sube imágenes que hagan reconocible tu marca en la página pública.">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ImageUpload label="Logo de tienda" currentUrl={store.logo_url} pathPrefix={`${store.id}/store/`} fileName="logo.png" onUploaded={(logo_url) => patchStore({ logo_url })} />
-            <ImageUpload label="Banner del catálogo" currentUrl={store.banner_url} pathPrefix={`${store.id}/store/`} fileName="banner.png" onUploaded={(banner_url) => patchStore({ banner_url })} />
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Frase de bienvenida"><input className={inputClass()} style={inputStyle} maxLength={180} value={profile.headline} onChange={(event) => setProfile({ ...profile, headline: event.target.value })} placeholder="Ej: Calidad y estilo para cada día" /></Field>
-            <Field label="Ciudad"><input className={inputClass()} style={inputStyle} maxLength={100} value={profile.city} onChange={(event) => setProfile({ ...profile, city: event.target.value })} placeholder="Ciudad" /></Field>
-            <Field label="Dirección"><input className={inputClass()} style={inputStyle} maxLength={180} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} placeholder="Dirección del local" /></Field>
-          </div>
-        </Panel>
-
-        <Panel title="WhatsApp y pedidos" description="Configura asesores y puntos de atención. Tus clientes podrán identificar cada contacto por su icono y elegir el más cercano antes de enviar el pedido.">
+              </>
+            ),
+          },
+          {
+            key: "whatsapp", label: "WhatsApp", icon: <MessageCircle />, color: "#10b981", hint: "A dónde llegan los pedidos",
+            badge: profile.contact_channels.filter((c) => c.active).length || null,
+            content: <>
           <div className="space-y-3">
             {profile.contact_channels.map((channel) => {
               const expanded = expandedContactId === channel.id;
@@ -1022,9 +1006,13 @@ export default function StoreSettings() {
               </button>
             </div>
           </div>
-        </Panel>
-
-        <Panel title="Encuéntranos" description="Estos enlaces se mostrarán en el botón fijo “Encuéntranos” del catálogo.">
+            </>,
+          },
+          {
+            key: "encuentranos", label: "Encuéntranos", icon: <MapPin />, color: "#f97316", hint: "Redes y puntos de atención",
+            content: (
+              <>
+                <SubCard title="Redes y enlaces" hint="Salen en el botón fijo «Encuéntranos» del catálogo.">
           <div className="space-y-3">
             <SocialLinksEditor
               links={links}
@@ -1034,9 +1022,8 @@ export default function StoreSettings() {
               onAdd={(type, label) => addLink(type, label)}
             />
           </div>
-        </Panel>
-
-        <Panel title="Puntos para encontrarnos" description="Agrega sucursales, locales o puntos de entrega con ubicación, mapa, horarios en la descripción y fotos.">
+                </SubCard>
+                <SubCard title="Puntos de atención" hint="Sucursales, locales o puntos de entrega con mapa, horarios y fotos.">
           <div className="space-y-4">
             {profile.locations.map((location) => (
               <article key={location.id} className="rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
@@ -1083,9 +1070,14 @@ export default function StoreSettings() {
             ))}
             <button type="button" onClick={addLocation} className="btn-soft inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold"><Plus size={16} /> Agregar punto de atención</button>
           </div>
-        </Panel>
-
-        <Panel title="Enlaces de acceso" description="Abre o comparte tus catálogos y el acceso privado de tu equipo.">
+                </SubCard>
+              </>
+            ),
+          },
+          {
+            key: "enlaces", label: "Enlaces y dominio", icon: <Link2 />, color: "#0ea5e9", hint: "Abre o comparte tus catálogos",
+            content: (
+              <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {[
               ...(store.catalog_retail ? [["Catálogo detal", `/${store.slug}/detal`]] : []),
@@ -1108,16 +1100,34 @@ export default function StoreSettings() {
             {store.active_until ? ` · Vigencia hasta ${new Date(store.active_until).toLocaleDateString("es-CO")}` : " · Sin vencimiento configurado"}.
             El estado de suscripción se administra desde el panel administrativo.
           </p>
-        </Panel>
-
-        <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
-        <DomainPanel storeId={store.id} storeSlug={store.slug} storeName={store.name} canEdit={canEdit} />
-        <GooglePanel storeId={store.id} storeSlug={store.slug} canEdit={canEdit} />
-        {canEdit ? <LoyaltyPanel storeId={store.id} /> : null}
-        {canEdit ? <QrPanel storeId={store.id} /> : null}
-        {canEdit ? <BackupPanel storeId={store.id} storeSlug={store.slug} /> : null}
-
-        <Panel title="Acceso rápido" description="Elige qué accesos mostrar como tarjetas en la página inicial del dashboard.">
+                <DomainPanel storeId={store.id} storeSlug={store.slug} storeName={store.name} canEdit={canEdit} />
+              </>
+            ),
+          },
+          {
+            key: "marketing", label: "Marketing y Google", icon: <Megaphone />, color: "#f59e0b", hint: "Píxeles, anuncios y aparecer en Google",
+            content: (
+              <>
+                <MarketingPanel storeId={store.id} storeSlug={slugPreview || store.slug} canEdit={canEdit} siteOrigin={siteOrigin} />
+                <GooglePanel storeId={store.id} storeSlug={store.slug} canEdit={canEdit} />
+              </>
+            ),
+          },
+          ...(canEdit ? [{
+            key: "clientes", label: "Clientes", icon: <Gift />, color: "#f43f5e", hint: "Puntos de fidelidad y QR",
+            content: (
+              <>
+                <LoyaltyPanel storeId={store.id} />
+                <QrPanel storeId={store.id} />
+              </>
+            ),
+          }, {
+            key: "copias", label: "Copias", icon: <ShieldCheck />, color: "#14b8a6", hint: "Respaldo de tu información",
+            content: <BackupPanel storeId={store.id} storeSlug={store.slug} />,
+          }] : []),
+          {
+            key: "rapido", label: "Acceso rápido", icon: <Zap />, color: "#6366f1", hint: "Tarjetas de la página de inicio",
+            content: <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {QUICK_ACCESS_OPTIONS.map(([key, label, icon]) => {
               const enabled = profile.quick_access.includes(key);
@@ -1141,13 +1151,11 @@ export default function StoreSettings() {
             })}
           </div>
           <p className="flex items-center gap-2 text-xs" style={{ color: "var(--t-muted)" }}><Globe2 size={14} /> Solo se muestran accesos para los que tu usuario tiene permiso.</p>
-        </Panel>
+            </>,
+          },
+        ]} />
       </fieldset>
 
-      <div className="flex flex-wrap justify-end gap-3">
-        <a href={`/${store.slug}/detal`} target="_blank" rel="noreferrer" className="btn-soft inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold"><Link2 size={16} /> Vista previa del catálogo</a>
-        <button type="button" onClick={() => void saveSettings()} disabled={!canEdit || saving} className="btn-cta inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold disabled:opacity-50"><Save size={16} /> {saving ? "Guardando…" : "Guardar cambios"}</button>
-      </div>
       {/* En el celular, «Guardar» queda abajo a la mano (la página es larga). */}
       <MobileActionBar show={canEdit}>
         <button type="button" onClick={() => void saveSettings()} disabled={saving} className="btn-cta inline-flex items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold disabled:opacity-50"><Save size={16} /> {saving ? "Guardando…" : "Guardar cambios"}</button>
