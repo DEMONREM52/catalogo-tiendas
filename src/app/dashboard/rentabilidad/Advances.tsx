@@ -19,6 +19,8 @@ export type AdvanceRow = {
   method: string; reference: string | null; note: string; support_url: string | null; status: "pending" | "approved" | "rejected" | "voided";
   created_by_name: string | null; created_at: string; decided_by_name: string | null; decided_at: string | null; decision_note: string | null;
   voided_by_name: string | null; void_reason: string | null; settlement: { id: string; number: number; status: string; cutoff: string } | null; mine: boolean;
+  /** Lo ya abonado al costo en liquidaciones vigentes (20261289). */
+  used?: number;
 };
 type Beneficiary = { id: string; name: string; active: boolean };
 
@@ -37,12 +39,15 @@ function statusOf(a: AdvanceRow): { label: string; color: string } {
   if (a.status === "pending") return { label: "Por aprobar", color: "#eda100" };
   if (a.status === "rejected") return { label: "Rechazado", color: "#94a3b8" };
   if (a.status === "voided") return { label: "Anulado", color: "#94a3b8" };
-  if (a.settlement) return { label: `Descontado en la liquidación #${a.settlement.number}`, color: "#22c55e" };
-  return { label: "Por descontar en la próxima liquidación", color: "#8b5cf6" };
+  const left = n(a.amount) - n(a.used);
+  if ((a.kind ?? "advance") === "advance" && a.settlement && left > 0.004) return { label: `Abonado ${cop(a.used)} de ${cop(a.amount)} · el resto en la próxima`, color: "#8b5cf6" };
+  if (a.settlement) return { label: `${(a.kind ?? "advance") === "advance" ? "Abonado al costo" : "Descontado"} en la liquidación #${a.settlement.number}`, color: "#22c55e" };
+  return { label: (a.kind ?? "advance") === "advance" ? "Por abonar al costo en la próxima liquidación" : "Por descontar en la próxima liquidación", color: "#8b5cf6" };
 }
 
 /** «A quién» en palabras: LOS MELLOS 70 % · ROBIN 30 %, mitad y mitad, según el reparto… */
 function splitText(a: AdvanceRow, names: (id: string) => string) {
+  if ((a.kind ?? "advance") === "advance") return "Abono al costo de la mercancía (no toca la ganancia)";
   const s = splitOf(a);
   if (s === "one") return `Solo ${a.beneficiary_name ?? names(a.beneficiary_id ?? "")}`;
   if (s === "equal") return "Mitad y mitad (partes iguales)";
@@ -81,9 +86,9 @@ export function AdvancesSection({ storeId, point, beneficiaries, shares, can, re
     const sum = (f: (a: AdvanceRow) => boolean) => list.filter(f).reduce((t, a) => t + n(a.amount), 0);
     return {
       waiting: sum((a) => a.status === "pending"),
-      advances: sum((a) => a.status === "approved" && !a.settlement && (a.kind ?? "advance") === "advance"),
+      advances: list.filter((a) => a.status === "approved" && (a.kind ?? "advance") === "advance").reduce((t, a) => t + Math.max(0, n(a.amount) - n(a.used)), 0),
       expenses: sum((a) => a.status === "approved" && !a.settlement && a.kind === "expense"),
-      done: sum((a) => a.status === "approved" && !!a.settlement),
+      done: list.filter((a) => a.status === "approved").reduce((t, a) => t + ((a.kind ?? "advance") === "advance" ? n(a.used) : a.settlement ? n(a.amount) : 0), 0),
     };
   }, [rows]);
 
@@ -121,7 +126,7 @@ export function AdvancesSection({ storeId, point, beneficiaries, shares, can, re
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white" style={{ background: "linear-gradient(135deg,#f59e0b,#d95926)" }}><HandCoins size={19} /></span>
         <div className="min-w-0 flex-1">
           <p className="font-black">Anticipos y gastos</p>
-          <p className="text-xs" style={{ color: "var(--t-muted)" }}>Dinero que salió antes de liquidar y gastos del punto (transporte, consumo…). En cada uno escoges cómo se reparte; se resta solo en la próxima liquidación.</p>
+          <p className="text-xs" style={{ color: "var(--t-muted)" }}><b>Anticipos:</b> dinero que la sede ya entregó; se abona al costo de la mercancía. <b>Gastos:</b> transporte, consumo…; se restan de la ganancia como escojas repartirlos.</p>
         </div>
         {can.settle ? (
           <div className="flex flex-wrap gap-2">
@@ -138,7 +143,7 @@ export function AdvancesSection({ storeId, point, beneficiaries, shares, can, re
       {error ? <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{error}</p> : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-        {[["Por aprobar", totals.waiting, "#eda100"], ["Anticipos por descontar", totals.advances, "#f59e0b"], ["Gastos por descontar", totals.expenses, "#0ea5e9"], ["Ya descontado", totals.done, "#22c55e"]].map(([l, v, c]) => (
+        {[["Por aprobar", totals.waiting, "#eda100"], ["Anticipos por abonar al costo", totals.advances, "#f59e0b"], ["Gastos por descontar", totals.expenses, "#0ea5e9"], ["Ya aplicado", totals.done, "#22c55e"]].map(([l, v, c]) => (
           <div key={l as string} className="rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)" }}>
             <p className="text-[10px] font-bold uppercase" style={{ color: "var(--t-muted)" }}>{l as string}</p>
             <p className="font-black tabular-nums" style={{ color: n(v) ? (c as string) : undefined }}>{cop(v as number)}</p>
@@ -239,7 +244,7 @@ function AdvanceSheet({ kind: initialKind, storeId, point, beneficiaries, shares
       : split === "equal" ? splitPeople.map((s) => ({ id: s.beneficiary_id, pct: 100 / Math.max(1, splitPeople.length) }))
         : split === "custom" ? beneficiaries.filter((b) => n(custom[b.id]) > 0).map((b) => ({ id: b.id, pct: n(custom[b.id]) }))
           : splitPeople.map((s) => ({ id: s.beneficiary_id, pct: (n(s.pct) * 100) / Math.max(1, totalPct) }));
-  const splitOk = split === "one" ? !!who : split === "custom" ? Math.abs(customSum - 100) < 0.01 : splitPeople.length > 0;
+  const splitOk = kind === "advance" ? true : split === "one" ? !!who : split === "custom" ? Math.abs(customSum - 100) < 0.01 : splitPeople.length > 0;
   const ok = n(amount) > 0 && note.trim().length >= 3 && !!given && splitOk;
 
   async function save() {
@@ -281,6 +286,12 @@ function AdvanceSheet({ kind: initialKind, storeId, point, beneficiaries, shares
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder={kind === "expense" ? "Ej.: transporte de mercancía de la bodega" : "Ej.: la sede le entregó a Robin para el arriendo"} className="w-full rounded-xl border px-3 py-2 text-sm outline-none" style={inputStyle} />
       </Field>
 
+      {kind === "advance" ? (
+        <p className="rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, var(--t-card-border))", background: "color-mix(in oklab, #f59e0b 8%, transparent)" }}>
+          💸 <b>Se abona al costo de la mercancía</b>: baja lo que la sede todavía debe entregar por la mercancía vendida. <b>No toca la ganancia</b> de los beneficiarios. Si es más que el costo de la liquidación, lo que sobra se abona en la siguiente.
+        </p>
+      ) : null}
+      {kind === "expense" ? (<>
       <Field label="¿Cómo se reparte?">
         <div className="grid gap-2 sm:grid-cols-2">
           {([
@@ -311,6 +322,7 @@ function AdvanceSheet({ kind: initialKind, storeId, point, beneficiaries, shares
           <p className="text-right text-xs font-bold" style={{ color: Math.abs(customSum - 100) < 0.01 ? "#22c55e" : "#e66767" }}>Suman {customSum.toLocaleString("es-CO")} % {Math.abs(customSum - 100) < 0.01 ? "✓" : "(deben sumar 100)"}</p>
         </div>
       ) : null}
+      </>) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={kind === "expense" ? "Fecha del gasto" : "¿Cuándo salió el dinero?"} hint="Se descuenta en la primera liquidación con corte después de esta fecha."><DateField withTime value={given} max={now} onChange={setGiven} /></Field>
@@ -323,7 +335,7 @@ function AdvanceSheet({ kind: initialKind, storeId, point, beneficiaries, shares
       <Field label="Referencia (opcional)"><input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={120} placeholder="N.º de transferencia o recibo" className="w-full rounded-xl border px-3 py-2 text-sm outline-none" style={inputStyle} /></Field>
       <ImageUpload label="Foto del soporte (opcional)" currentUrl={support} pathPrefix={`${storeId}/anticipos/`} fileName={fileName} onUploaded={setSupport} />
 
-      {n(amount) > 0 && parts.length ? (
+      {kind === "expense" && n(amount) > 0 && parts.length ? (
         <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: `color-mix(in oklab, ${kc} 45%, var(--t-card-border))`, background: `color-mix(in oklab, ${kc} 8%, transparent)` }}>
           <p className="font-bold">Así se descontará</p>
           <ul className="mt-1 space-y-0.5 text-xs">

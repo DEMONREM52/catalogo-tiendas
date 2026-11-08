@@ -11,6 +11,7 @@ export type ReportDetail = {
     point_name: string | null; created_by_name: string | null; created_at: string; submitted_by_name?: string | null; decided_by_name: string | null;
     decision_note: string | null; revert_reason: string | null; notes: string | null; split_version: number | null;
     gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean; advances_total?: number | null;
+    merch_cost?: number | null; cost_advances_total?: number | null; cost_due?: number | null;
   };
   lines: Array<{ id: string; name: string; document: string | null; pct: number; share_amount: number; carried_amount: number; advance_amount?: number; amount: number; paid: number }>;
   advances?: Array<{ number: number; kind?: string; split?: string | null; name: string | null; amount: number; given_at: string; method: string; reference: string | null; note: string; created_by_name: string | null; decided_by_name: string | null }>;
@@ -119,7 +120,8 @@ export async function openSettlementReport(d: ReportDetail): Promise<string | nu
     <div class="box"><div class="k">Ganancia</div><div class="v">${esc(cop(profit))}</div><div class="m">margen ${pct(profit, sales)}</div></div>
     <div class="box"><div class="k">A pagar</div><div class="v">${esc(cop(n(s.pool_total) + n(s.carried_total) - n(s.advances_total)))}</div>${n(s.advances_total) ? `<div class="m">anticipos −${esc(cop(s.advances_total))}</div>` : ""}</div>
   </div>
-  <div class="formula">Ganancia del período <b>${esc(cop(gross))}</b>${s.deducted || n(s.expenses_total) ? ` − gastos y nómina <b>${esc(cop(s.expenses_total))}</b>` : ""}${n(s.carried_total) ? ` + saldo traído <b>${esc(cop(s.carried_total))}</b>` : ""}${n(s.advances_total) ? ` − anticipos <b>${esc(cop(s.advances_total))}</b>` : ""} = <b>${esc(cop(n(s.pool_total) + n(s.carried_total) - n(s.advances_total)))}</b> a pagar${n(s.unassigned_total) ? ` · sin asignar ${esc(cop(s.unassigned_total))}` : ""}</div>
+  <div class="formula">Ganancia del período <b>${esc(cop(gross))}</b>${s.deducted || n(s.expenses_total) ? ` − gastos y nómina <b>${esc(cop(s.expenses_total))}</b>` : ""}${n(s.carried_total) ? ` + saldo traído <b>${esc(cop(s.carried_total))}</b>` : ""}${n(s.advances_total) ? ` − gastos compartidos <b>${esc(cop(s.advances_total))}</b>` : ""} = <b>${esc(cop(n(s.pool_total) + n(s.carried_total) - n(s.advances_total)))}</b> a pagar${n(s.unassigned_total) ? ` · sin asignar ${esc(cop(s.unassigned_total))}` : ""}</div>
+  ${s.merch_cost !== null && s.merch_cost !== undefined ? `<div class="formula">Costo de la mercancía <b>${esc(cop(s.merch_cost))}</b>${n(s.cost_advances_total) ? ` − anticipos ya entregados <b>${esc(cop(s.cost_advances_total))}</b>` : ""} = costo que falta entregar <b>${esc(cop(s.cost_due))}</b></div>` : ""}
   ${b.mode !== "total" ? `<p class="m" style="margin-top:6px">Ganancia total ${esc(cop(profit))} = parte de la madre ${esc(cop(lines.reduce((t, l) => t + n(l.mother), 0)))} + parte del punto ${esc(cop(lines.reduce((t, l) => t + n(l.point), 0)))}.</p>` : ""}
 
   <h2>Reparto entre beneficiarios</h2>

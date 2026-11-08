@@ -29,7 +29,7 @@ type Overview = {
   split_history: Array<{ version: number; total_pct: number; reason: string; created_by_name: string | null; created_at: string }>;
   pending: {
     pool_total: number; carried_total: number; assigned_total: number; orders: number; lines: PreviewLine[];
-    gross_total?: number; expenses_total?: number; expenses?: number; advances_total?: number; advances?: Array<{ amount: number; kind?: "advance" | "expense" }>; no_cost?: Array<{ order_id: string; product_id: string; name: string; qty: number; revenue: number }>;
+    gross_total?: number; expenses_total?: number; expenses?: number; advances_total?: number; advances?: Array<{ amount: number; kind?: "advance" | "expense" }>; merch_cost?: number; cost_advances_total?: number; cost_due?: number; advances_pending_cost?: number; no_cost?: Array<{ order_id: string; product_id: string; name: string; qty: number; revenue: number }>;
   };
   /** Cómo se liquida el pozo (20261208): ganancia total o sobre el precio de la madre, y si se restan gastos. */
   settings?: { mode: "total" | "margin" | "mother"; mode_from: string | null; deduct_expenses: boolean; deduct_from: string | null; updated_by_name: string | null; updated_at: string | null; can_edit: boolean };
@@ -41,7 +41,7 @@ type Row = { id: string; number: number; cutoff: string; status: Status; pool_to
 type Status = "calculated" | "review" | "approved" | "partially_paid" | "paid" | "rejected" | "reverted";
 type Detail = {
   settlement: Row & { point_id: string | null; point_name: string | null; split_version: number | null; notes: string | null; decision_note: string | null; revert_reason: string | null; submitted_by_name: string | null; reverted_by_name: string | null;
-    gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean };
+    gross_total?: number | null; expenses_total?: number | null; mode?: string | null; deducted?: boolean; merch_cost?: number | null; cost_advances_total?: number | null; cost_due?: number | null };
   lines: Array<{ id: string; beneficiary_id: string; name: string; kind: string; document: string | null; pct: number; share_amount: number; carried_amount: number; advance_amount?: number; amount: number; paid: number; carried_into: string | null }>;
   advances?: UsedAdvance[];
   payments: Array<{ id: string; line_id: string; amount: number; method: string; reference: string | null; note: string | null; paid_at: string; created_by_name: string | null; voided: boolean; void_reason: string | null }>;
@@ -177,7 +177,7 @@ export function Settlements({ storeId, points, myPoints }: { storeId: string; po
                     </div>
                     {n(l.advance_amount) || n(l.carried_amount) ? (
                       <p className="text-[11px] tabular-nums" style={{ color: "var(--t-muted)" }}>
-                        parte {cop(l.share_amount)}{n(l.carried_amount) ? ` · saldo traído ${cop(l.carried_amount)}` : ""}{n(l.advance_amount) ? ` · anticipo −${cop(l.advance_amount)}` : ""}
+                        parte {cop(l.share_amount)}{n(l.carried_amount) ? ` · saldo traído ${cop(l.carried_amount)}` : ""}{n(l.advance_amount) ? ` · gastos −${cop(l.advance_amount)}` : ""}
                       </p>
                     ) : null}
                   </li>
@@ -431,7 +431,8 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                     Ganancia <b>{cop(s.gross_total)}</b>
                     {s.deducted || n(s.expenses_total) ? <> − gastos y nómina <b style={{ color: "#e66767" }}>{cop(s.expenses_total)}</b></> : null}
                     {" "}= <b>{cop(s.pool_total)}</b> a repartir
-                    {n(s.advances_total) ? <> · menos anticipos <b style={{ color: "#e66767" }}>{cop(s.advances_total)}</b></> : null}
+                    {n(s.advances_total) ? <> · menos gastos compartidos <b style={{ color: "#e66767" }}>{cop(s.advances_total)}</b></> : null}
+                    {s.merch_cost !== null && s.merch_cost !== undefined ? <span className="mt-1 block">Costo de la mercancía <b>{cop(s.merch_cost)}</b>{n(s.cost_advances_total) ? <> − anticipos <b style={{ color: "#f59e0b" }}>{cop(s.cost_advances_total)}</b></> : null} = falta entregar <b>{cop(s.cost_due)}</b></span> : null}
                   </p>
                 </div>
               ) : null}
@@ -445,7 +446,7 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                 </button>
               </ExportGate>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[["Del periodo", s.pool_total], ["Saldo traído", s.carried_total], ...(n(s.advances_total) ? [["Anticipos", -n(s.advances_total)]] : []), ["Asignado", s.assigned_total], ["Sin asignar", s.unassigned_total]].map(([l, v]) => (
+                {[["Del periodo", s.pool_total], ["Saldo traído", s.carried_total], ...(n(s.advances_total) ? [["Gastos compartidos", -n(s.advances_total)]] : []), ...(n(s.cost_advances_total) ? [["Anticipos al costo", n(s.cost_advances_total)]] : []), ["Asignado", s.assigned_total], ["Sin asignar", s.unassigned_total]].map(([l, v]) => (
                   <div key={l as string} className="rounded-xl border p-2.5" style={cardStyle}>
                     <p className="text-[11px] font-bold uppercase" style={{ color: "var(--t-muted)" }}>{l as string}</p>
                     <p className="font-black tabular-nums" style={n(v) < 0 ? { color: "#e66767" } : undefined}>{cop(v as number)}</p>
@@ -476,7 +477,7 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                         <span className="text-xs" style={{ color: "var(--t-muted)" }}>{n(l.pct)} %</span>
                         <b className="tabular-nums" style={n(l.amount) < 0 ? { color: "#e66767" } : undefined}>{cop(l.amount)}</b>
                       </div>
-                      {n(l.carried_amount) || n(l.advance_amount) ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>periodo {cop(l.share_amount)}{n(l.carried_amount) ? ` · saldo traído ${cop(l.carried_amount)}` : ""}{n(l.advance_amount) ? ` · anticipo −${cop(l.advance_amount)}` : ""}</p> : null}
+                      {n(l.carried_amount) || n(l.advance_amount) ? <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>periodo {cop(l.share_amount)}{n(l.carried_amount) ? ` · saldo traído ${cop(l.carried_amount)}` : ""}{n(l.advance_amount) ? ` · gastos −${cop(l.advance_amount)}` : ""}</p> : null}
                       {l.carried_into ? <p className="text-[11px] text-amber-400">Saldo en contra: se compensa en la siguiente liquidación</p> : null}
                       {n(l.amount) > 0 ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">

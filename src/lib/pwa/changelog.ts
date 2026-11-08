@@ -470,6 +470,16 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "Mira el resumen: ventas − costo − gastos − anticipos" },
     ],
   },
+  {
+    id: 44, date: "2026-11-08", title: "Anticipos: abono al costo de la mercancía",
+    summary: "Los anticipos ahora se abonan al costo de la mercancía (bajan lo que la sede debe entregar) y no tocan la ganancia de los beneficiarios. Los gastos siguen restándose de la ganancia como escojas repartirlos.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "💸", text: "Registra el anticipo que entregó la sede" },
+      { icon: "📦", text: "Se abona al costo de la mercancía" },
+      { icon: "🤝", text: "La ganancia se reparte completa (menos gastos)" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
