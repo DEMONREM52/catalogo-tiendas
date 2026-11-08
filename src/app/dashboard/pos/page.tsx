@@ -18,7 +18,6 @@ import { CreditMeter } from "../clientes/CreditMeter";
 import type { CreditState } from "../clientes/terceros";
 import { OfflineDrafts } from "./OfflineDrafts";
 import { OfflineReadiness } from "./OfflineReadiness";
-import { DrillGuide } from "./DrillGuide";
 import { PRACTICE_PRINT_EVENT } from "@/lib/pos/drill";
 import { clearPracticeDrafts, getDrafts, removeDraft, saveDraft, subscribeDrafts, type PosDraft, type PosDraftFiscal, type PosDraftKind } from "@/lib/pos/drafts";
 import { resolveOfflineIssue, setSyncSkip } from "@/lib/pos/sync";
@@ -1695,7 +1694,6 @@ export default function PosPage() {
 
   return (
     <main className="space-y-3 pb-20 lg:pb-0">
-      <DrillGuide storeId={store?.id} pointId={pointId} fiscalOn={fiscalOn} practice={localDrafts.filter((d) => d.practice)} />
       <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} onPrint={printDraft} />
       <div {...cardProps()}>
         <div className="flex flex-wrap items-center justify-between gap-2">

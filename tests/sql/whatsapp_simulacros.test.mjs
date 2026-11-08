@@ -150,5 +150,13 @@ if (today >= 2 && today <= 29) {
 await raw("update erp_drill_settings set enabled = false where store_id = $1", [A]);
 ok((await service("select * from public.erp_drill_digest()")).length === 0, "Apagado: no hay recordatorios");
 
+console.log("4. Sin simulacro (20261302)");
+await raw("update erp_drill_settings set enabled = true where store_id = $1", [A]);
+await db.exec(fs.readFileSync(path.join(MIG, "20261302_sin_simulacro.sql"), "utf8"));
+await db.exec(fs.readFileSync(path.join(MIG, "20261302_sin_simulacro.sql"), "utf8"));
+const after = await one(CAJA2, "select public.erp_offline_alerts($1) r", [A]);
+ok(!after.some((a) => String(a.key).startsWith("drill-")), "La campana ya no muestra nada del simulacro", after.map((a) => a.key));
+ok(after.some((a) => a.key === "offline-sale-issues"), "Los demás avisos sin conexión siguen", after.map((a) => a.key));
+
 console.log(`\n${pass} pruebas OK, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

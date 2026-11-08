@@ -14,10 +14,9 @@ export const runtime = "nodejs";
  *    (y los números que él eligió) + notificación al celular del dueño, administradores y facturación.
  *    Cada etapa se avisa una sola vez (erp_whatsapp_log / erp_push_log); un WhatsApp que falla se reintenta
  *    la hora siguiente (máximo 3 veces).
- *  · 9 a. m. de Colombia: recordatorios del simulacro mensual (día 1, día límite y resumen al administrador).
+ *  (El simulacro mensual sin internet y sus recordatorios se quitaron el 2026-11-08.)
  */
 type Watch = { store_id: string; store_name: string; slug: string; stage: "h24" | "h6" | "overdue"; docs: number; issues: number; hours_left: number; deadline: string; first_id: string; recipients: string[] };
-type DrillRow = { store_id: string; user_id: string; kind: "start" | "due" | "manager"; pending: number; total: number; period: string };
 
 const bogota = (iso: string) => new Date(iso).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "2-digit", hour: "numeric", minute: "2-digit" });
 
@@ -26,9 +25,8 @@ export async function GET(request: Request) {
   const admin = pushAdminClient();
   if (!admin) return NextResponse.json({ ok: false, skipped: "not-configured" });
   const contingency = await contingencyWatch(admin);
-  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Bogota", hour: "numeric", hour12: false }).format(new Date()));
-  const drills = hour === 9 ? await drillReminders(admin) : { skipped: "hour" };
-  return NextResponse.json({ ok: true, contingency, drills });
+  // El simulacro mensual se quitó (2026-11-08): ya no se mandan sus recordatorios.
+  return NextResponse.json({ ok: true, contingency });
 }
 
 async function contingencyWatch(admin: SupabaseClient) {
@@ -87,23 +85,4 @@ async function contingencyWatch(admin: SupabaseClient) {
     }
   }
   return { stores: (data ?? []).length, whatsapp, failed, push };
-}
-
-async function drillReminders(admin: SupabaseClient) {
-  if (!pushConfigured()) return { skipped: "push" };
-  const { data, error } = await admin.rpc("erp_drill_digest");
-  if (error) return { skipped: /Could not find the function|schema cache/i.test(error.message) ? "migration" : error.message };
-  const byStore = new Map<string, Map<string, PushPayload>>();
-  for (const d of (data ?? []) as DrillRow[]) {
-    const { error: dup } = await admin.from("erp_push_log").insert({ key: `drill:${d.store_id}:${d.user_id}:${d.period}:${d.kind}` });
-    if (dup) continue;
-    const payload: PushPayload = d.kind === "manager"
-      ? { title: `🎓 Simulacro del mes: ${d.total - d.pending} de ${d.total}`, body: `A ${d.pending} cajero${d.pending === 1 ? "" : "s"} le${d.pending === 1 ? "" : "s"} falta practicar vender sin internet. Toca para ver quién.`, url: "/dashboard#simulacro", tag: `drill-${d.period}` }
-      : { title: d.kind === "start" ? "🎓 Simulacro del mes" : "🎓 Hoy vence el simulacro del mes", body: "2 minutos: practica vender sin internet (no se registra nada). Toca para empezar.", url: "/dashboard/pos?simulacro=1", tag: `drill-${d.period}` };
-    if (!byStore.has(d.store_id)) byStore.set(d.store_id, new Map());
-    byStore.get(d.store_id)!.set(d.user_id, payload);
-  }
-  let sent = 0;
-  for (const [storeId, payloads] of byStore) sent += (await sendToUsers(admin, storeId, payloads)).sent;
-  return { people: (data ?? []).length, sent };
 }
