@@ -5,22 +5,38 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { parseQuery, scoreItem } from "@/lib/fuzzy-search";
+import { announceUrlChange } from "@/lib/url-intent";
 
 /**
- * Buscador global (Ctrl+K / ⌘K): páginas, acciones, productos, traslados, pedidos internos, clientes y ventas.
+ * Buscador global (Ctrl+K / ⌘K): páginas, cada pestaña de cada módulo, acciones («nuevo vale», «crear factura»),
+ * productos, traslados, pedidos internos, clientes y ventas. Busca por parecido (tildes, errores, sinónimos)
+ * y recuerda lo que más usas.
  * «?» (fuera de un campo de texto) abre la lista de atajos de teclado.
  * Cada resultado respeta los permisos: lo que no puedes abrir no aparece.
  */
 
-export type PaletteLink = { href: string; label: string; emoji: string; hint?: string; keywords?: string };
-type Hit = PaletteLink & { group: string };
+export type PaletteLink = { href: string; label: string; emoji: string; hint?: string; keywords?: string; action?: boolean };
+type Hit = PaletteLink & { group: string; score?: number };
+
+/** Lo que más usa cada persona (en este equipo): sube en los resultados y sale al abrir. */
+const RECENT_KEY = "remhub:palette-recent";
+type Recent = { href: string; label: string; n: number; at: number };
+const readRecent = (): Recent[] => { try { return JSON.parse(window.localStorage.getItem(RECENT_KEY) ?? "[]") as Recent[]; } catch { return []; } };
+const saveRecent = (h: { href: string; label: string }) => {
+  try {
+    const list = readRecent().filter((r) => !(r.href === h.href && r.label === h.label));
+    const old = readRecent().find((r) => r.href === h.href && r.label === h.label);
+    list.unshift({ href: h.href, label: h.label, n: (old?.n ?? 0) + 1, at: Date.now() });
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 30)));
+  } catch { /* sin almacenamiento */ }
+};
 
 const OPEN_EVENT = "remhub-open-palette";
 export const openCommandPalette = () => window.dispatchEvent(new Event(OPEN_EVENT));
 const HELP_EVENT = "remhub-open-shortcuts";
 export const openShortcuts = () => window.dispatchEvent(new Event(HELP_EVENT));
 
-const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const clean = (t: string) => t.replace(/[,()*%\\"]/g, " ").trim();
 const isTyping = (el: EventTarget | null) => {
   const n = el as HTMLElement | null;
@@ -65,13 +81,23 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
   }, [show]);
   useEffect(() => { if (open) window.setTimeout(() => inputRef.current?.focus(), 30); }, [open]);
 
-  // Páginas y acciones: filtro local, al instante.
+  // Páginas, pestañas y acciones: por parecido y al instante; lo que más usas sube.
+  const [recent, setRecent] = useState<Recent[]>([]);
+  useEffect(() => { if (!open) return; const t = window.setTimeout(() => setRecent(readRecent()), 0); return () => window.clearTimeout(t); }, [open]);
   const local = useMemo<Hit[]>(() => {
-    const words = fold(q.trim()).split(/\s+/).filter(Boolean);
-    const all = links.map((l) => ({ ...l, group: l.href.includes("nuevo=") || l.label.startsWith("Nuevo") || l.label.startsWith("Nueva") || l.label.startsWith("Ingresar") ? "Acciones" : "Ir a" }));
-    if (!words.length) return all.slice(0, 12);
-    return all.filter((l) => { const hay = fold(`${l.label} ${l.hint ?? ""} ${l.keywords ?? ""}`); return words.every((w) => hay.includes(w)); }).slice(0, 8);
-  }, [q, links]);
+    const isAction = (l: PaletteLink) => Boolean(l.action) || l.href.includes("nuevo=") || /^(Nuev[oa]|Ingresar|Registrar|Preparar|Abrir o)/.test(l.label);
+    const all = links.map((l) => ({ ...l, action: isAction(l), group: isAction(l) ? "Acciones" : "Ir a" }));
+    const usage = (l: PaletteLink) => { const r = recent.find((x) => x.href === l.href && x.label === l.label); return r ? Math.min(3, 1 + Math.log2(r.n)) : 0; };
+    const query = parseQuery(q);
+    if (!query.words.length && !query.create) {
+      const rec = recent.map((r) => all.find((l) => l.href === r.href && l.label === r.label)).filter((l): l is NonNullable<typeof l> => !!l).slice(0, 5).map((l) => ({ ...l, group: "Recientes" }));
+      const seen = new Set(rec.map((r) => `${r.href}|${r.label}`));
+      return [...rec, ...all.filter((l) => !seen.has(`${l.href}|${l.label}`)).slice(0, 12)];
+    }
+    const scored = all.map((l) => ({ ...l, score: scoreItem(l, query, usage(l)) })).filter((l) => l.score > 0).sort((a, b) => b.score - a.score);
+    // El mejor primero (en su propio grupo) y luego el resto agrupado.
+    return scored.slice(0, 12).map((l, i) => (i === 0 ? { ...l, group: "Mejor resultado" } : l));
+  }, [q, links, recent]);
 
   // Datos: productos, traslados, pedidos internos, clientes y ventas (con una pausa corta al escribir).
   useEffect(() => {
@@ -158,8 +184,17 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
   const go = useCallback((h: Hit | undefined) => {
     if (!h) return;
     setOpen(false);
-    if (h.href.startsWith("/pedido/")) window.open(h.href, "_blank", "noopener");
-    else router.push(h.href);
+    saveRecent(h);
+    if (h.href.startsWith("/pedido/")) { window.open(h.href, "_blank", "noopener"); return; }
+    const target = new URL(h.href, window.location.origin);
+    if (target.pathname === window.location.pathname) {
+      // Misma página: cambia la dirección y avisa para que abra la pestaña o el formulario sin recargar.
+      window.history.pushState(null, "", target.pathname + target.search);
+      announceUrlChange();
+      window.dispatchEvent(new Event("remhub-tab-change"));
+      return;
+    }
+    router.push(h.href);
   }, [router]);
 
   useEffect(() => {
@@ -191,7 +226,7 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
                   else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
                   else if (e.key === "Enter") { e.preventDefault(); go(hits[active]); }
                 }}
-                placeholder="Buscar página, producto, #traslado, cliente, factura…"
+                placeholder="¿Qué buscas o qué quieres crear? Ej.: vales, nueva factura, liquidación…"
                 className="h-14 flex-1 text-base"
                 style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0, minHeight: 0, borderRadius: 0, outline: "none", color: "var(--t-text)" }}
                 aria-label="Buscar"
@@ -220,7 +255,7 @@ export function CommandPalette({ storeId, links, can }: { storeId: string | null
               {!hits.length && !loading ? <p className="px-3 py-8 text-center text-sm" style={{ color: "var(--t-muted)" }}>Nada coincide con «{q}». Prueba con otra palabra, una referencia o un número (#14).</p> : null}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-[11px]" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-              <span>↑ ↓ para moverte · Enter para abrir · escribe #14 para un traslado o pedido</span>
+              <span>↑ ↓ moverte · Enter abrir · «nuevo …» para crear · #14 para un traslado o pedido</span>
               <button type="button" className="font-semibold underline" onClick={() => { setOpen(false); setHelp(true); }}>Atajos de teclado (?)</button>
             </div>
           </div>

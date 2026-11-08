@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useUrlTab } from "@/lib/url-intent";
 import { HandCoins, LayoutDashboard, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -22,7 +23,7 @@ export default function GastosPage() {
   const [cat, setCat] = useState<Catalog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useUrlTab<Tab>(["overview", "expenses", "recurring", "budgets", "payroll", "loans", "reserves"], "overview");
   const [openExpense, setOpenExpense] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
 

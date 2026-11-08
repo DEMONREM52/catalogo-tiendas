@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useUrlAction } from "@/lib/url-intent";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Camera, Check, Download, FileText, Hash, Paperclip, Pencil, Plus, Receipt, Search, Store, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -39,6 +40,8 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
   const [range, setRange] = useState<[string, string]>(() => { const d = new Date(); return [iso(new Date(d.getFullYear(), d.getMonth() - 2, 1)), iso(new Date(d.getFullYear(), d.getMonth() + 1, 0))]; });
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Expense | "new" | null>(null);
+  // Desde el buscador: «Nuevo gasto».
+  useUrlAction("gasto", () => { if (cat.can.expenses) setEditing("new"); });
   const visible = cat.my_points ? points.filter((p) => cat.my_points!.includes(p.id)) : points;
 
   const load = useCallback(async () => {

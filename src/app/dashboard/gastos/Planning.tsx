@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUrlAction } from "@/lib/url-intent";
 import { AnimatePresence } from "framer-motion";
 import { ArrowDownCircle, ArrowUpCircle, CalendarClock, Check, Pencil, PiggyBank, Plus, Repeat, Tags, Target, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -23,6 +24,8 @@ const Empty = ({ icon, title, text }: { icon: React.ReactNode; title: string; te
 // ================================================================ GASTOS FIJOS
 export function RecurringTab({ storeId, points, cat, onChanged }: { storeId: string; points: Point[]; cat: Catalog; onChanged: () => void }) {
   const [editing, setEditing] = useState<Recurring | "new" | null>(null);
+  // Desde el buscador: «Nuevo gasto fijo».
+  useUrlAction("gasto-fijo", () => { if (cat.can.expenses || cat.can.budgets) setEditing("new"); });
   const can = cat.can.budgets || cat.can.expenses;
   const totalMonthly = cat.recurring.filter((r) => r.active).reduce((s, r) => s + n(r.amount) * PER_MONTH[r.frequency], 0);
 
@@ -275,6 +278,8 @@ function CategoryForm({ storeId, initial, onClose, onSaved }: { storeId: string;
 // ================================================================ RESERVAS
 export function ReservesTab({ storeId, points, cat, onChanged }: { storeId: string; points: Point[]; cat: Catalog; onChanged: () => void }) {
   const [editing, setEditing] = useState<Fund | "new" | null>(null);
+  // Desde el buscador: «Nueva reserva».
+  useUrlAction("reserva", () => { if (cat.can.budgets) setEditing("new"); });
   const [moving, setMoving] = useState<{ fund: Fund; kind: "in" | "out" } | null>(null);
   const total = cat.funds.filter((f) => f.active).reduce((s, f) => s + n(f.balance), 0);
 

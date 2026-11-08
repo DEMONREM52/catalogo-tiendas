@@ -578,6 +578,16 @@ export const RELEASES: Release[] = [
       { icon: "📲", text: "En el celular, compártelo por WhatsApp" },
     ],
   },
+  {
+    id: 55, date: "2026-11-08", title: "Pestañas nuevas y buscador maestro",
+    summary: "Las pestañas de cada sección tienen su ícono y su color para ubicarlas de un vistazo. Y el buscador (Ctrl+K) entiende lo que escribes: «vales», «nueva factura», «liquidasion» con error… te lleva directo a la pestaña o abre el formulario para crear.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🔍", text: "Toca Buscar o Ctrl + K" },
+      { icon: "✍️", text: "Escribe «vales» o «nuevo vale»" },
+      { icon: "⚡", text: "Enter: te lleva directo, o abre el formulario" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

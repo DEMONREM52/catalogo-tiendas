@@ -41,6 +41,7 @@ import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
+import { SEARCH_INDEX } from "@/lib/search-index";
 import { HelpButton } from "@/components/HelpButton";
 import { GuidedTourHost } from "@/components/tour/GuidedTour";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
@@ -827,21 +828,12 @@ export default function DashboardShell({
   const paletteLinks = useMemo<PaletteLink[]>(() => {
     if (!canAccessStorePages) return [];
     const out: PaletteLink[] = [];
-    const add = (l: PaletteLink, ok: boolean) => { if (ok && !out.some((x) => x.href === l.href)) out.push(l); };
-    add({ href: "/dashboard/pos", emoji: "💳", label: "Nueva venta (POS)", keywords: "vender facturar remision caja" }, canOpen("pos"));
-    add({ href: "/dashboard/inventario?tab=transfers", emoji: "🚚", label: "Nuevo traslado", keywords: "enviar mercancia bodega punto" }, canOpen("transfers") || canOpen("inventory"));
-    add({ href: "/dashboard/inventario?tab=purchases", emoji: "🛒", label: "Ingresar factura de compra", keywords: "proveedor compra ingreso" }, canOpen("purchases"));
-    add({ href: "/dashboard/products/crear", emoji: "✨", label: "Nuevo producto", keywords: "crear articulo" }, canOpen("products_create"));
-    add({ href: "/dashboard/products/importar", emoji: "📥", label: "Importar productos desde Excel", keywords: "excel csv subir masivo plantilla" }, canOpen("products_import"));
-    add({ href: "/dashboard/pedidos?tab=internos", emoji: "📨", label: "Nuevo pedido interno", keywords: "pedir mercancia punto bodega" }, ["stock_requests", "stock_requests_manage", "transfers"].some((p) => canOpen(p)));
+    const add = (l: PaletteLink, ok: boolean) => { if (ok && !out.some((x) => x.href === l.href && (x.label === l.label || !l.action && !x.action))) out.push(l); };
+    // Destinos y acciones del buscador (cada pestaña de cada módulo, «Nuevo vale», «Nueva nómina»…).
+    for (const e of SEARCH_INDEX) add({ href: e.href, emoji: e.emoji, label: e.label, hint: e.hint, keywords: e.keywords, action: e.action },
+      (!e.perms.length || e.perms.some((p) => canOpen(p))) && (!e.adminOnly || storeIsOwner || isStoreAdmin));
     for (const g of menu) for (const i of g.items) add({ href: i.href, emoji: i.emoji, label: i.label, hint: i.hint ?? g.title }, true);
     for (const tabs of Object.values(MODULE_TABS)) for (const t of tabs) add({ href: t.href, emoji: t.icon, label: t.label }, t.permissions.some((p) => canOpen(p)) && (!t.adminOnly || storeIsOwner || isStoreAdmin));
-    const inv: Array<[string, string, string, string[]]> = [
-      ["stock", "📦", "Existencias", ["inventory"]], ["transfers", "🚚", "Traslados", ["transfers", "inventory"]], ["adjustments", "🛠️", "Ajustes de inventario", ["inventory_adjust", "inventory"]],
-      ["kardex", "📒", "Kardex", ["inventory"]], ["purchases", "🛒", "Facturas de compra", ["purchases"]], ["suppliers", "🏭", "Proveedores", ["suppliers", "purchases"]],
-      ["payables", "💸", "Cuentas por pagar", ["payables"]], ["internal", "🤝", "Cuenta con puntos", ["internal_credit", "internal_credit_manage"]], ["stale", "💤", "Productos sin movimiento", ["inventory", "reports"]], ["expiry", "📅", "Vencimientos", ["inventory", "purchases", "products"]],
-    ];
-    for (const [key, emoji, label, perms] of inv) add({ href: `/dashboard/inventario?tab=${key}`, emoji, label, hint: "Inventario" }, perms.some((p) => canOpen(p)));
     return out;
   }, [canAccessStorePages, menu, canOpen, storeIsOwner, isStoreAdmin]);
 

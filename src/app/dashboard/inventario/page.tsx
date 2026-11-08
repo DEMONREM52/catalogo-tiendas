@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { URL_CHANGE_EVENT } from "@/lib/url-intent";
 import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench } from "lucide-react";
 import { SectionTabs } from "@/components/ui/SectionTabs";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
@@ -55,6 +56,14 @@ export default function InventarioPage() {
   const [ctx, setCtx] = useState<ErpCtx | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [tab, setTab] = useState<TabKey>("overview");
+  useEffect(() => {
+    const read = () => {
+      const wanted = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
+      if (wanted && TABS.some((t) => t.key === wanted)) setTab(wanted);
+    };
+    window.addEventListener(URL_CHANGE_EVENT, read);
+    return () => window.removeEventListener(URL_CHANGE_EVENT, read);
+  }, []);
   const [error, setError] = useState<string | null>(null);
 
   const loadWarehouses = useCallback(async (storeId: string) => {

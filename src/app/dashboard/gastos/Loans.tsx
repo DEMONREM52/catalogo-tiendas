@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useUrlAction } from "@/lib/url-intent";
 import Swal from "sweetalert2";
 import { Banknote, Copy, ExternalLink, FileBarChart, HandCoins, MessageCircle, Pause, Pencil, PenLine, Play, Plus, Printer, Search, ShoppingBag, Trash2, X } from "lucide-react";
 import { storeName } from "./PayrollReport";
@@ -41,6 +42,8 @@ export function LoansTab({ storeId, points, cat, onChanged }: { storeId: string;
   const [loans, setLoans] = useState<Loan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Desde el buscador: «Nuevo vale».
+  useUrlAction("vale", () => { if (cat.can.payroll) setCreating(true); });
   const [paying, setPaying] = useState<Loan | null>(null);
   const [filter, setFilter] = useState<"active" | "all">("active");
   const [q, setQ] = useState("");

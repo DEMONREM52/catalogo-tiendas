@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useUrlTab } from "@/lib/url-intent";
 import { BarChart3, Calculator, HandCoins, Package, ShieldCheck, Store, Tags, TrendingUp } from "lucide-react";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -25,7 +26,8 @@ export default function RentabilidadPage() {
   const [points, setPoints] = useState<Point[]>([]);
   const [settings, setSettings] = useState<ProfitSettings | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab | null>(null);
+  const [urlTab, setTab] = useUrlTab<Tab | "auto">(["summary", "points", "products", "rules", "limits", "settle", "sim"], "auto");
+  const tab: Tab | null = urlTab === "auto" ? null : urlTab;
 
   const loadSettings = useCallback(async (store: string) => {
     const { data, error } = await supabaseBrowser().rpc("erp_profit_settings_get", { p_store: store });

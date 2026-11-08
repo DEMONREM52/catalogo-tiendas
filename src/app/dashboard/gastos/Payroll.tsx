@@ -1,6 +1,7 @@
 "use client";
 
 import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
+import { useUrlAction } from "@/lib/url-intent";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Printer, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
@@ -40,6 +41,11 @@ export function PayrollTab({ storeId, points, cat, onChanged }: { storeId: strin
   const [reporting, setReporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | "new" | null>(null);
+  // Desde el buscador: «Nueva nómina» y «Nuevo empleado».
+  useUrlAction(["nomina", "empleado"], (n) => {
+    if (!cat.can.payroll) return;
+    if (n === "nomina") { setView("runs"); setCreating(true); } else { setView("people"); setEditingEmp("new"); }
+  });
   const employees = cat.employees ?? [];
   const visible = cat.my_points ? points.filter((p) => cat.my_points!.includes(p.id)) : points;
 
