@@ -72,7 +72,35 @@ const TABS: Array<{ key: Tab; label: string; icon: React.ReactNode }> = [
 function themeSwatch(theme: ThemeOption) {
   const cfg = (theme.config ?? {}) as Record<string, unknown>;
   const pick = (k: string, fallback: string) => (typeof cfg[k] === "string" && String(cfg[k]).trim() ? String(cfg[k]) : fallback);
-  return { accent: pick("accent", "#a855f7"), accent2: pick("accent2", "#ec4899"), bg: pick("bg", "#100b18") };
+  return { accent: pick("accent", "#a855f7"), accent2: pick("accent2", "#ec4899"), bg: pick("bg", "#100b18"), card: pick("card", ""), text: pick("text", "") };
+}
+
+/** Mini vista del catálogo con los colores del tema (encabezado, dos productos con precio y el botón). */
+function ThemeMock({ sw }: { sw: ReturnType<typeof themeSwatch> }) {
+  const dark = (() => { const h = sw.bg.replace("#", ""); if (h.length < 6) return true; const n = parseInt(h.slice(0, 6), 16); const l = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; return l < 0.5; })();
+  const card = sw.card || (dark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.05)");
+  const ink = sw.text || (dark ? "rgba(255,255,255,.85)" : "rgba(0,0,0,.75)");
+  const soft = dark ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.12)";
+  return (
+    <span className="mb-1.5 block overflow-hidden rounded-xl p-1.5" style={{ background: sw.bg }}>
+      <span className="flex items-center gap-1">
+        <span className="h-3 w-3 rounded-full" style={{ background: `linear-gradient(135deg, ${sw.accent}, ${sw.accent2})` }} />
+        <span className="h-1.5 w-10 rounded-full" style={{ background: ink, opacity: 0.8 }} />
+        <span className="ml-auto h-2.5 w-6 rounded-full" style={{ background: soft }} />
+      </span>
+      <span className="mt-1.5 block h-5 rounded-md" style={{ background: `linear-gradient(110deg, ${sw.accent}, ${sw.accent2})` }} />
+      <span className="mt-1.5 grid grid-cols-2 gap-1">
+        {[0, 1].map((i) => (
+          <span key={i} className="block rounded-md p-1" style={{ background: card }}>
+            <span className="block h-5 rounded" style={{ background: soft }} />
+            <span className="mt-1 block h-1 w-3/4 rounded-full" style={{ background: ink, opacity: 0.55 }} />
+            <span className="mt-1 block h-1.5 w-1/2 rounded-full" style={{ background: sw.accent }} />
+          </span>
+        ))}
+      </span>
+      <span className="mt-1.5 block h-2.5 rounded-full" style={{ background: `linear-gradient(90deg, ${sw.accent}, ${sw.accent2})` }} />
+    </span>
+  );
 }
 
 function normalizeCatalog(row: StoreCatalog): StoreCatalog {
@@ -460,36 +488,37 @@ export function CatalogEditor({
                     <Section title="Logo y portada" hint="Si no subes nada, se usan los de tu tienda." icon={<ImageIcon size={18} />}>
                       <div className="grid gap-3 lg:grid-cols-2">
                         <div>
-                          <ImageUpload label="Logo del catálogo" currentUrl={draft.logo_url} pathPrefix={`${store.id}/catalogs/${catalogId}/`} fileName="logo.png" onUploaded={(url) => patch({ logo_url: url })} />
-                          {draft.logo_url ? <button type="button" onClick={() => patch({ logo_url: null })} className="mt-1 text-xs underline" style={{ color: "var(--t-muted)" }}>Usar el logo de la tienda</button> : null}
+                          <ImageUpload label="Logo del catálogo" currentUrl={draft.logo_url ?? store.logo_url ?? null} pathPrefix={`${store.id}/catalogs/${catalogId}/`} fileName="logo.png" onUploaded={(url) => patch({ logo_url: url })} />
+                          {draft.logo_url ? <button type="button" onClick={() => patch({ logo_url: null })} className="mt-1 text-xs underline" style={{ color: "var(--t-muted)" }}>Usar el logo de la tienda</button> : store.logo_url ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>🏪 Usando el logo de la tienda. Sube otro si este catálogo lleva uno propio.</p> : null}
                         </div>
                         <div>
-                          <ImageUpload label="Portada (carrusel sin campañas)" currentUrl={draft.banner_url} pathPrefix={`${store.id}/catalogs/${catalogId}/`} fileName="banner.png" onUploaded={(url) => patch({ banner_url: url })} />
-                          {draft.banner_url ? <button type="button" onClick={() => patch({ banner_url: null })} className="mt-1 text-xs underline" style={{ color: "var(--t-muted)" }}>Usar la portada de la tienda</button> : null}
+                          <ImageUpload label="Portada (carrusel sin campañas)" currentUrl={draft.banner_url ?? store.banner_url ?? null} pathPrefix={`${store.id}/catalogs/${catalogId}/`} fileName="banner.png" onUploaded={(url) => patch({ banner_url: url })} />
+                          {draft.banner_url ? <button type="button" onClick={() => patch({ banner_url: null })} className="mt-1 text-xs underline" style={{ color: "var(--t-muted)" }}>Usar la portada de la tienda</button> : store.banner_url ? <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>🏪 Usando la portada de la tienda. Sube otra si este catálogo lleva una propia.</p> : null}
                         </div>
                       </div>
                     </Section>
 
                     <Section title="Tema de colores" hint="Elige cómo se ve este catálogo." icon={<Palette size={18} />}>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                         <button
                           type="button"
                           onClick={() => patch({ theme: null })}
-                          className="rounded-2xl border-2 p-2 text-left text-xs font-semibold"
-                          style={{ borderColor: !draft.theme ? "var(--t-accent)" : "var(--t-card-border)" }}
+                          className="relative rounded-2xl border-2 p-2 text-left text-xs font-semibold transition hover:-translate-y-0.5"
+                          style={{ borderColor: !draft.theme ? "var(--t-accent)" : "var(--t-card-border)", boxShadow: !draft.theme ? "0 10px 24px -14px var(--t-accent)" : undefined }}
                         >
-                          <span className="mb-1.5 grid h-10 place-items-center rounded-xl" style={{ background: "var(--t-card-bg-soft)" }}><StoreIcon size={16} /></span>
+                          <span className="mb-1.5 grid h-[106px] place-items-center rounded-xl text-center" style={{ background: "var(--t-card-bg-soft)" }}>
+                            <span><StoreIcon size={22} className="mx-auto" /><span className="mt-1 block text-[10px] font-normal" style={{ color: "var(--t-muted)" }}>El tema de Mi tienda</span></span>
+                          </span>
                           Igual a la tienda
+                          {!draft.theme ? <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full text-white" style={{ background: "var(--t-accent)" }}><Check size={12} /></span> : null}
                         </button>
                         {themes.map((t) => {
                           const sw = themeSwatch(t);
                           const selected = draft.theme === t.id;
                           return (
-                            <button key={t.id} type="button" onClick={() => patch({ theme: t.id })} className="relative rounded-2xl border-2 p-2 text-left text-xs font-semibold" style={{ borderColor: selected ? "var(--t-accent)" : "var(--t-card-border)" }}>
-                              <span className="mb-1.5 flex h-10 overflow-hidden rounded-xl" style={{ background: sw.bg }}>
-                                <span className="m-auto h-5 w-5 rounded-full" style={{ background: sw.accent }} />
-                                <span className="m-auto h-5 w-5 rounded-full" style={{ background: sw.accent2 }} />
-                              </span>
+                            <button key={t.id} type="button" onClick={() => patch({ theme: t.id })} className="relative rounded-2xl border-2 p-2 text-left text-xs font-semibold transition hover:-translate-y-0.5"
+                              style={{ borderColor: selected ? sw.accent : "var(--t-card-border)", boxShadow: selected ? `0 10px 24px -14px ${sw.accent}` : undefined }}>
+                              <ThemeMock sw={sw} />
                               <span className="line-clamp-1">{t.name}</span>
                               {selected ? <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full text-white" style={{ background: "var(--t-accent)" }}><Check size={12} /></span> : null}
                             </button>
