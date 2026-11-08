@@ -119,5 +119,12 @@ ok(n(zp.stock_value) === 10 * 11500 + 6 * 23000, "Precio de bodega (costo + 15 %
 const b3 = await one(CREDIT_ONLY, "select public.erp_internal_board($1) r", [A]);
 ok(b3.points.every((p) => p.stock_cost === undefined), "Quien no puede ver costos no recibe el costo real", b3.points);
 
+console.log("6. Mismo permiso que la liquidación (20261298)");
+await db.exec(fs.readFileSync(path.join(MIG, "20261298_costo_real_mismo_permiso.sql"), "utf8"));
+const b4 = await one(ZUSER, "select public.erp_internal_board($1) r", [A]);
+ok(b4.can_see_costs && n(b4.points.find((p) => p.point_id === Z)?.stock_cost) === 10 * 10000 + 6 * 20000, "Con «Ver rentabilidad» también ve el costo real (como en la liquidación)", b4);
+const b5 = await one(CREDIT_ONLY, "select public.erp_internal_board($1) r", [A]);
+ok(b5.points.every((p) => p.stock_cost === undefined), "Sin «Ver costos» ni «Ver rentabilidad» sigue sin verlo");
+
 console.log(`\n${pass} ok · ${fail} fallas`);
 process.exit(fail ? 1 : 0);
