@@ -490,6 +490,16 @@ export const RELEASES: Release[] = [
       { icon: "📄", text: "Las firmas salen en el informe PDF" },
     ],
   },
+  {
+    id: 46, date: "2026-11-08", title: "Informes por fecha y hora, y liquidación del punto mejorada",
+    summary: "Nuevo informe de ventas, costo y ganancia en cualquier rango con hora (por punto, día a día, productos y vendedores, con Excel y PDF). La liquidación del punto compara las 5 listas y explica cada producto con pérdida.",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "📅", text: "Toca «Por fechas y horas» en Puntos" },
+      { icon: "⏰", text: "Escoge desde y hasta, con la hora" },
+      { icon: "⚠️", text: "En la liquidación mira «Pérdidas» y «Comparar listas»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

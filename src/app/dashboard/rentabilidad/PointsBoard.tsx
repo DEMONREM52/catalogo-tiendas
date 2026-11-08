@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { PointValuationModal } from "@/app/dashboard/inventario/PointValuation";
 import { cardStyle, cop, downloadCsv } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { RangeReportSheet } from "./RangeReport";
 
 /**
  * Tablero de puntos: cómo le va a cada punto mes a mes (ventas, ganancia, gastos, ganancia neta), frente al periodo anterior,
@@ -69,6 +70,7 @@ export function PointsBoard({ storeId }: { storeId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [cfg, setCfg] = useState(false);
   const [valuation, setValuation] = useState<PointData | null>(null);
+  const [range, setRange] = useState(false);
 
   useEffect(() => { try { window.localStorage.setItem(prefsKey, JSON.stringify(prefs)); } catch { /* sin almacenamiento */ } }, [prefs, prefsKey]);
   const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setPrefs((cur) => ({ ...cur, [k]: v }));
@@ -232,6 +234,7 @@ export function PointsBoard({ storeId }: { storeId: string }) {
           <button type="button" className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={chip(prefs.view === "cards")} onClick={() => set("view", "cards")}>▦ Tarjetas</button>
           <button type="button" className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={chip(prefs.view === "table")} onClick={() => set("view", "table")}>☰ Tabla</button>
           <div className="ml-auto flex flex-wrap gap-1.5">
+            <button type="button" className="rounded-full px-3 py-1.5 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }} onClick={() => setRange(true)} title="Ventas, costo y ganancia desde una fecha y hora hasta otra">📅 Por fechas y horas</button>
             <button type="button" className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={chip(cfg)} onClick={() => setCfg((v) => !v)}>⚙️ Personalizar</button>
             <button type="button" className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={chip(false)} onClick={exportCsv}>⬇️ Exportar</button>
           </div>
@@ -332,6 +335,9 @@ export function PointsBoard({ storeId }: { storeId: string }) {
 
       <AnimatePresence>
         {valuation ? <PointValuationModal key="val" storeId={storeId} pointId={valuation.point_id} pointName={valuation.name} onClose={() => setValuation(null)} /> : null}
+      </AnimatePresence>
+      <AnimatePresence>
+        {range ? <RangeReportSheet key="range" storeId={storeId} points={(board?.points ?? []).map((p) => ({ id: p.point_id, name: p.name }))} onClose={() => setRange(false)} /> : null}
       </AnimatePresence>
     </div>
   );
