@@ -7,11 +7,16 @@ import { GalleryEditor } from "./GalleryEditor";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { getYoutubeThumbnailUrl, isSafeHttpUrl, type ProductDetails } from "@/lib/product-details";
 
+type Part = "long" | "highlights" | "specs" | "media";
 type Props = {
   details: ProductDetails;
   onChange: (details: ProductDetails) => void;
   userId: string | null;
   productId?: string;
+  /** Qué partes mostrar (por defecto todas). */
+  parts?: Part[];
+  /** Sin el marco ni el título «Página de producto» (cuando va dentro de otra sección). */
+  bare?: boolean;
 };
 
 const textStyle: React.CSSProperties = {
@@ -108,7 +113,8 @@ function VideoField({ label, icon, value, onChange, hint }: { label: string; ico
   );
 }
 
-export default function ProductDetailsFields({ details, onChange, userId, productId }: Props) {
+export default function ProductDetailsFields({ details, onChange, userId, productId, parts = ["long", "highlights", "specs", "media"], bare = false }: Props) {
+  const show = (p: Part) => parts.includes(p);
   const [uploadId] = useState(() => Math.random().toString(36).slice(2));
   // Filas mientras se escriben (las vacías no se guardan).
   const [highlights, setHighlights] = useState<string[]>(() => details.highlights);
@@ -143,22 +149,24 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
   const desc = details.long_description;
 
   return (
-    <section className="space-y-4 rounded-[22px] border p-4 sm:p-5" style={textStyle}>
-      <div>
-        <h2 className="text-lg font-bold">✨ Página de producto</h2>
-        <p className="mt-1 text-sm opacity-75">Agrega información comprobable para que tus clientes conozcan mejor el producto. Todo esto sale en la ficha, el catálogo y las landing pages.</p>
-      </div>
+    <section className={bare ? "space-y-4" : "space-y-4 rounded-[22px] border p-4 sm:p-5"} style={bare ? undefined : textStyle}>
+      {bare ? null : (
+        <div>
+          <h2 className="text-lg font-bold">✨ Página de producto</h2>
+          <p className="mt-1 text-sm opacity-75">Agrega información comprobable para que tus clientes conozcan mejor el producto. Todo esto sale en la ficha, el catálogo y las landing pages.</p>
+        </div>
+      )}
 
-      <Box icon="📝" title="Descripción completa" hint="Cuenta para qué sirve, cómo se usa y por qué vale la pena" right={<span className="text-[11px] font-semibold" style={muted}>{desc.length.toLocaleString("es-CO")} / 10.000</span>}>
+      {show("long") ? <Box icon="📝" title="Descripción completa" hint="Cuenta para qué sirve, cómo se usa y por qué vale la pena" right={<span className="text-[11px] font-semibold" style={muted}>{desc.length.toLocaleString("es-CO")} / 10.000</span>}>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {DESC_STARTERS.map((s) => (
             <button key={s} type="button" onClick={() => update("long_description", `${desc}${desc && !desc.endsWith("\n") ? "\n" : ""}${s}`)} className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:-translate-y-0.5" style={textStyle}>+ {s.trim()}</button>
           ))}
         </div>
         <RichTextEditor value={desc} onChange={(v) => update("long_description", v)} placeholder="Detalles, usos y contexto que conozcas del producto…" maxLength={10000} />
-      </Box>
+      </Box> : null}
 
-      <Box icon="⭐" title="Características" hint="Toca las sugerencias para agregarlas o quitarlas (puedes elegir varias). Cada una lleva su ícono." right={highlights.length ? <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)" }}>{highlights.length} elegidas</span> : null}>
+      {show("highlights") ? <Box icon="⭐" title="Características" hint="Toca las sugerencias para agregarlas o quitarlas (puedes elegir varias). Cada una lleva su ícono." right={highlights.length ? <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 18%, transparent)" }}>{highlights.length} elegidas</span> : null}>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {HIGHLIGHT_GROUPS.map(([g]) => (
             <button key={g} type="button" onClick={() => setOpenGroup(g)} className="rounded-full px-3 py-1 text-xs font-bold transition" style={openGroup === g ? { background: "var(--t-cta)", color: "#fff" } : { ...textStyle, border: "1px solid var(--t-card-border)" }}>{g}</button>
@@ -197,9 +205,9 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
           <input value={newHighlight} onChange={(e) => setNewHighlight(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }} placeholder="Escribe una propia (ej. Cancelación de ruido) y presiona Enter" className="w-full rounded-xl border p-2.5 text-sm outline-none" style={textStyle} maxLength={160} />
           <button type="button" onClick={addCustom} disabled={!newHighlight.trim()} className="inline-flex shrink-0 items-center gap-1 rounded-xl px-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: "var(--t-cta)" }}><Plus size={15} /> Agregar</button>
         </div>
-      </Box>
+      </Box> : null}
 
-      <Box icon="📋" title="Especificaciones" hint="Datos técnicos en filas: toca un nombre para agregarlo y escribe su valor">
+      {show("specs") ? <Box icon="📋" title="Especificaciones" hint="Datos técnicos en filas: toca un nombre para agregarlo y escribe su valor">
         <div className="flex flex-wrap gap-1.5">
           {SPEC_NAMES.map(([ic, name]) => {
             const used = specs.some((s) => s.name.trim().toLowerCase() === name.toLowerCase());
@@ -228,8 +236,9 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
         ) : null}
         <button type="button" onClick={() => { focusSpec.current = true; saveSpecs([...specs, { name: "", value: "" }]); }} className="mt-3 inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm font-semibold" style={textStyle}><Plus size={14} /> Otra especificación</button>
         {specs.some((s) => s.name.trim() && !s.value.trim()) ? <p className="mt-2 text-xs font-semibold" style={{ color: "#d97706" }}>Las filas sin valor no se guardan.</p> : null}
-      </Box>
+      </Box> : null}
 
+      {show("media") ? <>
       <div className="grid gap-3 sm:grid-cols-2">
         <VideoField icon="🎬" label="Video del producto" hint="YouTube (también «shorts») o un enlace .mp4" value={details.video_url} onChange={(v) => update("video_url", v)} />
         <VideoField icon="📘" label="Tutorial o guía de uso" hint="Un video o página que explique cómo usarlo" value={details.tutorial_url} onChange={(v) => update("tutorial_url", v)} />
@@ -242,6 +251,7 @@ export default function ProductDetailsFields({ details, onChange, userId, produc
         productId={productId}
         uploadId={uploadId}
       />
+      </> : null}
     </section>
   );
 }

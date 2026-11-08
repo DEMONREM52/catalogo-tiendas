@@ -588,6 +588,16 @@ export const RELEASES: Release[] = [
       { icon: "⚡", text: "Enter: te lleva directo, o abre el formulario" },
     ],
   },
+  {
+    id: 56, date: "2026-11-08", title: "Crear y editar producto, más fácil",
+    summary: "La ficha del producto ahora va por secciones (Lo básico, Precios, Inventario, Fotos y videos, Descripción, Características, Códigos y Catálogos), con lo listo marcado ✓, lo opcional señalado, vista previa de cómo se ve en el catálogo y Guardar siempre a la mano.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "📦", text: "Abre un producto o «Nuevo producto»" },
+      { icon: "👉", text: "Ve sección por sección con «Siguiente»" },
+      { icon: "👀", text: "Mira a la derecha cómo queda en el catálogo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

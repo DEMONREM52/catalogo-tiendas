@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
-import Link from "next/link";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
@@ -19,56 +19,10 @@ import { checkProductCode, cleanProductCode } from "../product-code";
 import { PricingPanel, loadDefaultMarkup, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { BadgeDollarSign, FileText, Images, ListChecks, Package, ScanBarcode } from "lucide-react";
+import { Field, ProductEditorLayout, ProductPreviewCard, inputCls, inputStyle, type EditorSection } from "../ProductEditorLayout";
 
 type Category = { id: string; name: string };
-
-// ✅ Helpers de estilo (tokens CSS → auto claro/oscuro por sistema)
-function wrapProps() {
-  return {
-    className: "rounded-[24px] border backdrop-blur-xl",
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "var(--t-card-bg)",
-      boxShadow: "var(--t-shadow)",
-    } as React.CSSProperties,
-  };
-}
-
-function inputProps(extraClassName = "") {
-  return {
-    className: `w-full rounded-2xl border p-3 text-sm outline-none ${extraClassName}`,
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-      color: "var(--t-text)",
-    } as React.CSSProperties,
-  };
-}
-
-function btnSoftProps() {
-  return {
-    className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-      color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
-    } as React.CSSProperties,
-  };
-}
-
-function btnPrimaryProps() {
-  return {
-    className:
-      "rounded-2xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    style: {
-      borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)",
-      background: "color-mix(in oklab, var(--t-accent) 18%, transparent)",
-      color: "var(--t-text)",
-      boxShadow: "0 0 22px color-mix(in oklab, var(--t-accent) 14%, transparent)",
-    } as React.CSSProperties,
-  };
-}
 
 function digitsOnlyToNumber(raw: string, fallback = 0) {
   const digits = String(raw ?? "").replace(/\D/g, "");
@@ -77,6 +31,7 @@ function digitsOnlyToNumber(raw: string, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 export default function CreateProductPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // Evita crear el producto dos veces con un doble toque.
@@ -251,181 +206,112 @@ export default function CreateProductPage() {
 
   if (loading) {
     return (
-      <main className="p-4 sm:p-6" style={{ color: "var(--t-text)" }}>
-<div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]" role="status" aria-label="Cargando…">
+      <main className="space-y-3 px-3 py-3 sm:p-6" style={{ color: "var(--t-text)" }}>
+        <Skeleton className="h-24 w-full rounded-[22px]" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[230px_1fr_300px]" role="status" aria-label="Cargando…">
+          <div className="hidden space-y-2 lg:block">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full rounded-2xl" />)}</div>
           <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
-            <Skeleton className="h-40 w-full rounded-2xl" />
-            <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-2/3" /><Skeleton className="h-28 w-full" />
+            <Skeleton className="h-12 w-1/2" /><Skeleton className="h-11 w-full" /><Skeleton className="h-40 w-full" />
           </div>
-          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
-            <Skeleton className="h-5 w-32" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
-          </div>
+          <Skeleton className="hidden aspect-[3/4] w-full rounded-[22px] lg:block" />
         </div>
       </main>
     );
   }
 
-  const wMain = wrapProps();
-  const wRight = wrapProps();
-
-  const soft = btnSoftProps();
-  const primary = btnPrimaryProps();
+  const mainCategory = categories.find((c) => c.id === categoryIds[0])?.name ?? null;
+  const sections: EditorSection[] = [
+    {
+      key: "basic", label: "Lo básico", icon: <Package />, color: "#8b5cf6", hint: "Solo el nombre es obligatorio. Lo demás lo puedes completar ahora o después.",
+      done: Boolean(name.trim()),
+      content: (
+        <div className="grid gap-4 sm:grid-cols-[200px_minmax(0,1fr)]">
+          <div>
+            <p className="mb-1.5 text-sm font-bold">📸 Foto principal</p>
+            <div className="mx-auto max-w-[200px] sm:max-w-none">
+            {userId ? (
+              <ImageUpload label="Subir foto" currentUrl={imageUrl} pathPrefix={`${userId}/products/`} fileName={`new-${Date.now()}.png`} bucket="product-images" onUploaded={(url) => setImageUrl(url)} />
+            ) : <Skeleton className="aspect-square w-full rounded-2xl" />}
+            </div>
+            <p className="mt-1 text-center text-[11px] sm:text-left" style={{ color: "var(--t-muted)" }}>Opcional, pero ayuda a vender.</p>
+          </div>
+          <div className="space-y-4">
+            <Field label="Nombre" icon="🏷️" help="Así lo ven tus clientes y así lo buscas en el POS.">
+              <input autoFocus className={inputCls} style={inputStyle} value={name} maxLength={160} onChange={(e) => setName(e.target.value)} placeholder="Ej: Reloj inteligente Ultra 10 Pro" />
+            </Field>
+            <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
+            <Field label="Descripción corta" icon="💬" help="Una o dos frases que salen debajo del nombre.">
+              <RichTextEditor value={description} onChange={setDescription} placeholder="Ej: Resistente al agua, batería de 7 días y más de 100 modos deportivos." minHeight={90} />
+            </Field>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "prices", label: "Precios", icon: <BadgeDollarSign />, color: "#10b981", hint: "El % de ganancia de cada lista. El precio sale solo cuando ingreses la factura con el costo.",
+      done: markups.some((m) => m !== null),
+      content: (
+        <>
+          {storeId && canPrices ? <PricingPanel isNew part="pricing" storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}
+          {storeId && !canPrices ? (
+            <p className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+              💲 Los precios se calculan solos con el % de ganancia de la tienda ({markups[0]} %) cuando se haga el ingreso de factura. Solo quien tiene «Cambiar precios» puede ajustarlos.
+            </p>
+          ) : null}
+          <Field label="Desde cuántas unidades es precio mayorista" icon="📦" help="Si un cliente lleva esta cantidad o más, se le cobra el precio al por mayor.">
+            <input className={`${inputCls} max-w-[10rem]`} style={inputStyle} inputMode="numeric" value={String(minWholesale)} onChange={(e) => setMinWholesale(Math.max(1, digitsOnlyToNumber(e.target.value, 1)))} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      key: "media", label: "Fotos y videos", icon: <Images />, color: "#ec4899", hint: "Más fotos y un video ayudan a vender.", optional: true,
+      done: productDetails.gallery_urls.length > 0 || Boolean(productDetails.video_url),
+      content: <ProductDetailsFields bare parts={["media"]} details={productDetails} onChange={setProductDetails} userId={userId} />,
+    },
+    {
+      key: "desc", label: "Descripción completa", icon: <FileText />, color: "#f59e0b", hint: "Para qué sirve, cómo se usa y por qué vale la pena.", optional: true,
+      done: Boolean(productDetails.long_description.trim()),
+      content: <ProductDetailsFields bare parts={["long"]} details={productDetails} onChange={setProductDetails} userId={userId} />,
+    },
+    {
+      key: "features", label: "Características", icon: <ListChecks />, color: "#6366f1", hint: "Lo que lo hace especial y sus datos técnicos (color, talla, material…).", optional: true,
+      done: productDetails.highlights.length > 0 || productDetails.specifications.length > 0,
+      content: <ProductDetailsFields bare parts={["highlights", "specs"]} details={productDetails} onChange={setProductDetails} userId={userId} />,
+    },
+    {
+      key: "codes", label: "Código", icon: <ScanBarcode />, color: "#64748b", hint: "Para buscarlo rápido. Si lo dejas vacío, se le pone un número (1, 2, 3…).", optional: true,
+      done: Boolean(code.trim()),
+      content: (
+        <Field label="Código del producto" icon="🔖" help="Vacío = se usa el número interno. El código de barras se agrega después al editarlo.">
+          <input className={`${inputCls} uppercase`} style={inputStyle} value={code} maxLength={40} placeholder="Ej: OLL-01"
+            onChange={(e) => { const el = e.target; const at = el.selectionStart; setCode(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
+        </Field>
+      ),
+    },
+  ];
 
   return (
-    <main className="p-4 sm:p-6 space-y-4" style={{ color: "var(--t-text)" }}>
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold">Crear producto</h1>
-          <p className="hidden sm:block text-sm" style={{ color: "var(--t-muted)" }}>
-            Fácil, rápido y bonito 🙂
-          </p>
-        </div>
-
-        <Link {...soft} href="/dashboard/products" className={soft.className} style={soft.style}>
-          ← Volver
-        </Link>
-      </div>
-
-      <div {...wMain} className={`${wMain.className} p-4 sm:p-6 space-y-4`} style={wMain.style}>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-          {/* Left */}
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Nombre
-              </label>
-              <input
-                {...inputProps()}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej: Reloj inteligente Ultra 10 Pro"
-                style={{
-                  ...inputProps().style,
-                }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Código del producto (opcional)
-              </label>
-              <input
-                {...inputProps("uppercase")}
-                value={code}
-                maxLength={40}
-                onChange={(e) => { const el = e.target; const at = el.selectionStart; setCode(el.value.toUpperCase()); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }}
-                placeholder="Vacío = se usa el número interno (1, 2, 3…)"
-                style={{ ...inputProps().style }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Descripción
-              </label>
-              <RichTextEditor value={description} onChange={setDescription} placeholder="Descripción corta para vender mejor..." minHeight={110} />
-            </div>
-
-            {storeId && canPrices ? <PricingPanel isNew storeId={storeId} productId={null} cost={0} costKnown prices={[0, 0, 0, 0, 0]} markups={markups} onChange={setMarkups} /> : null}
-            {storeId && !canPrices ? (
-              <p className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-                💲 Los precios se calculan solos con el % de ganancia predeterminado de la tienda ({markups[0]}%) cuando se haga el ingreso de factura. Solo quien tiene «Cambiar precios» puede ajustarlos.
-              </p>
-            ) : null}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Mínimo mayor
-                </label>
-                <input
-                  {...inputProps()}
-                  inputMode="numeric"
-                  value={String(minWholesale)}
-                  onChange={(e) => setMinWholesale(Math.max(1, digitsOnlyToNumber(e.target.value, 1)))}
-                  style={{
-                    ...inputProps().style,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
-
-                <label
-                  className="mt-3 flex items-center gap-2 rounded-2xl border p-3 text-sm"
-                  style={{
-                    borderColor: "var(--t-card-border)",
-                    background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-                    color: "var(--t-text)",
-                  }}
-                >
-                  <input type="checkbox" checked={active} onChange={() => setActive((v) => !v)} />
-                  Producto activo
-                </label>
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
-              <button
-                {...primary}
-                onClick={() => void createNow()}
-                disabled={saving || !storeId}
-                className={primary.className}
-                style={primary.style}
-              >
-                Crear producto
-              </button>
-              <Link {...soft} href="/dashboard/products" className={soft.className} style={soft.style}>
-                Cancelar
-              </Link>
-            </div>
-            <MobileActionBar show={Boolean(name.trim())}>
-              <button type="button" onClick={() => void createNow()} disabled={saving || !storeId} className={primary.className} style={primary.style}>
-                {saving ? "Creando…" : "✅ Crear producto"}
-              </button>
-            </MobileActionBar>
-          </div>
-
-          {/* Right */}
-          <div {...wRight} className={`${wRight.className} p-4`} style={wRight.style}>
-            <p className="font-semibold">Imagen</p>
-            <p className="text-sm" style={{ color: "var(--t-muted)" }}>
-              Opcional, pero ayuda a vender.
-            </p>
-
-            <div className="mt-3">
-              {userId ? (
-                <ImageUpload
-                  label="Subir imagen"
-                  currentUrl={imageUrl}
-                  pathPrefix={`${userId}/products/`}
-                  fileName={`new-${Date.now()}.png`}
-                  bucket="product-images"
-                  onUploaded={(url) => setImageUrl(url)}
-                />
-              ) : (
-                <div className="text-sm" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
-                  Cargando usuario…
-                </div>
-              )}
-            </div>
-
-            <p className="mt-2 text-xs" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
-              La imagen se guarda cuando presionas <b>Crear producto</b>.
-            </p>
-          </div>
-        </div>
-
-        <ProductDetailsFields
-          details={productDetails}
-          onChange={setProductDetails}
-          userId={userId}
-        />
-
-      </div>
-    </main>
+    <>
+      <ProductEditorLayout
+        mode="create"
+        name={name}
+        image={imageUrl}
+        code={code.trim() || null}
+        active={active}
+        onToggleActive={() => setActive((v) => !v)}
+        dirty={Boolean(name.trim())}
+        saving={saving}
+        onSave={() => void createNow()}
+        onBack={() => router.push("/dashboard/products")}
+        sections={sections}
+        preview={<ProductPreviewCard name={name} image={imageUrl} price={null} active={active} highlights={productDetails.highlights} category={mainCategory} />}
+      />
+      <MobileActionBar show={Boolean(name.trim())}>
+        <button type="button" onClick={() => void createNow()} disabled={saving || !storeId} className="rounded-xl px-4 py-2 text-sm font-black text-white" style={{ background: "var(--t-accent)" }}>
+          {saving ? "Creando…" : "✅ Crear producto"}
+        </button>
+      </MobileActionBar>
+    </>
   );
 }

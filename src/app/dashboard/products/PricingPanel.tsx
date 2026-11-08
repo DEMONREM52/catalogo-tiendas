@@ -40,9 +40,13 @@ export async function loadDefaultMarkup(storeId: string): Promise<number> {
  * Precios por porcentaje de ganancia (y, al editar, costo y existencias SOLO de lectura).
  * El costo y las unidades solo cambian con ingreso de factura, ajustes o traslados.
  */
-export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, prices, markups, onChange, isNew }: {
+export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, prices, markups, onChange, isNew, part = "all" }: {
   storeId: string; productId: string | null; cost: number; costKnown: boolean; prices: number[]; markups: Markups; onChange: (m: Markups) => void; isNew?: boolean;
+  /** Mostrar solo el costo y las existencias («stock»), solo los precios («pricing») o todo. */
+  part?: "all" | "stock" | "pricing";
 }) {
+  const showStock = part !== "pricing";
+  const showPricing = part !== "stock";
   const [cfg, setCfg] = useState<Pricing | null>(null);
   const [lastInfo, setLastInfo] = useState<LastCost | null>(null);
   const [repricing, setRepricing] = useState(false);
@@ -133,7 +137,7 @@ export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, pri
 
   return (
     <div className="space-y-3">
-      {!isNew ? (
+      {!isNew && showStock ? (
         <section className="rounded-2xl border p-4" style={card}>
           <div className="flex flex-wrap items-center gap-2">
             <p className="flex flex-1 items-center gap-1.5 text-sm font-black"><Warehouse size={16} /> Costo y existencias</p>
@@ -176,13 +180,13 @@ export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, pri
             <Receipt size={14} /> Hacer ingreso de factura
           </Link>
         </section>
-      ) : (
+      ) : isNew && showPricing ? (
         <p className="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm">
           🧾 El <b>costo</b> y las <b>unidades</b> se agregan con el <b>ingreso de factura</b> (Inventario → Ingreso de factura). Ahí mismo se calculan los precios con el % de ganancia.
         </p>
-      )}
+      ) : null}
 
-      <section className="rounded-2xl border p-4" style={card}>
+      {showPricing ? <section className="rounded-2xl border p-4" style={card}>
         <div className="flex flex-wrap items-center gap-2">
           <p className="flex flex-1 items-center gap-1.5 text-sm font-black"><Percent size={16} /> Ganancia por porcentaje</p>
           {cfg?.can_edit ? <button type="button" onClick={() => setShowCfg((v) => !v)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }}><Settings2 size={12} /> Redondeo</button> : null}
@@ -255,7 +259,7 @@ export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, pri
             {!isNew && cost > 0 ? <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Precio actual en la tienda: {prices.map((x, i) => `P${i + 1} ${cop(x)}`).join(" · ")}. Al guardar se reemplazan por los calculados.</p> : null}
           </>
         )}
-      </section>
+      </section> : null}
     </div>
   );
 }

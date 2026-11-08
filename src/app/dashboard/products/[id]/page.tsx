@@ -22,6 +22,8 @@ import { fetchProductCosts } from "@/lib/profit/costs";
 import { PricingPanel, type Markups } from "../PricingPanel";
 import { useCan } from "@/lib/permission-runtime";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { BadgeDollarSign, FileText, Images, ListChecks, Package, ScanBarcode, Store, Warehouse } from "lucide-react";
+import { Field, ProductEditorLayout, ProductPreviewCard, inputCls, inputStyle, type EditorSection } from "../ProductEditorLayout";
 
 type Category = { id: string; name: string };
 
@@ -57,73 +59,6 @@ type Product = {
 };
 
 
-// ✅ Styles con tokens (auto claro/oscuro por sistema)
-function inputSoftProps(extraClassName = "") {
-  return {
-    className: `w-full rounded-2xl border p-3 text-sm outline-none ${extraClassName}`,
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-      color: "var(--t-text)",
-    } as React.CSSProperties,
-  };
-}
-function btnSoftProps() {
-  return {
-    className:
-      "rounded-xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl transition disabled:opacity-60",
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-      color: "color-mix(in oklab, var(--t-text) 90%, transparent)",
-    } as React.CSSProperties,
-  };
-}
-function btnPrimaryProps() {
-  return {
-    className:
-      "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    style: {
-      borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)",
-      background: "color-mix(in oklab, var(--t-accent) 18%, transparent)",
-      color: "var(--t-text)",
-      boxShadow: "0 0 22px color-mix(in oklab, var(--t-accent) 14%, transparent)",
-    } as React.CSSProperties,
-  };
-}
-function btnToggleProps(active: boolean) {
-  if (active) {
-    return {
-      className:
-        "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-      style: {
-        borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))",
-        background: "color-mix(in oklab, #10b981 14%, transparent)",
-        color: "var(--t-text)",
-      } as React.CSSProperties,
-    };
-  }
-  return {
-    className:
-      "rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-60",
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "color-mix(in oklab, var(--t-card-bg) 85%, transparent)",
-      color: "color-mix(in oklab, var(--t-text) 80%, transparent)",
-    } as React.CSSProperties,
-  };
-}
-
-function panelProps(extraClassName = "") {
-  return {
-    className: `rounded-[22px] border backdrop-blur-xl ${extraClassName}`,
-    style: {
-      borderColor: "var(--t-card-border)",
-      background: "var(--t-card-bg)",
-      boxShadow: "var(--t-shadow)",
-    } as React.CSSProperties,
-  };
-}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function clampNum(raw: any, fallback = 0) {
   const n = Number(raw);
@@ -148,6 +83,7 @@ export default function EditProductPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   // Evita guardar dos veces con un doble toque (antes de que el botón alcance a deshabilitarse).
   const savingNow = useRef(false);
   // Si el costo no se pudo leer (sin permiso o sin conexión) no se muestra ni se guarda: así nunca se borra.
@@ -343,14 +279,9 @@ export default function EditProductPage() {
         return;
       }
 
-      await Swal.fire({
-        icon: "success",
-        title: "Guardado",
-        timer: 900,
-        showConfirmButton: false,
-        background: "var(--t-bg-base)",
-        color: "var(--t-text)",
-      });
+      // Confirmación sin ventana: «Guardado ✓» en la barra de arriba.
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 2200);
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -384,237 +315,157 @@ export default function EditProductPage() {
     if (res.isConfirmed) router.push("/dashboard/products");
   }
 
-  const headerPanel = panelProps("p-4 sm:p-6");
-  const leftPanel = panelProps("p-4 sm:p-6 space-y-3");
-  const rightPanel = panelProps("p-4 sm:p-6");
-
-  const softBtn = btnSoftProps();
-  const primaryBtn = btnPrimaryProps();
-  const toggleBtn = btnToggleProps(!!draft?.active);
-
-  return (
-    <main className="px-3 py-3 sm:p-6 space-y-3 panel-enter" style={{ color: "var(--t-text)" }}>
-      {/* Header */}
-      <div {...headerPanel}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">
-              Editar producto {draft?.name ? `· ${draft.name}` : ""}
-            </h1>
-            <p className="text-sm mt-1" style={{ color: "var(--t-muted)" }}>
-              {isDirty ? "Tienes cambios sin guardar." : "Sin cambios."}
-            </p>
-          </div>
-
-          {/* ✅ Botonera arriba a la derecha (incluye Activo/Inactivo) */}
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {/* Historial del producto: quién lo creó, qué cambió (precios, %, datos) y cuándo. */}
-            <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
-            <button
-              className={toggleBtn.className}
-              style={toggleBtn.style}
-              type="button"
-              disabled={saving || loading || !draft}
-              onClick={() => draft && setDraft({ ...draft, active: !draft.active })}
-              title="Este cambio se guarda cuando presionas Guardar"
-            >
-              {draft?.active ? "Activo ✅" : "Inactivo ⛔"}
-            </button>
-
-            <button className={softBtn.className} style={softBtn.style} type="button" onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">
-              🏷️ Etiqueta
-            </button>
-
-            <button className={softBtn.className} style={softBtn.style} type="button" onClick={() => void goBack()}>
-              Volver
-            </button>
-
-            <button
-              className={primaryBtn.className}
-              style={primaryBtn.style}
-              type="button"
-              disabled={saving || loading || !draft}
-              onClick={() => void save()}
-            >
-              Guardar
-            </button>
-
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      {loading || !draft ? (
-<div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]" role="status" aria-label="Cargando el producto…">
+  if (loading || !draft) {
+    return (
+      <main className="space-y-3 px-3 py-3 sm:p-6" style={{ color: "var(--t-text)" }}>
+        <Skeleton className="h-24 w-full rounded-[22px]" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[230px_1fr_300px]" role="status" aria-label="Cargando el producto…">
+          <div className="hidden space-y-2 lg:block">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full rounded-2xl" />)}</div>
           <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
-            <Skeleton className="h-40 w-full rounded-2xl" />
-            <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-2/3" /><Skeleton className="h-28 w-full" />
+            <Skeleton className="h-12 w-1/2" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-2/3" /><Skeleton className="h-40 w-full" />
           </div>
-          <div className="space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--t-card-border)" }}>
-            <Skeleton className="h-5 w-32" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
-          </div>
+          <Skeleton className="hidden aspect-[3/4] w-full rounded-[22px] lg:block" />
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-3">
-          <div {...leftPanel}>
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Nombre
-              </label>
-              <input
-                className={`mt-1 ${inputSoftProps().className}`}
-                style={inputSoftProps().style}
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </div>
+      </main>
+    );
+  }
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Código del producto
-                </label>
-                <input
-                  className={`mt-1 ${inputSoftProps("uppercase").className}`}
-                  style={inputSoftProps().style}
-                  value={draft.sku ?? ""}
-                  maxLength={40}
-                  placeholder={draft.product_no ? String(draft.product_no) : "Ej: OLL-01"}
-                  onChange={(e) => { const el = e.target; const at = el.selectionStart; setDraft({ ...draft, sku: el.value.toUpperCase() }); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }}
-                />
-                <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>
-                  {draft.product_no ? <>N.º interno <b>#{draft.product_no}</b> (no cambia). </> : null}
-                  Si lo dejas vacío se usa el número interno. Se puede buscar por código en todos los buscadores.
-                </p>
-              </div>
-              <div>
-                <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                  Código de barras
-                </label>
-                <input
-                  className={`mt-1 ${inputSoftProps().className}`}
-                  style={inputSoftProps().style}
-                  value={draft.barcode ?? ""}
-                  maxLength={60}
-                  inputMode="numeric"
-                  placeholder="Opcional"
-                  onChange={(e) => setDraft({ ...draft, barcode: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Descripción
-              </label>
-              <RichTextEditor value={draft.description ?? ""} onChange={(v) => setDraft({ ...draft, description: v })} placeholder="Descripción para vender mejor…" minHeight={120} />
-            </div>
-
-            {pricesEditable ? (
-              <PricingPanel
-                storeId={storeId ?? ""}
-                productId={draft.id}
-                cost={clampNum(draft.cost_price, 0)}
-                costKnown={costKnown}
-                prices={[draft.price_1, draft.price_2, draft.price_3, draft.price_4, draft.price_5].map((x) => clampNum(x, 0))}
-                markups={draft.markups ?? [null, null, null, null, null]}
-                onChange={(m) => setDraft({ ...draft, markups: m })}
-              />
-            ) : (
-              <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
-                <p className="font-semibold">💲 Precios</p>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  {[draft.price_1, draft.price_2, draft.price_3, draft.price_4, draft.price_5].map((v, i) => (
-                    <div key={i} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
-                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Precio {i + 1}</p>
-                      <p className="font-black tabular-nums">{`$ ${Math.round(clampNum(v, 0)).toLocaleString("es-CO")}`}</p>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
-                  🔒 {canPrices
-                    ? "Para cambiar precios por % necesitas también el permiso «Ver costos y márgenes»."
-                    : "Puedes editar el producto, pero los precios y el % de ganancia solo los cambia quien tiene «Cambiar precios»."}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs" style={{ color: "var(--t-muted)" }}>
-                Mínimo para precio mayorista (unidades)
-              </label>
-              <input
-                className={`mt-1 ${inputSoftProps().className}`}
-                style={inputSoftProps().style}
-                type="text"
-                inputMode="numeric"
-                value={String(draft.min_wholesale ?? 1)}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)),
-                  })
-                }
-              />
-            </div>
-
-            <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
-
-            <p className="text-xs pt-2" style={{ color: "color-mix(in oklab, var(--t-text) 60%, transparent)" }}>
-              ID: <span style={{ color: "color-mix(in oklab, var(--t-text) 80%, transparent)" }}>{draft.id}</span>
-            </p>
-          </div>
-
-          <div {...rightPanel}>
-            <p className="font-semibold">Imagen principal</p>
-            <p className="text-sm mt-1" style={{ color: "var(--t-muted)" }}>
-              Se guarda cuando presionas Guardar.
-            </p>
-
-            <div className="mt-3">
-              {userId ? (
-                <ImageUpload
-                  label="Subir imagen"
-                  currentUrl={draft.image_url}
-                  pathPrefix={`${userId}/products/`}
-                  fileName={`${draft.id}.png`}
-                  bucket="product-images"
-                  onUploaded={(url) => setDraft({ ...draft, image_url: url })}
-                />
-              ) : (
-                <div className="text-xs" style={{ color: "color-mix(in oklab, var(--t-text) 70%, transparent)" }}>
-                  Cargando usuario…
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!loading && draft ? (
+  const d = draft;
+  const prices = [d.price_1, d.price_2, d.price_3, d.price_4, d.price_5].map((x) => clampNum(x, 0));
+  const det = d.product_details;
+  const mainCategory = categories.find((c) => c.id === categoryIds[0])?.name ?? null;
+  const sections: EditorSection[] = [
+    {
+      key: "basic", label: "Lo básico", icon: <Package />, color: "#8b5cf6", hint: "Foto, nombre y dónde aparece. Es lo único indispensable.",
+      done: Boolean(d.name.trim()),
+      content: (
         <>
-          <ProductDetailsFields
-            details={draft.product_details}
-            onChange={(product_details) => setDraft({ ...draft, product_details })}
-            userId={userId}
-            productId={draft.id}
-          />
-          {storeId ? (
-            <div className="mt-4">
-              <ProductCatalogsPanel
-                storeId={storeId}
-                productId={draft.id}
-                prices={{ price_1: draft.price_1, price_2: draft.price_2, price_3: draft.price_3, price_4: draft.price_4, price_5: draft.price_5 }}
-              />
+          <div className="grid gap-4 sm:grid-cols-[200px_minmax(0,1fr)]">
+            <div>
+              <p className="mb-1.5 text-sm font-bold">📸 Foto principal</p>
+            <div className="mx-auto max-w-[200px] sm:max-w-none">
+              {userId ? (
+                <ImageUpload label="Subir foto" currentUrl={d.image_url} pathPrefix={`${userId}/products/`} fileName={`${d.id}.png`} bucket="product-images"
+                  onUploaded={(url) => setDraft({ ...d, image_url: url })} />
+              ) : <Skeleton className="aspect-square w-full rounded-2xl" />}
+              </div>
+            <p className="mt-1 text-center text-[11px] sm:text-left" style={{ color: "var(--t-muted)" }}>Más fotos en «Fotos y videos».</p>
             </div>
-          ) : null}
-          <MobileActionBar show={isDirty} hint="Tienes cambios sin guardar">
-            <button type="button" className={primaryBtn.className} style={primaryBtn.style} disabled={saving || loading || !draft} onClick={() => void save()}>
-              {saving ? "Guardando…" : "💾 Guardar cambios"}
-            </button>
-          </MobileActionBar>
+            <div className="space-y-4">
+              <Field label="Nombre" icon="🏷️" help="Así lo ven tus clientes y así lo buscas en el POS.">
+                <input className={inputCls} style={inputStyle} value={d.name} maxLength={160} placeholder="Ej: Reloj inteligente Ultra 10 Pro" onChange={(e) => setDraft({ ...d, name: e.target.value })} />
+              </Field>
+              <CategoryPicker categories={categories} value={categoryIds} onChange={setCategoryIds} disabled={saving} />
+              <Field label="Descripción corta" icon="💬" help="Una o dos frases que salen debajo del nombre.">
+                <RichTextEditor value={d.description ?? ""} onChange={(v) => setDraft({ ...d, description: v })} placeholder="Ej: Resistente al agua, batería de 7 días y más de 100 modos deportivos." minHeight={90} />
+              </Field>
+            </div>
+          </div>
         </>
-      ) : null}
-    </main>
+      ),
+    },
+    {
+      key: "prices", label: "Precios", icon: <BadgeDollarSign />, color: "#10b981", hint: "Cuánto ganas en cada lista de precio. Escribe el % o el precio directo.",
+      done: prices.some((p) => p > 0) || Boolean(d.markups?.some((m) => m !== null)),
+      content: (
+        <>
+          {pricesEditable ? (
+            <PricingPanel part="pricing" storeId={storeId ?? ""} productId={d.id} cost={clampNum(d.cost_price, 0)} costKnown={costKnown}
+              prices={prices} markups={d.markups ?? [null, null, null, null, null]} onChange={(m) => setDraft({ ...d, markups: m })} />
+          ) : (
+            <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {prices.map((v, i) => (
+                  <div key={i} className="rounded-xl border px-3 py-2" style={{ borderColor: "var(--t-card-border)" }}>
+                    <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Precio {i + 1}</p>
+                    <p className="font-black tabular-nums">{`$ ${Math.round(v).toLocaleString("es-CO")}`}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>
+                🔒 {canPrices ? "Para cambiar precios por % necesitas también el permiso «Ver costos y márgenes»." : "Los precios y el % de ganancia solo los cambia quien tiene «Cambiar precios»."}
+              </p>
+            </div>
+          )}
+          <Field label="Desde cuántas unidades es precio mayorista" icon="📦" help="Si un cliente lleva esta cantidad o más, se le cobra el precio al por mayor.">
+            <input className={`${inputCls} max-w-[10rem]`} style={inputStyle} inputMode="numeric" value={String(d.min_wholesale ?? 1)}
+              onChange={(e) => setDraft({ ...d, min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)) })} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      key: "stock", label: "Inventario", icon: <Warehouse />, color: "#0ea5e9", hint: "Costo y unidades en cada punto. Solo de consulta: cambian con facturas, ajustes y traslados.",
+      done: true,
+      content: <PricingPanel part="stock" storeId={storeId ?? ""} productId={d.id} cost={clampNum(d.cost_price, 0)} costKnown={costKnown} prices={prices} markups={d.markups ?? [null, null, null, null, null]} onChange={() => undefined} />,
+    },
+    {
+      key: "media", label: "Fotos y videos", icon: <Images />, color: "#ec4899", hint: "Más fotos y un video ayudan a vender.", optional: true,
+      done: det.gallery_urls.length > 0 || Boolean(det.video_url),
+      content: <ProductDetailsFields bare parts={["media"]} details={det} onChange={(product_details) => setDraft({ ...d, product_details })} userId={userId} productId={d.id} />,
+    },
+    {
+      key: "desc", label: "Descripción completa", icon: <FileText />, color: "#f59e0b", hint: "Para qué sirve, cómo se usa y por qué vale la pena. Sale en la ficha del catálogo.", optional: true,
+      done: Boolean(det.long_description.trim()),
+      content: <ProductDetailsFields bare parts={["long"]} details={det} onChange={(product_details) => setDraft({ ...d, product_details })} userId={userId} productId={d.id} />,
+    },
+    {
+      key: "features", label: "Características", icon: <ListChecks />, color: "#6366f1", hint: "Lo que lo hace especial y sus datos técnicos (color, talla, material…).", optional: true,
+      done: det.highlights.length > 0 || det.specifications.length > 0,
+      content: <ProductDetailsFields bare parts={["highlights", "specs"]} details={det} onChange={(product_details) => setDraft({ ...d, product_details })} userId={userId} productId={d.id} />,
+    },
+    {
+      key: "codes", label: "Códigos", icon: <ScanBarcode />, color: "#64748b", hint: "Para buscarlo rápido y leerlo con la pistola de códigos.", optional: true,
+      done: Boolean((d.sku ?? "").trim() || (d.barcode ?? "").trim()),
+      content: (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Código del producto" icon="🔖" help={<>{d.product_no ? <>N.º interno <b>#{d.product_no}</b> (no cambia). </> : null}Si lo dejas vacío se usa el número interno.</>}>
+            <input className={`${inputCls} uppercase`} style={inputStyle} value={d.sku ?? ""} maxLength={40} placeholder={d.product_no ? String(d.product_no) : "Ej: OLL-01"}
+              onChange={(e) => { const el = e.target; const at = el.selectionStart; setDraft({ ...d, sku: el.value.toUpperCase() }); requestAnimationFrame(() => { try { el.setSelectionRange(at, at); } catch {} }); }} />
+          </Field>
+          <Field label="Código de barras" icon="📊" help="El que trae el empaque. Escanéalo o escríbelo.">
+            <input className={inputCls} style={inputStyle} value={d.barcode ?? ""} maxLength={60} inputMode="numeric" placeholder="Opcional" onChange={(e) => setDraft({ ...d, barcode: e.target.value })} />
+          </Field>
+          <details className="sm:col-span-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+            <summary className="cursor-pointer font-semibold">Datos técnicos</summary>
+            <p className="mt-1">ID del producto: <span className="font-mono">{d.id}</span></p>
+          </details>
+        </div>
+      ),
+    },
+    ...(storeId ? [{
+      key: "catalogs", label: "Catálogos", icon: <Store />, color: "#14b8a6", hint: "En qué catálogos aparece y con qué precio.", optional: true, done: false,
+      content: <ProductCatalogsPanel storeId={storeId} productId={d.id} prices={{ price_1: d.price_1, price_2: d.price_2, price_3: d.price_3, price_4: d.price_4, price_5: d.price_5 }} />,
+    }] : []),
+  ];
+
+  const actionBtn = "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition hover:-translate-y-0.5";
+  return (
+    <>
+      <ProductEditorLayout
+        mode="edit"
+        name={d.name}
+        image={d.image_url}
+        code={d.sku || (d.product_no ? String(d.product_no) : null)}
+        active={!!d.active}
+        onToggleActive={() => setDraft({ ...d, active: !d.active })}
+        dirty={isDirty}
+        saving={saving}
+        savedFlash={savedFlash}
+        onSave={() => void save()}
+        onBack={() => void goBack()}
+        actions={<>
+          <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
+          <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">🏷️ Etiqueta</button>
+        </>}
+        sections={sections}
+        preview={<ProductPreviewCard name={d.name} image={d.image_url} price={prices[2] || prices[0]} active={!!d.active} highlights={det.highlights} category={mainCategory} />}
+      />
+      <MobileActionBar show={isDirty} hint="Tienes cambios sin guardar">
+        <button type="button" className="rounded-xl px-4 py-2 text-sm font-black text-white" style={{ background: "var(--t-accent)" }} disabled={saving} onClick={() => void save()}>
+          {saving ? "Guardando…" : "💾 Guardar cambios"}
+        </button>
+      </MobileActionBar>
+    </>
   );
 }
