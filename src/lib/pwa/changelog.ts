@@ -510,6 +510,16 @@ export const RELEASES: Release[] = [
       { icon: "⚠️", text: "Revisa los costos sospechosos" },
     ],
   },
+  {
+    id: 48, date: "2026-11-08", title: "La deuda de los puntos sigue al último costo",
+    summary: "Cuando la madre cambia el costo en una factura, la deuda de los puntos por las unidades que tienen se ajusta sola: nota crédito si baja, cargo si sube. Con historial y botón «Revaluar ahora».",
+    paths: ["/dashboard/rentabilidad", "/dashboard/inventario"],
+    demo: [
+      { icon: "🧾", text: "La madre ingresa una factura más barata" },
+      { icon: "♻️", text: "A cada punto le baja la deuda sola" },
+      { icon: "📋", text: "Mira el historial en la liquidación del punto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Chip, Modal } from "./dialog";
 import { Btn, errorMessage, money } from "./shared";
@@ -69,6 +69,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<"sale" | "qty" | "profit" | "loss" | "margin" | "name">("sale");
+  const [reload, setReload] = useState(0);
 
   // Las 5 listas a la vez (para comparar sin esperar al cambiar de lista).
   useEffect(() => {
@@ -83,7 +84,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
       setAll(map);
     });
     return () => { alive = false; };
-  }, [storeId, pointId, basis]);
+  }, [storeId, pointId, basis, reload]);
   useEffect(() => { try { window.localStorage.setItem(LEVEL_KEY, String(level)); } catch { /* sin almacenamiento */ } }, [level]);
 
   const data = all[level] ?? null;
@@ -256,6 +257,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
                   <>⚖️ La mercancía que tiene ({money(internal)} a precio de bodega) <b>cubre su deuda</b>{gap < 0 ? <> y le sobran <b>{money(-gap)}</b> en mercancía ya pagada</> : null}.</>
                 )}
               </div>
+              <RevaluePanel storeId={storeId} pointId={pointId} onApplied={() => setReload((x) => x + 1)} />
             </section>
           ) : (
             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Este punto no tiene cuenta con la bodega: los valores de bodega son de referencia (costo + % de la bodega).</p>
@@ -412,6 +414,98 @@ function ProductTable({ lines, level, costs }: { lines: Line[]; level: number; c
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type RevalRow = { point: string; product: string; sku: string | null; qty: number; old_unit: number; new_unit: number; diff: number };
+type RevalHist = { at: string; product: string; sku: string | null; qty: number; old_unit: number; new_unit: number; diff: number; source: string; by: string | null; doc_number: number | null };
+
+/**
+ * La deuda sigue al último costo (20261293): se hace sola cuando cambia el costo en una factura; aquí se ve el historial
+ * y la madre puede ponerse al día con «Revaluar ahora» (vista previa antes de aplicar).
+ */
+function RevaluePanel({ storeId, pointId, onApplied }: { storeId: string; pointId: string; onApplied: () => void }) {
+  const [preview, setPreview] = useState<{ lines: number; rows: RevalRow[] } | null>(null);
+  const [hist, setHist] = useState<RevalHist[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showHist, setShowHist] = useState(false);
+
+  const loadHist = useCallback(async () => {
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_revaluations_list", { p_store: storeId, p_point: pointId });
+    if (error) { if (/Could not find|schema cache/i.test(error.message)) setMsg("Para que la deuda siga al último costo ejecuta en Supabase la migración 20261293_revaluar_deuda_puntos.sql."); return; }
+    setHist((data ?? []) as RevalHist[]);
+  }, [storeId, pointId]);
+  useEffect(() => { const t = window.setTimeout(() => void loadHist(), 0); return () => window.clearTimeout(t); }, [loadHist]);
+
+  async function check() {
+    setBusy(true); setMsg(null);
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_revalue_now", { p_store: storeId, p_point: pointId, p_apply: false });
+    setBusy(false);
+    if (error) return setMsg(errorMessage(error));
+    setPreview(data as { lines: number; rows: RevalRow[] });
+  }
+  async function apply() {
+    setBusy(true);
+    const { data, error } = await supabaseBrowser().rpc("erp_internal_revalue_now", { p_store: storeId, p_point: pointId, p_apply: true });
+    setBusy(false);
+    if (error) return setMsg(errorMessage(error));
+    const r = data as { net: number; lines: number };
+    setMsg(`✅ Listo: ${r.lines} producto(s) revaluado(s). ${n(r.net) < 0 ? `Nota crédito por ${money(-n(r.net))}` : n(r.net) > 0 ? `Cargo por ${money(r.net)}` : "Sin diferencia"}.`);
+    setPreview(null);
+    void loadHist();
+    onApplied();
+  }
+
+  const net = preview ? preview.rows.reduce((t, r) => t + n(r.diff), 0) : 0;
+  const dt = (v: string) => new Date(v).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="mt-2 space-y-2 rounded-2xl border p-3 text-xs" style={{ borderColor: "var(--t-card-border)" }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1"><b>♻️ La deuda sigue al último costo.</b> Cuando la madre cambia el costo en una factura, la deuda de las unidades que el punto tiene se ajusta sola (nota crédito si baja, cargo si sube).</p>
+        <Btn variant="ghost" onClick={() => void check()} disabled={busy}>{busy && !preview ? "Revisando…" : "Revaluar ahora"}</Btn>
+        <Btn variant="ghost" onClick={() => setShowHist((v) => !v)}>Historial ({hist?.length ?? 0})</Btn>
+      </div>
+      {msg ? <p className="font-semibold">{msg}</p> : null}
+      {preview ? (
+        preview.lines === 0 ? <p>✅ Todo al día: el precio de bodega ya está con el último costo.</p> : (
+          <div className="space-y-2">
+            <p>Se ajustarían <b>{preview.lines}</b> producto(s): {net < 0 ? <>nota crédito por <b style={{ color: "#10b981" }}>{money(-net)}</b> (le baja la deuda)</> : <>cargo por <b style={{ color: "#ef4444" }}>{money(net)}</b> (le sube la deuda)</>}.</p>
+            <div className="max-h-56 overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
+              <table className="w-full text-[11px]">
+                <thead style={{ color: "var(--t-muted)" }}><tr><th className="px-2 py-1 text-left">Producto</th><th className="px-2 py-1 text-right">Und.</th><th className="px-2 py-1 text-right">Bodega antes → ahora</th><th className="px-2 py-1 text-right">Diferencia</th></tr></thead>
+                <tbody>{preview.rows.map((r, i) => (
+                  <tr key={i} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
+                    <td className="px-2 py-1">{r.product}</td><td className="px-2 py-1 text-right">{n(r.qty)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{money(r.old_unit)} → <b>{money(r.new_unit)}</b></td>
+                    <td className="px-2 py-1 text-right tabular-nums" style={{ color: n(r.diff) < 0 ? "#10b981" : "#ef4444" }}>{money(r.diff)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div className="flex gap-2"><Btn onClick={() => void apply()} disabled={busy}>{busy ? "Aplicando…" : "Aplicar"}</Btn><Btn variant="ghost" onClick={() => setPreview(null)}>Cancelar</Btn></div>
+          </div>
+        )
+      ) : null}
+      {showHist && hist ? (
+        hist.length ? (
+          <div className="max-h-56 overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
+            <table className="w-full text-[11px]">
+              <thead style={{ color: "var(--t-muted)" }}><tr><th className="px-2 py-1 text-left">Fecha</th><th className="px-2 py-1 text-left">Producto</th><th className="px-2 py-1 text-right">Und.</th><th className="px-2 py-1 text-right">Antes → ahora</th><th className="px-2 py-1 text-right">Diferencia</th><th className="px-2 py-1 text-left">Nota</th></tr></thead>
+              <tbody>{hist.map((h, i) => (
+                <tr key={i} className="border-t" style={{ borderColor: "var(--t-card-border)" }}>
+                  <td className="px-2 py-1">{dt(h.at)}</td>
+                  <td className="px-2 py-1">{h.product}</td><td className="px-2 py-1 text-right">{n(h.qty)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{money(h.old_unit)} → {money(h.new_unit)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums" style={{ color: n(h.diff) < 0 ? "#10b981" : "#ef4444" }}>{money(h.diff)}</td>
+                  <td className="px-2 py-1">{h.doc_number ? `#${h.doc_number}` : "—"} · {h.source === "auto" ? "automática" : h.by ?? "manual"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <p style={{ color: "var(--t-muted)" }}>Aún no hay revaluaciones.</p>
+      ) : null}
     </div>
   );
 }
