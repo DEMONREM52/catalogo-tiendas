@@ -64,13 +64,18 @@ export function useStoreAlerts(storeId: string | null | undefined) {
     const sb = supabaseBrowser();
     // Alertas del ERP + fiscales, de seguridad y de usuarios (si la migración fiscal no está, se ignoran)
     // + trabajo sin conexión: contingencias por transmitir y ventas por revisar (20261243).
-    const [base, extra, offline] = await Promise.all([
+    // + pedidos sin confirmar y sin completar (20261303).
+    const [base, extra, offline, orders] = await Promise.all([
       sb.rpc("erp_alerts", { p_store: storeId }),
       sb.rpc("erp_extra_alerts", { p_store: storeId }),
       sb.rpc("erp_offline_alerts", { p_store: storeId }),
+      sb.rpc("erp_order_alerts", { p_store: storeId }),
     ]);
+    const ordersOk = !orders.error && Array.isArray(orders.data);
     const rows = [
-      ...(!base.error && Array.isArray(base.data) ? (base.data as StoreAlert[]) : []),
+      // Con los avisos nuevos de pedidos, el viejo («sin confirmar hace más de un día») sobra.
+      ...(!base.error && Array.isArray(base.data) ? (base.data as StoreAlert[]).filter((a) => !(ordersOk && a.key.startsWith("orders-pending-"))) : []),
+      ...(ordersOk ? (orders.data as StoreAlert[]) : []),
       ...(!extra.error && Array.isArray(extra.data) ? (extra.data as StoreAlert[]) : []),
       ...(!offline.error && Array.isArray(offline.data) ? (offline.data as StoreAlert[]) : []),
     ].filter((a) => SEVERITY[a.severity]);

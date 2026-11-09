@@ -193,6 +193,11 @@ export function CustomerOrders() {
   // Celular: punto, periodo y orden van plegados detrás de «Filtros».
   const [showFilters, setShowFilters] = useState(false);
   const [view, setView] = useState<View>("pending");
+  // Desde la campana: ?ver=to_confirm | to_complete abre esa vista.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("ver");
+    if (v && VIEWS.some(([k]) => k === v)) { const t = window.setTimeout(() => setView(v as View), 0); return () => window.clearTimeout(t); }
+  }, []);
   const [point, setPoint] = useState<string>("all");
   const [period, setPeriod] = useState<Period>("30d");
   const [oldFirst, setOldFirst] = useState(false);

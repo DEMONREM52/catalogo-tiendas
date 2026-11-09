@@ -248,6 +248,12 @@ export default function PosPage() {
   // Quién usa el POS (la venta en curso se guarda sola por usuario en este equipo).
   const [meId, setMeId] = useState("");
   const restoredSale = useRef(false);
+  // Venta ya registrada: la copia guardada se borra al instante y no se vuelve a guardar mientras el carrito se vacía.
+  const saleDone = useRef(false);
+  function forgetCurrentSale() {
+    saleDone.current = true;
+    if (storeId && meId) saveCurrentSale(storeId, meId, null);
+  }
   // Producto recién agregado: se resalta un momento con un aviso («Ya tenías 2 · ahora 3»).
   const [flash, setFlash] = useState<{ id: string; text: string } | null>(null);
   const flashTimer = useRef<number | undefined>(undefined);
@@ -420,6 +426,11 @@ export default function PosPage() {
   // …y cada cambio del carrito o del cliente se guarda al instante (se borra solo al vender, poner en espera o vaciar).
   useEffect(() => {
     if (!storeId || !meId || !restoredSale.current || editingDoc) return;
+    if (saleDone.current) {
+      if (!cart.length) saleDone.current = false;
+      saveCurrentSale(storeId, meId, null);
+      return;
+    }
     saveCurrentSale(storeId, meId, cart.length ? {
       cart, total, customerName: customerName.trim(), selectedClientId, customerDocument: customerDocument.trim(),
       customerWhatsApp: customerWhatsApp.trim(), customerNote: customerNote.trim(), documentKind, pointId, sellerId,
@@ -1114,6 +1125,7 @@ export default function PosPage() {
       });
       return;
     }
+    forgetCurrentSale();
     if (draftId) await removeDraft(store.id, draftId);
     // Las existencias del punto bajan ya en este equipo (para no vender dos veces lo mismo sin conexión).
     if (pointStock && pointId) {
@@ -1441,6 +1453,8 @@ export default function PosPage() {
       const token = (data as { token?: string } | null)?.token;
       if (!token) throw new Error("No se generó token de factura.");
       createdToken = token;
+      // Ya es una venta: si se recarga o se sale antes de cerrar el aviso, no se vuelve a recuperar.
+      forgetCurrentSale();
  
       let docNumber = "";
       let fiscalNote = "";

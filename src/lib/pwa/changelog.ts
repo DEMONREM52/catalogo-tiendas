@@ -669,6 +669,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Al confirmar un pedido, complétalo ahí mismo" },
     ],
   },
+  {
+    id: 64, date: "2026-11-09", title: "Pedidos pendientes en la campana",
+    summary: "La campana avisa cuántos pedidos tienes sin confirmar y cuántos confirmados sin completar, con el total; al tocar el aviso se abre Pedidos con esa lista. Y en el POS, cuando ya creaste la remisión, esa venta no vuelve a aparecer al entrar otra vez: solo se recupera la que no alcanzaste a crear.",
+    paths: ["/dashboard", "/dashboard/pos", "/dashboard/pedidos"],
+    demo: [
+      { icon: "🔔", text: "Mira la campana: pedidos sin confirmar y sin completar" },
+      { icon: "📦", text: "Toca el aviso y se abre la lista para atenderlos" },
+      { icon: "🧾", text: "La venta ya creada no se vuelve a cargar en el POS" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
