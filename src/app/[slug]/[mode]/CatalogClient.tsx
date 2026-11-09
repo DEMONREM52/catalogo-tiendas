@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { RichText } from "@/components/RichText";
-import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, Sparkles, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, ShoppingCart, Sparkles, X } from "lucide-react";
 import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { AnimatePresence, motion } from "framer-motion";
@@ -30,6 +30,8 @@ import {
 } from "./catalog-data";
 import { searchDelay } from "@/lib/search-timing";
 import { SmartLogo } from "@/components/ui/SmartLogo";
+import { fetchPublicItems, type PublicItem } from "@/lib/catalog/public-prices";
+import { BestSellersStrip } from "@/components/catalog/BestSellers";
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -231,7 +233,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
   const [carouselInView, setCarouselInView] = useState(true);
   const [pageVisible, setPageVisible] = useState(true);
 
-  const { initCart, addItem, addItems, cart } = useCart();
+  const { initCart, addItem, addItems, setQty, open: openCart, cart } = useCart();
   // Igual en el servidor y en el navegador: en el espacio de la tienda, sin el nombre (sin redirección por clic).
   const pathFor = (path: string) => (storeHost ? path : `/${store?.slug ?? slug}${path}`);
 
@@ -279,6 +281,68 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
       });
     })();
   }, [searchParams, store?.id, catalog, cartStoreId, safeMode, addItems]);
+
+  // Desde la página del producto (?agregar=<id>&cant=2[&comprar=1]): deja el producto en el carrito con el precio
+  // de este catálogo. «Comprar ahora» abre el carrito de una; «Agregar y seguir» deja seguir escogiendo.
+  const addFromLinkDone = useRef(false);
+  useEffect(() => {
+    const pid = searchParams.get("agregar");
+    if (!pid || addFromLinkDone.current || !store?.id || cartStoreId !== store.id) return;
+    addFromLinkDone.current = true;
+    const want = Math.max(1, Math.min(999, Math.floor(Number(searchParams.get("cant")) || 1)));
+    const buyNow = searchParams.get("comprar") === "1";
+    const clean = new URLSearchParams(window.location.search);
+    ["agregar", "cant", "comprar"].forEach((k) => clean.delete(k));
+    window.history.replaceState(null, "", window.location.pathname + (clean.toString() ? `?${clean}` : ""));
+    const storeRef = { id: store.id, slug: store.slug };
+    void (async () => {
+      const items = await fetchPublicItems(supabaseBrowser(), storeRef, catalog?.slug ?? safeMode, key, [pid]);
+      const it = items.get(pid);
+      if (!it) {
+        await Swal.fire({ icon: "info", title: "Ese producto ya no está disponible", text: "Mira los demás productos del catálogo.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+        return;
+      }
+      const qty = it.stock === null ? want : Math.min(want, Math.floor(it.stock));
+      const already = cart?.items.find((x) => x.productId === pid);
+      if (already) {
+        if (already.qty < qty) setQty(pid, qty);
+        if (buyNow) openCart();
+      } else {
+        addItem({ productId: it.id, name: it.name, price: it.price, qty, minWholesale: it.min_wholesale }, { openDrawer: buyNow });
+      }
+      track.addToCart({ id: it.id, name: it.name, price: it.price, quantity: qty }, storeRef.slug);
+      if (!buyNow) {
+        void Swal.fire({
+          toast: true, position: "top", icon: "success", timer: 3200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)",
+          title: `🛒 ${qty} × ${it.name} ya está en tu carrito`, text: "Sigue agregando lo que quieras 👇",
+        });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, store?.id, cartStoreId]);
+
+  // Lo más vendido de la tienda (solo el orden; precios y existencias de este catálogo).
+  const [bestSellers, setBestSellers] = useState<PublicItem[]>([]);
+  useEffect(() => {
+    if (!store?.id || !store.slug) return;
+    let alive = true;
+    const storeRef = { id: store.id, slug: store.slug };
+    void (async () => {
+      const sb = supabaseBrowser();
+      const { data, error } = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12 });
+      if (error || !data) return;
+      const d = (Array.isArray(data) ? { ids: data } : data) as { ids?: unknown[]; title?: string | null; badges?: boolean };
+      const ids = (d.ids ?? []).map(String);
+      if (!ids.length) return;
+      const items = await fetchPublicItems(sb, storeRef, catalog?.slug ?? safeMode, key, ids);
+      if (!alive) return;
+      setBestMeta({ title: d.title?.trim() || "Lo más vendido", badges: d.badges !== false });
+      setBestSellers(ids.map((id) => items.get(id)).filter((x): x is PublicItem => Boolean(x)));
+    })();
+    return () => { alive = false; };
+  }, [store?.id, store?.slug, catalog?.slug, safeMode, key]);
+  const [bestMeta, setBestMeta] = useState({ title: "Lo más vendido", badges: true });
+  const bestRank = useMemo(() => new Map(bestMeta.badges ? bestSellers.map((b, i) => [b.id, i + 1]) : []), [bestSellers, bestMeta.badges]);
   // Mínimos por producto: catálogo mayorista clásico o catálogos con esa regla.
   const wholesaleRules = catalog ? catalog.wholesale_rules : safeMode === "mayor";
   const showStock = catalog ? catalog.show_stock : true;
@@ -1790,6 +1854,22 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           </div>
         )}
 
+        {/* Lo más vendido (solo sin búsqueda ni categoría) */}
+        {bestSellers.length >= 3 && !q && !selectedCat ? (
+          <BestSellersStrip
+            items={bestSellers}
+            title={bestMeta.title}
+            money={money}
+            hrefFor={(id) => catalog
+              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
+              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            onAdd={(it) => void addToCartWithQty({
+              id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
+              active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
+            }, it.price)}
+          />
+        ) : null}
+
         {/* Productos */}
         <div className="mt-7 flex items-end justify-between gap-4">
           <div>
@@ -1859,13 +1939,19 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                         color: "var(--t-text)",
                       };
 
+                const rank = bestRank.get(p.id);
                 return (
                   <div
                     key={p.id}
                     id={`catalog-product-${p.id}`}
-                    className="t-card rounded-[28px] border p-4"
-                    style={{ borderColor: "var(--t-border)", background: glassBg }}
+                    className="t-card catalog-card-lift relative rounded-[28px] border p-4"
+                    style={{ borderColor: rank && rank <= 3 ? "color-mix(in oklab, #f59e0b 55%, var(--t-border))" : "var(--t-border)", background: glassBg }}
                   >
+                    {rank ? (
+                      <span className="catalog-best-badge pointer-events-none absolute left-6 top-6 z-[1] inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black text-white shadow-lg">
+                        {rank === 1 ? "👑" : "🔥"} {rank <= 3 ? `Top ${rank} en ventas` : "Más vendido"}
+                      </span>
+                    ) : null}
                     {p.image_url ? canViewProductLanding ? (
                       <Link
                         href={productPageUrl}
@@ -1968,7 +2054,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                       </div>
 
                       <button
-                        className="t-btn rounded-2xl px-4 py-2 text-sm font-extrabold"
+                        className={cx("t-btn inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-extrabold", !isOut && "catalog-cta-pop")}
                         style={{
                           background: "var(--t-cta)",
                           color: "var(--t-cta-text, #fff)",
@@ -1978,7 +2064,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                         disabled={isOut}
                         title={isOut ? "Producto agotado" : "Agregar al carrito"}
                       >
-                        {isOut ? "Agotado" : "Agregar"}
+                        {isOut ? "Agotado" : <><ShoppingCart size={16} aria-hidden /> Agregar</>}
                       </button>
                     </div>
                   </div>

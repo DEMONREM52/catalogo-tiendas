@@ -2,7 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShareProductButton } from "@/components/ShareProductButton";
-import { WhatsAppProductLink } from "@/components/WhatsAppProductLink";
+import { BuyBox } from "@/components/catalog/BuyBox";
+import { RelatedProducts } from "@/components/catalog/RelatedProducts";
+import { fetchPublicItems, type PublicItem } from "@/lib/catalog/public-prices";
 import { ProductShowcase } from "@/components/ProductShowcase";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -204,6 +206,37 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     details,
   });
 
+  // Comprar: el catálogo de donde viene (o el clásico) recibe el producto en el carrito.
+  const catalogSlug = inCatalog?.slug ?? "detal";
+  const catalogPath = `/${store.slug}/${catalogSlug}`;
+  const keyQ = inCatalog?.key ? `key=${encodeURIComponent(inCatalog.key)}&` : "";
+  const productHref = (pid: string) => inCatalog ? `/${store.slug}/producto/${pid}?catalogo=${encodeURIComponent(inCatalog.slug)}${inCatalog.key ? `&key=${encodeURIComponent(inCatalog.key)}` : ""}` : `/${store.slug}/producto/${pid}`;
+  const addHref = (pid: string) => `${catalogPath}?${keyQ}agregar=${pid}&cant=1`;
+
+  // Lo más vendido y productos de la misma categoría (con el precio de este catálogo). Si algo falla, no se muestra.
+  let bestItems: PublicItem[] = [];
+  let relatedItems: PublicItem[] = [];
+  let bestRank: number | null = null;
+  let bestTitle = "Lo más vendido";
+  try {
+    const [bestRes, sameCat] = await Promise.all([
+      sb.rpc("store_public_best_sellers", { p_store: store.slug, p_limit: 10 }),
+      product.category_id
+        ? sb.from("products").select("id").eq("store_id", store.id).eq("category_id", product.category_id).eq("active", true).neq("id", product.id).or("stock.is.null,stock.gt.0").limit(12)
+        : Promise.resolve({ data: [] as Array<{ id: string }> }),
+    ]);
+    const bd = bestRes.error || !bestRes.data ? null : (Array.isArray(bestRes.data) ? { ids: bestRes.data } : bestRes.data) as { ids?: unknown[]; title?: string | null; badges?: boolean };
+    const bestIds = (bd?.ids ?? []).map(String);
+    if (bd?.title?.trim()) bestTitle = bd.title.trim();
+    const pos = bestIds.indexOf(product.id);
+    if (pos >= 0 && bd?.badges !== false) bestRank = pos + 1;
+    const relIds = ((sameCat.data ?? []) as Array<{ id: string }>).map((r) => r.id).filter((x) => !bestIds.includes(x));
+    const items = await fetchPublicItems(sb, { id: store.id, slug: store.slug }, catalogSlug, inCatalog?.key ?? null, [...bestIds, ...relIds]);
+    bestItems = bestIds.filter((x) => x !== product.id).map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x));
+    relatedItems = relIds.map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).slice(0, 10);
+    if (bestItems.length < 3) bestItems = [];
+  } catch { /* sin recomendaciones */ }
+
   // Ficha para Google (schema.org/Product): nombre, fotos, precio en pesos y disponibilidad.
   const canonical = storeUrl(await storeBase(store.slug), `/producto/${product.id}`);
   const jsonLd = {
@@ -279,24 +312,38 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
                 {categoryName ? <span className="product-landing-category rounded-full px-3 py-1.5 text-xs font-bold">{categoryName}</span> : null}
                 {code ? <span className="product-landing-category rounded-full px-3 py-1.5 text-xs font-bold">Código {code}</span> : null}
               </div>
-              <h1 className="mt-5 text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-6xl">{product.name}</h1>
+              {bestRank ? (
+                <p className="catalog-best-badge mt-4 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black text-white shadow-lg">
+                  {bestRank === 1 ? "👑 El más vendido de la tienda" : `🔥 Top ${bestRank} en ventas`}
+                </p>
+              ) : null}
+              <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-6xl">{product.name}</h1>
               <p className="product-landing-price mt-6 text-4xl font-black sm:text-5xl">{money(price)}</p>
               <div className="product-landing-stock mt-3 flex items-center gap-2 text-sm font-semibold">
                 <span className="product-landing-stock-dot h-2 w-2 rounded-full" />
-                {stock === null ? "Listo para ti" : `${stock} unidades disponibles`}
+                {stock === null ? "Listo para ti" : Number(stock) <= 5 ? <b>🔥 ¡Solo quedan {stock}!</b> : `${stock} unidades disponibles`}
               </div>
               {description ? <RichText text={description} className="mt-7 space-y-1 break-words text-base leading-7 opacity-80" /> : null}
 
               <div className="mt-auto pt-8">
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <ShareProductButton title={product.name} text={shareText} />
-                  {store.whatsapp ? (
-                    <WhatsAppProductLink phone={store.whatsapp} productText={shareText} />
-                  ) : null}
+                <BuyBox productId={product.id} name={product.name} price={Number(price) || 0} stock={stock === null ? null : Number(stock)}
+                  catalogPath={catalogPath} accessKey={inCatalog?.key ?? null} whatsapp={store.whatsapp || null} shareText={shareText} />
+                <ul className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold">
+                  {[
+                    ["⚡", "Pides en un minuto"],
+                    ["💬", "Te atendemos por WhatsApp"],
+                    ["✅", "Te confirmamos disponibilidad"],
+                    ["🛍️", "Suma más productos al pedido"],
+                  ].map(([icon, text], i) => (
+                    <li key={text} className="trust-chip flex items-center gap-2 rounded-2xl border px-3 py-2.5" style={{ borderColor: "var(--t-card-border)", animationDelay: `${i * 80}ms` }}>
+                      <span className="text-base" aria-hidden>{icon}</span>{text}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 flex items-center gap-2 opacity-80">
+                  <ShareProductButton title={product.name} text={shareText} compact />
+                  <span className="text-xs">Compártelo con alguien a quien le pueda gustar</span>
                 </div>
-                <p className="product-landing-share-note mt-3 text-xs leading-5">
-                  Cada foto se incluye como enlace separado. No se comparte el nombre de la tienda ni el enlace a su página.
-                </p>
               </div>
             </div>
           </div>
@@ -337,7 +384,16 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
           </section>
         ) : null}
 
-        <footer className="product-landing-footer mt-8 text-center text-xs">
+        <RelatedProducts kind="best" title={bestTitle} items={bestItems} productHref={productHref} addHref={addHref} />
+        <RelatedProducts kind="related" title="También te puede gustar" items={relatedItems} productHref={productHref} addHref={addHref} />
+
+        <div className="mt-7 text-center">
+          <Link href={backHref} className="inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-black transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
+            🛍️ Ver todo el catálogo
+          </Link>
+        </div>
+
+        <footer className="product-landing-footer mt-8 pb-24 text-center text-xs lg:pb-0">
           Información del producto · {new Date().getFullYear()}
         </footer>
       </div>

@@ -7,6 +7,7 @@ import CatalogsManager from "./catalogs/CatalogsManager";
 import SocialDashboard from "./SocialDashboard";
 import Link from "next/link";
 import { ShareCard } from "./ShareCard";
+import { BestSellersSettings } from "./BestSellersSettings";
 
 type Tab = "catalogs" | "campaigns" | "share" | "landing";
 
@@ -37,7 +38,7 @@ export default function SocialHub() {
     <div className="space-y-4">
       {/* Primero las pestañas; la imagen para redes va en su propia pestaña (antes ocupaba toda la parte de arriba). */}
       <SectionTabs items={TABS} value={tab} onChange={choose} layoutId="social-hub-tab" label="RemHub Social" />
-      {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <SocialDashboard /> : tab === "share" ? <ShareCard /> : (
+      {tab === "catalogs" ? <CatalogsManager /> : tab === "campaigns" ? <><BestSellersSettings /><SocialDashboard /></> : tab === "share" ? <ShareCard /> : (
         <div className="rounded-3xl p-6 text-white" style={{ background: "linear-gradient(135deg, #e11d48, #9333ea 55%, #2563eb)" }}>
           <h2 className="text-2xl font-black">🚀 Landing pages</h2>
           <p className="mt-1 max-w-xl text-sm opacity-90">Tienen su propia administración: cada landing con sus visitas, WhatsApp, pedidos, inversión en pauta y ganancia, aparte del resto de la tienda.</p>

@@ -9,7 +9,7 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { normalizeProductDetails } from "@/lib/product-details";
 import { richToPlain } from "@/lib/rich-text";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
-import { BUILTIN_TEMPLATES, renderTemplate, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
+import { BUILTIN_TEMPLATES, renderTemplate, type CatalogOption, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
 import { TemplateEditor } from "./TemplateEditor";
 
 /**
@@ -18,7 +18,7 @@ import { TemplateEditor } from "./TemplateEditor";
  * como publicado (onShared). Las plantillas se arman en «Plantillas» (20261307).
  */
 
-type Loaded = { vars: TemplateVars; images: string[]; name: string };
+type Loaded = { vars: TemplateVars; images: string[]; name: string; slug: string | null };
 
 const toast = (title: string, icon: "success" | "info" | "error" = "success") =>
   void Swal.fire({ toast: true, position: "top", icon, title, timer: 2800, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
@@ -36,10 +36,19 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
   const [edited, setEdited] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [editor, setEditor] = useState(false);
+  const [catalogs, setCatalogs] = useState<CatalogOption[]>([]);
 
   const all = useMemo(() => [...own, ...BUILTIN_TEMPLATES], [own]);
   const tpl = all.find((t) => t.id === tplId) ?? own.find((t) => t.is_default) ?? all[0];
-  const rendered = useMemo(() => (data ? renderTemplate(tpl.body, data.vars) : ""), [tpl, data]);
+  // {enlace}: la página del producto dentro del catálogo de la plantilla (con su clave si la tiene).
+  const link = useMemo(() => {
+    if (!data?.slug) return "";
+    const cat = tpl.catalog_slug ? catalogs.find((c) => c.slug === tpl.catalog_slug) : null;
+    const base = `${PRODUCTION_ORIGIN}/${data.slug}/producto/${productId}`;
+    if (!cat) return base;
+    return `${base}?catalogo=${encodeURIComponent(cat.slug)}${cat.access_key ? `&key=${encodeURIComponent(cat.access_key)}` : ""}`;
+  }, [data?.slug, tpl.catalog_slug, catalogs, productId]);
+  const rendered = useMemo(() => (data ? renderTemplate(tpl.body, { ...data.vars, enlace: link }) : ""), [tpl, data, link]);
   const text = edited ?? rendered;
 
   const loadTemplates = useCallback(async (select?: string) => {
@@ -58,6 +67,8 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
      
     if (remembered) setTplId(remembered);
     void loadTemplates();
+    void supabaseBrowser().from("store_catalogs").select("slug,name,access_key,active").eq("store_id", storeId).order("sort_order")
+      .then(({ data: rows }) => setCatalogs(((rows ?? []) as Array<CatalogOption & { active?: boolean | null }>).filter((c) => c.active !== false && c.slug)));
   }, [storeId, loadTemplates]);
 
   useEffect(() => {
@@ -91,7 +102,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
         whatsapp: store?.whatsapp ?? "",
       };
       const images = [...new Set([row.image_url, ...det.gallery_urls].filter((u): u is string => typeof u === "string" && /^https?:\/\//.test(u)))];
-      if (alive) setData({ vars, images, name: row.name });
+      if (alive) setData({ vars, images, name: row.name, slug: store?.slug ?? null });
     })();
     return () => { alive = false; };
   }, [storeId, productId]);
@@ -218,7 +229,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
         ) : null}
       </AnimatePresence>
       {editor && storeId && data ? (
-        <TemplateEditor storeId={storeId} vars={data.vars} templates={own} missing={missing}
+        <TemplateEditor storeId={storeId} vars={{ ...data.vars, enlace: link }} templates={own} missing={missing} catalogs={catalogs}
           onClose={() => setEditor(false)} onChanged={(id) => { void loadTemplates(id); if (id) choose(id); }} />
       ) : null}
     </div>

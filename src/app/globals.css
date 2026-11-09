@@ -1464,3 +1464,30 @@ html.lite *, html.lite *::before, html.lite *::after {
 html.lite [data-glass-area]::before { filter: none !important; }
 html.lite * { transition-duration: 80ms !important; }
 html.lite .animate-pulse, html.lite .animate-spin-slow { animation: none !important; }
+
+/* ===== Vender más: catálogo y página del producto (20261308) ===== */
+.catalog-card-lift { transition: transform .25s ease, box-shadow .25s ease; }
+@media (hover: hover) { .catalog-card-lift:hover { transform: translateY(-4px); box-shadow: 0 24px 50px -24px rgba(0,0,0,.45); } }
+.catalog-best-badge { background: linear-gradient(135deg, #f59e0b, #ef4444); animation: best-badge-in .5s cubic-bezier(.2,1.4,.4,1) both; }
+.catalog-cta-pop:active { transform: scale(.94); }
+.best-card { animation: best-rise .45s ease both; transition: transform .25s ease, box-shadow .25s ease; }
+@media (hover: hover) { .best-card:hover { transform: translateY(-4px) rotate(-.4deg); box-shadow: 0 22px 44px -22px rgba(245,158,11,.55); } }
+.best-strip-row { scrollbar-width: thin; }
+.best-flame { animation: best-flame 1.4s ease-in-out infinite; transform-origin: 50% 100%; }
+.best-crown { animation: best-crown 2.4s ease-in-out infinite; }
+.best-add { transition: transform .15s ease; }
+.best-add:active { transform: scale(.88); }
+.buy-now-btn { position: relative; overflow: hidden; }
+.buy-now-btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%); transform: translateX(-120%); animation: buy-shine 3.2s ease-in-out infinite; }
+.buy-pulse { animation: buy-pulse 2.2s ease-in-out infinite; }
+.trust-chip { animation: best-rise .5s ease both; }
+@keyframes best-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes best-badge-in { from { opacity: 0; transform: scale(.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@keyframes best-flame { 0%, 100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.18) rotate(4deg); } }
+@keyframes best-crown { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px) scale(1.05); } }
+@keyframes buy-shine { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+@keyframes buy-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--t-cta, #8b5cf6) 55%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .catalog-best-badge, .best-card, .best-flame, .best-crown, .buy-now-btn::after, .buy-pulse, .trust-chip { animation: none !important; }
+}
+html.lite .best-card, html.lite .buy-now-btn::after, html.lite .buy-pulse, html.lite .best-flame, html.lite .best-crown { animation: none !important; }

@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Bold, Copy, Loader2, Plus, Save, Star, Trash2, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { BUILTIN_TEMPLATES, VARIABLES, renderTemplate, unknownVariables, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
+import { BUILTIN_TEMPLATES, VARIABLES, renderTemplate, unknownVariables, type CatalogOption, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
 
 /**
  * Editor de plantillas de mensajes: crear, editar, duplicar, borrar y escoger la de siempre.
@@ -17,16 +17,16 @@ const EMOJIS = ["🔥", "💰", "✅", "📲", "⚡", "🎁", "🚚", "⭐", "�
 const toast = (title: string, icon: "success" | "error" = "success") =>
   void Swal.fire({ toast: true, position: "top", icon, title, timer: 2200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
 
-type Draft = { id: string | null; name: string; body: string; is_default: boolean };
+type Draft = { id: string | null; name: string; body: string; is_default: boolean; catalog_slug: string | null };
 
-export function TemplateEditor({ storeId, vars, templates, missing, onClose, onChanged }: {
-  storeId: string; vars: TemplateVars; templates: PublishTemplate[]; missing: boolean;
+export function TemplateEditor({ storeId, vars, templates, missing, catalogs = [], onClose, onChanged }: {
+  storeId: string; vars: TemplateVars; templates: PublishTemplate[]; missing: boolean; catalogs?: CatalogOption[];
   onClose: () => void; onChanged: (selectId?: string) => void;
 }) {
   const first = templates[0];
   const [draft, setDraft] = useState<Draft>(first
-    ? { id: first.id, name: first.name, body: first.body, is_default: Boolean(first.is_default) }
-    : { id: null, name: "Mi plantilla", body: BUILTIN_TEMPLATES[0].body, is_default: true });
+    ? { id: first.id, name: first.name, body: first.body, is_default: Boolean(first.is_default), catalog_slug: first.catalog_slug ?? null }
+    : { id: null, name: "Mi plantilla", body: BUILTIN_TEMPLATES[0].body, is_default: true, catalog_slug: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [upper, setUpper] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -46,7 +46,13 @@ export function TemplateEditor({ storeId, vars, templates, missing, onClose, onC
   async function save() {
     if (missing) { toast("Falta correr la migración 20261307 en Supabase.", "error"); return; }
     setBusy("save");
-    const { data, error } = await supabaseBrowser().rpc("publish_template_save", { p_store: storeId, p_id: draft.id, p_name: draft.name, p_body: draft.body, p_default: draft.is_default });
+    const sb = supabaseBrowser();
+    let { data, error } = await sb.rpc("publish_template_save", { p_store: storeId, p_id: draft.id, p_name: draft.name, p_body: draft.body, p_default: draft.is_default, p_catalog: draft.catalog_slug });
+    if (error && /Could not find the function|schema cache/i.test(error.message)) {
+      // Sin 20261308 todavía: se guarda sin catálogo.
+      ({ data, error } = await sb.rpc("publish_template_save", { p_store: storeId, p_id: draft.id, p_name: draft.name, p_body: draft.body, p_default: draft.is_default }));
+      if (!error && draft.catalog_slug) toast("Guardada. Para el catálogo de la plantilla corre la migración 20261308.", "error");
+    }
     setBusy(null);
     const d = data as { ok?: boolean; id?: string; message?: string } | null;
     if (error || !d?.ok) { toast(error?.message ?? d?.message ?? "No se guardó", "error"); return; }
@@ -56,7 +62,7 @@ export function TemplateEditor({ storeId, vars, templates, missing, onClose, onC
   }
 
   async function remove() {
-    if (!draft.id) { setDraft({ id: null, name: "", body: "", is_default: false }); return; }
+    if (!draft.id) { setDraft({ id: null, name: "", body: "", is_default: false, catalog_slug: null }); return; }
     const ok = await Swal.fire({ icon: "warning", title: `¿Borrar «${draft.name}»?`, showCancelButton: true, confirmButtonText: "Borrar", cancelButtonText: "Cancelar", confirmButtonColor: "#ef4444", background: "var(--t-bg-base)", color: "var(--t-text)" });
     if (!ok.isConfirmed) return;
     setBusy("del");
@@ -66,11 +72,11 @@ export function TemplateEditor({ storeId, vars, templates, missing, onClose, onC
     if (error || !d?.ok) { toast(error?.message ?? d?.message ?? "No se borró", "error"); return; }
     toast("Plantilla borrada");
     const next = templates.find((t) => t.id !== draft.id);
-    setDraft(next ? { id: next.id, name: next.name, body: next.body, is_default: Boolean(next.is_default) } : { id: null, name: "Mi plantilla", body: BUILTIN_TEMPLATES[0].body, is_default: true });
+    setDraft(next ? { id: next.id, name: next.name, body: next.body, is_default: Boolean(next.is_default), catalog_slug: next.catalog_slug ?? null } : { id: null, name: "Mi plantilla", body: BUILTIN_TEMPLATES[0].body, is_default: true, catalog_slug: null });
     onChanged();
   }
 
-  const pick = (t: PublishTemplate) => setDraft({ id: t.id, name: t.name, body: t.body, is_default: Boolean(t.is_default) });
+  const pick = (t: PublishTemplate) => setDraft({ id: t.id, name: t.name, body: t.body, is_default: Boolean(t.is_default), catalog_slug: t.catalog_slug ?? null });
   const chip = "rounded-full border px-2.5 py-1 text-[11px] font-bold transition hover:-translate-y-0.5";
   const field = { borderColor: "var(--t-card-border)", background: "var(--t-input-bg, var(--t-card-bg))", color: "var(--t-text)" } as const;
 
@@ -96,13 +102,13 @@ export function TemplateEditor({ storeId, vars, templates, missing, onClose, onC
                 {t.is_default ? <Star size={12} className="shrink-0 text-amber-500" fill="currentColor" /> : null}<span className="truncate">{t.name}</span>
               </button>
             ))}
-            <button type="button" onClick={() => setDraft({ id: null, name: "Nueva plantilla", body: "🔥 *{NOMBRE}* 🔥\n💰 *{precio}*\n\n", is_default: false })} disabled={missing}
+            <button type="button" onClick={() => setDraft({ id: null, name: "Nueva plantilla", body: "🔥 *{NOMBRE}* 🔥\n💰 *{precio}*\n\n", is_default: false, catalog_slug: null })} disabled={missing}
               className="flex w-full items-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-xs font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)" }}>
               <Plus size={13} /> Nueva
             </button>
             <p className="pt-2 text-[11px] font-bold uppercase" style={{ color: "var(--t-muted)" }}>De RemHub (para copiar)</p>
             {BUILTIN_TEMPLATES.map((t) => (
-              <button key={t.id} type="button" disabled={missing} onClick={() => setDraft({ id: null, name: `${t.name} (mía)`, body: t.body, is_default: false })}
+              <button key={t.id} type="button" disabled={missing} onClick={() => setDraft({ id: null, name: `${t.name} (mía)`, body: t.body, is_default: false, catalog_slug: null })}
                 className="flex w-full items-center gap-1.5 rounded-xl border px-3 py-2 text-left text-xs disabled:opacity-50" style={{ borderColor: "var(--t-card-border)" }} title="Copiar para editarla">
                 <Copy size={12} className="shrink-0" /><span className="truncate">{t.name}</span>
               </button>
@@ -132,6 +138,13 @@ export function TemplateEditor({ storeId, vars, templates, missing, onClose, onC
               className="w-full resize-y rounded-xl border p-3 font-mono text-xs leading-relaxed outline-none" style={field} aria-label="Texto de la plantilla" />
             {unknown.length ? <p className="text-[11px] text-amber-500">⚠️ No existe: {unknown.map((u) => `{${u}}`).join(", ")}. Se dejará tal cual.</p> : null}
             <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Si un dato está vacío (por ejemplo, sin descripción), esa línea se quita sola.</p>
+            <label className="block text-xs font-bold">🛍️ El enlace lleva al catálogo
+              <select value={draft.catalog_slug ?? ""} onChange={(e) => setDraft({ ...draft, catalog_slug: e.target.value || null })} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" style={field}>
+                <option value="">Catálogo principal (al detal)</option>
+                {catalogs.map((c) => <option key={c.slug} value={c.slug}>{c.name}{c.access_key ? " 🔒" : ""}</option>)}
+              </select>
+              <span className="mt-0.5 block text-[11px] font-normal" style={{ color: "var(--t-muted)" }}>Con ese precio. Al comprar, el producto queda en el carrito de ese catálogo y pueden agregar más.</span>
+            </label>
             <label className="flex cursor-pointer items-center gap-2 text-xs font-bold">
               <input type="checkbox" checked={draft.is_default} onChange={(e) => setDraft({ ...draft, is_default: e.target.checked })} /> ⭐ Usar siempre esta plantilla
             </label>

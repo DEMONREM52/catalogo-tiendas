@@ -28,7 +28,8 @@ export const VARIABLES: Array<{ key: keyof TemplateVars; label: string; example:
   { key: "whatsapp", label: "WhatsApp", example: "300 123 4567" },
 ];
 
-export type PublishTemplate = { id: string; name: string; body: string; is_default?: boolean; builtin?: boolean };
+export type PublishTemplate = { id: string; name: string; body: string; is_default?: boolean; builtin?: boolean; /** Catálogo al que lleva {enlace} (null = el clásico). */ catalog_slug?: string | null };
+export type CatalogOption = { slug: string; name: string; access_key: string | null };
 
 export const BUILTIN_TEMPLATES: PublishTemplate[] = [
   {

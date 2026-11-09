@@ -31,12 +31,12 @@ const M = fs.readFileSync(path.join(MIG, "20261307_plantillas_publicar.sql"), "u
 await db.exec(M); await db.exec(M);
 const call = async (u, fn, args) => (await as(u, `select public.${fn} r`, args))[0].r;
 
-let r = await call(OWNER, "publish_template_save($1, null, $2, $3, true)", [A, "Instagram", "📸 {nombre} {precio}"]);
+var r = await call(OWNER, "publish_template_save($1, null, $2, $3, true)", [A, "Instagram", "📸 {nombre} {precio}"]);
 ok(r.ok, "Crea una plantilla", r);
 const T1 = r.id;
 r = await call(OWNER, "publish_template_save($1, null, $2, $3, true)", [A, "Oferta", "⚡ {nombre}"]);
 const T2 = r.id;
-let list = (await call(OWNER, "publish_templates_list($1)", [A])).templates;
+var list = (await call(OWNER, "publish_templates_list($1)", [A])).templates;
 ok(list.length === 2 && list.filter((t) => t.is_default).length === 1 && list[0].id === T2, "Solo una queda como la de siempre (la última)", list);
 r = await call(OWNER, "publish_template_save($1, $2, $3, $4, false)", [A, T1, "Insta", "Nuevo {nombre}"]);
 list = (await call(OWNER, "publish_templates_list($1)", [A])).templates;
@@ -52,6 +52,44 @@ ok((await call(OWNER, "publish_templates_list($1)", [A])).templates.length === 1
 let denied = false;
 try { await as(OWNER, "select * from erp_publish_templates"); } catch { denied = true; }
 ok(denied, "La tabla no se lee directo");
+
+console.log("— 20261308: catálogo por plantilla y lo más vendido");
+const M2 = fs.readFileSync(path.join(MIG, "20261308_catalogo_vender_mas.sql"), "utf8");
+await db.exec(M2); await db.exec(M2);
+r = await call(OWNER, "publish_template_save($1, null, $2, $3, false, $4)", [A, "Para Zamora", "{nombre}", " Zamora-Centro "]);
+ok(r.ok, "Guarda con catálogo", r);
+list = (await call(OWNER, "publish_templates_list($1)", [A])).templates;
+ok(list.some((t) => t.name === "Para Zamora" && t.catalog_slug === "zamora-centro"), "El catálogo queda guardado (en minúsculas)", list);
+ok((await call(OWNER, "publish_template_save($1, null, $2, $3, false, $4)", [A, "Mala", "x", "../hack"])).ok === false, "Catálogo raro: no");
+const P = async (name, stock = 5) => (await raw("insert into products (store_id, name, stock, active) values ($1, $2, $3, true) returning id", [A, name, stock]))[0].id;
+const X1 = await P("Top"), X2 = await P("Segundo"), X3 = await P("Agotado", 0), X4 = await P("Viejo");
+const sale = async (pid, qty, ago = "2 days", status = "completed") => {
+  const [{ id }] = await raw("insert into orders (store_id, token, total, status, created_at) values ($1, md5(random()::text), 1, $2, now() - $3::interval) returning id", [A, status, ago]);
+  await raw("insert into order_items (order_id, product_id, quantity, price) values ($1, $2, $3, 1)", [id, pid, qty]);
+};
+await sale(X1, 9); await sale(X2, 3); await sale(X3, 50); await sale(X4, 99, "90 days"); await sale(X2, 40, "1 day", "draft");
+await raw("update stores set slug = 'tienda-a' where id = $1", [A]);
+const pub = async () => { await db.exec("set role anon"); try { return (await db.query("select public.store_public_best_sellers('Tienda-A', 10) r")).rows[0].r; } finally { await db.exec("reset role"); } };
+let best = await pub();
+ok(JSON.stringify(best.ids) === JSON.stringify([X1, X2]) && best.badges === true, "Visitante: el orden de los más vendidos (sin agotados, viejos ni borradores)", best);
+ok(best.ids.every((x) => typeof x === "string") && !("q" in best), "Solo ids, sin cantidades");
+// Erp_can_any no está en la base de prueba: se crea igual que en producción (dueño o permiso).
+await db.exec(`create or replace function public.erp_can_any(p_store uuid, p_perms text[]) returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and (exists (select 1 from public.stores s where s.id = p_store and s.owner_id = auth.uid())
+    or exists (select 1 from public.store_users su where su.store_id = p_store and su.user_id = auth.uid() and su.active and su.permissions && p_perms)) $$;`);
+let cfg = await call(OWNER, "best_sellers_config_get($1)", [A]);
+ok(cfg.ok && cfg.config.mode === "auto" && cfg.config.days === 60, "Configuración por defecto: automático, 60 días", cfg);
+cfg = await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "auto", "🔥 Los favoritos", [X4, X4, X3], 120, false]);
+ok(cfg.ok && cfg.config.product_ids.length === 2 && cfg.config.title === "🔥 Los favoritos", "Fija productos (sin repetir)", cfg);
+best = await pub();
+ok(JSON.stringify(best.ids) === JSON.stringify([X4, X1, X2]) && best.title === "🔥 Los favoritos" && best.badges === false, "Fijado primero (el agotado no sale), luego por ventas", best);
+await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "manual", null, [X2, X1], 60, true]);
+best = await pub();
+ok(JSON.stringify(best.ids) === JSON.stringify([X2, X1]), "A mano: solo los escogidos, en ese orden", best);
+await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "off", null, [], 60, true]);
+ok((await pub()).ids.length === 0, "Apagado: no sale");
+ok((await call(VEND, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "off", null, [], 60, true])).ok === false, "Sin permiso: no lo cambia");
+ok((await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "raro", null, [], 60, true])).ok === false, "Modo raro: no");
 
 console.log(`\n${pass} bien, ${fail} mal`);
 process.exit(fail ? 1 : 0);

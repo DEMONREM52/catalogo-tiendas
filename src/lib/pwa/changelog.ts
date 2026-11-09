@@ -733,6 +733,17 @@ export const RELEASES: Release[] = [
       { icon: "⭐", text: "Márcala para usarla siempre" },
     ],
   },
+  {
+    id: 70, date: "2026-11-09", title: "Comprar desde el enlace y «Lo más vendido»",
+    summary: "La página del producto ahora vende: «Comprar ahora» (lo deja en el carrito y lo abre para pedir) y «Agregar y seguir comprando» (lo deja en el carrito del catálogo para sumar más), con cantidad, barra fija en el celular, aviso real de pocas unidades, «Lo más vendido» y «También te puede gustar». Cada plantilla del kit puede llevar a un catálogo (con su precio). En todos los catálogos sale «🔥 Lo más vendido» con insignias Top; se configura en Catálogos y campañas → Campañas: automático, a mano o apagado.",
+    paths: ["/dashboard/social", "/dashboard/products"],
+    demo: [
+      { icon: "📝", text: "En la plantilla escoge a qué catálogo lleva el enlace" },
+      { icon: "⚡", text: "El cliente toca «Comprar ahora» y pide" },
+      { icon: "🛒", text: "O «Agregar y seguir comprando» para sumar más" },
+      { icon: "🔥", text: "Configura «Lo más vendido» en Campañas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
