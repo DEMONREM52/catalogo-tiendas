@@ -414,7 +414,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
           </Link>
         </div>
 
-        <footer className="product-landing-footer mt-8 pb-24 text-center text-xs lg:pb-0">
+        <footer className="product-landing-footer mt-8 pb-28 text-center text-xs">
           Información del producto · {new Date().getFullYear()}
         </footer>
       </div>

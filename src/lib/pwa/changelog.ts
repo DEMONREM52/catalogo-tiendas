@@ -755,6 +755,11 @@ export const RELEASES: Release[] = [
       { icon: "⭐", text: "Marca destacados para que salgan primero" },
     ],
   },
+  {
+    id: 72, date: "2026-11-09", title: "Botón de comprar siempre a la vista",
+    summary: "En la página del producto la barra de compra queda fija abajo (celular y computador): cambias la cantidad ahí mismo, el carrito naranja se mueve suave para invitar a agregar y «Comprar» en verde lleva directo a pedir.",
+    paths: ["/dashboard/products"],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
