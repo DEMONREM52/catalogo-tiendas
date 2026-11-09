@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { duplicateNames, healthScore, productIssues, publishStatusText, ddmmyyyy, agoDays, type RadarProduct } from "@/lib/products/radar";
+import { duplicateImages, planToday, stockValue, transferHint, duplicateNames, healthScore, productIssues, publishStatusText, ddmmyyyy, agoDays, type RadarProduct } from "@/lib/products/radar";
 
 const NOW = Date.parse("2026-11-09T15:00:00Z");
 const base = (over: Partial<RadarProduct> = {}): RadarProduct => ({
@@ -65,4 +65,36 @@ test("textos de publicación y fechas", () => {
   assert.equal(ddmmyyyy("2026-10-01T03:00:00Z"), "30/09/2026");
   assert.equal(agoDays(39), "hace 39 días");
   assert.equal(agoDays(1), "ayer");
+});
+
+test("foto repetida, foto mala, margen bajo y nombre largo", () => {
+  const imgs = duplicateImages([{ image: "a.png" }, { image: "a.png" }, { image: "b.png" }]);
+  const keys = (over: Partial<RadarProduct>, c = {}) => productIssues(base(over), ctx(c)).map((i) => i.key);
+  assert.ok(keys({ image: "a.png" }, { duplicateImages: imgs }).includes("photo_repeated"));
+  assert.ok(keys({ image: "b.png" }, { photoChecks: new Map([["b.png", "small"]]) }).includes("photo_bad"));
+  assert.ok(keys({ prices: [42000, 0, 0, 0, 0] }).includes("low_margin"));
+  assert.ok(!keys({ prices: [30000, 0, 0, 0, 0] }).includes("low_margin"), "bajo el costo no es además margen bajo");
+  assert.ok(keys({ name: "x".repeat(95) }).includes("long_name"));
+});
+
+test("valor quieto y sugerencia de traslado", () => {
+  assert.deepEqual(stockValue(base({ stock: 10 }), true), { value: 400000, basis: "cost" });
+  assert.deepEqual(stockValue(base({ stock: 10 }), false), { value: 630000, basis: "price" });
+  const p = base({ by_point: [{ id: "Z", qty: 10, sold_30: 0 }, { id: "C", qty: 1, sold_30: 6 }] });
+  assert.deepEqual(transferHint(p, null), { pointId: "C", sold: 6, from: "Z", fromQty: 10 });
+  assert.equal(transferHint(p, "C"), null, "en Cisneros sí se vende");
+});
+
+test("plan del día: lo atrasado primero y lo publicado hoy cuenta", () => {
+  const rows = [
+    base({ id: "hoy", pub: { every_days: 1, every: 1, last: "2026-11-09T14:00:00Z", by: null, times: 1, next_due: "2026-11-10" } }),
+    base({ id: "atrasado", pub: { every_days: 7, every: 7, last: "2026-10-20T00:00:00Z", by: null, times: 1, next_due: "2026-10-27" } }),
+    base({ id: "toca", pub: { every_days: 7, every: 7, last: "2026-11-02T00:00:00Z", by: null, times: 1, next_due: "2026-11-09" } }),
+    base({ id: "nunca", pub: { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null } }),
+    base({ id: "aldia" }),
+    base({ id: "agotado", stock: 0, pub: { every_days: 1, every: 1, last: null, by: null, times: 0, next_due: "2026-11-09" } }),
+  ];
+  const plan = planToday(rows, "2026-11-09", 3, (r) => productIssues(r, ctx()).map((i) => i.key));
+  assert.deepEqual(plan.done.map((r) => r.id), ["hoy"]);
+  assert.deepEqual(plan.todo.map((r) => r.id), ["atrasado", "toca"]);
 });

@@ -711,6 +711,17 @@ export const RELEASES: Release[] = [
       { icon: "🩺", text: "Toca una falencia para arreglarla" },
     ],
   },
+  {
+    id: 68, date: "2026-11-09", title: "Radar de productos más completo",
+    summary: "Plan de hoy con los productos que conviene publicar (lo atrasado primero) y aviso al celular a la hora que escojas. «¡Publícame!» trae un kit con el texto listo, las fotos y WhatsApp; al compartir queda marcado solo, y muestra cuánto se vendió la semana antes y después de cada publicación. El Radar muestra la plata quieta, sugiere trasladar a donde sí se vende, filtra por punto, detecta fotos rotas, pequeñas o repetidas, margen bajo y nombres largos, y «Nombre repetido» te muestra cuáles se llaman igual. Editor rápido sin salir, arreglos en grupo (categoría, activar, ocultar), tareas para el equipo, calendario de publicaciones con quién publicó más, gráfica de salud con meta y exportar a Excel.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "🗓️", text: "Mira tu «Plan de hoy» en el Radar" },
+      { icon: "✨", text: "En «Publícame» usa el kit y WhatsApp" },
+      { icon: "⚡", text: "Toca «Rápido» para arreglar sin salir" },
+      { icon: "📋", text: "Selecciona productos y «Asignar» a alguien" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

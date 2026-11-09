@@ -68,12 +68,14 @@ export function useStoreAlerts(storeId: string | null | undefined) {
     // + trabajo sin conexión: contingencias por transmitir y ventas por revisar (20261243).
     // + pedidos sin confirmar y sin completar (20261303).
     // + productos a los que ya les toca publicarse (20261305).
-    const [base, extra, offline, orders, publish] = await Promise.all([
+    // + tareas de productos asignadas a la persona (20261306).
+    const [base, extra, offline, orders, publish, tasks] = await Promise.all([
       sb.rpc("erp_alerts", { p_store: storeId }),
       sb.rpc("erp_extra_alerts", { p_store: storeId }),
       sb.rpc("erp_offline_alerts", { p_store: storeId }),
       sb.rpc("erp_order_alerts", { p_store: storeId }),
       sb.rpc("erp_publish_alerts", { p_store: storeId }),
+      sb.rpc("erp_product_task_alerts", { p_store: storeId }),
     ]);
     const ordersOk = !orders.error && Array.isArray(orders.data);
     const rows = [
@@ -83,6 +85,7 @@ export function useStoreAlerts(storeId: string | null | undefined) {
       ...(!extra.error && Array.isArray(extra.data) ? (extra.data as StoreAlert[]) : []),
       ...(!offline.error && Array.isArray(offline.data) ? (offline.data as StoreAlert[]) : []),
       ...(!publish.error && Array.isArray(publish.data) ? (publish.data as StoreAlert[]) : []),
+      ...(!tasks.error && Array.isArray(tasks.data) ? (tasks.data as StoreAlert[]) : []),
     ].filter((a) => SEVERITY[a.severity]);
     if (!base.error || !extra.error) {
       setAlerts(rows.sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order));

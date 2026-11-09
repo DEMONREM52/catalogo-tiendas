@@ -37,6 +37,8 @@ export type RadarProduct = {
   last_sale_at: string | null;
   sold_30: number;
   sold_90: number;
+  /** Por punto: unidades y vendidos en 30 días (20261306). */
+  by_point?: Array<{ id: string; qty: number; sold_30: number }>;
   pub: PublishState;
 };
 
@@ -47,7 +49,8 @@ export type EditorSectionKey = "basic" | "prices" | "stock" | "media" | "desc" |
 export type IssueKey =
   | "no_photo" | "no_price" | "below_cost" | "no_cost" | "no_category" | "duplicate_name"
   | "out_of_stock" | "hidden_with_stock" | "no_sales" | "publish_due" | "never_published"
-  | "no_short_desc" | "no_long_desc" | "one_photo" | "no_features" | "no_barcode";
+  | "no_short_desc" | "no_long_desc" | "one_photo" | "no_features" | "no_barcode"
+  | "photo_bad" | "photo_repeated" | "low_margin" | "long_name";
 
 export type IssueDef = { key: IssueKey; label: string; short: string; emoji: string; level: IssueLevel; weight: number; section: EditorSectionKey; help: string };
 
@@ -56,6 +59,9 @@ export const ISSUES: Record<IssueKey, IssueDef> = {
   no_price: { key: "no_price", label: "Sin precio", short: "Precio", emoji: "💲", level: "critical", weight: 20, section: "prices", help: "No tiene ningún precio: no se puede vender." },
   below_cost: { key: "below_cost", label: "Precio bajo el costo", short: "Pierde", emoji: "📉", level: "critical", weight: 15, section: "prices", help: "Algún precio está por debajo de lo que cuesta: se vende perdiendo." },
   no_cost: { key: "no_cost", label: "Sin costo", short: "Costo", emoji: "🧾", level: "warning", weight: 8, section: "stock", help: "No tiene costo: entra con un ingreso de factura. Sin él no se sabe cuánto deja." },
+  photo_bad: { key: "photo_bad", label: "Foto rota o muy pequeña", short: "Foto mala", emoji: "🧩", level: "warning", weight: 10, section: "basic", help: "La foto no abre o es muy pequeña (menos de 300 px): se ve borrosa en el catálogo." },
+  photo_repeated: { key: "photo_repeated", label: "Misma foto que otro", short: "Foto repetida", emoji: "🪞", level: "warning", weight: 6, section: "basic", help: "Otro producto usa exactamente la misma foto: el cliente no los distingue." },
+  low_margin: { key: "low_margin", label: "Gana menos del 10 %", short: "Margen bajo", emoji: "🪙", level: "warning", weight: 6, section: "prices", help: "Algún precio deja menos del 10 % sobre el costo." },
   no_category: { key: "no_category", label: "Sin categoría", short: "Categoría", emoji: "🗂️", level: "warning", weight: 10, section: "basic", help: "No aparece en ninguna sección del catálogo." },
   duplicate_name: { key: "duplicate_name", label: "Nombre repetido", short: "Repetido", emoji: "👯", level: "warning", weight: 8, section: "basic", help: "Hay otro producto con el mismo nombre: confunde al vender." },
   out_of_stock: { key: "out_of_stock", label: "Agotado", short: "Agotado", emoji: "📦", level: "warning", weight: 10, section: "stock", help: "Está activo pero no hay unidades en ningún punto." },
@@ -67,6 +73,7 @@ export const ISSUES: Record<IssueKey, IssueDef> = {
   no_long_desc: { key: "no_long_desc", label: "Sin descripción completa", short: "Ficha", emoji: "📝", level: "tip", weight: 4, section: "desc", help: "Para qué sirve, cómo se usa y por qué vale la pena." },
   one_photo: { key: "one_photo", label: "Una sola foto", short: "Más fotos", emoji: "🖼️", level: "tip", weight: 4, section: "media", help: "Más fotos (y un video) dan confianza." },
   no_features: { key: "no_features", label: "Sin características", short: "Detalles", emoji: "✨", level: "tip", weight: 3, section: "features", help: "Color, talla, material, lo que lo hace especial." },
+  long_name: { key: "long_name", label: "Nombre muy largo", short: "Nombre largo", emoji: "📏", level: "tip", weight: 2, section: "basic", help: "Más de 90 letras: se corta en el catálogo y en el POS." },
   no_barcode: { key: "no_barcode", label: "Sin código de barras", short: "Barras", emoji: "📊", level: "tip", weight: 2, section: "basic", help: "Con código de barras se vende más rápido en el POS." },
 };
 
@@ -101,7 +108,20 @@ export function duplicateNames(products: Pick<RadarProduct, "name">[]): Set<stri
   return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
 }
 
-export type RadarContext = { today: string; now: number; canCosts: boolean; duplicates: Set<string> };
+/** Fotos que usan varios productos. */
+export function duplicateImages(products: Pick<RadarProduct, "image">[]): Set<string> {
+  const seen = new Map<string, number>();
+  for (const p of products) if (p.image) seen.set(p.image, (seen.get(p.image) ?? 0) + 1);
+  return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
+}
+
+export type PhotoCheck = "small" | "broken";
+export type RadarContext = {
+  today: string; now: number; canCosts: boolean; duplicates: Set<string>;
+  duplicateImages?: Set<string>;
+  /** Fotos revisadas en el navegador (rotas o pequeñas). */
+  photoChecks?: Map<string, PhotoCheck>;
+};
 
 /** Lo que le falta a un producto, de lo más grave a lo menos. */
 export function productIssues(p: RadarProduct, ctx: RadarContext): IssueDef[] {
@@ -112,13 +132,17 @@ export function productIssues(p: RadarProduct, ctx: RadarContext): IssueDef[] {
   const ageDays = (ctx.now - Date.parse(p.created_at)) / DAY;
 
   if (!p.image) out.push("no_photo");
+  else if (ctx.photoChecks?.has(p.image)) out.push("photo_bad");
+  if (p.image && ctx.duplicateImages?.has(p.image)) out.push("photo_repeated");
   if (!priced.length) out.push("no_price");
   if (ctx.canCosts && p.cost !== null) {
     if (Number(p.cost) > 0 && priced.some((x) => x < Number(p.cost))) out.push("below_cost");
     if (!(Number(p.cost) > 0)) out.push("no_cost");
+    else if (!out.includes("below_cost") && priced.some((x) => x < Number(p.cost) * 1.1)) out.push("low_margin");
   }
   if (!p.cats) out.push("no_category");
   if (ctx.duplicates.has(nameKey(p.name))) out.push("duplicate_name");
+  if (p.name.trim().length > 90) out.push("long_name");
   if (p.active && stock !== null && stock <= 0) out.push("out_of_stock");
   if (!p.active && stock !== null && stock > 0) out.push("hidden_with_stock");
   if (p.active && stock !== null && stock > 0 && ageDays > 30) {
@@ -212,3 +236,42 @@ export const CHANNELS: Array<{ key: string; label: string; emoji: string }> = [
   { key: "marketplace", label: "Marketplace", emoji: "🛒" },
   { key: "otro", label: "Otro", emoji: "✨" },
 ];
+
+/** Valor de lo que hay (al costo si se puede ver; si no, al precio). */
+export function stockValue(p: RadarProduct, canCosts: boolean): { value: number; basis: "cost" | "price" } {
+  const qty = Math.max(0, Number(p.stock ?? 0));
+  const cost = canCosts && p.cost !== null && Number(p.cost) > 0 ? Number(p.cost) : 0;
+  if (cost) return { value: qty * cost, basis: "cost" };
+  const price = p.prices.map(Number).find((x) => x > 0) ?? 0;
+  return { value: qty * price, basis: "price" };
+}
+
+/** Punto donde sí se vende (para sugerir un traslado). null si no hay. */
+export function transferHint(p: RadarProduct, currentPoint: string | null): { pointId: string; sold: number; from: string | null; fromQty: number } | null {
+  const rows = p.by_point ?? [];
+  const from = currentPoint ? rows.find((r) => r.id === currentPoint) ?? null : [...rows].sort((a, b) => b.qty - a.qty)[0] ?? null;
+  if (!from || from.qty <= 0 || from.sold_30 > 0) return null;
+  const best = rows.filter((r) => r.id !== from.id && r.sold_30 > 0).sort((a, b) => b.sold_30 - a.sold_30)[0];
+  return best ? { pointId: best.id, sold: best.sold_30, from: from.id, fromQty: from.qty } : null;
+}
+
+/**
+ * Plan del día: hasta `target` productos para publicar hoy. Primero los que toca (los más atrasados), luego los quietos
+ * con más unidades y los que nunca se han publicado. Los que ya se publicaron hoy cuentan como hechos.
+ */
+export function planToday<T extends RadarProduct>(rows: T[], today: string, target: number, issuesOf: (r: T) => IssueKey[]): { done: T[]; todo: T[] } {
+  const done = rows.filter((r) => r.active && r.pub.last && bogotaToday(new Date(r.pub.last)) === today);
+  const doneIds = new Set(done.map((r) => r.id));
+  const score = (r: T) => {
+    const keys = issuesOf(r);
+    const late = r.pub.next_due && r.pub.next_due <= today ? 100 + daysBetween(r.pub.next_due, today) * 5 : 0;
+    return late + (keys.includes("no_sales") ? 40 : 0) + (r.pub.last ? 0 : 20) + Math.min(30, Math.max(0, Number(r.stock ?? 0)) / 10) + (r.image ? 5 : -50);
+  };
+  const candidates = rows
+    .filter((r) => r.active && !doneIds.has(r.id) && (r.stock === null || Number(r.stock) > 0))
+    .filter((r) => isPublishDue(r.pub, today) || !r.pub.last || issuesOf(r).includes("no_sales"))
+    .map((r) => ({ r, s: score(r) }))
+    .sort((a, b) => b.s - a.s || a.r.name.localeCompare(b.r.name))
+    .map((x) => x.r);
+  return { done, todo: candidates.slice(0, Math.max(0, target - done.length)) };
+}

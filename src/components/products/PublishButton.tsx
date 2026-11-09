@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BellOff, Check, History, Loader2, Megaphone, Undo2, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { PublishKit } from "./PublishKit";
 import {
   CHANNELS, EVERY_OPTIONS, agoDays, bogotaToday, daysSince, ddmmyyyy, everyLabel, publishStatusText, type PublishState,
 } from "@/lib/products/radar";
@@ -15,7 +16,7 @@ import {
  * Cuando ya toca, el megáfono se mueve y la campana avisa. Funciona con la migración 20261305.
  */
 
-type LogRow = { id: string; at: string; by: string | null; channels: string[]; note: string | null; mine: boolean };
+type LogRow = { id: string; at: string; by: string | null; channels: string[]; note: string | null; mine: boolean; before_7?: number; after_7?: number; after_complete?: boolean };
 const EMPTY: PublishState = { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,7 +149,10 @@ function PublishPanel({
   }
 
   const sb = supabaseBrowser();
-  const mark = () => run("mark", () => sb.rpc("product_publish_mark", { p_store: storeId, p_products: [productId], p_channels: channels }), "📣 ¡Listo! Quedó publicado hoy");
+  const mark = (extra?: string) => {
+    const ch = extra && !channels.includes(extra) ? [...channels, extra] : channels;
+    return run("mark", () => sb.rpc("product_publish_mark", { p_store: storeId, p_products: [productId], p_channels: ch }), "📣 ¡Listo! Quedó publicado hoy");
+  };
   const setEvery = (days: number) => run(`every-${days}`, () => sb.rpc("product_publish_set_every", { p_store: storeId, p_products: [productId], p_every: days }), days > 0 ? `⏰ Te recuerdo ${everyLabel(days).toLowerCase()}` : "🔕 Sin recordatorio");
   const undo = () => run("undo", () => sb.rpc("product_publish_undo", { p_store: storeId, p_product: productId }), "↩️ Se deshizo la última");
 
@@ -203,6 +207,9 @@ function PublishPanel({
             <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>{everyLabel(state.every)}{state.times ? ` · ${state.times} vez${state.times === 1 ? "" : "es"}` : ""}</p>
           </div>
         </div>
+
+        {/* Kit: texto, fotos y WhatsApp listos; al compartir queda marcado solo */}
+        <PublishKit storeId={storeId} productId={productId} onShared={(channel) => void mark(channel)} />
 
         {/* Dónde (opcional) */}
         <p className="mt-4 text-xs font-bold">¿Dónde lo publicaste? <span className="font-normal" style={{ color: "var(--t-muted)" }}>(opcional)</span></p>
@@ -259,6 +266,15 @@ function PublishPanel({
               </button>
             ) : null}
           </div>
+          {log && log.some((l) => l.after_complete) ? (() => {
+            const done = log.filter((l) => l.after_complete);
+            const before = done.reduce((t, l) => t + Number(l.before_7 ?? 0), 0), after = done.reduce((t, l) => t + Number(l.after_7 ?? 0), 0);
+            return (
+              <p className="mt-1.5 rounded-xl px-2.5 py-1.5 text-[11px]" style={{ background: after > before ? "color-mix(in oklab, #10b981 12%, transparent)" : "color-mix(in oklab, var(--t-text) 6%, transparent)" }}>
+                {after > before ? "📈" : "➖"} ¿Sirvió publicar? En la semana después de publicar se vendieron <b>{after}</b> und · la semana antes <b>{before}</b>.
+              </p>
+            );
+          })() : null}
           {log === null ? <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Cargando…</p>
             : log.length === 0 ? <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Todavía no hay publicaciones marcadas.</p>
             : (
@@ -271,6 +287,12 @@ function PublishPanel({
                       <span style={{ color: "var(--t-muted)" }}>{new Date(l.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" })}</span>
                       <span className="truncate">{l.by ?? ""}</span>
                       <span className="ml-auto shrink-0">{l.channels.map((c) => CHANNELS.find((x) => x.key === c)?.emoji ?? "•").join(" ")}</span>
+                      {l.after_7 !== undefined ? (
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 font-bold tabular-nums" title="Unidades vendidas 7 días antes → 7 días después de publicar"
+                          style={{ background: Number(l.after_7) > Number(l.before_7) ? "color-mix(in oklab, #10b981 18%, transparent)" : "color-mix(in oklab, var(--t-text) 8%, transparent)" }}>
+                          🛒 {Number(l.before_7)}→{Number(l.after_7)}{l.after_complete ? "" : "…"}
+                        </span>
+                      ) : null}
                     </motion.li>
                   ))}
                 </AnimatePresence>
