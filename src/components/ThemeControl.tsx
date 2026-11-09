@@ -5,6 +5,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
+import { isLiteDevice } from "@/lib/lite-device";
 import { Check, Monitor, Moon, Palette, Plus, Settings2, Sparkles, Sun } from "lucide-react";
 import { OBSIDIAN, PEARL, swatches, type ThemeConfig } from "@/lib/appearance/theme";
 import {
@@ -23,7 +24,7 @@ export function useAppearanceState() {
 /** ¿Va el fondo animado? (Apariencia → Fondo animado). */
 export function useAnimatedBackground() {
   const s = useSyncExternalStore(subscribeAppearance, getAppearance, () => null);
-  return s ? s.prefs.animated && !s.prefs.reducedMotion : false;
+  return s ? s.prefs.animated && !s.prefs.reducedMotion && !isLiteDevice() : false;
 }
 
 export type StudioOpen = { view: "manager" } | { view: "editor"; theme?: UserTheme | null; from?: ThemeConfig; name?: string };

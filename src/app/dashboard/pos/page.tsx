@@ -11,6 +11,7 @@ import { errorText as fiscalErrorText, fiscalApi, newIdempotencyKey } from "@/li
 import type { PointReadiness } from "@/lib/fiscal/types";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
 import { PhotoSearchButton } from "../PhotoSearchControls";
+import { QtyPicker } from "./QtyPicker";
 import { useErpFinderSource } from "../useErpFinder";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
 import { matchesSearch, smartFilter } from "@/lib/search";
@@ -31,7 +32,7 @@ import { storedSessionUser } from "@/lib/supabase/offline-session";
 import { canReachData, isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
 import { cacheAge, cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pause, Play, UserRound, X } from "lucide-react";
+import { Pause, Play, ShoppingCart, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
 import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
@@ -211,6 +212,9 @@ export default function PosPage() {
   const [clientPicking, setClientPicking] = useState(false);
   // Celular: el carrito se abre encima (hoja de abajo) sin perder la búsqueda.
   const [cartSheet, setCartSheet] = useState(false);
+  // Celular: producto al que se le está escogiendo la cantidad; y si se ven todos los productos sin buscar.
+  const [picking, setPicking] = useState<Product | null>(null);
+  const [browseAll, setBrowseAll] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [customerName, setCustomerName] = useState(DEFAULT_CLIENT_NAME);
   const [customerEmail, setCustomerEmail] = useState("");
@@ -926,19 +930,31 @@ export default function PosPage() {
    * Agrega un producto (o suma uno si ya está). Con el lector de códigos se queda en el buscador;
    * al tocarlo, el cursor salta a su cantidad → Enter al precio → Enter de vuelta a buscar.
    */
-  function addProduct(product: Product, scanned = false) {
+  function addProduct(product: Product, scanned = false, qty = 1, fromPicker = false) {
     playTone(scanned ? "escaner" : "pop", scanned ? 0.6 : 0.25);
     const had = cart.find((item) => item.productId === product.id)?.qty ?? 0;
     window.clearTimeout(flashTimer.current);
-    setFlash({ id: product.id, text: had ? `Ya tenías ${had} · ahora ${had + 1}. Cambia la cantidad si quieres y Enter.` : "Agregado · cantidad y Enter para seguir" });
+    setFlash({ id: product.id, text: fromPicker
+      ? (had ? `Ya tenías ${had} · ahora ${had + qty}. Revisa el precio aquí.` : `Agregado ${qty} · revisa el precio o cámbialo aquí`)
+      : had ? `Ya tenías ${had} · ahora ${had + qty}. Cambia la cantidad si quieres y Enter.` : "Agregado · cantidad y Enter para seguir" });
     flashTimer.current = window.setTimeout(() => setFlash(null), 3200);
-    if (!scanned) focusPosField(product.id, "qty");
+    if (fromPicker) {
+      // Celular: se abre el carrito y se baja hasta el producto (sin abrir el teclado).
+      setCartSheet(true);
+      const go = (tries: number) => window.setTimeout(() => {
+        const els = document.querySelectorAll<HTMLElement>(`[data-pos-qty="${CSS.escape(product.id)}"]`);
+        const el = els[els.length - 1];
+        if (!el) { if (tries > 0) go(tries - 1); return; }
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 120);
+      go(8);
+    } else if (!scanned) focusPosField(product.id, "qty");
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       const price = priceOf(product, currentPriceList);
       if (existing) {
         return prev.map((item) =>
-          item.productId === product.id ? { ...item, qty: item.qty + 1 } : item,
+          item.productId === product.id ? { ...item, qty: item.qty + qty } : item,
         );
       }
       return [
@@ -946,13 +962,19 @@ export default function PosPage() {
         {
           productId: product.id,
           name: product.name,
-          qty: 1,
+          qty,
           price,
           priceLevel: currentPriceList,
           note: "",
         },
       ];
     });
+  }
+
+  /** Al tocar un producto: en celular pregunta la cantidad; en computador lo agrega y salta a su cantidad. */
+  function pickProduct(product: Product) {
+    if (window.matchMedia("(min-width: 1024px)").matches) addProduct(product);
+    else { searchRef.current?.blur(); setPicking(product); }
   }
 
   /** Carga un documento abierto del punto en el carrito para agregarle o quitarle productos. */
@@ -1834,7 +1856,7 @@ export default function PosPage() {
                     void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
                     return;
                   }
-                  addProduct({ ...product, stock });
+                  pickProduct({ ...product, stock });
                 }}
               />
             </div>
@@ -1852,7 +1874,13 @@ export default function PosPage() {
                     : "No se encontraron productos."}
               </p>
             ) : (
-              <div className="mt-3 max-h-[62vh] overflow-y-auto pr-1">
+              <>
+              {!search.trim() && !browseAll ? (
+                <button type="button" onClick={() => setBrowseAll(true)} className="mt-3 w-full rounded-xl border border-dashed py-2.5 text-xs font-semibold lg:hidden" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                  Escribe arriba para buscar · o ver todos los productos ({filteredProducts.length})
+                </button>
+              ) : null}
+              <div className={`mt-3 lg:max-h-[62vh] lg:overflow-y-auto lg:pr-1 ${!search.trim() && !browseAll ? "hidden lg:block" : ""}`}>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredProducts.slice(0, visibleCount).map((product) => {
                     const disabled = !product.active || product.stock === 0;
@@ -1862,7 +1890,7 @@ export default function PosPage() {
                         type="button"
                         disabled={disabled}
                         data-pos-result
-                        onClick={() => addProduct(product)}
+                        onClick={() => pickProduct(product)}
                         onKeyDown={(e) => {
                           // Flechas para moverse entre resultados; Esc vuelve a buscar (Enter agrega: es un botón).
                           const all = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pos-result]:not([disabled])"));
@@ -1919,6 +1947,7 @@ export default function PosPage() {
                   </button>
                 ) : null}
               </div>
+              </>
             )}
           </div>
 
@@ -2445,13 +2474,23 @@ export default function PosPage() {
         {cart.length && !cartSheet ? (
           <motion.div initial={{ y: 80 }} animate={{ y: 0 }} exit={{ y: 80 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}
             className="fixed inset-x-3 bottom-3 z-40 lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-            <button type="button" onClick={() => setCartSheet(true)}
-              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-white shadow-[0_14px_40px_rgba(0,0,0,.45)]" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
-              <span className="relative text-2xl">🛒<motion.span key={units} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="absolute -right-2 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-black text-violet-700">{units}</motion.span></span>
-              <span className="min-w-0 flex-1 text-sm font-bold leading-tight">{cart.length} producto{cart.length === 1 ? "" : "s"}<span className="block text-[11px] font-semibold opacity-80">Toca para ver el carrito</span></span>
-              <motion.span key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="text-lg font-black tabular-nums">{money(total)}</motion.span>
-              <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-black">Ver ↑</span>
-            </button>
+            <div className="flex items-stretch gap-2">
+              <button type="button" onClick={() => setCartSheet(true)} aria-label={`Ver carrito: ${cart.length} productos`}
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left shadow-[0_14px_40px_rgba(0,0,0,.35)]" style={{ background: "var(--t-bg-base)", borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6)" }}>
+                  <ShoppingCart size={17} />
+                  <motion.span key={units} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[11px] font-black text-white">{units}</motion.span>
+                </span>
+                <span className="min-w-0 flex-1 leading-tight">
+                  <motion.span key={total} initial={{ scale: 1.1 }} animate={{ scale: 1 }} className="block truncate text-base font-black tabular-nums">{money(total)}</motion.span>
+                  <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>{cart.length} producto{cart.length === 1 ? "" : "s"} · ver</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => void createInvoice()} disabled={saving}
+                className="shrink-0 rounded-2xl px-4 text-sm font-black text-white shadow-[0_14px_40px_rgba(0,0,0,.35)] active:scale-95 disabled:opacity-60" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
+                {saving ? "Creando…" : editingDoc ? "💾 Guardar" : documentKind === "factura" ? "⚡ Facturar" : "⚡ Crear remisión"}
+              </button>
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -2488,15 +2527,29 @@ export default function PosPage() {
                 {listTotal > total ? <p className="flex justify-between text-xs text-amber-400"><span>🏷️ Descuento</span><span className="tabular-nums">−{money(listTotal - total)}</span></p> : null}
                 <p className="flex items-end justify-between"><span className="font-bold">Total</span><span className="text-2xl font-black tabular-nums">{money(total)}</span></p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setCartSheet(false); goSearch(); }} className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>➕ Agregar más</button>
+                  <button type="button" onClick={() => { setCartSheet(false); goSearch(); }} className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>➕ Agregar otro</button>
                   <button type="button" onClick={() => { setCartSheet(false); window.setTimeout(() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 220); }}
-                    className="rounded-2xl px-3 py-3 text-sm font-black" style={{ background: "var(--t-cta)", color: "#0b0b0b" }}>💳 Ir a cobrar</button>
+                    className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>👤 Cliente y pago</button>
                 </div>
+                <button type="button" disabled={saving} onClick={() => { setCartSheet(false); void createInvoice(); }}
+                  className="w-full rounded-2xl px-3 py-3.5 text-base font-black text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
+                  {saving ? "Creando…" : editingDoc ? "💾 Guardar cambios" : documentKind === "factura" ? "⚡ Crear factura" : "⚡ Crear remisión"} · {money(total)}
+                </button>
+                <p className="text-center text-[10px]" style={{ color: "var(--t-muted)" }}>Cliente: {effectiveClient.name}{paymentType === "contado" ? " · contado" : " · crédito"}</p>
               </div>
             </motion.div>
           </>
         ) : null}
       </AnimatePresence>
+      <QtyPicker
+        product={picking}
+        price={picking ? priceOf(picking, currentPriceList) : 0}
+        stock={picking ? picking.stock : null}
+        inCart={picking ? cart.find((c) => c.productId === picking.id)?.qty ?? 0 : 0}
+        money={money}
+        onClose={() => setPicking(null)}
+        onAdd={(qty) => { const p = picking; setPicking(null); if (p) { addProduct(p, false, qty, true); setSearch(""); } }}
+      />
       {newClient && store ? (
         <ThirdPartyForm
           key={newClient.key}

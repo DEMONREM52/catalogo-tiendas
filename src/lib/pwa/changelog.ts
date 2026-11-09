@@ -658,6 +658,17 @@ export const RELEASES: Release[] = [
       { icon: "🎯", text: "En Campañas, muestra u oculta con un toque" },
     ],
   },
+  {
+    id: 63, date: "2026-11-09", title: "POS más cómodo en el celular",
+    summary: "Al tocar un producto se pregunta la cantidad y te lleva a él en el carrito para revisar el precio. La lista ya no tiene doble barra para bajar. Abajo, el carrito pequeño con la cantidad de unidades y un botón para crear la remisión de una vez. En celulares sencillos el panel quita efectos para ir más rápido. En el comprobante del pedido se ve mejor el total y hay botón para completar el pedido.",
+    paths: ["/dashboard/pos", "/pedido"],
+    demo: [
+      { icon: "🔢", text: "Toca un producto y escoge la cantidad" },
+      { icon: "🛒", text: "El carrito de abajo muestra cuántas unidades llevas" },
+      { icon: "⚡", text: "«Crear remisión» directo desde la barra" },
+      { icon: "✅", text: "Al confirmar un pedido, complétalo ahí mismo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

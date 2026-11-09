@@ -740,8 +740,8 @@ export default function PedidoPage() {
     return () => { alive = false; };
   }, [isStaff, orderStoreId]);
 
-  async function completeOrder() {
-    const ok = await Swal.fire({
+  async function completeOrder(skipAsk = false) {
+    const ok = skipAsk ? { isConfirmed: true } : await Swal.fire({
       icon: "question",
       title: "¿Completar el pedido?",
       text: "Queda como entregado y finalizado.",
@@ -810,15 +810,31 @@ export default function PedidoPage() {
         throw new Error("Supabase respondió sin cambiar el pedido a confirmado. Verifica que se haya instalado supabase/configuracion-pedidos-pagos.sql e inténtalo de nuevo.");
       }
 
-      await Swal.fire({
-        icon: "success",
-        title: "Pedido confirmado",
-        text: "Ya quedó registrado y no se puede editar.",
-        timer: 1400,
-        showConfirmButton: false,
-        background: "color-mix(in oklab, var(--t-card-bg) 92%, black)",
-        color: "var(--t-text)",
-      });
+      if (canComplete && loadedStatus === "confirmed") {
+        // Equipo de la tienda: puede dejarlo completado (entregado) de una vez.
+        const next = await Swal.fire({
+          icon: "success",
+          title: "Pedido confirmado",
+          text: "¿Ya se entregó? Puedes completarlo ahora o después con el botón «Completar pedido».",
+          showCancelButton: true,
+          confirmButtonText: "✅ Completar ahora",
+          cancelButtonText: "Después",
+          background: "color-mix(in oklab, var(--t-card-bg) 92%, black)",
+          color: "var(--t-text)",
+          confirmButtonColor: "#22c55e",
+        });
+        if (next.isConfirmed) { setSaving(false); await completeOrder(true); }
+      } else {
+        await Swal.fire({
+          icon: "success",
+          title: "Pedido confirmado",
+          text: "Ya quedó registrado y no se puede editar.",
+          timer: 1400,
+          showConfirmButton: false,
+          background: "color-mix(in oklab, var(--t-card-bg) 92%, black)",
+          color: "var(--t-text)",
+        });
+      }
     } catch (err: unknown) {
       await Swal.fire({
         icon: "error",

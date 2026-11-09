@@ -42,6 +42,7 @@ import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
 import { SEARCH_INDEX } from "@/lib/search-index";
+import { markLiteDevice } from "@/lib/lite-device";
 import { HelpButton } from "@/components/HelpButton";
 import { GuidedTourHost } from "@/components/tour/GuidedTour";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
@@ -490,6 +491,8 @@ export default function DashboardShell({
   // Efecto vidrio solo en el panel: suave (casi sólido) donde se trabaja rápido y se lee mucho; ahí tampoco va el fondo animado.
   const softArea = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos)(\/|$)/.test(pathname ?? "");
   const animatedBg = useAnimatedBackground();
+  // Celulares sencillos: sin vidrio ni efectos pesados (clase «lite» en <html>).
+  useEffect(() => { markLiteDevice(); }, []);
   useEffect(() => {
     document.documentElement.dataset.glassArea = softArea ? "soft" : "full";
     return () => { delete document.documentElement.dataset.glassArea; };

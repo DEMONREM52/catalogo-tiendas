@@ -159,38 +159,48 @@ export function OrderScreen(props: {
     </button>
   );
 
+  const completeAction = p.status === "confirmed" && p.onComplete ? (
+    <button type="button" onClick={p.onComplete} disabled={p.completing}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-base font-black text-white shadow-lg transition active:scale-[0.99] disabled:opacity-60"
+      style={{ background: "linear-gradient(135deg,#22c55e,#10b981)", boxShadow: "0 14px 34px rgba(34,197,94,.3)" }}>
+      <Check size={18} /> {p.completing ? "Completando…" : "Completar pedido"}
+    </button>
+  ) : null;
+  const mobileAction = mainAction ?? completeAction;
+
   return (
-    <div className="mx-auto w-full max-w-5xl pb-28 lg:pb-0">
+    <div className={`mx-auto w-full max-w-5xl lg:pb-0 ${mobileAction ? "pb-36" : "pb-6"}`}>
       {/* ===== Encabezado ===== */}
       <motion.header initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="overflow-hidden rounded-3xl border" style={card}>
         <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${st.color}, var(--t-accent))` }} />
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-white" style={{ borderColor: "var(--t-card-border)" }}>
+        <div className="p-4 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-white sm:h-14 sm:w-14" style={{ borderColor: "var(--t-card-border)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {p.logo ? <img src={p.logo} alt="" className="h-full w-full object-contain" /> : <span className="text-2xl">🏪</span>}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg font-black">{p.businessName}</p>
-              <p className="text-xs" style={{ color: "var(--t-muted)" }}>{p.businessLine}</p>
+              <p className="truncate text-base font-black sm:text-lg">{p.businessName}</p>
+              <p className="line-clamp-2 break-words text-[11px] leading-snug sm:text-xs" style={{ color: "var(--t-muted)" }}>{p.businessLine}</p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black"
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black sm:px-3 sm:py-1.5 sm:text-xs"
               style={{ color: st.color, background: `color-mix(in oklab, ${st.color} 16%, transparent)`, border: `1px solid color-mix(in oklab, ${st.color} 40%, transparent)` }}>
               {st.emoji} {st.label}
             </span>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{p.docKindLabel}</p>
-              <p className="text-3xl font-black tracking-tight sm:text-4xl">{p.docNumber}</p>
+          <div className="mt-4 grid gap-3 sm:mt-5 sm:flex sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--t-muted)" }}>{p.docKindLabel}</p>
+              <p className="break-all text-2xl font-black tracking-tight sm:text-4xl">{p.docNumber}</p>
               <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>
                 {p.orderNumber ? `Pedido #${p.orderNumber} · ` : ""}{p.catalogLabel} · {st.hint}
               </p>
             </div>
-            <div className="sm:text-right">
-              <p className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>Total</p>
-              <motion.p key={p.total} initial={{ scale: 1.08 }} animate={{ scale: 1 }} className="text-3xl font-black tabular-nums">{p.money(p.total)}</motion.p>
+            <div className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 sm:block sm:border-0 sm:p-0 sm:text-right"
+              style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 8%, transparent)" }}>
+              <p className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>Total{units ? ` · ${units} und.` : ""}</p>
+              <motion.p key={p.total} initial={{ scale: 1.08 }} animate={{ scale: 1 }} className="text-3xl font-black tabular-nums sm:text-4xl">{p.money(p.total)}</motion.p>
             </div>
           </div>
 
@@ -242,12 +252,12 @@ export function OrderScreen(props: {
                       <p className="mt-0.5 text-xs tabular-nums" style={{ color: "var(--t-muted)" }}>{p.money(i.price)} c/u{p.locked ? ` × ${i.qty}` : ""}</p>
                       {!p.locked ? <div className="mt-1.5"><Qty qty={i.qty} disabled={p.saving} onChange={(n) => p.onQty(i.product_id, n)} /></div> : null}
                     </div>
-                    <p className="shrink-0 self-center text-base font-black tabular-nums">{p.money(i.price * i.qty)}</p>
+                    <p className="shrink-0 self-center text-sm font-black tabular-nums sm:text-base">{p.money(i.price * i.qty)}</p>
                   </motion.li>
                 ))}
               </AnimatePresence>
             </ul>
-            <div className="flex items-center justify-between border-t px-5 py-4" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+            <div className="flex items-center justify-between gap-3 border-t px-4 py-4 sm:px-5" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
               <span className="text-sm font-bold">Total a pagar</span>
               <span className="text-2xl font-black tabular-nums">{p.money(p.total)}</span>
             </div>
@@ -339,12 +349,11 @@ export function OrderScreen(props: {
                 <p className="flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
                   <Lock size={14} /> {p.status === "cancelled" ? "Documento anulado: no se puede editar." : p.status === "completed" ? "Completado: entregado y finalizado." : "Confirmado: ya no se puede editar."}
                 </p>
-                {p.status === "confirmed" && p.onComplete ? (
-                  <button type="button" onClick={p.onComplete} disabled={p.completing}
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg,#22c55e,#10b981)" }}>
-                    <Check size={17} /> {p.completing ? "Completando…" : "Completar pedido (entregado)"}
-                  </button>
+                {completeAction ? (
+                  <>
+                    <div className="mt-2">{completeAction}</div>
+                    <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Úsalo cuando el cliente ya recibió la mercancía.</p>
+                  </>
                 ) : null}
               </>
             ) : (
@@ -410,15 +419,15 @@ export function OrderScreen(props: {
       </div>
 
       {/* Celular: acción principal siempre a mano */}
-      {mainAction ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t p-3 backdrop-blur-xl lg:hidden"
-          style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-          <div className="mx-auto flex max-w-5xl items-center gap-3">
-            <div className="shrink-0">
-              <p className="text-[10px] font-bold uppercase" style={{ color: "var(--t-muted)" }}>Total</p>
-              <p className="text-lg font-black tabular-nums">{p.money(p.total)}</p>
+      {mobileAction ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t px-3 pt-2.5 shadow-[0_-12px_30px_rgba(0,0,0,.25)] lg:hidden"
+          style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+              <span className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>{p.items.length} producto{p.items.length === 1 ? "" : "s"} · {units} und.</span>
+              <span className="text-2xl font-black tabular-nums">{p.money(p.total)}</span>
             </div>
-            <div className="min-w-0 flex-1">{mainAction}</div>
+            {mobileAction}
           </div>
         </div>
       ) : null}
