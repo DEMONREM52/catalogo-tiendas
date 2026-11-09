@@ -263,6 +263,21 @@ export default function ProductRadarPage() {
     void load();
   }
 
+  async function bulkFeatured(on: boolean) {
+    if (!storeId || !selected.size) return;
+    const ids = [...selected];
+    setBulkBusy("feat");
+    const { data: r, error: e } = await supabaseBrowser().rpc("product_featured_set", { p_store: storeId, p_products: ids, p_featured: on });
+    setBulkBusy(null);
+    const d = r as { ok?: boolean; count?: number; message?: string } | null;
+    if (e || !d?.ok) {
+      toast(e && missingFn(e.message) ? "Falta correr la migración 20261310 en Supabase." : e?.message ?? d?.message ?? "No se pudo", "error");
+      return;
+    }
+    setSelected(new Set());
+    toast(on ? `⭐ ${d.count} destacados: salen primero y resaltados en tus catálogos` : `Se quitó el destacado a ${d.count}`);
+  }
+
   async function bulkActive(active: boolean) {
     if (!storeId || !selected.size) return;
     const ids = [...selected];
@@ -515,6 +530,8 @@ export default function ProductRadarPage() {
               <option value="">{bulkBusy === "cat" ? "Guardando…" : "🗂️ Agregar a categoría…"}</option>
               {data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            <button type="button" onClick={() => void bulkFeatured(true)} disabled={!!bulkBusy} className="rounded-xl px-2.5 py-2 text-xs font-black disabled:opacity-60" style={{ background: "linear-gradient(135deg,#facc15,#f59e0b)", color: "#1c1917" }}>⭐ Destacar</button>
+            <button type="button" onClick={() => void bulkFeatured(false)} disabled={!!bulkBusy} className="rounded-xl border px-2.5 py-2 text-xs font-bold disabled:opacity-60" style={{ borderColor: "var(--t-card-border)" }}>Quitar ⭐</button>
             <button type="button" onClick={() => void bulkActive(true)} disabled={!!bulkBusy} className="rounded-xl border px-2.5 py-2 text-xs font-bold disabled:opacity-60" style={{ borderColor: "var(--t-card-border)" }}>✅ Activar</button>
             <button type="button" onClick={() => void bulkActive(false)} disabled={!!bulkBusy} className="rounded-xl border px-2.5 py-2 text-xs font-bold disabled:opacity-60" style={{ borderColor: "var(--t-card-border)" }}>🙈 Ocultar</button>
             {!proMissing ? <button type="button" onClick={() => setAssign(true)} disabled={!!bulkBusy} className="inline-flex items-center gap-1 rounded-xl border px-2.5 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}><ClipboardList size={13} /> Asignar</button> : null}

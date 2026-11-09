@@ -1515,3 +1515,15 @@ body:has(.buy-bar) .theme-control { bottom: calc(5.5rem + env(safe-area-inset-bo
 @media (prefers-reduced-motion: reduce) { .buy-bar { animation: none !important; } }
 .buy-capsule { box-shadow: 0 18px 44px -14px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04) inset; }
 html.lite .buy-capsule { backdrop-filter: none; background: var(--t-bg-base, #120a24) !important; }
+/* Tarjeta destacada en el catálogo: borde dorado que gira suave y brillo */
+.catalog-featured-card { border-color: transparent !important; isolation: isolate; box-shadow: 0 22px 50px -26px rgba(245,158,11,.75); }
+.catalog-featured-card::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 28px; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--fa, 0deg), #facc15, #f59e0b, #ec4899, #8b5cf6, #facc15);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: featured-spin 6s linear infinite; }
+@property --fa { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes featured-spin { to { --fa: 360deg; } }
+.featured-shine { position: relative; overflow: hidden; }
+.featured-shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.7) 50%, transparent 65%); transform: translateX(-120%); animation: buy-shine 3.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .catalog-featured-card::before, .featured-shine::after { animation: none !important; } }
+html.lite .catalog-featured-card::before, html.lite .featured-shine::after { animation: none !important; }

@@ -760,6 +760,11 @@ export const RELEASES: Release[] = [
     summary: "En la página del producto la barra de compra queda fija abajo (celular y computador): cambias la cantidad ahí mismo, el carrito naranja se mueve suave para invitar a agregar y «Comprar» en verde lleva directo a pedir.",
     paths: ["/dashboard/products"],
   },
+  {
+    id: 73, date: "2026-11-09", title: "Productos destacados que resaltan",
+    summary: "Los productos ⭐ destacados salen primero en el catálogo con borde dorado que gira, cinta «Destacado» con brillo y botón de agregar dorado, y aparecen en la franja «Destacados». Puedes destacar varios a la vez desde el Radar (selecciona y toca «⭐ Destacar»), uno por uno en Producto → Precios, o por catálogo en Catálogos → Productos.",
+    paths: ["/dashboard/products", "/dashboard/social"],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

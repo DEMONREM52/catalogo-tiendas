@@ -347,6 +347,14 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
   const [deals, setDeals] = useState<Map<string, PublicDeal>>(new Map());
   const [dealItems, setDealItems] = useState<{ offers: PublicItem[]; featured: PublicItem[] }>({ offers: [], featured: [] });
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const featuredStrip = useMemo(() => {
+    const seen = new Set(dealItems.featured.map((x) => x.id));
+    const fromList = products
+      .filter((p) => (p as ProductRow & { featured?: boolean }).featured && !seen.has(p.id))
+      .map((p) => ({ id: p.id, name: p.name, image_url: p.image_url, price: Number((safeMode === "detal" ? p.price_retail : p.price_wholesale) ?? 0), stock: p.stock, min_wholesale: p.min_wholesale }))
+      .filter((x) => x.price > 0);
+    return [...dealItems.featured, ...fromList].slice(0, 16);
+  }, [dealItems.featured, products, safeMode]);
   useEffect(() => {
     const t = window.setInterval(() => setNowTick(Date.now()), 60_000);
     return () => window.clearInterval(t);
@@ -1899,9 +1907,9 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             }, it.price)}
           />
         ) : null}
-        {dealItems.featured.length && !q && !selectedCat ? (
+        {featuredStrip.length && !q && !selectedCat ? (
           <BestSellersStrip
-            items={dealItems.featured}
+            items={featuredStrip}
             variant="featured"
             deals={deals}
             title="Destacados"
@@ -2004,11 +2012,13 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
 
                 const rank = bestRank.get(p.id);
                 const deal = deals.get(p.id);
+                // Destacado: desde el producto (⭐ en Precios / Radar) o desde el catálogo (Catálogos → Productos).
+                const isFeatured = Boolean((p as ProductRow & { featured?: boolean }).featured) || Boolean(deal?.featured);
                 return (
                   <div
                     key={p.id}
                     id={`catalog-product-${p.id}`}
-                    className="t-card catalog-card-lift relative rounded-[28px] border p-4"
+                    className={cx("t-card catalog-card-lift relative rounded-[28px] border p-4", isFeatured && "catalog-featured-card")}
                     style={{ borderColor: deal?.before ? "color-mix(in oklab, #ef4444 55%, var(--t-border))" : rank && rank <= 3 ? "color-mix(in oklab, #f59e0b 55%, var(--t-border))" : "var(--t-border)", background: glassBg }}
                   >
                     <div className="pointer-events-none absolute left-6 top-6 z-[1] flex flex-col items-start gap-1">
@@ -2018,7 +2028,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                           {rank === 1 ? "👑" : "🔥"} {rank <= 3 ? `Top ${rank} en ventas` : "Más vendido"}
                         </span>
                       ) : null}
-                      {deal?.featured ? <span className="featured-badge rounded-full px-2.5 py-1 text-[11px] font-black shadow-lg">⭐ Destacado</span> : null}
+                      {isFeatured ? <span className="featured-badge featured-shine rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide shadow-lg">⭐ Destacado</span> : null}
                     </div>
                     {deal?.pct ? <span className="offer-pct-badge pointer-events-none absolute right-6 top-6 z-[1] rounded-xl px-2.5 py-1.5 text-sm font-black text-white">-{deal.pct}%</span> : null}
                     {p.image_url ? canViewProductLanding ? (
@@ -2133,8 +2143,8 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                       <button
                         className={cx("t-btn inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-extrabold", !isOut && "catalog-cta-pop")}
                         style={{
-                          background: "var(--t-cta)",
-                          color: "var(--t-cta-text, #fff)",
+                          background: isFeatured && !isOut ? "linear-gradient(135deg,#facc15,#f59e0b 55%,#ea580c)" : "var(--t-cta)",
+                          color: isFeatured && !isOut ? "#1c1917" : "var(--t-cta-text, #fff)",
                           boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
                         }}
                         onClick={() => addToCartWithQty(p, Number(price ?? 0))}

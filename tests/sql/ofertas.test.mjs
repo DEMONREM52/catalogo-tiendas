@@ -112,5 +112,26 @@ console.log("7. Promociones del módulo «Promociones» también aplican en cat�
 await raw("insert into erp_promotions (store_id, name, kind, value, scope, ends_at) values ($1, 'Todo 10%', 'pct', 10, 'all', now() + interval '1 day')", [A]);
 ok(await price(DET, Q) === 9000, "10 % en toda la tienda: $9.000");
 
+console.log("8. Destacar varios (20261310)");
+const M2 = fs.readFileSync(path.join(MIG, "20261310_destacar_varios.sql"), "utf8");
+await db.exec(M2); await db.exec(M2);
+await call(OWNER, "product_offer_save($1, $2, $3, null, false, $4)", [A, P, 15000, "Oferta"]);
+ok((await call(SOLO, "product_featured_set($1, $2, true)", [A, [P, Q]])).ok === false, "Sin «Cambiar precios»: no");
+r = await call(PRECIOS, "product_featured_set($1, $2, true)", [A, [P, Q]]);
+ok(r.ok && r.count === 2, "Destaca dos", r);
+let rows = await raw("select product_id, featured, offer_price from erp_product_offers where store_id = $1 order by offer_price nulls last", [A]);
+ok(rows.length === 2 && rows.every((x) => x.featured) && rows.some((x) => x.product_id === P && Number(x.offer_price) === 15000), "No toca la oferta que ya tenía", rows);
+ok((await price(DET, Q)) === 9000 && (await raw("select featured from catalog__items($1, array[$2]::uuid[])", [DET, Q]))[0].featured === true, "Sale como destacado en el catálogo");
+r = await call(PRECIOS, "product_featured_set($1, $2, false)", [A, [P, Q]]);
+rows = await raw("select product_id, featured from erp_product_offers where store_id = $1", [A]);
+ok(r.ok && rows.length === 2 && rows.every((x) => x.featured === false), "Al quitar: las ofertas siguen, sin destacado", rows);
+await call(OWNER, "product_offer_save($1, $2, null, null, false, null)", [A, Q]);
+await call(PRECIOS, "product_featured_set($1, $2, true)", [A, [Q]]);
+await call(PRECIOS, "product_featured_set($1, $2, false)", [A, [Q]]);
+ok((await raw("select count(*)::int n from erp_product_offers where product_id = $1", [Q]))[0].n === 0, "Sin oferta ni etiqueta: la fila se borra");
+await raw("insert into store_catalog_products (catalog_id, product_id, store_id, featured) values ($1, $2, $3, true)", [DET, Q, A]);
+pub = (await anon("select public.store_public_offers('tienda', 'detal', null) r"))[0].r;
+ok(pub.items.some((x) => x.id === Q && x.featured), "Destacado propio del catálogo sale en la franja pública", pub);
+
 console.log(`\n${pass} bien, ${fail} mal`);
 process.exit(fail ? 1 : 0);
