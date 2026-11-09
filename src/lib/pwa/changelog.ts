@@ -689,6 +689,17 @@ export const RELEASES: Release[] = [
       { icon: "🗑️", text: "«Empezar de cero» si ya no lo necesitas" },
     ],
   },
+  {
+    id: 66, date: "2026-11-09", title: "Centro de operaciones en vivo",
+    summary: "Ahora sí muestra todo lo que se mueve en el negocio y se actualiza solo: ventas de hoy con su gráfica por hora y comparación con ayer a la misma hora, ventas por punto, lo que está por confirmar y por completar, pedidos internos, traslados en camino, cajas, compras y gastos del mes. Abajo, todos los movimientos por día (ventas, pedidos, traslados, ingresos, ajustes, gastos y cajas) con filtros, buscador y enlace a cada uno. Accesos rápidos para vender, pedir mercancía, trasladar, ingresar factura o registrar un gasto.",
+    paths: ["/dashboard/operaciones"],
+    demo: [
+      { icon: "🟢", text: "Se actualiza solo cada 45 segundos" },
+      { icon: "📈", text: "Ventas de hoy contra ayer a la misma hora" },
+      { icon: "⏳", text: "Filtra «Por atender» para ver lo pendiente" },
+      { icon: "⌨️", text: "Teclas: V vender, P pedir, / buscar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
