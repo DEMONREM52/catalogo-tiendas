@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { draftAge, onStockDraftChange, readStockDraft } from "@/lib/stock-request-draft";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, BellRing, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
@@ -20,6 +21,9 @@ type Scope = "attend" | "mine" | "active" | "closed";
 
 /** Pedidos internos entre puntos y bodegas: bandeja, filtros, nuevo pedido y sala con chat. */
 export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; canRequest: boolean }) {
+  // Pedido interno a medio armar en este equipo (se guarda solo): se avisa para seguirlo.
+  const draftSig = useSyncExternalStore(onStockDraftChange, () => { const d = readStockDraft(storeId); return d ? `${d.lines.length}|${d.at}` : ""; }, () => "");
+  const [draftCount, draftAt] = draftSig ? [Number(draftSig.split("|")[0]), draftSig.split("|")[1]] : [0, ""];
   const [rows, setRows] = useState<SrListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,6 +147,15 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
           ) : null}
         </div>
       </div>
+
+      {canRequest && draftCount && creating === null ? (
+        <button type="button" onClick={() => setCreating(Date.now())}
+          className="flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition hover:-translate-y-0.5"
+          style={{ borderColor: "#f59e0b", background: "rgba(245,158,11,.1)" }}>
+          <span><b>📝 Tienes un pedido sin enviar</b> · {draftCount} producto{draftCount === 1 ? "" : "s"} · guardado {draftAge(draftAt)}</span>
+          <span className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-black text-white" style={{ background: "#f59e0b" }}>Seguir armándolo</span>
+        </button>
+      ) : null}
 
       {counts.arriving || counts.unread ? (
         <div className="flex flex-wrap gap-1.5 text-xs font-bold">

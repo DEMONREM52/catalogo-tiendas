@@ -11,6 +11,7 @@ import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../in
 import { srError } from "./types";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { DateField } from "@/components/forms/Fields";
+import { draftAge, readStockDraft, saveStockDraft, type StockRequestDraft } from "@/lib/stock-request-draft";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
 // levels (opcional): existencias por punto; las líneas que traen esto (p. ej. desde la lista general) se conservan al cambiar de punto.
@@ -47,19 +48,61 @@ export function NewStockRequest({
   initialNote?: string;
 }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
-  const firstPoint = myPoint ?? (initialFrom && points.some((p) => p.id === initialFrom) ? initialFrom : null) ?? points.find((p) => p.kind === "point")?.id ?? points[0]?.id ?? "";
+  // Borrador guardado en este equipo (se salió por error, se cerró o se recargó): se recupera al abrir.
+  const [draft0] = useState<StockRequestDraft | null>(() => (typeof window === "undefined" ? null : readStockDraft(storeId)));
+  const hasPrefill = Boolean(initialLines?.length || initialNote?.trim());
+  const draftValid = (d: StockRequestDraft | null) => Boolean(d && points.some((p) => p.id === d.from) && points.some((p) => p.id === d.to) && d.from !== d.to && (!myPoint || d.from === myPoint));
+  const autoDraft = !hasPrefill && draftValid(draft0) ? draft0 : null;
+  // Con productos ya elegidos (lista de productos, chat) y un borrador guardado: se pregunta si unirlos.
+  const [offer, setOffer] = useState<StockRequestDraft | null>(() => (hasPrefill && draft0?.lines.length ? draft0 : null));
+  const [restoredAt, setRestoredAt] = useState<string | null>(autoDraft?.at ?? null);
+  const firstPoint = autoDraft?.from ?? myPoint ?? (initialFrom && points.some((p) => p.id === initialFrom) ? initialFrom : null) ?? points.find((p) => p.kind === "point")?.id ?? points[0]?.id ?? "";
   const [from, setFrom] = useState(firstPoint);
-  const [to, setTo] = useState(() => (initialTo && initialTo !== firstPoint && points.some((p) => p.id === initialTo) ? initialTo : null) ?? points.find((p) => p.id !== firstPoint && p.is_default)?.id ?? points.find((p) => p.id !== firstPoint && p.kind !== "point")?.id ?? points.find((p) => p.id !== firstPoint)?.id ?? "");
-  const [lines, setLines] = useState<Line[]>(() => (initialLines ?? []).map((l) => ({
+  const [to, setTo] = useState(() => autoDraft?.to ?? (initialTo && initialTo !== firstPoint && points.some((p) => p.id === initialTo) ? initialTo : null) ?? points.find((p) => p.id !== firstPoint && p.is_default)?.id ?? points.find((p) => p.id !== firstPoint && p.kind !== "point")?.id ?? points.find((p) => p.id !== firstPoint)?.id ?? "");
+  const [lines, setLines] = useState<Line[]>(() => autoDraft ? autoDraft.lines.map((l) => ({ ...l, qty: Math.max(1, Number(l.qty) || 1) })) : (initialLines ?? []).map((l) => ({
     product_id: l.product_id, name: l.name, sku: l.sku, qty: Math.max(1, l.qty ?? 1), levels: l.levels,
     there: Number(l.levels[to] ?? 0), here: firstPoint ? Number(l.levels[firstPoint] ?? 0) : null,
   })));
   // Al cambiar de punto: las líneas con existencias conocidas se recalculan; las demás se quitan (como antes).
   const relocate = (nextFrom: string, nextTo: string) =>
     setLines((cur) => cur.filter((l) => l.levels).map((l) => ({ ...l, there: Number(l.levels?.[nextTo] ?? 0), here: Number(l.levels?.[nextFrom] ?? 0) })));
-  const [note, setNote] = useState(initialNote ?? "");
-  const [urgent, setUrgent] = useState(false);
-  const [neededBy, setNeededBy] = useState("");
+  const [note, setNote] = useState(autoDraft?.note ?? initialNote ?? "");
+  const [urgent, setUrgent] = useState(autoDraft?.urgent ?? false);
+  const [neededBy, setNeededBy] = useState(autoDraft?.neededBy ?? "");
+  const sent = useRef(false);
+
+  // Cada cambio se guarda al instante (mientras se decide si unir el borrador anterior, no se toca).
+  useEffect(() => {
+    if (!open || offer || sent.current) return;
+    saveStockDraft(storeId, { from, to, lines, note, urgent, neededBy });
+  }, [open, offer, storeId, from, to, lines, note, urgent, neededBy]);
+
+  function joinDraft(d: StockRequestDraft) {
+    setLines((cur) => {
+      const have = new Set(cur.map((l) => l.product_id));
+      return [...cur, ...d.lines.filter((l) => !have.has(l.product_id)).map((l) => ({ ...l, qty: Math.max(1, Number(l.qty) || 1) }))];
+    });
+    if (!note.trim() && d.note) setNote(d.note);
+    setOffer(null);
+  }
+  async function startOver() {
+    const ok = await Swal.fire({
+      icon: "warning", title: "¿Empezar de cero?", text: `Se borran los ${lines.length} productos del borrador.`,
+      showCancelButton: true, confirmButtonText: "Sí, borrar", cancelButtonText: "No", reverseButtons: true,
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#ef4444",
+    });
+    if (!ok.isConfirmed) return;
+    setLines([]); setNote(""); setUrgent(false); setNeededBy(""); setRestoredAt(null);
+    saveStockDraft(storeId, null);
+  }
+  function close() {
+    if (lines.length && !sent.current) {
+      void Swal.fire({ toast: true, position: "top", icon: "info", timer: 3200, showConfirmButton: false,
+        title: "Pedido guardado como borrador", text: `${lines.length} producto${lines.length === 1 ? "" : "s"} · ábrelo otra vez para seguir.`,
+        background: "var(--t-bg-base)", color: "var(--t-text)" });
+    }
+    onClose();
+  }
   const [q, setQ] = useState("");
   const [focus, setFocus] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
@@ -149,6 +192,8 @@ export function NewStockRequest({
     });
     setSaving(false);
     if (error) return void Swal.fire({ icon: "error", title: "No se pudo enviar", text: srError(error), background: "var(--t-bg-base)", color: "var(--t-text)" });
+    sent.current = true;
+    saveStockDraft(storeId, null);
     void Swal.fire({ icon: "success", title: "¡Pedido enviado!", text: `${toName} ya recibió la notificación. Se abrió el chat del pedido.`, timer: 1800, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
     onCreated(String(data));
   }
@@ -158,7 +203,7 @@ export function NewStockRequest({
     <AnimatePresence>
       {open ? (
         <motion.div key="new-sr" className="fixed inset-0 z-120 flex justify-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <button type="button" aria-label="Cerrar" className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-[3px]" onClick={onClose} />
+          <button type="button" aria-label="Cerrar" className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-[3px]" onClick={close} />
           <motion.aside
             role="dialog"
             aria-modal="true"
@@ -175,12 +220,28 @@ export function NewStockRequest({
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-accent)" }}>Nuevo pedido interno</p>
                 <h3 className="mt-0.5 text-lg font-black">Pide mercancía a otro punto o bodega</h3>
               </div>
-              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+              <button type="button" onClick={close} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
                 <X size={16} />
               </button>
             </header>
 
             <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
+              {offer ? (
+                <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: "#f59e0b", background: "rgba(245,158,11,.1)" }}>
+                  <p className="font-bold">📝 Tienes un pedido sin enviar con {offer.lines.length} producto{offer.lines.length === 1 ? "" : "s"} ({draftAge(offer.at)}).</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => joinDraft(offer)} className="rounded-xl px-3 py-2 text-xs font-black text-white" style={{ background: "#f59e0b" }}>Unirlo a este pedido</button>
+                    <button type="button" onClick={() => setOffer(null)} className="rounded-xl border px-3 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>No, descartarlo</button>
+                  </div>
+                </div>
+              ) : restoredAt && lines.length ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-sm" style={{ borderColor: "color-mix(in oklab, #22c55e 50%, var(--t-card-border))", background: "rgba(34,197,94,.1)" }}>
+                  <span><b>📝 Recuperamos tu pedido sin enviar</b> · {lines.length} producto{lines.length === 1 ? "" : "s"} · guardado {draftAge(restoredAt)}</span>
+                  <button type="button" onClick={() => void startOver()} className="rounded-xl border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Empezar de cero</button>
+                </div>
+              ) : lines.length ? (
+                <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>💾 Se guarda solo en este equipo mientras lo armas: si sales por error, al abrir otra vez sigue aquí.</p>
+              ) : null}
               <div className="grid items-end gap-2 sm:grid-cols-[1fr_auto_1fr]">
                 <label className="block text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
                   Pide (llega a)

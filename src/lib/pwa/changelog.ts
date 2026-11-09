@@ -679,6 +679,16 @@ export const RELEASES: Release[] = [
       { icon: "🧾", text: "La venta ya creada no se vuelve a cargar en el POS" },
     ],
   },
+  {
+    id: 65, date: "2026-11-09", title: "El pedido de mercancía no se pierde",
+    summary: "Mientras armas un pedido interno se guarda solo en este equipo. Si te sales por error, cierras la ventana o se recarga la página, al abrir «Pedir mercancía» otra vez sigue con todos los productos, cantidades y el mensaje. En la lista de pedidos internos aparece «Tienes un pedido sin enviar» para seguirlo. Se borra al enviarlo o con «Empezar de cero».",
+    paths: ["/dashboard/pedidos", "/dashboard/lista-productos"],
+    demo: [
+      { icon: "💾", text: "Arma el pedido: se guarda solo" },
+      { icon: "📝", text: "Si sales, toca «Seguir armándolo»" },
+      { icon: "🗑️", text: "«Empezar de cero» si ya no lo necesitas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
