@@ -46,3 +46,32 @@ export async function fetchPublicItems(sb: SupabaseClient, store: { id: string; 
   }
   return out;
 }
+
+/** Oferta o destacado de un producto en un catálogo (20261309): precio de antes, de ahora, % y fin. */
+export type PublicDeal = { id: string; now: number; before: number | null; pct: number | null; ends_at: string | null; label: string | null; featured: boolean };
+
+export async function fetchPublicDeals(sb: SupabaseClient, storeSlug: string, catalog: string, key: string | null): Promise<Map<string, PublicDeal>> {
+  const out = new Map<string, PublicDeal>();
+  const { data, error } = await sb.rpc("store_public_offers", { p_store: storeSlug, p_catalog: catalog, p_key: key });
+  if (error || !data) return out;
+  for (const r of rowsOf((data as { items?: unknown }).items ?? data)) {
+    const id = String(r?.id ?? "");
+    if (!id) continue;
+    out.set(id, {
+      id, now: Number(r.now ?? 0), before: r.before == null ? null : Number(r.before), pct: r.pct == null ? null : Number(r.pct),
+      ends_at: r.ends_at ?? null, label: r.label ?? null, featured: Boolean(r.featured),
+    });
+  }
+  return out;
+}
+
+/** «Termina en 2 d 5 h» / «Termina en 3 h 20 min» (null si no tiene fin o ya pasó). */
+export function endsInText(endsAt: string | null, now: number): string | null {
+  if (!endsAt) return null;
+  const ms = Date.parse(endsAt) - now;
+  if (!(ms > 0)) return null;
+  const m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (d >= 1) return `Termina en ${d} d ${h % 24} h`;
+  if (h >= 1) return `Termina en ${h} h ${m % 60} min`;
+  return `Termina en ${m} min`;
+}

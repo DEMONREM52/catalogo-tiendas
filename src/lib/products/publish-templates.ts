@@ -7,6 +7,8 @@
 export type TemplateVars = {
   nombre: string;
   precio: string;
+  precio_antes: string;
+  descuento: string;
   descripcion: string;
   caracteristicas: string;
   enlace: string;
@@ -19,6 +21,8 @@ export type TemplateVars = {
 export const VARIABLES: Array<{ key: keyof TemplateVars; label: string; example: string }> = [
   { key: "nombre", label: "Nombre", example: "Excavadora a control remoto" },
   { key: "precio", label: "Precio", example: "$63.000" },
+  { key: "precio_antes", label: "Precio de antes", example: "$80.000" },
+  { key: "descuento", label: "Descuento", example: "-21%" },
   { key: "descripcion", label: "Descripción", example: "Movimientos realistas, ideal para los pequeños." },
   { key: "caracteristicas", label: "Características", example: "✅ Control 2.4 GHz\n✅ Rotación de 360°" },
   { key: "enlace", label: "Enlace", example: "https://remhub.co/mitienda/producto/123" },
@@ -42,7 +46,7 @@ export const BUILTIN_TEMPLATES: PublishTemplate[] = [
   },
   {
     id: "builtin-oferta", name: "Oferta", builtin: true,
-    body: "⚡ ¡OFERTA EN {tienda}! ⚡\n\n🛍️ {nombre}\n💥 Solo {precio}\n\n{caracteristicas}\n\n⏳ Unidades limitadas\n📲 Escríbenos al {whatsapp} o compra aquí: {enlace}",
+    body: "⚡ ¡OFERTA EN {tienda}! ⚡\n\n🛍️ *{NOMBRE}*\n❌ Antes: ~{precio_antes}~\n💥 *HOY: {precio}* ({descuento})\n\n{caracteristicas}\n\n⏳ Por tiempo limitado\n📲 Compra aquí: {enlace}",
   },
   {
     id: "builtin-estado", name: "Corto para estados", builtin: true,

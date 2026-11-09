@@ -744,6 +744,17 @@ export const RELEASES: Release[] = [
       { icon: "🔥", text: "Configura «Lo más vendido» en Campañas" },
     ],
   },
+  {
+    id: 71, date: "2026-11-09", title: "Ofertas «antes y ahora» y destacados",
+    summary: "En Precios de cada producto: «Precio de oferta» con fecha de fin opcional y etiqueta (Oferta, Nuevo precio, Liquidación…). Mientras dure se cobra en catálogos y POS, y se ve «Antes $20.000 · Ahora $15.000 · -25 %» con cuenta regresiva; al vencer vuelve solo al precio normal (los precios 1-5 no cambian). Marca productos ⭐ destacados: salen primero y en su franja. Los catálogos muestran «🏷️ Ofertas especiales» y «Destacados». El kit para publicar trae {precio_antes} y {descuento}, más emojis por categorías con buscador, cursiva y tachado, y los canales «Grupo de WhatsApp» y «Difusión de WhatsApp».",
+    paths: ["/dashboard/products", "/dashboard/social"],
+    demo: [
+      { icon: "💲", text: "Producto → Precios → «Oferta y destacado»" },
+      { icon: "📅", text: "Pon el precio de oferta y hasta cuándo" },
+      { icon: "🏷️", text: "Se ve tachado el de antes en el catálogo" },
+      { icon: "⭐", text: "Marca destacados para que salgan primero" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Bold, Copy, Loader2, Plus, Save, Star, Trash2, X } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { EmojiPicker } from "./EmojiPicker";
 import { BUILTIN_TEMPLATES, VARIABLES, renderTemplate, unknownVariables, type CatalogOption, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
 
 /**
@@ -29,15 +30,16 @@ export function TemplateEditor({ storeId, vars, templates, missing, catalogs = [
     : { id: null, name: "Mi plantilla", body: BUILTIN_TEMPLATES[0].body, is_default: true, catalog_slug: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [upper, setUpper] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const preview = useMemo(() => renderTemplate(draft.body, vars), [draft.body, vars]);
   const unknown = useMemo(() => unknownVariables(draft.body), [draft.body]);
 
-  function insert(text: string, wrap = false) {
+  function insert(text: string, wrap = false, mark = "*") {
     const el = area.current;
     const start = el?.selectionStart ?? draft.body.length, end = el?.selectionEnd ?? draft.body.length;
     const sel = draft.body.slice(start, end);
-    const piece = wrap ? `*${sel || "texto"}*` : text;
+    const piece = wrap || mark !== "*" ? `${mark}${sel || "texto"}${mark}` : text;
     const body = draft.body.slice(0, start) + piece + draft.body.slice(end);
     setDraft({ ...draft, body });
     requestAnimationFrame(() => { el?.focus(); const at = start + piece.length; el?.setSelectionRange(at, at); });
@@ -133,7 +135,14 @@ export function TemplateEditor({ storeId, vars, templates, missing, catalogs = [
             <div className="flex flex-wrap items-center gap-1">
               <button type="button" onClick={() => insert("", true)} className={`${chip} inline-flex items-center gap-1`} style={{ borderColor: "var(--t-card-border)" }} title="Negrilla en WhatsApp: *texto*"><Bold size={11} /> Negrilla</button>
               {EMOJIS.map((e) => <button key={e} type="button" onClick={() => insert(e)} className="grid h-7 w-7 place-items-center rounded-lg border text-sm" style={{ borderColor: "var(--t-card-border)" }}>{e}</button>)}
+              <button type="button" onClick={() => setEmojiOpen((o) => !o)} className={`${chip} inline-flex items-center gap-1`}
+                style={emojiOpen ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" } : { borderColor: "var(--t-card-border)" }}>
+                😀 Más emojis
+              </button>
+              <button type="button" onClick={() => insert("", false, "_")} className={chip} style={{ borderColor: "var(--t-card-border)" }} title="Cursiva en WhatsApp: _texto_"><i>Cursiva</i></button>
+              <button type="button" onClick={() => insert("", false, "~")} className={chip} style={{ borderColor: "var(--t-card-border)" }} title="Tachado en WhatsApp: ~texto~"><s>Tachado</s></button>
             </div>
+            {emojiOpen ? <EmojiPicker onPick={(e) => insert(e)} onClose={() => setEmojiOpen(false)} /> : null}
             <textarea ref={area} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} rows={11} maxLength={4000}
               className="w-full resize-y rounded-xl border p-3 font-mono text-xs leading-relaxed outline-none" style={field} aria-label="Texto de la plantilla" />
             {unknown.length ? <p className="text-[11px] text-amber-500">⚠️ No existe: {unknown.map((u) => `{${u}}`).join(", ")}. Se dejará tal cual.</p> : null}

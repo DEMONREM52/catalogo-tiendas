@@ -232,6 +232,8 @@ export const CHANNELS: Array<{ key: string; label: string; emoji: string }> = [
   { key: "instagram", label: "Instagram", emoji: "📸" },
   { key: "facebook", label: "Facebook", emoji: "📘" },
   { key: "whatsapp", label: "Estados de WhatsApp", emoji: "💬" },
+  { key: "whatsapp_grupo", label: "Grupo de WhatsApp", emoji: "👥" },
+  { key: "whatsapp_difusion", label: "Difusión de WhatsApp", emoji: "📢" },
   { key: "tiktok", label: "TikTok", emoji: "🎵" },
   { key: "marketplace", label: "Marketplace", emoji: "🛒" },
   { key: "otro", label: "Otro", emoji: "✨" },

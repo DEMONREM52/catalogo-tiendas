@@ -9,6 +9,7 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { normalizeProductDetails } from "@/lib/product-details";
 import { richToPlain } from "@/lib/rich-text";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+import { fetchPublicDeals, type PublicDeal } from "@/lib/catalog/public-prices";
 import { BUILTIN_TEMPLATES, renderTemplate, type CatalogOption, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
 import { TemplateEditor } from "./TemplateEditor";
 
@@ -37,6 +38,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
   const [busy, setBusy] = useState<string | null>(null);
   const [editor, setEditor] = useState(false);
   const [catalogs, setCatalogs] = useState<CatalogOption[]>([]);
+  const [deal, setDeal] = useState<PublicDeal | null>(null);
 
   const all = useMemo(() => [...own, ...BUILTIN_TEMPLATES], [own]);
   const tpl = all.find((t) => t.id === tplId) ?? own.find((t) => t.is_default) ?? all[0];
@@ -48,7 +50,21 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
     if (!cat) return base;
     return `${base}?catalogo=${encodeURIComponent(cat.slug)}${cat.access_key ? `&key=${encodeURIComponent(cat.access_key)}` : ""}`;
   }, [data?.slug, tpl.catalog_slug, catalogs, productId]);
-  const rendered = useMemo(() => (data ? renderTemplate(tpl.body, { ...data.vars, enlace: link }) : ""), [tpl, data, link]);
+  // Oferta vigente en el catálogo de la plantilla: {precio} sale con la oferta y {precio_antes}/{descuento} se llenan.
+  useEffect(() => {
+    if (!data?.slug) return;
+    let alive = true;
+    const cat = tpl.catalog_slug ? catalogs.find((c) => c.slug === tpl.catalog_slug) ?? null : null;
+    void fetchPublicDeals(supabaseBrowser(), data.slug, cat?.slug ?? "detal", cat?.access_key ?? null)
+      .then((m) => { if (alive) setDeal(m.get(productId) ?? null); })
+      .catch(() => { if (alive) setDeal(null); });
+    return () => { alive = false; };
+  }, [data?.slug, tpl.catalog_slug, catalogs, productId]);
+  const fmt = (n: number) => `${Math.round(n).toLocaleString("es-CO")}`;
+  const dealVars = deal?.before
+    ? { precio: fmt(deal.now), precio_antes: fmt(deal.before), descuento: deal.pct ? `-${deal.pct}%` : "" }
+    : {};
+  const rendered = useMemo(() => (data ? renderTemplate(tpl.body, { ...data.vars, ...dealVars, enlace: link }) : ""), [tpl, data, link, dealVars.precio, dealVars.precio_antes, dealVars.descuento]); // eslint-disable-line react-hooks/exhaustive-deps
   const text = edited ?? rendered;
 
   const loadTemplates = useCallback(async (select?: string) => {
@@ -92,7 +108,9 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
       const price = Number(row.price_3 || row.price_1 || 0);
       const vars: TemplateVars = {
         nombre: row.name.trim(),
-        precio: price > 0 ? `$${Math.round(price).toLocaleString("es-CO")}` : "",
+        precio: price > 0 ? `${Math.round(price).toLocaleString("es-CO")}` : "",
+        precio_antes: "",
+        descuento: "",
         descripcion: plain(row.description),
         caracteristicas: det.highlights.slice(0, 8).map((h) => `✅ ${h}`).join("\n"),
         enlace: store?.slug ? `${PRODUCTION_ORIGIN}/${store.slug}/producto/${productId}` : "",
@@ -229,7 +247,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
         ) : null}
       </AnimatePresence>
       {editor && storeId && data ? (
-        <TemplateEditor storeId={storeId} vars={{ ...data.vars, enlace: link }} templates={own} missing={missing} catalogs={catalogs}
+        <TemplateEditor storeId={storeId} vars={{ ...data.vars, ...dealVars, enlace: link }} templates={own} missing={missing} catalogs={catalogs}
           onClose={() => setEditor(false)} onChanged={(id) => { void loadTemplates(id); if (id) choose(id); }} />
       ) : null}
     </div>

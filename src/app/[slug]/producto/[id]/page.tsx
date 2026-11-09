@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { BuyBox } from "@/components/catalog/BuyBox";
 import { RelatedProducts } from "@/components/catalog/RelatedProducts";
-import { fetchPublicItems, type PublicItem } from "@/lib/catalog/public-prices";
+import { endsInText, fetchPublicDeals, fetchPublicItems, type PublicDeal, type PublicItem } from "@/lib/catalog/public-prices";
 import { ProductShowcase } from "@/components/ProductShowcase";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -218,6 +218,12 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   let relatedItems: PublicItem[] = [];
   let bestRank: number | null = null;
   let bestTitle = "Lo más vendido";
+  // Oferta de este producto en este catálogo (20261309): el precio de ahora ya viene con la oferta.
+  let deals = new Map<string, PublicDeal>();
+  try { deals = await fetchPublicDeals(sb, store.slug, catalogSlug, inCatalog?.key ?? null); } catch { /* sin ofertas */ }
+  const deal = deals.get(product.id) ?? null;
+  const shownPrice = deal?.now && deal.now > 0 ? deal.now : Number(price);
+  const endsText = deal?.before ? endsInText(deal.ends_at, Date.now()) : null;
   try {
     const [bestRes, sameCat] = await Promise.all([
       sb.rpc("store_public_best_sellers", { p_store: store.slug, p_limit: 10 }),
@@ -232,8 +238,9 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     if (pos >= 0 && bd?.badges !== false) bestRank = pos + 1;
     const relIds = ((sameCat.data ?? []) as Array<{ id: string }>).map((r) => r.id).filter((x) => !bestIds.includes(x));
     const items = await fetchPublicItems(sb, { id: store.id, slug: store.slug }, catalogSlug, inCatalog?.key ?? null, [...bestIds, ...relIds]);
-    bestItems = bestIds.filter((x) => x !== product.id).map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x));
-    relatedItems = relIds.map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).slice(0, 10);
+    const withDeal = (x: PublicItem) => ({ ...x, price: deals.get(x.id)?.now || x.price });
+    bestItems = bestIds.filter((x) => x !== product.id).map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).map(withDeal);
+    relatedItems = relIds.map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).map(withDeal).slice(0, 10);
     if (bestItems.length < 3) bestItems = [];
   } catch { /* sin recomendaciones */ }
 
@@ -252,7 +259,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     offers: Number(price) > 0 ? {
       "@type": "Offer",
       priceCurrency: "COP",
-      price: Number(price),
+      price: shownPrice,
       availability: stock === null || Number(stock) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: canonical,
       seller: { "@type": "Organization", name: (store as { name?: string }).name ?? store.slug },
@@ -318,7 +325,21 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
                 </p>
               ) : null}
               <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-6xl">{product.name}</h1>
-              <p className="product-landing-price mt-6 text-4xl font-black sm:text-5xl">{money(price)}</p>
+              {deal?.before ? (
+                <div className="mt-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {deal.pct ? <span className="offer-pct-badge rounded-xl px-3 py-1.5 text-lg font-black text-white">-{deal.pct}%</span> : null}
+                    {deal.label ? <span className="offer-ribbon rounded-full px-3 py-1 text-xs font-black uppercase text-white">{deal.label}</span> : null}
+                  </div>
+                  <p className="mt-3 text-lg font-bold opacity-60">Antes <span className="line-through">{money(deal.before)}</span></p>
+                  <p className="offer-price text-5xl font-black sm:text-6xl">{money(shownPrice)}</p>
+                  <p className="mt-1 text-sm font-black" style={{ color: "#10b981" }}>Ahorras {money(deal.before - shownPrice)}</p>
+                  {endsText ? <p className="mt-1 text-sm font-bold" style={{ color: "#f59e0b" }}>⏳ {endsText}</p> : null}
+                </div>
+              ) : (
+                <p className="product-landing-price mt-6 text-4xl font-black sm:text-5xl">{money(shownPrice)}</p>
+              )}
+              {deal?.featured ? <p className="featured-badge mt-3 inline-flex w-fit rounded-full px-3 py-1 text-xs font-black">⭐ Producto destacado</p> : null}
               <div className="product-landing-stock mt-3 flex items-center gap-2 text-sm font-semibold">
                 <span className="product-landing-stock-dot h-2 w-2 rounded-full" />
                 {stock === null ? "Listo para ti" : Number(stock) <= 5 ? <b>🔥 ¡Solo quedan {stock}!</b> : `${stock} unidades disponibles`}
@@ -326,7 +347,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
               {description ? <RichText text={description} className="mt-7 space-y-1 break-words text-base leading-7 opacity-80" /> : null}
 
               <div className="mt-auto pt-8">
-                <BuyBox productId={product.id} name={product.name} price={Number(price) || 0} stock={stock === null ? null : Number(stock)}
+                <BuyBox productId={product.id} name={product.name} price={shownPrice || 0} stock={stock === null ? null : Number(stock)}
                   catalogPath={catalogPath} accessKey={inCatalog?.key ?? null} whatsapp={store.whatsapp || null} shareText={shareText} />
                 <ul className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold">
                   {[

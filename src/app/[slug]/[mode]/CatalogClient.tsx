@@ -30,7 +30,7 @@ import {
 } from "./catalog-data";
 import { searchDelay } from "@/lib/search-timing";
 import { SmartLogo } from "@/components/ui/SmartLogo";
-import { fetchPublicItems, type PublicItem } from "@/lib/catalog/public-prices";
+import { endsInText, fetchPublicDeals, fetchPublicItems, type PublicDeal, type PublicItem } from "@/lib/catalog/public-prices";
 import { BestSellersStrip } from "@/components/catalog/BestSellers";
 
 function normalizeStoreSlug(value: string) {
@@ -342,6 +342,34 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     return () => { alive = false; };
   }, [store?.id, store?.slug, catalog?.slug, safeMode, key]);
   const [bestMeta, setBestMeta] = useState({ title: "Lo más vendido", badges: true });
+
+  // Ofertas («antes/ahora») y destacados de este catálogo (20261309). El precio que se cobra ya viene con la oferta.
+  const [deals, setDeals] = useState<Map<string, PublicDeal>>(new Map());
+  const [dealItems, setDealItems] = useState<{ offers: PublicItem[]; featured: PublicItem[] }>({ offers: [], featured: [] });
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (!store?.id || !store.slug) return;
+    let alive = true;
+    const storeRef = { id: store.id, slug: store.slug };
+    const cat = catalog?.slug ?? safeMode;
+    void (async () => {
+      const sb = supabaseBrowser();
+      const map = await fetchPublicDeals(sb, storeRef.slug, cat, key);
+      if (!alive || !map.size) return;
+      setDeals(map);
+      const offerIds = [...map.values()].filter((d) => d.before).sort((a, b) => Number(b.pct ?? 0) - Number(a.pct ?? 0)).map((d) => d.id).slice(0, 16);
+      const featIds = [...map.values()].filter((d) => d.featured).map((d) => d.id).slice(0, 16);
+      const items = await fetchPublicItems(sb, storeRef, cat, key, [...offerIds, ...featIds]);
+      if (!alive) return;
+      const pick = (ids: string[]) => ids.map((id) => items.get(id)).filter((x): x is PublicItem => Boolean(x)).map((x) => ({ ...x, price: map.get(x.id)?.now || x.price }));
+      setDealItems({ offers: pick(offerIds), featured: pick(featIds) });
+    })();
+    return () => { alive = false; };
+  }, [store?.id, store?.slug, catalog?.slug, safeMode, key]);
   const bestRank = useMemo(() => new Map(bestMeta.badges ? bestSellers.map((b, i) => [b.id, i + 1]) : []), [bestSellers, bestMeta.badges]);
   // Mínimos por producto: catálogo mayorista clásico o catálogos con esa regla.
   const wholesaleRules = catalog ? catalog.wholesale_rules : safeMode === "mayor";
@@ -1854,10 +1882,45 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
           </div>
         )}
 
+        {/* Ofertas especiales y destacados (solo sin búsqueda ni categoría) */}
+        {dealItems.offers.length && !q && !selectedCat ? (
+          <BestSellersStrip
+            items={dealItems.offers}
+            variant="offers"
+            deals={deals}
+            title="🏷️ Ofertas especiales"
+            money={money}
+            hrefFor={(id) => catalog
+              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
+              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            onAdd={(it) => void addToCartWithQty({
+              id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
+              active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
+            }, it.price)}
+          />
+        ) : null}
+        {dealItems.featured.length && !q && !selectedCat ? (
+          <BestSellersStrip
+            items={dealItems.featured}
+            variant="featured"
+            deals={deals}
+            title="Destacados"
+            money={money}
+            hrefFor={(id) => catalog
+              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
+              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            onAdd={(it) => void addToCartWithQty({
+              id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
+              active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
+            }, it.price)}
+          />
+        ) : null}
+
         {/* Lo más vendido (solo sin búsqueda ni categoría) */}
         {bestSellers.length >= 3 && !q && !selectedCat ? (
           <BestSellersStrip
             items={bestSellers}
+            deals={deals}
             title={bestMeta.title}
             money={money}
             hrefFor={(id) => catalog
@@ -1940,18 +2003,24 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                       };
 
                 const rank = bestRank.get(p.id);
+                const deal = deals.get(p.id);
                 return (
                   <div
                     key={p.id}
                     id={`catalog-product-${p.id}`}
                     className="t-card catalog-card-lift relative rounded-[28px] border p-4"
-                    style={{ borderColor: rank && rank <= 3 ? "color-mix(in oklab, #f59e0b 55%, var(--t-border))" : "var(--t-border)", background: glassBg }}
+                    style={{ borderColor: deal?.before ? "color-mix(in oklab, #ef4444 55%, var(--t-border))" : rank && rank <= 3 ? "color-mix(in oklab, #f59e0b 55%, var(--t-border))" : "var(--t-border)", background: glassBg }}
                   >
-                    {rank ? (
-                      <span className="catalog-best-badge pointer-events-none absolute left-6 top-6 z-[1] inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black text-white shadow-lg">
-                        {rank === 1 ? "👑" : "🔥"} {rank <= 3 ? `Top ${rank} en ventas` : "Más vendido"}
-                      </span>
-                    ) : null}
+                    <div className="pointer-events-none absolute left-6 top-6 z-[1] flex flex-col items-start gap-1">
+                      {deal?.before && deal.label ? <span className="offer-ribbon rounded-full px-2.5 py-1 text-[11px] font-black uppercase text-white shadow-lg">{deal.label}</span> : null}
+                      {rank ? (
+                        <span className="catalog-best-badge inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black text-white shadow-lg">
+                          {rank === 1 ? "👑" : "🔥"} {rank <= 3 ? `Top ${rank} en ventas` : "Más vendido"}
+                        </span>
+                      ) : null}
+                      {deal?.featured ? <span className="featured-badge rounded-full px-2.5 py-1 text-[11px] font-black shadow-lg">⭐ Destacado</span> : null}
+                    </div>
+                    {deal?.pct ? <span className="offer-pct-badge pointer-events-none absolute right-6 top-6 z-[1] rounded-xl px-2.5 py-1.5 text-sm font-black text-white">-{deal.pct}%</span> : null}
                     {p.image_url ? canViewProductLanding ? (
                       <Link
                         href={productPageUrl}
@@ -2047,10 +2116,18 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
 
                     <div className="mt-4 flex items-end justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>
-                          Precio
-                        </p>
-                        <p className="text-lg font-black">{money(price)}</p>
+                        {deal?.before ? (
+                          <>
+                            <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Antes <span className="line-through">{money(deal.before)}</span></p>
+                            <p className="offer-price text-xl font-black">{money(price)}</p>
+                            {endsInText(deal.ends_at, nowTick) ? <p className="text-[11px] font-bold" style={{ color: "#f59e0b" }}>⏳ {endsInText(deal.ends_at, nowTick)}</p> : null}
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs font-semibold" style={{ color: "var(--t-muted)" }}>Precio</p>
+                            <p className="text-lg font-black">{money(price)}</p>
+                          </>
+                        )}
                       </div>
 
                       <button

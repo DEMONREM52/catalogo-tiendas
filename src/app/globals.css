@@ -1491,3 +1491,10 @@ html.lite .animate-pulse, html.lite .animate-spin-slow { animation: none !import
   .catalog-best-badge, .best-card, .best-flame, .best-crown, .buy-now-btn::after, .buy-pulse, .trust-chip { animation: none !important; }
 }
 html.lite .best-card, html.lite .buy-now-btn::after, html.lite .buy-pulse, html.lite .best-flame, html.lite .best-crown { animation: none !important; }
+.offer-pct-badge { background: linear-gradient(135deg, #ef4444, #f59e0b); box-shadow: 0 8px 20px -8px rgba(239,68,68,.7); animation: offer-wiggle 3s ease-in-out infinite; }
+.offer-price { color: #ef4444; }
+.offer-ribbon { background: linear-gradient(135deg, #ef4444, #db2777); }
+.featured-badge { background: linear-gradient(135deg, #f59e0b, #eab308); color: #1c1917; }
+@keyframes offer-wiggle { 0%, 88%, 100% { transform: rotate(0); } 92% { transform: rotate(-8deg) scale(1.08); } 96% { transform: rotate(6deg) scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .offer-pct-badge { animation: none !important; } }
+html.lite .offer-pct-badge { animation: none !important; }
