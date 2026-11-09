@@ -1511,5 +1511,7 @@ html.lite .buy-cart-icon, html.lite .buy-cta { animation: none !important; }
 .buy-bar { animation: buy-bar-in .5s cubic-bezier(.2,1.2,.4,1) both .3s; }
 @keyframes buy-bar-in { from { transform: translateY(110%); } to { transform: none; } }
 /* Con la barra de compra, el botón de tema sube para no taparla. */
-body:has(.buy-bar) .theme-control { bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
+body:has(.buy-bar) .theme-control { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) { .buy-bar { animation: none !important; } }
+.buy-capsule { box-shadow: 0 18px 44px -14px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04) inset; }
+html.lite .buy-capsule { backdrop-filter: none; background: var(--t-bg-base, #120a24) !important; }
