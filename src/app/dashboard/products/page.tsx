@@ -22,6 +22,7 @@ import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
 import { ScrollButtons } from "@/components/ui/ScrollButtons";
+import { ProductsModeSwitch } from "./ModeSwitch";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -699,7 +700,10 @@ export default function ProductsListPage() {
         <div className={`${clsWrap()} p-3.5 sm:p-5`}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h1 className="text-lg font-bold leading-tight sm:text-2xl">Productos</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-lg font-bold leading-tight sm:text-2xl">Productos</h1>
+                  <ProductsModeSwitch mode="simple" />
+                </div>
                 <p className="text-[11px] text-[color:var(--t-muted)] sm:text-sm">
                   <b className="text-[color:var(--t-text)]">{filtered.length}</b> de <b className="text-[color:var(--t-text)]">{products.length}</b> cargados
                   {searching ? <span className="ml-1">· <b>Buscando…</b></span> : null}

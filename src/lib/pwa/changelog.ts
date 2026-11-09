@@ -700,6 +700,17 @@ export const RELEASES: Release[] = [
       { icon: "⌨️", text: "Teclas: V vender, P pedir, / buscar" },
     ],
   },
+  {
+    id: 67, date: "2026-11-09", title: "«¡Publícame!» y Radar de productos",
+    summary: "En cada producto hay un botón con megáfono para marcar que lo publicaste hoy (y dónde). Escoge cada cuánto te lo recuerda: diario, cada 3 días, semanal, mensual o los días que quieras; cuando le toca, el megáfono se mueve y la campana te avisa. Nuevo modo Radar en Productos: la salud de cada ficha de 0 a 100, qué le falta (foto, precio, categoría, descripción, costo…), cuáles toca publicar, cuáles están quietos sin vender y agotados. Cada falencia abre el producto en otra ventana justo donde se arregla, y puedes marcar muchos como publicados a la vez.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "📣", text: "En el producto toca «Publícame»" },
+      { icon: "⏰", text: "Escoge cada cuánto te lo recuerdo" },
+      { icon: "📡", text: "Cambia a «Radar» para ver lo que falta" },
+      { icon: "🩺", text: "Toca una falencia para arreglarla" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

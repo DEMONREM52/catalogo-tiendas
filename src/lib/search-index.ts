@@ -82,6 +82,8 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/inventario?tab=internal", emoji: "🤝", label: "Cuenta con puntos", hint: "Inventario", keywords: "deuda puntos bodega liquidacion del punto mercancia en punto abono cuadrar", perms: CREDIT },
   { href: "/dashboard/inventario?tab=manifests", emoji: "📄", label: "Manifiestos", hint: "Inventario", keywords: "manifiesto carga", perms: ["inventory", "purchases"] },
   { href: "/dashboard/inventario?tab=audit", emoji: "🛡️", label: "Auditoría de inventario", hint: "Inventario", keywords: "quien cambio historial", perms: ["audit"] },
+  { href: "/dashboard/products/radar", emoji: "📡", label: "Radar de productos", keywords: "falencias publicar publicame recordatorio redes sin foto sin precio quietos sin ventas salud administracion", perms: ["products"] },
+  { href: "/dashboard/products/radar?ver=publicar", emoji: "📣", label: "Productos por publicar", keywords: "publicame publicar redes instagram recordatorio", perms: ["products"] },
   { href: "/dashboard/lista-productos", emoji: "📋", label: "Lista general de productos", keywords: "precios lista consultar", perms: ["products_view", "products", "inventory", "pos"] },
   { href: "/dashboard/products", emoji: "📦", label: "Productos", keywords: "editar precios fotos catalogo articulos", perms: ["products"] },
   { href: "/dashboard/categories", emoji: "🗂️", label: "Categorías", keywords: "grupos familias", perms: ["categories"] },

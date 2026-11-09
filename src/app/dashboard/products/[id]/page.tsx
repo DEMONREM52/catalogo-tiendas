@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
+import { PublishButton } from "@/components/products/PublishButton";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import Swal from "sweetalert2";
@@ -450,6 +451,7 @@ export default function EditProductPage() {
         onSave={() => void save()}
         onBack={() => void goBack()}
         actions={<>
+          <PublishButton storeId={storeId} productId={d.id} productName={d.name} />
           <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
           <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">🏷️ Etiqueta</button>
         </>}

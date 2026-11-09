@@ -40,7 +40,11 @@ export function ProductEditorLayout({
   sections: EditorSection[];
   preview: ReactNode;
 }) {
-  const [current, setCurrent] = useState(sections[0]?.key ?? "");
+  // ?section=media abre directo en esa sección (lo usa el Radar de productos para ir a lo que falta).
+  const [current, setCurrent] = useState(() => {
+    const wanted = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("section") : null;
+    return wanted && sections.some((s) => s.key === wanted) ? wanted : sections[0]?.key ?? "";
+  });
   const idx = Math.max(0, sections.findIndex((s) => s.key === current));
   const sec = sections[idx];
   const doneCount = sections.filter((s) => s.done).length;

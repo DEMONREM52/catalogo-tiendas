@@ -220,6 +220,7 @@ type ModuleTab = { href: string; icon: string; label: string; short?: string; pe
 const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   inventory: [
     { href: "/dashboard/products", icon: "📦", label: "Productos", permissions: ["products"] },
+    { href: "/dashboard/products/radar", icon: "📡", label: "Radar de productos", short: "Radar", permissions: ["products"] },
     { href: "/dashboard/lista-productos", icon: "📋", label: "Lista general", short: "Lista", permissions: PRODUCT_LIST_PERMISSIONS },
     { href: "/dashboard/categories", icon: "🗂️", label: "Categorías", permissions: ["categories"] },
     { href: "/dashboard/inventario", icon: "🏭", label: "Stock y compras", short: "Stock", permissions: ERP_PERMISSIONS },
