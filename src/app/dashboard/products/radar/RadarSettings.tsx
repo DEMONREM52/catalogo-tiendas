@@ -16,6 +16,9 @@ const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "a
 export function RadarSettings({ storeId, value, onClose, onSaved }: { storeId: string; value: RadarSettingsValue; onClose: () => void; onSaved: (v: RadarSettingsValue) => void }) {
   const [v, setV] = useState(value);
   const [busy, setBusy] = useState(false);
+  // Se escribe libre (se puede borrar todo) y se ajusta entre 1 y 100 al salir del campo o al guardar.
+  const [target, setTarget] = useState(String(value.daily_target));
+  const clampTarget = (t: string) => Math.max(1, Math.min(100, Math.floor(Number(t)) || 1));
   const [tpls, setTpls] = useState<{ list: PublishTemplate[]; missing: boolean } | null>(null);
   async function openTemplates() {
     const { data, error } = await supabaseBrowser().rpc("publish_templates_list", { p_store: storeId });
@@ -24,14 +27,14 @@ export function RadarSettings({ storeId, value, onClose, onSaved }: { storeId: s
   }
   async function save() {
     setBusy(true);
-    const { data, error } = await supabaseBrowser().rpc("product_radar_settings_save", { p_store: storeId, p_daily_target: v.daily_target, p_push_hour: v.push_hour, p_health_goal: v.health_goal });
+    const { data, error } = await supabaseBrowser().rpc("product_radar_settings_save", { p_store: storeId, p_daily_target: clampTarget(target), p_push_hour: v.push_hour, p_health_goal: v.health_goal });
     setBusy(false);
     const d = data as { ok?: boolean; message?: string; settings?: RadarSettingsValue } | null;
     if (error || !d?.ok) {
       void Swal.fire({ icon: "error", title: "No se guardó", text: error?.message ?? d?.message, background: "var(--t-bg-base)", color: "var(--t-text)" });
       return;
     }
-    onSaved(d.settings ?? v);
+    onSaved(d.settings ?? { ...v, daily_target: clampTarget(target) });
     onClose();
   }
   const field = "w-full rounded-xl border px-3 py-2.5 text-sm";
@@ -41,7 +44,20 @@ export function RadarSettings({ storeId, value, onClose, onSaved }: { storeId: s
       <div className="space-y-4 text-sm">
         <label className="block">
           <span className="font-bold">🗓️ Productos para publicar al día</span>
-          <input type="number" min={1} max={100} value={v.daily_target} onChange={(e) => setV({ ...v, daily_target: Math.max(1, Math.min(100, Math.floor(Number(e.target.value) || 1))) })} className={`${field} mt-1`} style={style} />
+          <div className="mt-1 flex items-center gap-2">
+            <button type="button" onClick={() => setTarget(String(Math.max(1, (Number(target) || 1) - 1)))} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-lg font-black" style={style} aria-label="Uno menos">−</button>
+            <input type="text" inputMode="numeric" value={target} onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => setTarget(e.target.value.replace(/D/g, "").slice(0, 3))}
+              onBlur={() => setTarget(String(clampTarget(target)))}
+              className={`${field} text-center text-lg font-black`} style={style} aria-label="Productos para publicar al día" />
+            <button type="button" onClick={() => setTarget(String(Math.min(100, (Number(target) || 0) + 1)))} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-lg font-black" style={style} aria-label="Uno más">+</button>
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {[1, 3, 5, 10, 15, 20, 30].map((n) => (
+              <button key={n} type="button" onClick={() => setTarget(String(n))} className="rounded-full border px-2.5 py-1 text-[11px] font-bold"
+                style={Number(target) === n ? { borderColor: "#10b981", background: "color-mix(in oklab, #10b981 18%, transparent)" } : { borderColor: "var(--t-card-border)" }}>{n}</button>
+            ))}
+          </div>
           <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>El «Plan de hoy» te propone esta cantidad (lo atrasado primero).</span>
         </label>
         <label className="block">
