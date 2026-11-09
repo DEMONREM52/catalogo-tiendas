@@ -722,6 +722,17 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "Selecciona productos y «Asignar» a alguien" },
     ],
   },
+  {
+    id: 69, date: "2026-11-09", title: "Plantillas de mensajes para publicar",
+    summary: "Arma tus propios mensajes para publicar productos y úsalos con cualquiera: escribe el texto con botones para meter el nombre, precio, descripción, características, enlace, categoría, código, tienda y WhatsApp, negrilla y emojis, y míralo como se ve en WhatsApp. {NOMBRE} en mayúsculas pone el nombre en MAYÚSCULAS. Marca una con ⭐ para usarla siempre. Ya viene «Tu estilo»: 🔥 *NOMBRE* 🔥 💰🔥 *PRECIO* 🔥💰.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "📣", text: "Abre «Publícame» en un producto" },
+      { icon: "📝", text: "Toca «Plantillas» en el kit" },
+      { icon: "➕", text: "Arma tu mensaje con los botones" },
+      { icon: "⭐", text: "Márcala para usarla siempre" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -5,6 +5,8 @@ import { Loader2, Settings } from "lucide-react";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Sheet } from "./RadarWidgets";
+import { TemplateEditor } from "@/components/products/TemplateEditor";
+import { SAMPLE_VARS, type PublishTemplate } from "@/lib/products/publish-templates";
 
 export type RadarSettingsValue = { daily_target: number; push_hour: number | null; health_goal: number };
 export const DEFAULT_SETTINGS: RadarSettingsValue = { daily_target: 5, push_hour: 9, health_goal: 85 };
@@ -14,6 +16,12 @@ const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "a
 export function RadarSettings({ storeId, value, onClose, onSaved }: { storeId: string; value: RadarSettingsValue; onClose: () => void; onSaved: (v: RadarSettingsValue) => void }) {
   const [v, setV] = useState(value);
   const [busy, setBusy] = useState(false);
+  const [tpls, setTpls] = useState<{ list: PublishTemplate[]; missing: boolean } | null>(null);
+  async function openTemplates() {
+    const { data, error } = await supabaseBrowser().rpc("publish_templates_list", { p_store: storeId });
+    const d = data as { ok?: boolean; templates?: PublishTemplate[] } | null;
+    setTpls({ list: d?.ok ? d.templates ?? [] : [], missing: Boolean(error && /Could not find the function|schema cache|does not exist/i.test(error.message)) });
+  }
   async function save() {
     setBusy(true);
     const { data, error } = await supabaseBrowser().rpc("product_radar_settings_save", { p_store: storeId, p_daily_target: v.daily_target, p_push_hour: v.push_hour, p_health_goal: v.health_goal });
@@ -49,10 +57,15 @@ export function RadarSettings({ storeId, value, onClose, onSaved }: { storeId: s
           <input type="range" min={50} max={100} step={5} value={v.health_goal} onChange={(e) => setV({ ...v, health_goal: Number(e.target.value) })} className="mt-2 w-full" />
           <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>Llegar a <b style={{ color: "var(--t-text)" }}>{v.health_goal}</b> de 100 en promedio.</span>
         </label>
+        <button type="button" onClick={() => void openTemplates()} className="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left" style={{ borderColor: "var(--t-card-border)" }}>
+          <span><span className="font-bold">📝 Plantillas de mensajes</span><br /><span className="text-[11px]" style={{ color: "var(--t-muted)" }}>El texto que arma «Publícame» para redes y WhatsApp.</span></span>
+          <span aria-hidden>›</span>
+        </button>
         <button type="button" onClick={() => void save()} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-black text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#10b981,#0ea5e9)" }}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : null} Guardar
         </button>
       </div>
+      {tpls ? <TemplateEditor storeId={storeId} vars={SAMPLE_VARS} templates={tpls.list} missing={tpls.missing} onClose={() => setTpls(null)} onChanged={() => void openTemplates()} /> : null}
     </Sheet>
   );
 }
