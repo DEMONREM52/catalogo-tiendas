@@ -91,7 +91,7 @@ export function SmartLogo({ src, alt = "", size = 40, rounded = "rounded-xl", cl
 /** Logo de RemHub (blanco y transparente): siempre sobre su círculo oscuro con brillo. */
 export function RemhubMark({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className={`grid shrink-0 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_22px_rgba(168,85,247,.45)] ring-2 ring-fuchsia-500/40 ${className}`} style={{ width: size, height: size }}>
+    <span className={`grid shrink-0 place-items-center rounded-full bg-[#0b0716] shadow-[0_0_22px_rgba(168,85,247,.45)] ring-2 ring-brand/40 ${className}`} style={{ width: size, height: size }}>
       <img src={size > 64 ? "/remhub-icon-256.png" : "/remhub-icon-128.png"} alt="" className="h-[92%] w-[92%] object-contain" />
     </span>
   );

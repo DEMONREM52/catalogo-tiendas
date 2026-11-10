@@ -74,7 +74,7 @@ export function TeamCodeCard({ storeId, canEdit }: { storeId: string; canEdit: b
         ) : null}
       </div>
       {code && code.length < 4 ? <p className="mt-2 text-xs text-amber-500">Mínimo 4 números (recomendado 6).</p> : null}
-      {msg ? <p className={`mt-2 text-xs font-semibold ${msg.ok ? "text-emerald-500" : "text-rose-500"}`}>{msg.text}</p> : null}
+      {msg ? <p className={`mt-2 text-xs font-semibold ${msg.ok ? "text-emerald-500" : "text-danger"}`}>{msg.text}</p> : null}
     </div>
   );
 }

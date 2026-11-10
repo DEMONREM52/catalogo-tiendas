@@ -362,7 +362,7 @@ function ReminderDialog({ row, board, name, onClose, onSaved }: { row: PayableRo
       {mode === "custom" ? (
         <>
           <Field label="Avisar antes de vencer" hint="Escoge los días. Si no lo cambias, usa los de la tienda.">
-            <label className="mb-2 flex items-center gap-2 text-xs"><input type="checkbox" className="accent-violet-500" checked={ownDays} onChange={(e) => setOwnDays(e.target.checked)} /> Usar días propios para esta cuenta</label>
+            <label className="mb-2 flex items-center gap-2 text-xs"><input type="checkbox" className="accent-brand" checked={ownDays} onChange={(e) => setOwnDays(e.target.checked)} /> Usar días propios para esta cuenta</label>
             {ownDays ? <DaysPicker value={days} onChange={setDays} /> : null}
           </Field>
           <Field label="Si se vence, insistir">

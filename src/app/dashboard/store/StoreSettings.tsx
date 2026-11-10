@@ -141,7 +141,7 @@ function themePreview(theme: ThemeOption | undefined, light = false) {
 }
 
 function inputClass() {
-  return "mt-1 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fuchsia-500/25";
+  return "mt-1 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-brand/25";
 }
 
 function errorMessage(error: unknown) {
@@ -712,7 +712,7 @@ export default function StoreSettings() {
   }
 
   if (loading) return <div className="p-4"><SkeletonList rows={6} avatar={false} label="Cargando configuración de tienda…" /></div>;
-  if (!store) return <p className="p-4 text-sm text-rose-500">No se pudo cargar la tienda.</p>;
+  if (!store) return <p className="p-4 text-sm text-danger">No se pudo cargar la tienda.</p>;
 
   const inputStyle = {
     borderColor: "var(--t-card-border)",
@@ -731,7 +731,7 @@ export default function StoreSettings() {
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-black sm:text-2xl">{store.name || "Mi tienda"}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs" style={{ color: "var(--t-muted)" }}>
-              <span className={`rounded-full px-2 py-0.5 font-bold ${store.active ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"}`}>{store.active ? "● Activa" : "● Inactiva"}</span>
+              <span className={`rounded-full px-2 py-0.5 font-bold ${store.active ? "bg-emerald-500/15 text-emerald-500" : "bg-danger/15 text-danger"}`}>{store.active ? "● Activa" : "● Inactiva"}</span>
               <span className="inline-flex items-center gap-1">Hola, <EditableNickname value={nickname} fallback={nicknameFallback} onSaved={setNickname} inputClassName="text-xs font-bold" /></span>
             </div>
           </div>
@@ -801,8 +801,8 @@ export default function StoreSettings() {
               ["catalog_retail", "Catálogo detal", "Permite que tus clientes consulten precios al detal."],
               ["catalog_wholesale", "Catálogo mayorista", "Permite el acceso mayorista con la llave secreta."],
             ].map(([key, label, description]) => (
-              <label key={key} className="flex items-start gap-3 rounded-2xl border p-4 transition hover:border-fuchsia-400/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-                <input className="mt-1 h-4 w-4 accent-fuchsia-600" type="checkbox" checked={store[key as "catalog_retail" | "catalog_wholesale"]} onChange={(event) => patchStore({ [key]: event.target.checked })} />
+              <label key={key} className="flex items-start gap-3 rounded-2xl border p-4 transition hover:border-brand/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
+                <input className="mt-1 h-4 w-4 accent-brand" type="checkbox" checked={store[key as "catalog_retail" | "catalog_wholesale"]} onChange={(event) => patchStore({ [key]: event.target.checked })} />
                 <span><b className="block text-sm">{label}</b><span className="mt-1 block text-xs" style={{ color: "var(--t-muted)" }}>{description}</span></span>
               </label>
             ))}
@@ -913,7 +913,7 @@ export default function StoreSettings() {
                       aria-label={`${channel.active ? "Desactivar" : "Activar"} ${contactName}`}
                       title={channel.active ? "Desactivar WhatsApp" : "Activar WhatsApp"}
                       onClick={() => patchContact(channel.id, { active: !channel.active })}
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500 focus-visible:ring-offset-2 ${
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
                         channel.active
                           ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
                           : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
@@ -922,7 +922,7 @@ export default function StoreSettings() {
                       <Power size={17} />
                     </button>
                     {channel.id !== "primary" ? (
-                      <button type="button" className="btn-soft inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-rose-600 dark:text-rose-300" onClick={() => removeContact(channel.id)} aria-label={`Quitar ${contactName}`}><Trash2 size={15} /><span className="hidden sm:inline">Quitar</span></button>
+                      <button type="button" className="btn-soft inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-danger " onClick={() => removeContact(channel.id)} aria-label={`Quitar ${contactName}`}><Trash2 size={15} /><span className="hidden sm:inline">Quitar</span></button>
                     ) : null}
                   </div>
                   {expanded ? (
@@ -1031,13 +1031,13 @@ export default function StoreSettings() {
             {profile.locations.map((location) => (
               <article key={location.id} className="rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 font-bold"><MapPin size={17} className="text-fuchsia-500" /> Punto de atención</div>
+                  <div className="flex items-center gap-2 font-bold"><MapPin size={17} className="text-brand" /> Punto de atención</div>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 text-xs font-semibold">
-                      <input type="checkbox" className="h-4 w-4 accent-fuchsia-600" checked={location.active} onChange={(event) => patchLocation(location.id, { active: event.target.checked })} />
+                      <input type="checkbox" className="h-4 w-4 accent-brand" checked={location.active} onChange={(event) => patchLocation(location.id, { active: event.target.checked })} />
                       Visible en catálogo
                     </label>
-                    <button type="button" className="btn-soft grid h-9 w-9 place-items-center rounded-xl text-rose-600 dark:text-rose-300" aria-label={`Eliminar punto ${location.name || "sin nombre"}`} onClick={() => removeLocation(location.id)}><Trash2 size={15} /></button>
+                    <button type="button" className="btn-soft grid h-9 w-9 place-items-center rounded-xl text-danger " aria-label={`Eliminar punto ${location.name || "sin nombre"}`} onClick={() => removeLocation(location.id)}><Trash2 size={15} /></button>
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1135,10 +1135,10 @@ export default function StoreSettings() {
             {QUICK_ACCESS_OPTIONS.map(([key, label, icon]) => {
               const enabled = profile.quick_access.includes(key);
               return (
-                <label key={key} className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition ${enabled ? "border-fuchsia-400/40 bg-fuchsia-500/10" : ""}`} style={{ borderColor: enabled ? undefined : "var(--t-card-border)", background: enabled ? undefined : "var(--t-card-bg-soft)" }}>
+                <label key={key} className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition ${enabled ? "border-brand/40 bg-brand/10" : ""}`} style={{ borderColor: enabled ? undefined : "var(--t-card-border)", background: enabled ? undefined : "var(--t-card-bg-soft)" }}>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-fuchsia-600"
+                    className="h-4 w-4 accent-brand"
                     checked={enabled}
                     onChange={(event) => setProfile((current) => ({
                       ...current,

@@ -104,7 +104,7 @@ export function EditableNickname({
               if (e.key === "Enter") void commit();
               if (e.key === "Escape") setEditing(false);
             }}
-            className={`min-w-0 rounded-xl border bg-transparent px-2.5 py-1 outline-none focus:ring-2 focus:ring-fuchsia-500/30 ${inputClassName ?? ""}`}
+            className={`min-w-0 rounded-xl border bg-transparent px-2.5 py-1 outline-none focus:ring-2 focus:ring-brand/30 ${inputClassName ?? ""}`}
             style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)", width: `${Math.max(10, draft.length + 2)}ch`, maxWidth: "100%" }}
             aria-label="¿Cómo quieres que te llamemos?"
           />

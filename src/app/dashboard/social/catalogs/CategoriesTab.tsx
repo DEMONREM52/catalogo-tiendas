@@ -159,7 +159,7 @@ export function CategoriesTab({
                       <RotateCcw size={14} />
                     </button>
                   ) : (
-                    <button type="button" onClick={() => setRows(rows.filter((r) => r.id !== row.id))} className="grid h-8 w-8 place-items-center rounded-lg border text-rose-500" style={softBox} title="Eliminar categoría propia">
+                    <button type="button" onClick={() => setRows(rows.filter((r) => r.id !== row.id))} className="grid h-8 w-8 place-items-center rounded-lg border text-danger" style={softBox} title="Eliminar categoría propia">
                       <Trash2 size={14} />
                     </button>
                   )}

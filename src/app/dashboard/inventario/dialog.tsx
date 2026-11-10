@@ -54,7 +54,7 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boo
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--t-card-border)" }}>
       <span>{label}</span>
-      <input type="checkbox" className="h-5 w-5 accent-violet-500" checked={on} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="h-5 w-5 accent-brand" checked={on} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }

@@ -117,12 +117,12 @@ function hashToIndex(seed: string, mod: number) {
 }
 function avatarClass(seed: string) {
   const palette = [
-    "bg-fuchsia-200/70 border-fuchsia-300 text-slate-900 dark:bg-fuchsia-500/15 dark:border-fuchsia-400/25 dark:text-fuchsia-100",
+    "bg-brand/18 border-brand/40 text-slate-900 dark:bg-brand/15 dark:border-brand/25 dark:text-brand",
     "bg-emerald-200/70 border-emerald-300 text-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/25 dark:text-emerald-100",
     "bg-sky-200/70 border-sky-300 text-slate-900 dark:bg-sky-500/15 dark:border-sky-400/25 dark:text-sky-100",
     "bg-amber-200/70 border-amber-300 text-slate-900 dark:bg-amber-500/15 dark:border-amber-400/25 dark:text-amber-100",
-    "bg-rose-200/70 border-rose-300 text-slate-900 dark:bg-rose-500/15 dark:border-rose-400/25 dark:text-rose-100",
-    "bg-violet-200/70 border-violet-300 text-slate-900 dark:bg-violet-500/15 dark:border-violet-400/25 dark:text-violet-100",
+    "bg-danger/18 border-danger/40 text-slate-900 dark:bg-danger/15 dark:border-danger/25 dark:text-danger",
+    "bg-brand/18 border-brand/40 text-slate-900 dark:bg-brand/15 dark:border-brand/25 dark:text-brand",
   ];
   return palette[hashToIndex(seed, palette.length)];
 }
@@ -884,7 +884,7 @@ export default function ProductsListPage() {
                 </label>
               </div>
               {minPrice && maxPrice && Number(minPrice) > Number(maxPrice) ? (
-                <p role="alert" className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-300">El precio mínimo no puede superar al precio máximo.</p>
+                <p role="alert" className="mt-2 text-xs font-semibold text-danger ">El precio mínimo no puede superar al precio máximo.</p>
               ) : null}
             </details>
             {socialDataError ? (

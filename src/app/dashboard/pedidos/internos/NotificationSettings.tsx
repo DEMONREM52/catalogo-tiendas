@@ -249,7 +249,7 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                     <div className={device.muted ? "pointer-events-none opacity-40" : ""}>
                       <div className="flex items-center gap-3">
                         <VolumeX size={16} style={{ color: "var(--t-muted)" }} />
-                        <input type="range" min={0.05} max={1} step={0.05} value={vol} onChange={(e) => setDevicePrefs(storeId, { volume: Number(e.target.value) })} className="h-2 flex-1 cursor-pointer accent-violet-500" aria-label="Volumen" />
+                        <input type="range" min={0.05} max={1} step={0.05} value={vol} onChange={(e) => setDevicePrefs(storeId, { volume: Number(e.target.value) })} className="h-2 flex-1 cursor-pointer accent-brand" aria-label="Volumen" />
                         <Volume2 size={16} style={{ color: "var(--t-muted)" }} />
                         <span className="w-10 text-right text-xs font-bold tabular-nums">{Math.round(vol * 100)}%</span>
                       </div>
@@ -301,7 +301,7 @@ export function NotificationSettings({ open, onClose, storeId, points }: { open:
                     ))}
                     <div className="flex items-center gap-3 pt-1">
                       <span className="text-sm font-bold">Volumen sugerido</span>
-                      <input type="range" min={0.05} max={1} step={0.05} disabled={!editable} value={draft.volume} onChange={(e) => setDraft({ ...draft, volume: Number(e.target.value) })} className="h-2 flex-1 cursor-pointer accent-violet-500 disabled:opacity-40" aria-label="Volumen sugerido" />
+                      <input type="range" min={0.05} max={1} step={0.05} disabled={!editable} value={draft.volume} onChange={(e) => setDraft({ ...draft, volume: Number(e.target.value) })} className="h-2 flex-1 cursor-pointer accent-brand disabled:opacity-40" aria-label="Volumen sugerido" />
                       <span className="w-10 text-right text-xs font-bold tabular-nums">{Math.round(draft.volume * 100)}%</span>
                     </div>
                   </section>

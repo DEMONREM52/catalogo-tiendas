@@ -253,7 +253,7 @@ export default function TercerosPage() {
             <div className="relative min-w-0 flex-1 sm:min-w-60">
               <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 opacity-60" />
               <input
-                className="w-full rounded-2xl border py-3 pr-4 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
+                className="w-full rounded-2xl border py-3 pr-4 text-sm outline-none focus:ring-2 focus:ring-brand/25"
                 style={{ paddingLeft: "2.4rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
                 placeholder="Buscar por nombre, documento, celular, ciudad o etiqueta…"
                 value={q}

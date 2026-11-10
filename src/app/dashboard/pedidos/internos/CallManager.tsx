@@ -477,7 +477,7 @@ export function CallManager({ storeId }: { storeId: string }) {
               {!(video && hasRemoteVideo) ? (
                 <div className="relative mb-6 grid h-28 w-28 place-items-center">
                   {phase === "incoming" || phase === "outgoing" ? [0, 1, 2].map((i) => (
-                    <motion.span key={i} className="absolute inset-0 rounded-full border-2 border-fuchsia-400/60" animate={{ scale: [1, 1.9], opacity: [0.7, 0] }} transition={{ repeat: Infinity, duration: 2.2, delay: i * 0.7 }} />
+                    <motion.span key={i} className="absolute inset-0 rounded-full border-2 border-brand/60" animate={{ scale: [1, 1.9], opacity: [0.7, 0] }} transition={{ repeat: Infinity, duration: 2.2, delay: i * 0.7 }} />
                   )) : null}
                   <span className="grid h-28 w-28 place-items-center rounded-full text-4xl font-black" style={{ background: "linear-gradient(135deg, #8b5cf6, #ec4899)" }}>{(who.trim()[0] ?? "R").toUpperCase()}</span>
                 </div>
@@ -517,7 +517,7 @@ export function CallManager({ storeId }: { storeId: string }) {
                         <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Escuchar por</p>
                         {outputs.map((d) => (
                           <button key={d.deviceId} type="button" onClick={() => { setShowOutputs(false); void applyOutput(/speaker|altavoz|bocina|parlante/i.test(d.label), d.deviceId); }}
-                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left ${outputId === d.deviceId ? "bg-violet-100 font-bold" : "hover:bg-slate-100"}`}>
+                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left ${outputId === d.deviceId ? "bg-brand/15 font-bold" : "hover:bg-slate-100"}`}>
                             {/bluetooth|airpods|buds/i.test(d.label) ? "🎧" : /speaker|altavoz|bocina|parlante/i.test(d.label) ? "🔊" : "🔈"} <span className="truncate">{d.label || "Salida de audio"}</span>
                           </button>
                         ))}

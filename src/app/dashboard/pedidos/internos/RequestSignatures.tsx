@@ -216,7 +216,7 @@ function SignModal({ data, step, onClose, onDone }: { data: SrDetail; step: (typ
   }
 
   if (!mounted) return null;
-  const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25";
+  const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand/25";
   const fieldStyle = { borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" };
   return createPortal(
     <AnimatePresence>

@@ -151,7 +151,7 @@ export default function MessagesPage() {
                     <span className="min-w-0 flex-1 truncate text-xs" style={{ color: "var(--t-muted)" }}>
                       {t.last ? `${t.last.mine ? "Tú: " : t.kind === "group" && t.last.user_name ? `${t.last.user_name}: ` : ""}${t.last.body}` : "Sin mensajes todavía"}
                     </span>
-                    {t.mentioned ? <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-fuchsia-500 text-white" title="Te mencionaron"><AtSign size={12} /></span> : null}
+                    {t.mentioned ? <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand text-on-brand" title="Te mencionaron"><AtSign size={12} /></span> : null}
                     {t.unread ? <span className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[10px] font-black text-white ${t.muted ? "bg-slate-500" : "bg-emerald-500"}`}>{t.unread > 99 ? "99+" : t.unread}</span> : null}
                   </span>
                 </span>
@@ -316,7 +316,7 @@ function NewChat({ open, storeId, onClose, onOpened }: { open: boolean; storeId:
               {list.map((p) => (
                 <button key={p.user_id} type="button" disabled={busy} onClick={() => (group && !announce ? setPicked((cur) => { const n = new Set(cur); if (n.has(p.user_id)) n.delete(p.user_id); else n.add(p.user_id); return n; }) : void direct(p))}
                   className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-[color:var(--t-card-bg)] disabled:opacity-50">
-                  {group ? <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 text-[11px] font-black ${picked.has(p.user_id) ? "border-fuchsia-500 bg-fuchsia-500 text-white" : ""}`} style={picked.has(p.user_id) ? undefined : { borderColor: "var(--t-card-border)" }}>{picked.has(p.user_id) ? "✓" : ""}</span> : null}
+                  {group ? <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 text-[11px] font-black ${picked.has(p.user_id) ? "border-brand bg-brand text-white" : ""}`} style={picked.has(p.user_id) ? undefined : { borderColor: "var(--t-card-border)" }}>{picked.has(p.user_id) ? "✓" : ""}</span> : null}
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-black text-white" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>{initials(p.name)}</span>
                   <span className="min-w-0 flex-1"><b className="block truncate text-sm">{p.name}</b><span className="text-xs" style={{ color: "var(--t-muted)" }}>{p.owner ? "Dueño" : p.point ?? "Todos los puntos"}</span></span>
                 </button>

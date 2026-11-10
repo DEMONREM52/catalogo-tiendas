@@ -312,7 +312,7 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
       </div>
       <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, #ec4899 45%, var(--t-card-border))", background: "color-mix(in oklab, #ec4899 7%, transparent)" }}>
         <Field label="🎂 Cumpleaños"><DateField value={bday.date} onChange={(v) => setBday((b) => ({ ...b, date: v }))} ariaLabel="Fecha de cumpleaños" /></Field>
-        <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={bday.showAge} onChange={(e) => setBday((b) => ({ ...b, showAge: e.target.checked }))} className="h-4 w-4 accent-pink-500" /> Mostrar cuántos años cumple</label>
+        <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={bday.showAge} onChange={(e) => setBday((b) => ({ ...b, showAge: e.target.checked }))} className="h-4 w-4 accent-brand" /> Mostrar cuántos años cumple</label>
         <p className="text-xs" style={{ color: "var(--t-muted)" }}>🎉 Todo el equipo recibe aviso una semana antes, el día anterior y el mismo día, y ese día RemHub lo celebra con confeti y un muro de felicitaciones. Solo se muestra el día y el mes.</p>
       </div>
       {points.length > 0 || cat.can.madre ? (
@@ -345,8 +345,8 @@ function EmployeeForm({ storeId, points, cat, initial, onClose, onSaved }: { sto
         </div>
       ) : null}
       <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>
-        <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.transport_aid} onChange={(e) => set("transport_aid", e.target.checked)} className="h-5 w-5 accent-violet-500" /> 🚌 Recibe auxilio de transporte</label>
-        <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-5 w-5 accent-violet-500" /> ✅ Activo (entra en las nóminas)</label>
+        <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.transport_aid} onChange={(e) => set("transport_aid", e.target.checked)} className="h-5 w-5 accent-brand" /> 🚌 Recibe auxilio de transporte</label>
+        <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-5 w-5 accent-brand" /> ✅ Activo (entra en las nóminas)</label>
       </div>
       <Field label="Notas (opcional)"><input {...text("notes")} /></Field>
     </Sheet>

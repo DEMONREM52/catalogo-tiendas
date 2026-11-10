@@ -377,7 +377,7 @@ export function ForwardDialog({ open, storeId, onClose, onSend }: { open: boolea
               {list && !list.length ? <p className="p-4 text-center text-sm" style={{ color: "var(--t-muted)" }}>No tienes chats todavía. Abre uno en «Mensajes».</p> : null}
               {list?.map((t) => (
                 <label key={t.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 hover:bg-[color:var(--t-card-bg)]">
-                  <input type="checkbox" checked={picked.has(t.id)} onChange={() => setPicked((cur) => { const n = new Set(cur); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} className="h-5 w-5 accent-fuchsia-600" style={{ minHeight: 0, padding: 0 }} />
+                  <input type="checkbox" checked={picked.has(t.id)} onChange={() => setPicked((cur) => { const n = new Set(cur); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} className="h-5 w-5 accent-brand" style={{ minHeight: 0, padding: 0 }} />
                   <b className="min-w-0 flex-1 truncate text-sm">{t.kind === "group" ? "👥 " : ""}{name(t)}</b>
                 </label>
               ))}

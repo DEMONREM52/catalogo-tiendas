@@ -371,7 +371,7 @@ function SettingsDialog({ storeId, settings, onClose, onSaved }: { storeId: stri
         <Field label="Mínimo para los puntos"><NumberField value={s.point_min_pct} onChange={(v) => setS({ ...s, point_min_pct: v ?? 0 })} suffix="%" min={-90} max={1000} align="left" /></Field>
         <Field label="Máximo para los puntos"><NumberField value={s.point_max_pct} onChange={(v) => setS({ ...s, point_max_pct: v ?? 0 })} suffix="%" min={-90} max={1000} align="left" /></Field>
       </div>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.require_approval} onChange={(e) => setS({ ...s, require_approval: e.target.checked })} className="h-4 w-4 accent-violet-500" /> Las reglas de los puntos necesitan aprobación de la madre</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.require_approval} onChange={(e) => setS({ ...s, require_approval: e.target.checked })} className="h-4 w-4 accent-brand" /> Las reglas de los puntos necesitan aprobación de la madre</label>
       <div>
         <span className={label}>Guardián de precios</span>
         <div className="mt-1 grid gap-1.5 text-sm">

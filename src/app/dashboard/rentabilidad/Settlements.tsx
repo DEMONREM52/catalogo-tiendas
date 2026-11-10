@@ -668,7 +668,7 @@ function PoolSettings({ storeId, point, settings, hasOpen, onSaved }: {
             </div>
           ) : null}
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-500" />
+            <input type="checkbox" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
             <span><b>Restar gastos y nómina antes de repartir</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>Arriendo, servicios, nómina… registrados en Gastos para {isMother ? "la madre" : "este punto"}. Apagado: se reparte solo la ganancia.</span></span>
           </label>
           {deduct && deductChanged ? <Field label="Restar gastos desde"><DateField value={deductFrom} max={todayIso()} onChange={setDeductFrom} /></Field> : null}

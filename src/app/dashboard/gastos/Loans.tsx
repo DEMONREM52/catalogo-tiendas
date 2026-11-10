@@ -492,7 +492,7 @@ function LoanForm({ storeId, points, employees, initial, onClose, onSaved }: { s
         ) : (
           <div className="space-y-2">
             <Field label="Valor prestado"><MoneyField value={amount} onChange={setAmount} big /></Field>
-            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={fromCash} disabled={editing} onChange={(e) => setFromCash(e.target.checked)} className="h-5 w-5 accent-violet-500" /> 💵 Sale de la caja del punto (queda como salida de caja)</label>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={fromCash} disabled={editing} onChange={(e) => setFromCash(e.target.checked)} className="h-5 w-5 accent-brand" /> 💵 Sale de la caja del punto (queda como salida de caja)</label>
           </div>
         )}
 

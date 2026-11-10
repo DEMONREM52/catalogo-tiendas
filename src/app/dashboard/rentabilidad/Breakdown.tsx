@@ -153,7 +153,7 @@ export function BreakdownSheet({ storeId, point, settlementId, title, onClose }:
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar factura, producto, vendedor o cliente…" className="w-full rounded-xl border py-2 pr-3 text-sm" style={{ ...inputStyle, paddingLeft: "2.2rem" }} />
             </label>
-            <label className="inline-flex items-center gap-1.5 text-xs font-semibold"><input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} className="accent-violet-500" /> Solo con avisos</label>
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold"><input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} className="accent-brand" /> Solo con avisos</label>
             <ExportGate><button type="button" onClick={exportCsv} className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}><Download size={13} /> Excel</button></ExportGate>
             <button type="button" onClick={print} className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}><Printer size={13} /> Imprimir / PDF</button>
           </div>

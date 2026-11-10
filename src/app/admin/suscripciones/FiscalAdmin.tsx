@@ -156,7 +156,7 @@ export function FiscalAdmin() {
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => void editAddon(null)} className="rounded-xl bg-violet-600 px-3 py-2 text-sm font-bold text-white">+ Paquete</button>
+        <button type="button" onClick={() => void editAddon(null)} className="rounded-xl bg-brand px-3 py-2 text-sm font-bold text-on-brand">+ Paquete</button>
         <button type="button" onClick={() => void setStoreAddon()} className="rounded-xl border px-3 py-2 text-sm font-bold" style={box}>Dar / quitar a una tienda</button>
         <button type="button" onClick={() => void closeMonth()} className="rounded-xl border px-3 py-2 text-sm font-bold" style={box}>Cerrar un mes</button>
         <button type="button" onClick={() => void settings()} className="rounded-xl border px-3 py-2 text-sm font-bold" style={box}>Ajustes</button>

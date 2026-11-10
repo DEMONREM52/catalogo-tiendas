@@ -19,7 +19,7 @@ type Line = { product_id: string; name: string; sku: string | null; qty: number;
 export type PrefillLine = { product_id: string; name: string; sku: string | null; qty?: number; levels: Record<string, number> };
 type Suggestion = { product_id: string; name: string; sku: string | null; image_url: string | null; here: number; there: number };
 
-const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fuchsia-500/25";
+const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-brand/25";
 const fieldStyle = { borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", color: "var(--t-text)" };
 
 /** Nuevo pedido interno: de qué punto, a quién, qué productos (viendo lo que hay allá). */

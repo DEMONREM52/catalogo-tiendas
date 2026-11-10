@@ -258,7 +258,7 @@ export default function DashboardHome() {
           </button>
         </div>
       ) : loadError ? (
-        <div className="rounded-[24px] border border-rose-400/25 p-5 text-sm text-rose-700 dark:text-rose-200">{loadError}</div>
+        <div className="rounded-[24px] border border-danger/25 p-5 text-sm text-danger ">{loadError}</div>
       ) : null}
 
       {isAdmin ? (

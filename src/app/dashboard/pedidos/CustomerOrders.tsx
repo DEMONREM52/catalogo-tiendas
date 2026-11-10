@@ -556,8 +556,8 @@ export function CustomerOrders() {
                   <details className="relative sm:hidden">
                     <summary className="btn-soft grid h-8 w-9 cursor-pointer list-none place-items-center px-0 text-base font-black [&::-webkit-details-marker]:hidden" aria-label="Más opciones">⋯</summary>
                     <div role="menu" className="absolute bottom-full right-0 z-30 mb-2 grid w-44 gap-1 rounded-2xl border p-1.5 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-fuchsia-500/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void openOrder(o); }}>📄 Detalle</button>
-                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-fuchsia-500/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void copyLink(o); }}>🔗 Copiar enlace</button>
+                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-brand/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void openOrder(o); }}>📄 Detalle</button>
+                      <button type="button" role="menuitem" className="rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-brand/10" onClick={(e) => { e.currentTarget.closest("details")?.removeAttribute("open"); void copyLink(o); }}>🔗 Copiar enlace</button>
                     </div>
                   </details>
                   {toConfirm ? (

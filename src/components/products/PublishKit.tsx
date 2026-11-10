@@ -192,7 +192,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border" style={{ borderColor: "color-mix(in oklab, #ec4899 40%, var(--t-card-border))", background: "color-mix(in oklab, #ec4899 6%, transparent)" }}>
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-black">
-        <Sparkles size={14} className="text-pink-500" /> Kit para publicar
+        <Sparkles size={14} className="text-brand" /> Kit para publicar
         <span className="font-normal" style={{ color: "var(--t-muted)" }}>· mensaje, fotos y WhatsApp</span>
         <motion.span className="ml-auto" animate={{ rotate: open ? 180 : 0 }}><ChevronDown size={14} /></motion.span>
       </button>

@@ -234,7 +234,7 @@ export function Simulator({ storeId }: { storeId: string }) {
               <NumField label="Descuento esperado" value={discountPct} onChange={setDiscountPct} suffix="%" max={100} hint="Reduce la venta neta, no el precio" />
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={allowBelow} onChange={(e) => setAllowBelow(e.target.checked)} className="h-4 w-4 accent-violet-500" />
+              <input type="checkbox" checked={allowBelow} onChange={(e) => setAllowBelow(e.target.checked)} className="h-4 w-4 accent-brand" />
               Permitir simular por debajo del costo (requiere autorización en la vida real)
             </label>
           </div>

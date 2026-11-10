@@ -657,6 +657,20 @@ html[data-reduce-motion="on"] *::after {
 @theme inline {
   --color-background: var(--t-bg);
   --color-foreground: var(--t-text);
+  /* Colores del tema como clases (Amethyst etapa 8): bg-brand/10, text-brand, border-line, text-danger…
+     Siguen el tema de cada persona en vez de un violeta o fucsia fijo. Los estados son fijos en todos los temas. */
+  --color-brand: var(--t-accent);
+  --color-brand-2: var(--t-accent2);
+  --color-brand-3: var(--t-accent3);
+  --color-on-brand: var(--t-on-accent);
+  --color-ink: var(--t-text);
+  --color-muted: var(--t-muted);
+  --color-line: var(--t-card-border);
+  --color-card: var(--t-card-bg);
+  --color-success: var(--t-success);
+  --color-warning: var(--t-warning);
+  --color-danger: var(--t-danger);
+  --color-info: var(--t-info);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 }

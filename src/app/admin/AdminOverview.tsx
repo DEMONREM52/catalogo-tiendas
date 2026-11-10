@@ -311,10 +311,10 @@ function RevenueChart({
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs" style={{ color: "var(--t-muted)" }}>
-        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> Pedidos web confirmados</span>
-        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-500" /> Facturas POS</span>
+        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-brand" /> Pedidos web confirmados</span>
+        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-brand" /> Facturas POS</span>
         <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> Documentos de facturación</span>
-        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-fuchsia-500" /> Pagos POS / facturación</span>
+        <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-brand" /> Pagos POS / facturación</span>
       </div>
       <div className="mt-5 grid h-52 grid-cols-7 items-end gap-2 sm:grid-cols-14">
         {chart.days.map((day) => (
@@ -379,7 +379,7 @@ function OrdersChart({ orders, endDate, period }: { orders: OrderRow[]; endDate:
         {days.map((day) => (
           <div key={day.key} className="flex h-full min-w-0 flex-col items-center justify-end gap-2" title={`${day.label}: ${day.count} pedidos`}>
             <div className="flex h-full w-full items-end">
-              <div className="w-full rounded-t-md bg-indigo-400" style={{ height: `${Math.max(day.count ? 5 : 1, (day.count / max) * 100)}%`, opacity: day.count ? 1 : 0.2 }} />
+              <div className="w-full rounded-t-md bg-brand" style={{ height: `${Math.max(day.count ? 5 : 1, (day.count / max) * 100)}%`, opacity: day.count ? 1 : 0.2 }} />
             </div>
             <span className="truncate text-[10px]" style={{ color: "var(--t-muted)" }}>{day.label}</span>
           </div>
@@ -1239,7 +1239,7 @@ export default function AdminOverview() {
                       <span style={{ color: "var(--t-muted)" }}>{store.count}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--t-card-bg)" }}>
-                      <div className="h-full rounded-full bg-fuchsia-500" style={{ width: `${(store.count / max) * 100}%` }} />
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${(store.count / max) * 100}%` }} />
                     </div>
                   </div>
                 );

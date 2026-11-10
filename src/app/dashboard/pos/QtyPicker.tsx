@@ -57,7 +57,7 @@ export function QtyPicker({ product, price, stock, inCart, onAdd, onClose, money
                   style={qty === n ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>{n}</button>
               ))}
             </div>
-            {stock !== null && max <= 0 ? <p className="mt-2 text-xs font-semibold text-rose-500">Ya agregaste todas las unidades disponibles.</p> : null}
+            {stock !== null && max <= 0 ? <p className="mt-2 text-xs font-semibold text-danger">Ya agregaste todas las unidades disponibles.</p> : null}
             <button type="button" disabled={stock !== null && max <= 0} onClick={() => onAdd(qty)}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-black text-white shadow-lg active:scale-[0.99] disabled:opacity-50"
               style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>

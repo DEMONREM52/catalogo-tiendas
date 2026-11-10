@@ -24,7 +24,7 @@ const emptyDraft = (kinds: ThirdKind[] = ["customer"]): Draft => ({
   credit_days: 30, credit_blocked: false, credit_blocked_reason: null,
 });
 
-const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fuchsia-500/25";
+const field = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-brand/25";
 const fieldStyle = { borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)", color: "var(--t-text)" };
 
 function Section({ icon, title, children, hint }: { icon: ReactNode; title: string; children: ReactNode; hint?: string }) {
@@ -529,7 +529,7 @@ export function ThirdPartyForm({
                   <b className="flex items-center gap-2 text-sm"><StickyNote size={15} /> Tercero activo</b>
                   <span className="text-xs" style={{ color: "var(--t-muted)" }}>Los inactivos no aparecen para vender ni comprar, pero conservan su historial.</span>
                 </span>
-                <input type="checkbox" className="h-5 w-5 accent-fuchsia-600" checked={draft.active} onChange={(e) => patch({ active: e.target.checked })} />
+                <input type="checkbox" className="h-5 w-5 accent-brand" checked={draft.active} onChange={(e) => patch({ active: e.target.checked })} />
               </label>
             </div>
 

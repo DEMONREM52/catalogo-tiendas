@@ -29,7 +29,7 @@ function cx(...s: Array<string | false | null | undefined>) {
 function kindColor(kind: Noti["kind"]) {
   if (kind === "expired") return "border-red-500/40 bg-red-500/15 text-red-100";
   if (kind === "d3") return "border-red-500/30 bg-red-500/10 text-red-100";
-  if (kind === "d5") return "border-rose-400/30 bg-rose-400/10 text-rose-100";
+  if (kind === "d5") return "border-danger/30 bg-danger/10 text-danger";
   if (kind === "d0") return "border-amber-400/30 bg-amber-400/10 text-amber-100";
   return "border-amber-400/30 bg-amber-400/10 text-amber-100";
 }
@@ -159,7 +159,7 @@ export default function AdminBell() {
       >
         <span className="text-[18px]">🔔</span>
         {unread > 0 ? (
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-fuchsia-500 px-1 text-[11px] font-bold text-black">
+          <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-brand px-1 text-[11px] font-bold text-black">
             {unread > 99 ? "99+" : unread}
           </span>
         ) : null}

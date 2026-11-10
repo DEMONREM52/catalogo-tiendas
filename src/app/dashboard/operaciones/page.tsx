@@ -248,7 +248,7 @@ export default function OperationsPage() {
         </div>
       </Hero>
 
-      {error ? <p className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">⚠️ {error} <button type="button" className="ml-2 underline" onClick={() => void load()}>Reintentar</button></p> : null}
+      {error ? <p className="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm">⚠️ {error} <button type="button" className="ml-2 underline" onClick={() => void load()}>Reintentar</button></p> : null}
 
       {!data ? <Skeleton /> : (
         <>

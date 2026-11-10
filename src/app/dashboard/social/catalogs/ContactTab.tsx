@@ -132,7 +132,7 @@ export function ContactTab({
                   <input className={inputCls} style={inputStyle} inputMode="tel" value={c.phone} placeholder="Número de WhatsApp" onChange={(e) => patchChannel(c.id, { phone: e.target.value })} />
                   <div className="flex items-center gap-2">
                     <Switch checked={c.active} onChange={(next) => patchChannel(c.id, { active: next })} label={`Activar ${c.label}`} />
-                    <button type="button" onClick={() => setChannels(channels.filter((x) => x.id !== c.id))} className="grid h-8 w-8 place-items-center rounded-lg border text-rose-500" style={softBox} aria-label="Quitar asesor"><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => setChannels(channels.filter((x) => x.id !== c.id))} className="grid h-8 w-8 place-items-center rounded-lg border text-danger" style={softBox} aria-label="Quitar asesor"><Trash2 size={14} /></button>
                   </div>
                 </motion.div>
               ))}
@@ -187,7 +187,7 @@ export function ContactTab({
                   <div className="flex items-center justify-end gap-2 sm:col-span-2">
                     <span className="text-xs" style={{ color: "var(--t-muted)" }}>Visible</span>
                     <Switch checked={l.active} onChange={(next) => patchLocation(l.id, { active: next })} label={`Mostrar ${l.name}`} />
-                    <button type="button" onClick={() => patch({ locations: draft.locations.filter((x) => x.id !== l.id) })} className="grid h-8 w-8 place-items-center rounded-lg border text-rose-500" style={softBox} aria-label="Quitar ubicación"><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => patch({ locations: draft.locations.filter((x) => x.id !== l.id) })} className="grid h-8 w-8 place-items-center rounded-lg border text-danger" style={softBox} aria-label="Quitar ubicación"><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>

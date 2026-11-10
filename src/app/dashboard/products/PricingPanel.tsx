@@ -225,7 +225,7 @@ export function PricingPanel({ storeId, productId, cost: avgCost, costKnown, pri
         ) : (
           <>
             <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
-              <input type="checkbox" checked={same} onChange={(e) => { setSame(e.target.checked); if (e.target.checked) setAll(markups[0]); }} className="h-4 w-4 accent-violet-500" />
+              <input type="checkbox" checked={same} onChange={(e) => { setSame(e.target.checked); if (e.target.checked) setAll(markups[0]); }} className="h-4 w-4 accent-brand" />
               El mismo % para los 5 precios
             </label>
             {same ? (

@@ -116,7 +116,7 @@ function RecurringForm({ storeId, points, cat, initial, onClose, onSaved }: { st
   return (
     <Sheet title={initial ? "Editar gasto fijo" : "Nuevo gasto fijo"} subtitle="Se crea solo cada vez que toca" icon={<Repeat size={18} />} onClose={onClose} dirty={dirty} footer={
       <>
-        {initial ? <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-4 w-4 accent-violet-500" /> Activo</label> : null}
+        {initial ? <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="h-4 w-4 accent-brand" /> Activo</label> : null}
         <span className="min-w-0 flex-1 text-right text-xs" style={{ color: missing ? "#eda100" : "var(--t-muted)" }}>{missing ? `⚠️ ${missing}` : `≈ ${cop(Math.round(monthly))} al mes`}</span>
         <button type="button" disabled={Boolean(missing) || saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}><Check size={16} /> {saving ? "Guardando…" : "Guardar"}</button>
       </>
@@ -254,7 +254,7 @@ function CategoryForm({ storeId, initial, onClose, onSaved }: { storeId: string;
   return (
     <Sheet title={initial ? "Editar categoría" : "Nueva categoría"} icon={<Tags size={18} />} onClose={onClose} dirty={JSON.stringify(f) !== JSON.stringify(start)} footer={
       <>
-        {initial ? <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} className="h-4 w-4 accent-violet-500" /> Activa</label> : null}
+        {initial ? <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} className="h-4 w-4 accent-brand" /> Activa</label> : null}
         <span className="flex-1" />
         <button type="button" disabled={f.name.trim().length < 2 || saving} onClick={() => void save()} className={primaryBtn} style={primaryBg}><Check size={16} /> Guardar</button>
       </>

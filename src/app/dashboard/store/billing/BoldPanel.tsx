@@ -223,7 +223,7 @@ export default function BoldPanel({ storeId, isOwner }: { storeId: string | null
                     {a.has_test ? `🧪 ${a.test_identity}` : "🧪 sin llaves"} · {a.has_prod ? `🚀 ${a.prod_identity}` : "🚀 sin llaves"}
                     {uses ? ` · ${uses} ${uses === 1 ? "punto" : "puntos"}` : ""}{a.is_default ? " · y los puntos sin cuenta" : ""}
                   </p>
-                  {a.last_error ? <p className="mt-1 text-xs font-bold text-rose-500">❌ {a.last_error}</p> : a.last_ok_at ? <p className="mt-1 text-xs text-emerald-500">✅ Conexión probada el {when(a.last_ok_at)}</p> : null}
+                  {a.last_error ? <p className="mt-1 text-xs font-bold text-danger">❌ {a.last_error}</p> : a.last_ok_at ? <p className="mt-1 text-xs text-emerald-500">✅ Conexión probada el {when(a.last_ok_at)}</p> : null}
                   {a.last_event_at ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Último aviso de Bold: {when(a.last_event_at)}</p> : null}
                 </div>
                 <div className="grid grid-cols-2 overflow-hidden rounded-xl border text-xs font-black" style={box}>
@@ -256,7 +256,7 @@ export default function BoldPanel({ storeId, isOwner }: { storeId: string | null
                 <button type="button" disabled={busy === `test-${a.id}`} onClick={() => void test(a)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold disabled:opacity-50" style={box}><Plug size={13} /> {busy === `test-${a.id}` ? "Probando…" : "Probar conexión"}</button>
                 {!a.is_default ? <button type="button" onClick={() => void act("default", { id: a.id }, `def-${a.id}`, "Ahora es la de por defecto")} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold" style={box}><Star size={13} /> Usar por defecto</button> : null}
                 <button type="button" onClick={() => void act("save", { id: a.id, name: a.name, mode: a.mode, active: !a.active }, `on-${a.id}`, a.active ? "Cuenta apagada" : "Cuenta encendida")} className="rounded-xl border px-3 py-1.5 text-xs font-bold" style={box}>{a.active ? "⏸ Apagar" : "▶ Encender"}</button>
-                <button type="button" onClick={() => void remove(a)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold text-rose-500" style={box}><Trash2 size={13} /> Borrar</button>
+                <button type="button" onClick={() => void remove(a)} className="inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold text-danger" style={box}><Trash2 size={13} /> Borrar</button>
               </div>
             </article>
           );

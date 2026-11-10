@@ -83,7 +83,7 @@ function CardMenu({ label, icon, items, title }: { label: string; icon: React.Re
           <motion.div initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.97 }} transition={{ duration: 0.15 }}
             className="absolute bottom-full right-0 z-30 mb-2 w-52 overflow-hidden rounded-2xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
             {items.map((it) => {
-              const cls = `flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition hover:bg-[color:var(--t-card-bg-soft)] disabled:opacity-50 ${it.danger ? "text-rose-500" : ""}`;
+              const cls = `flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition hover:bg-[color:var(--t-card-bg-soft)] disabled:opacity-50 ${it.danger ? "text-danger" : ""}`;
               return it.href ? (
                 <a key={it.label} href={it.href} target="_blank" rel="noreferrer" className={cls}>{it.icon}{it.label}</a>
               ) : (

@@ -74,9 +74,9 @@ const PAGE_SIZE = 24;
 const SOCIAL_PUBLISHING_TOOLS_ENABLED: boolean = false;
 
 const fieldClass =
-  "w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-fuchsia-400 focus:ring-4 focus:ring-fuchsia-200/50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-fuchsia-400";
+  "w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand/40 focus:ring-4 focus:ring-brand/50 dark:border-white/10 dark:bg-white/5 dark:text-white ";
 const cardClass =
-  "rounded-[18px] border border-slate-200/70 bg-white/85 shadow-lg shadow-violet-950/[0.035] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#171421]/75";
+  "rounded-[18px] border border-slate-200/70 bg-white/85 shadow-lg shadow-brand/[0.035] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#171421]/75";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => {
@@ -851,10 +851,10 @@ export default function SocialDashboard() {
   return (
     <main className="min-h-screen space-y-6 px-3 py-4 text-slate-900 dark:text-white sm:p-6">
       <header className={`${cardClass} relative overflow-hidden p-5 sm:p-8`}>
-        <div className="pointer-events-none absolute -right-10 -top-24 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-10 -top-24 h-64 w-64 rounded-full bg-brand/20 blur-3xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-700 dark:text-fuchsia-300">
+            <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.2em] text-brand ">
               <Sparkles size={16} /> RemHub Social
             </p>
             <h1 className="mt-2 text-3xl font-black sm:text-4xl">Campañas de tu catálogo.</h1>
@@ -871,7 +871,7 @@ export default function SocialDashboard() {
                 setShowCampaignForm(true);
               }
             }}
-            className="inline-flex items-center gap-2 rounded-2xl bg-fuchsia-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 transition hover:bg-fuchsia-700"
+            className="inline-flex items-center gap-2 rounded-2xl bg-brand px-4 py-3 text-sm font-bold text-on-brand shadow-lg shadow-brand/20 transition hover:brightness-110"
           >
             <Plus size={17} /> Nueva campaña
           </button>
@@ -879,7 +879,7 @@ export default function SocialDashboard() {
       </header>
 
       {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-800 dark:text-rose-200">
+        <div role="alert" className="rounded-2xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger ">
           {error}
         </div>
       ) : null}
@@ -888,7 +888,7 @@ export default function SocialDashboard() {
         <form id="campaign-form" onSubmit={(event) => void createCampaign(event)} className={`${cardClass} space-y-4 p-5 transition`}>
           <div>
             <h2 className="flex items-center gap-2 text-xl font-bold">
-              {editingCampaignId ? <Pencil size={18} className="text-fuchsia-600" /> : <Sparkles size={18} className="text-fuchsia-600" />}
+              {editingCampaignId ? <Pencil size={18} className="text-brand" /> : <Sparkles size={18} className="text-brand" />}
               {editingCampaignId ? "Editar campaña del catálogo" : "Crear campaña para el catálogo"}
             </h2>
             <p className="text-sm opacity-70">Agrega una portada, asígnala a una categoría y elige los productos que aparecerán en el catálogo de {store?.name}.</p>
@@ -909,7 +909,7 @@ export default function SocialDashboard() {
                 type="checkbox"
                 checked={campaignIsPublic}
                 onChange={(event) => setCampaignIsPublic(event.target.checked)}
-                className="h-4 w-4 accent-fuchsia-600"
+                className="h-4 w-4 accent-brand"
               />
               <span><strong>Mostrar en el catálogo</strong><span className="mt-0.5 block text-xs font-normal opacity-65">Si lo desactivas, solo será visible en RemHub Social.</span></span>
             </label>
@@ -920,7 +920,7 @@ export default function SocialDashboard() {
                   <button
                     type="button"
                     onClick={() => setCampaignCatalogIds([])}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${campaignCatalogIds.length === 0 ? "border-fuchsia-500 bg-fuchsia-500/15" : "border-current/15"}`}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${campaignCatalogIds.length === 0 ? "border-brand bg-brand/15" : "border-current/15"}`}
                   >
                     🌐 Todos los catálogos
                   </button>
@@ -933,7 +933,7 @@ export default function SocialDashboard() {
                         onClick={() => setCampaignCatalogIds((current) =>
                           current.includes(option.id) ? current.filter((id) => id !== option.id) : [...current, option.id],
                         )}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${selected ? "border-fuchsia-500 bg-fuchsia-500/15" : "border-current/15"}`}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${selected ? "border-brand bg-brand/15" : "border-current/15"}`}
                       >
                         {selected ? "✓ " : ""}{option.name}
                       </button>
@@ -960,7 +960,7 @@ export default function SocialDashboard() {
           </div>
           <div className="grid max-h-80 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-3">
             {productOptions.map((product) => (
-              <label key={product.id} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-current/10 p-2.5 text-sm transition hover:border-fuchsia-500/40 hover:bg-fuchsia-500/5">
+              <label key={product.id} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-current/10 p-2.5 text-sm transition hover:border-brand/40 hover:bg-brand/5">
                 <input
                   type="checkbox"
                   checked={campaignProductIds.includes(product.id)}
@@ -971,7 +971,7 @@ export default function SocialDashboard() {
                 {product.image_url ? (
                   <img src={product.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" loading="lazy" />
                 ) : (
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-fuchsia-500/10 text-lg">📦</span>
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-brand/10 text-lg">📦</span>
                 )}
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{product.name}</span>
@@ -987,7 +987,7 @@ export default function SocialDashboard() {
               <button type="button" disabled={saving} onClick={resetCampaignForm} className="rounded-xl border border-current/10 px-4 py-2 text-sm font-semibold disabled:opacity-50">
                 Cancelar
               </button>
-              <button disabled={saving || campaignProductIds.length === 0 || !campaignCoverUrl || !campaignCategoryId} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:opacity-50">
+              <button disabled={saving || campaignProductIds.length === 0 || !campaignCoverUrl || !campaignCategoryId} className="rounded-xl bg-brand px-4 py-2 text-sm font-bold text-on-brand transition hover:brightness-110 disabled:opacity-50">
                 {saving ? "Guardando…" : editingCampaignId ? "Guardar cambios" : "Guardar campaña"}
               </button>
             </div>
@@ -996,9 +996,9 @@ export default function SocialDashboard() {
       ) : null}
 
       {SOCIAL_PUBLISHING_TOOLS_ENABLED && <section id="social-composer" className={`${cardClass} overflow-hidden`}>
-        <div className="border-b border-current/10 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-amber-500/10 p-5">
+        <div className="border-b border-current/10 bg-gradient-to-r from-brand/10 via-brand/10 to-amber-500/10 p-5">
           <h2 className="flex items-center gap-2 text-xl font-black">
-            <Megaphone size={20} className="text-fuchsia-600" />
+            <Megaphone size={20} className="text-brand" />
             {editingId ? "Editar borrador" : "Preparar una publicación"}
           </h2>
           <p className="mt-1 text-sm opacity-70">El contenido queda guardado como borrador o preparado; no se publica automáticamente. Al solicitar revisión se detectan insultos, referencias sexuales, alcohol y frases de daño o amenaza.</p>
@@ -1017,11 +1017,11 @@ export default function SocialDashboard() {
               </select>
             </label>
             {chosenProduct ? (
-              <div className="flex items-center gap-3 rounded-2xl bg-violet-500/5 p-3">
+              <div className="flex items-center gap-3 rounded-2xl bg-brand/5 p-3">
                 {chosenProduct.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={chosenProduct.image_url} alt="" className="h-14 w-14 rounded-xl object-cover" />
-                ) : <div className="grid h-14 w-14 place-items-center rounded-xl bg-fuchsia-500/10">📦</div>}
+                ) : <div className="grid h-14 w-14 place-items-center rounded-xl bg-brand/10">📦</div>}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{chosenProduct.name}</p>
                   {store?.catalog_retail &&
@@ -1029,7 +1029,7 @@ export default function SocialDashboard() {
                     description: chosenProduct.description,
                     imageUrl: chosenProduct.image_url,
                   }) ? (
-                    <Link className="text-xs font-semibold text-violet-600 hover:underline" href={storeHref(store?.slug ?? "", `/producto/${chosenProduct.id}`)} prefetch={false} target="_blank">
+                    <Link className="text-xs font-semibold text-brand hover:underline" href={storeHref(store?.slug ?? "", `/producto/${chosenProduct.id}`)} prefetch={false} target="_blank">
                       Abrir página pública →
                     </Link>
                   ) : (
@@ -1103,7 +1103,7 @@ export default function SocialDashboard() {
                 type="button"
                 onClick={regenerateSuggestion}
                 disabled={!chosenProduct}
-                className="ml-2 text-xs font-bold text-violet-600 underline disabled:opacity-40"
+                className="ml-2 text-xs font-bold text-brand underline disabled:opacity-40"
               >
                 Actualizar sugerencia
               </button>
@@ -1112,7 +1112,7 @@ export default function SocialDashboard() {
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-3xl border border-fuchsia-300/40 bg-fuchsia-500/5 p-4 dark:border-fuchsia-300/15">
+            <div className="rounded-3xl border border-brand/40 bg-brand/5 p-4 dark:border-brand/15">
               <p className="font-bold">Vista previa · {platformName(platform)}</p>
               <p className="mt-1 text-xs opacity-60">Formato de texto. Verifica manualmente los requisitos actuales de cada red.</p>
               <div className="mt-4 rounded-2xl bg-white p-4 text-sm text-slate-800 shadow dark:bg-[#201c2d] dark:text-white">
@@ -1129,7 +1129,7 @@ export default function SocialDashboard() {
               </ul>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button disabled={saving || !chosenProduct} className="inline-flex items-center gap-2 rounded-2xl bg-fuchsia-600 px-5 py-3 font-bold text-white shadow-lg shadow-fuchsia-950/20 disabled:opacity-50">
+              <button disabled={saving || !chosenProduct} className="inline-flex items-center gap-2 rounded-2xl bg-brand px-5 py-3 font-bold text-on-brand shadow-lg shadow-brand/20 disabled:opacity-50">
                 <Sparkles size={17} /> {saving ? "Guardando…" : editingId ? "Guardar cambios" : "Guardar borrador"}
               </button>
               {editingId ? <button type="button" onClick={clearComposer} className="rounded-2xl border border-current/15 px-4 py-3 text-sm font-semibold">Cancelar edición</button> : null}
@@ -1160,7 +1160,7 @@ export default function SocialDashboard() {
         {loading ? <SkeletonList rows={5} label="Cargando actividad…" /> : null}
         {!loading && visiblePosts.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-fuchsia-500/10 text-fuchsia-700"><Megaphone /></div>
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand/10 text-brand"><Megaphone /></div>
             <p className="mt-3 font-bold">Aún no tienes publicaciones guardadas</p>
             <p className="mt-1 text-sm opacity-65">Prepara un borrador desde aquí o desde la edición de un producto.</p>
           </div>
@@ -1181,7 +1181,7 @@ export default function SocialDashboard() {
                   <span className="shrink-0 rounded-full border border-current/10 px-2.5 py-1 text-[11px] font-bold">{post.status}</span>
                 </div>
                 <p className="line-clamp-3 whitespace-pre-wrap text-sm opacity-75">{post.caption}</p>
-                {post.error_message ? <p className="rounded-xl bg-rose-500/10 p-2 text-xs text-rose-700 dark:text-rose-200">Error: {post.error_message}</p> : null}
+                {post.error_message ? <p className="rounded-xl bg-danger/10 p-2 text-xs text-danger ">Error: {post.error_message}</p> : null}
                 {post.policy_warnings?.length ? <p className="line-clamp-2 text-xs text-amber-700 dark:text-amber-300">{post.policy_warnings[0]}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   {post.product_id &&
@@ -1195,7 +1195,7 @@ export default function SocialDashboard() {
                     </Link>
                   ) : null}
                   <button type="button" onClick={() => void copyCaption(post)} className="inline-flex items-center gap-1 rounded-xl border border-current/10 px-3 py-2 text-xs font-semibold"><Copy size={14} /> Copiar</button>
-                  <button type="button" onClick={() => openPlatform(post)} className="rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-bold text-white">Abrir plataforma</button>
+                  <button type="button" onClick={() => openPlatform(post)} className="rounded-xl bg-brand px-3 py-2 text-xs font-bold text-on-brand">Abrir plataforma</button>
                   {post.image_urls?.[0] ? (
                     <a href={post.image_urls[0]} target="_blank" rel="noreferrer" className="rounded-xl border border-current/10 px-3 py-2 text-xs font-semibold">
                       Abrir foto
@@ -1209,7 +1209,7 @@ export default function SocialDashboard() {
                     type="button"
                     onClick={() => void deletePost(post)}
                     disabled={saving}
-                    className="inline-flex items-center gap-1 rounded-xl border border-rose-500/25 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-200"
+                    className="inline-flex items-center gap-1 rounded-xl border border-danger/25 px-3 py-2 text-xs font-semibold text-danger transition hover:bg-danger/10 disabled:opacity-50 "
                     aria-label={`Eliminar publicación ${post.title || ""}`}
                   >
                     <Trash2 size={14} /> Eliminar
@@ -1253,7 +1253,7 @@ export default function SocialDashboard() {
           <button type="button" onClick={() => {
             resetCampaignForm();
             setShowCampaignForm(true);
-          }} className="inline-flex items-center gap-2 rounded-xl border border-current/10 px-3 py-2 text-sm font-semibold transition hover:bg-fuchsia-500/10">
+          }} className="inline-flex items-center gap-2 rounded-xl border border-current/10 px-3 py-2 text-sm font-semibold transition hover:bg-brand/10">
             <Plus size={16} /> Crear
           </button>
         </div>
@@ -1294,7 +1294,7 @@ export default function SocialDashboard() {
           </label>
           <button type="button" onClick={() => { setCampaignSearch(""); setCampaignVisibilityFilter("all"); setCampaignCategoryFilter("all"); setCampaignSort("newest"); }}
             disabled={!campaignSearch && campaignVisibilityFilter === "all" && campaignCategoryFilter === "all" && campaignSort === "newest"}
-            className="rounded-xl border border-current/10 px-3 text-xs font-semibold transition hover:bg-fuchsia-500/10 disabled:opacity-40" title="Limpiar filtros">
+            className="rounded-xl border border-current/10 px-3 text-xs font-semibold transition hover:bg-brand/10 disabled:opacity-40" title="Limpiar filtros">
             Limpiar
           </button>
         </div>
@@ -1315,11 +1315,11 @@ export default function SocialDashboard() {
                 <div className="space-y-3 p-4">
                   {campaign.description ? <p className="line-clamp-2 text-sm opacity-70">{campaign.description}</p> : null}
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    <span className="rounded-full bg-fuchsia-500/10 px-2.5 py-1 font-semibold text-fuchsia-800 dark:text-fuchsia-200">
+                    <span className="rounded-full bg-brand/10 px-2.5 py-1 font-semibold text-brand ">
                       🏷️ {categories.find((category) => category.id === campaign.category_id)?.name ?? "Sin categoría"}
                     </span>
                     {catalogOptions.length ? (
-                      <span className="max-w-full truncate rounded-full bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-800 dark:text-violet-200">
+                      <span className="max-w-full truncate rounded-full bg-brand/10 px-2.5 py-1 font-semibold text-brand ">
                         🛍️ {campaign.catalog_ids?.length
                           ? catalogOptions.filter((option) => campaign.catalog_ids?.includes(option.id)).map((option) => option.name).join(", ") || "Catálogo eliminado"
                           : "Todos los catálogos"}
@@ -1339,7 +1339,7 @@ export default function SocialDashboard() {
                       <Power size={14} className={updatingCampaignId === campaign.id ? "animate-pulse" : ""} /> {campaign.is_public ? "Ocultar" : "Mostrar"}
                     </button>
                     <button type="button" onClick={() => void deleteCampaign(campaign)} disabled={saving}
-                      className="grid h-10 w-10 place-items-center rounded-xl border border-rose-500/25 text-rose-600 transition hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300"
+                      className="grid h-10 w-10 place-items-center rounded-xl border border-danger/25 text-danger transition hover:bg-danger/10 disabled:opacity-50 "
                       aria-label={`Eliminar campaña ${campaign.name}`} title="Eliminar campaña">
                       <Trash2 size={15} />
                     </button>

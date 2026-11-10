@@ -314,8 +314,8 @@ export function Chat({ storeId, thread, me, onBack, onActivity, focusMessage }: 
                 <AnimatePresence>
                   {attachMenu ? (
                     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-12 left-0 z-30 w-52 overflow-hidden rounded-2xl border p-1 shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-                      <button type="button" onClick={() => { setAttachMenu(false); gallery.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><ImageIcon size={17} className="text-violet-400" /> Fotos o videos</button>
-                      <button type="button" onClick={() => { setAttachMenu(false); camera.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Camera size={17} className="text-pink-400" /> Cámara</button>
+                      <button type="button" onClick={() => { setAttachMenu(false); gallery.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><ImageIcon size={17} className="text-brand" /> Fotos o videos</button>
+                      <button type="button" onClick={() => { setAttachMenu(false); camera.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Camera size={17} className="text-brand" /> Cámara</button>
                       <button type="button" onClick={() => { setAttachMenu(false); audioIn.current?.click(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Music size={17} className="text-amber-400" /> Archivo de audio</button>
                       <button type="button" onClick={() => { setAttachMenu(false); setProductPick(true); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-[color:var(--t-card-bg)]"><Package size={17} className="text-emerald-400" /> Producto (con existencias)</button>
                     </motion.div>
@@ -331,7 +331,7 @@ export function Chat({ storeId, thread, me, onBack, onActivity, focusMessage }: 
                 onPaste={(e) => { const f = [...e.clipboardData.files].filter((x) => kindOf(x)); if (f.length) { e.preventDefault(); void addFiles(f); } }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } if (e.key === "Escape") kit.cancelCompose(); }}
                 placeholder={kit.edit ? "Corrige el mensaje…" : pending.length ? "Agrega un texto (opcional)…" : thread.kind !== "direct" ? "Escribe un mensaje… (@ para mencionar)" : "Escribe un mensaje…"}
-                className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-fuchsia-500/25"
+                className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand/25"
                 style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} />
               {text.trim() || pending.length ? (
                 <button type="button" onClick={() => void send()} disabled={sending} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white disabled:opacity-40" style={{ background: "var(--t-accent)" }} aria-label="Enviar">{sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button>

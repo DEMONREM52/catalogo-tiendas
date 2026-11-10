@@ -154,7 +154,7 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
             <label className="block min-w-0 text-sm font-semibold">
               ID del Píxel de Meta
               <input
-                className="mt-1 w-full rounded-xl border px-3 py-2.5 font-mono text-sm tracking-wider outline-none transition focus:ring-2 focus:ring-fuchsia-500/25"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 font-mono text-sm tracking-wider outline-none transition focus:ring-2 focus:ring-brand/25"
                 style={{ ...inputStyle, borderColor: pixelValid ? inputStyle.borderColor : "#ef4444" }}
                 inputMode="numeric"
                 autoComplete="off"
@@ -169,7 +169,7 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
               </span>
             </label>
             <label className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-              <input type="checkbox" className="h-4 w-4 accent-fuchsia-600" checked={form.meta_enabled} onChange={(e) => setForm({ ...form, meta_enabled: e.target.checked })} />
+              <input type="checkbox" className="h-4 w-4 accent-brand" checked={form.meta_enabled} onChange={(e) => setForm({ ...form, meta_enabled: e.target.checked })} />
               <span className="text-sm font-semibold">Píxel encendido</span>
             </label>
           </div>
@@ -179,7 +179,7 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {([[true, "🚀 Solo en las landing pages", "El catálogo y las fichas de producto no envían nada a Meta. Ideal si la pauta va a tus landings."], [false, "🛍️ En todas las páginas de la tienda", "Catálogos, fichas de producto y landings."]] as const).map(([v, title, hint]) => (
                 <label key={String(v)} className="flex cursor-pointer items-start gap-3 rounded-xl border p-3" style={{ borderColor: form.landing_only === v ? "#a855f7" : "var(--t-card-border)" }}>
-                  <input type="radio" name="pixel-scope" className="mt-1 h-4 w-4 accent-fuchsia-600" checked={form.landing_only === v} disabled={noScope} onChange={() => setForm({ ...form, landing_only: v })} />
+                  <input type="radio" name="pixel-scope" className="mt-1 h-4 w-4 accent-brand" checked={form.landing_only === v} disabled={noScope} onChange={() => setForm({ ...form, landing_only: v })} />
                   <span><b className="block text-sm">{title}</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>{hint}</span></span>
                 </label>
               ))}
@@ -191,12 +191,12 @@ export function MarketingPanel({ storeId, storeSlug, canEdit, siteOrigin }: { st
             <p className="text-sm font-semibold">¿Qué quieres medir?</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <div className="flex items-start gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)", opacity: 0.85 }}>
-                <input type="checkbox" className="mt-1 h-4 w-4 accent-fuchsia-600" checked readOnly disabled />
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-brand" checked readOnly disabled />
                 <span><b className="block text-sm">Visitas</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>PageView · siempre activo</span></span>
               </div>
               {EVENTS.map(([key, label, hint]) => (
-                <label key={key} className="flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition hover:border-fuchsia-400/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
-                  <input type="checkbox" className="mt-1 h-4 w-4 accent-fuchsia-600" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
+                <label key={key} className="flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition hover:border-brand/40" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg-soft)" }}>
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
                   <span><b className="block text-sm">{label}</b><span className="block text-xs" style={{ color: "var(--t-muted)" }}>{hint}</span></span>
                 </label>
               ))}

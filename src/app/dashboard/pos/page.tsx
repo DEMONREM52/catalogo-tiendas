@@ -2635,7 +2635,7 @@ export default function PosPage() {
                 className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left shadow-[0_14px_40px_rgba(0,0,0,.35)]" style={{ background: "var(--t-bg-base)", borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
                 <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6)" }}>
                   <ShoppingCart size={17} />
-                  <motion.span key={units} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[11px] font-black text-white">{units}</motion.span>
+                  <motion.span key={units} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-black text-white">{units}</motion.span>
                 </span>
                 <span className="min-w-0 flex-1 leading-tight">
                   <motion.span key={total} initial={{ scale: 1.1 }} animate={{ scale: 1 }} className="block truncate text-base font-black tabular-nums">{money(total)}</motion.span>

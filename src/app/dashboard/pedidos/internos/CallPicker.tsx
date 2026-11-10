@@ -59,7 +59,7 @@ export function CallPicker({ open, video, title, load, onCall, onClose }: {
               {failed ? <p className="p-3 text-center text-sm" style={{ color: "var(--t-muted)" }}>No se pudo cargar la lista. Puedes llamar a los involucrados del pedido.</p> : null}
               {list?.map((c) => (
                 <label key={c.user_id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-[color:var(--t-card-bg)]">
-                  <input type="checkbox" checked={picked.has(c.user_id)} onChange={() => toggle(c.user_id)} className="h-5 w-5 accent-fuchsia-600" style={{ minHeight: 0, padding: 0 }} />
+                  <input type="checkbox" checked={picked.has(c.user_id)} onChange={() => toggle(c.user_id)} className="h-5 w-5 accent-brand" style={{ minHeight: 0, padding: 0 }} />
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black text-white" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>{(c.name.trim()[0] ?? "?").toUpperCase()}</span>
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-sm">{c.name}</b>
