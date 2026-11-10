@@ -13,9 +13,11 @@ import { WhatsAppProductLink } from "@/components/WhatsAppProductLink";
  * El precio final lo pone el catálogo (el mismo con el que se vende); allá se registra «agregar al carrito».
  * En la ficha queda además el botón de WhatsApp para preguntar.
  */
-export function BuyBox({ productId, name, price, stock, catalogPath, accessKey, whatsapp, shareText, money }: {
+export function BuyBox({ productId, name, price, stock, catalogPath, accessKey, whatsapp, shareText, money, storeSlug, explicit = true }: {
   productId: string; name: string; price: number; stock: number | null;
   catalogPath: string; accessKey: string | null; whatsapp: string | null; shareText: string;
+  /** Si el enlace no trae catálogo (explicit=false), se usa el último catálogo que visitó esta persona. */
+  storeSlug?: string; explicit?: boolean;
   money?: (n: number) => string;
 }) {
   const fmt = money ?? ((n: number) => `$${Math.round(n).toLocaleString("es-CO")}`);
@@ -25,14 +27,25 @@ export function BuyBox({ productId, name, price, stock, catalogPath, accessKey, 
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
+  const [target, setTarget] = useState<{ path: string; key: string | null; name: string | null }>({ path: catalogPath, key: accessKey, name: null });
+  useEffect(() => {
+    if (explicit || !storeSlug) return;
+    try {
+      const last = JSON.parse(window.localStorage.getItem(`remhub:last-catalog:${storeSlug.toLowerCase()}`) ?? "null") as { slug?: string; key?: string | null; name?: string; at?: number } | null;
+      if (last?.slug && last.slug !== "detal" && /^[a-z0-9][a-z0-9-]{0,47}$/i.test(last.slug) && Date.now() - Number(last.at ?? 0) < 7 * 86400_000) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTarget({ path: `/${storeSlug}/${last.slug}`, key: last.key ?? null, name: last.name ?? null });
+      }
+    } catch { /* sin almacenamiento */ }
+  }, [explicit, storeSlug]);
 
   const go = (buyNow: boolean) => {
     const p = new URLSearchParams();
-    if (accessKey) p.set("key", accessKey);
+    if (target.key) p.set("key", target.key);
     p.set("agregar", productId);
     p.set("cant", String(qty));
     if (buyNow) p.set("comprar", "1");
-    window.location.href = `${catalogPath}?${p.toString()}`;
+    window.location.href = `${target.path}?${p.toString()}`;
   };
 
   const stepper = (big: boolean) => (
@@ -54,6 +67,7 @@ export function BuyBox({ productId, name, price, stock, catalogPath, accessKey, 
         <button type="button" onClick={() => go(true)} className="buy-now-btn buy-cta flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-lg font-black text-white shadow-xl transition hover:-translate-y-0.5 active:scale-[.98]">
           <Zap size={20} aria-hidden /> Comprar ahora
         </button>
+        {target.name ? <p className="text-xs font-bold opacity-80">🛍️ Se agrega en tu catálogo «{target.name}» (con su precio).</p> : null}
         {whatsapp ? <div className="[&>button]:w-full [&>button]:justify-center"><WhatsAppProductLink phone={whatsapp} productText={shareText} /></div> : null}
       </div>
 

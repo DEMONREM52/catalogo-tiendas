@@ -236,6 +236,11 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
   const { initCart, addItem, addItems, setQty, open: openCart, cart } = useCart();
   // Igual en el servidor y en el navegador: en el espacio de la tienda, sin el nombre (sin redirección por clic).
   const pathFor = (path: string) => (storeHost ? path : `/${store?.slug ?? slug}${path}`);
+  // Página del producto dentro de ESTE catálogo (Zamora, mayoristas…): ahí «Comprar» y el carrito vuelven aquí.
+  const productUrl = (id: string) => {
+    const cs = catalog?.slug ?? (safeMode !== "detal" ? safeMode : null);
+    return pathFor(`/producto/${id}${cs ? `?catalogo=${encodeURIComponent(cs)}${key ? `&key=${encodeURIComponent(key)}` : ""}` : ""}`);
+  };
 
   // «Volver a pedir» desde un comprobante (?reorder=<token>): llena el carrito con esos productos
   // a los precios de hoy de este catálogo; el cliente lo puede cambiar antes de enviarlo.
@@ -320,6 +325,14 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, store?.id, cartStoreId]);
+
+  // Último catálogo visitado en este equipo: si alguien abre un producto sin catálogo en el enlace, el carrito vuelve aquí.
+  useEffect(() => {
+    if (!store?.slug) return;
+    const cs = catalog?.slug ?? safeMode;
+    const name = catalog?.name ?? (safeMode === "mayor" ? "Por mayor" : "Al detal");
+    try { window.localStorage.setItem(`remhub:last-catalog:${store.slug.toLowerCase()}`, JSON.stringify({ slug: cs, key, name, at: Date.now() })); } catch { /* sin almacenamiento */ }
+  }, [store?.slug, catalog?.slug, catalog?.name, safeMode, key]);
 
   // Lo más vendido de la tienda (solo el orden; precios y existencias de este catálogo).
   const [bestSellers, setBestSellers] = useState<PublicItem[]>([]);
@@ -1773,7 +1786,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                   >
                     {product.image_url ? (
                       <Link
-                        href={pathFor(`/producto/${product.id}`)}
+                        href={productUrl(product.id)}
                         prefetch={false}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1898,9 +1911,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             deals={deals}
             title="🏷️ Ofertas especiales"
             money={money}
-            hrefFor={(id) => catalog
-              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
-              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            hrefFor={(id) => productUrl(id)}
             onAdd={(it) => void addToCartWithQty({
               id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
               active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
@@ -1914,9 +1925,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             deals={deals}
             title="Destacados"
             money={money}
-            hrefFor={(id) => catalog
-              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
-              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            hrefFor={(id) => productUrl(id)}
             onAdd={(it) => void addToCartWithQty({
               id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
               active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
@@ -1931,9 +1940,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             deals={deals}
             title={bestMeta.title}
             money={money}
-            hrefFor={(id) => catalog
-              ? pathFor(`/producto/${id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
-              : (safeMode === "detal" || store.catalog_retail) ? pathFor(`/producto/${id}`) : null}
+            hrefFor={(id) => productUrl(id)}
             onAdd={(it) => void addToCartWithQty({
               id: it.id, name: it.name, description: null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
               active: true, image_url: it.image_url, category_id: null, stock: it.stock, product_details: null,
@@ -1982,9 +1989,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                 const stockNum = isUnlimited ? Infinity : Math.max(0, Math.floor(Number(p.stock || 0)));
                 const isOut = !isUnlimited && stockNum <= 0;
                 // Sin el nombre de la tienda cuando ya estamos en su espacio (evita una redirección por clic).
-                const productPageUrl = catalog
-                  ? pathFor(`/producto/${p.id}?catalogo=${encodeURIComponent(catalog.slug)}${key ? `&key=${encodeURIComponent(key)}` : ""}`)
-                  : pathFor(`/producto/${p.id}`);
+                const productPageUrl = productUrl(p.id);
                 const canViewProductLanding =
                   (safeMode === "detal" || store.catalog_retail) &&
                   hasProductLanding(p.product_details, { description: p.description, imageUrl: p.image_url });

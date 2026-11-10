@@ -145,12 +145,15 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     );
   }
   const inCatalog = context?.available ? context : null;
+  // Catálogo clásico «Por mayor» (?catalogo=mayor) cuando no responde como catálogo: precio al por mayor y el carrito va allá.
+  const classic = !inCatalog && (catalogo ?? "").toLowerCase() === "mayor" ? { slug: "mayor", key: key ?? null } : null;
+  const via = inCatalog ?? classic;
   let storeQuery = sb
     .from("stores")
     .select("id,slug,name,active,catalog_retail,whatsapp")
     .eq("slug", decodeURIComponent(slug))
     .eq("active", true);
-  if (!inCatalog) storeQuery = storeQuery.eq("catalog_retail", true);
+  if (!via) storeQuery = storeQuery.eq("catalog_retail", true);
   const { data: store, error: storeError } = await storeQuery.maybeSingle();
   if (storeError) throw new Error(`No se pudo cargar la tienda: ${storeError.message}`);
   if (!store) notFound();
@@ -188,9 +191,9 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     ? getYoutubeEmbedUrl(details.video_url)
     : null;
   const description = details.long_description.trim() || product.description?.trim() || "";
-  const price = inCatalog ? inCatalog.price : Number(product.price_retail);
+  const price = inCatalog ? inCatalog.price : classic ? Number(product.price_wholesale) : Number(product.price_retail);
   const stock = inCatalog ? inCatalog.stock : product.stock;
-  const backHref = inCatalog ? catalogHref(store.slug, inCatalog) : `/${store.slug}/detal`;
+  const backHref = via ? catalogHref(store.slug, via) : `/${store.slug}/detal`;
   const finderCtx = { storeId: store.id, storeSlug: store.slug, catalogSlug: inCatalog?.slug ?? null, accessKey: inCatalog?.key ?? null };
   // El código se pide aparte: si el público aún no tiene permiso de verlo, la página carga igual.
   const { data: codeRow } = await sb.from("products").select("sku").eq("id", product.id).maybeSingle();
@@ -207,10 +210,10 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   });
 
   // Comprar: el catálogo de donde viene (o el clásico) recibe el producto en el carrito.
-  const catalogSlug = inCatalog?.slug ?? "detal";
+  const catalogSlug = via?.slug ?? "detal";
   const catalogPath = `/${store.slug}/${catalogSlug}`;
-  const keyQ = inCatalog?.key ? `key=${encodeURIComponent(inCatalog.key)}&` : "";
-  const productHref = (pid: string) => inCatalog ? `/${store.slug}/producto/${pid}?catalogo=${encodeURIComponent(inCatalog.slug)}${inCatalog.key ? `&key=${encodeURIComponent(inCatalog.key)}` : ""}` : `/${store.slug}/producto/${pid}`;
+  const keyQ = via?.key ? `key=${encodeURIComponent(via.key)}&` : "";
+  const productHref = (pid: string) => via ? `/${store.slug}/producto/${pid}?catalogo=${encodeURIComponent(via.slug)}${via.key ? `&key=${encodeURIComponent(via.key)}` : ""}` : `/${store.slug}/producto/${pid}`;
   const addHref = (pid: string) => `${catalogPath}?${keyQ}agregar=${pid}&cant=1`;
 
   // Lo más vendido y productos de la misma categoría (con el precio de este catálogo). Si algo falla, no se muestra.
@@ -220,7 +223,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   let bestTitle = "Lo más vendido";
   // Oferta de este producto en este catálogo (20261309): el precio de ahora ya viene con la oferta.
   let deals = new Map<string, PublicDeal>();
-  try { deals = await fetchPublicDeals(sb, store.slug, catalogSlug, inCatalog?.key ?? null); } catch { /* sin ofertas */ }
+  try { deals = await fetchPublicDeals(sb, store.slug, catalogSlug, via?.key ?? null); } catch { /* sin ofertas */ }
   const deal = deals.get(product.id) ?? null;
   const shownPrice = deal?.now && deal.now > 0 ? deal.now : Number(price);
   const endsText = deal?.before ? endsInText(deal.ends_at, Date.now()) : null;
@@ -237,7 +240,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
     const pos = bestIds.indexOf(product.id);
     if (pos >= 0 && bd?.badges !== false) bestRank = pos + 1;
     const relIds = ((sameCat.data ?? []) as Array<{ id: string }>).map((r) => r.id).filter((x) => !bestIds.includes(x));
-    const items = await fetchPublicItems(sb, { id: store.id, slug: store.slug }, catalogSlug, inCatalog?.key ?? null, [...bestIds, ...relIds]);
+    const items = await fetchPublicItems(sb, { id: store.id, slug: store.slug }, catalogSlug, via?.key ?? null, [...bestIds, ...relIds]);
     const withDeal = (x: PublicItem) => ({ ...x, price: deals.get(x.id)?.now || x.price });
     bestItems = bestIds.filter((x) => x !== product.id).map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).map(withDeal);
     relatedItems = relIds.map((x) => items.get(x)).filter((x): x is PublicItem => Boolean(x)).map(withDeal).slice(0, 10);
@@ -348,7 +351,7 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
 
               <div className="mt-auto pt-8">
                 <BuyBox productId={product.id} name={product.name} price={shownPrice || 0} stock={stock === null ? null : Number(stock)}
-                  catalogPath={catalogPath} accessKey={inCatalog?.key ?? null} whatsapp={store.whatsapp || null} shareText={shareText} />
+                  catalogPath={catalogPath} accessKey={via?.key ?? null} storeSlug={store.slug} explicit={Boolean(via)} whatsapp={store.whatsapp || null} shareText={shareText} />
                 <ul className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold">
                   {[
                     ["⚡", "Pides en un minuto"],
