@@ -7,6 +7,8 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cartUsesMinimums, useCart } from "./CartProvider";
 import { track } from "@/lib/tracking";
+import { CouponBox, useCartSession, useLeadAutosave, usePublicFeatures, validPhone, type AppliedCoupon } from "./CartExtras";
+import { ShippingBar, shippingReached } from "./ShippingBar";
 
 /* =========================
    Helpers
@@ -89,6 +91,7 @@ export function CartDrawer() {
     total,
     count,
     setCustomerName,
+    setCustomerWhatsapp,
     setCustomerNote,
     setContactTarget,
   } = useCart();
@@ -103,6 +106,19 @@ export function CartDrawer() {
   const [nameError, setNameError] = useState(false);
   const [namePulse, setNamePulse] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Opcional (20261312): solo en catálogos de RemHub Social y si la tienda lo encendió.
+  const features = usePublicFeatures(cart?.storeSlug, cart?.catalog?.slug ?? null, Boolean(cart?.catalog) && isOpen);
+  const { session, renew: renewSession } = useCartSession(cart?.storeId, cart?.mode);
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  const activeCoupon = features.cupones && cart?.items.length ? coupon : null;
+  const discount = activeCoupon?.discount ?? 0;
+  const grandTotal = Math.max(0, total - discount);
+  const shipCfg = features.envio_gratis;
+  useLeadAutosave({
+    on: features.carritos, storeSlug: cart?.storeSlug, catalog: cart?.catalog ?? null, session,
+    name: cart?.customerName ?? "", phone: cart?.customerWhatsapp ?? "", items: cart?.items ?? [], paused: sending,
+  });
 
   function minAllowed(i: { minWholesale?: number | null }) {
     if (!cart) return 1;
@@ -148,12 +164,17 @@ export function CartDrawer() {
     });
 
     lines.push("");
-    lines.push(`TOTAL: ${money(total)}`);
+    if (activeCoupon && discount > 0) {
+      lines.push(`Subtotal: ${money(total)}`);
+      lines.push(`🎟️ Cupón ${activeCoupon.code}: -${money(discount)}`);
+    }
+    if (shipCfg && shippingReached(grandTotal, shipCfg) && shipCfg.line) lines.push(shipCfg.line);
+    lines.push(`TOTAL: ${money(grandTotal)}`);
     lines.push("");
     lines.push(`✅ Quiero confirmar este pedido.`);
 
     return lines.join("\n");
-  }, [cart, total]);
+  }, [cart, total, activeCoupon, discount, grandTotal, shipCfg]);
 
   function bumpNameError() {
     setNameError(true);
@@ -445,16 +466,26 @@ export function CartDrawer() {
       const sb = supabaseBrowser();
 
       // Los catálogos de RemHub Social calculan precios y existencias en el servidor.
-      const { data, error } = cart.catalog
-        ? await sb.rpc("catalog_create_order", {
-            p_store: cart.storeSlug,
-            p_catalog: cart.catalog.slug,
-            p_key: cart.catalog.key,
-            p_items: cart.items.map((i) => ({ product_id: i.productId, qty: i.qty })),
-            p_customer_name: (cart.customerName ?? "").trim(),
-            p_customer_note: (cart.customerNote ?? "").trim(),
-            p_customer_whatsapp: null,
-          })
+      const phone = validPhone(cart.customerWhatsapp ?? "") ? (cart.customerWhatsapp ?? "").replace(/D/g, "") : null;
+      const catalogArgs = cart.catalog ? {
+        p_store: cart.storeSlug,
+        p_catalog: cart.catalog.slug,
+        p_key: cart.catalog.key,
+        p_items: cart.items.map((i) => ({ product_id: i.productId, qty: i.qty })),
+        p_customer_name: (cart.customerName ?? "").trim(),
+        p_customer_note: (cart.customerNote ?? "").trim(),
+        p_customer_whatsapp: phone,
+      } : null;
+      // Con cupón o con carritos abandonados se usa catalog_create_order_plus (20261312); sin esa migración, el de siempre.
+      const usePlus = Boolean(catalogArgs && (activeCoupon || features.carritos));
+      let plus = usePlus && catalogArgs
+        ? await sb.rpc("catalog_create_order_plus", { ...catalogArgs, p_coupon: activeCoupon?.code ?? null, p_session: session })
+        : null;
+      if (plus?.error && /Could not find the function|schema cache/i.test(plus.error.message)) plus = null;
+      const { data, error } = plus
+        ? plus
+        : catalogArgs
+        ? await sb.rpc("catalog_create_order", catalogArgs)
         : await sb.rpc("create_order_from_cart", {
             p_store_id: cart.storeId,
             p_catalog_type: cart.mode === "detal" ? "retail" : "wholesale",
@@ -505,6 +536,9 @@ export function CartDrawer() {
 
       const token = (data as any)?.token as string;
       if (!token) throw new Error("No se generó token.");
+      // Carrito nuevo para la próxima compra (y el cupón ya quedó usado).
+      renewSession();
+      setCoupon(null);
       // El token es privado (abre el comprobante): a la medición solo va el número de pedido.
       const receiptNo = (data as { receipt_no?: number | string } | null)?.receipt_no;
       track.order(receiptNo ? `${cart.storeSlug}-${receiptNo}` : `${cart.storeSlug}-${Date.now()}`, trackItems, cart.storeSlug);
@@ -849,6 +883,24 @@ export function CartDrawer() {
                     </p>
                   ) : null}
                 </div>
+                {features.carritos ? (
+                  <div>
+                    <label className="text-xs font-semibold opacity-80">
+                      Tu WhatsApp <span className="opacity-60">(opcional)</span>
+                    </label>
+                    <input
+                      value={cart.customerWhatsapp ?? ""}
+                      onChange={(e) => setCustomerWhatsapp(e.target.value.replace(/[^d +()-]/g, ""))}
+                      placeholder="Ej: 300 123 4567"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      className="ring-focus mt-2 w-full max-w-64 rounded-xl border px-3 py-2 text-sm"
+                      style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 86%, transparent)", color: "var(--t-text)" }}
+                      disabled={sending}
+                    />
+                    <p className="mt-1 text-[10px] opacity-60">Para ayudarte si algo falla con tu pedido.</p>
+                  </div>
+                ) : null}
                 <div className="sm:col-span-2">
                   <label className="text-xs font-semibold opacity-80">
                     Dirección / Observaciones{" "}
@@ -920,9 +972,20 @@ export function CartDrawer() {
                 </p>
               </div>
 
-              <div className="mt-3 flex items-center justify-between">
+              {shipCfg ? <div className="mt-3"><ShippingBar total={grandTotal} cfg={shipCfg} /></div> : null}
+              {features.cupones && cart.catalog ? (
+                <CouponBox storeSlug={cart.storeSlug} catalog={cart.catalog} items={cart.items} applied={activeCoupon} onApplied={setCoupon} disabled={sending} />
+              ) : null}
+
+              {discount > 0 ? (
+                <div className="mt-3 space-y-0.5 text-sm">
+                  <div className="flex items-center justify-between opacity-80"><span>Subtotal</span><span>{money(total)}</span></div>
+                  <div className="flex items-center justify-between font-bold" style={{ color: "#ec4899" }}><span>🎟️ Cupón {activeCoupon?.code}</span><span>-{money(discount)}</span></div>
+                </div>
+              ) : null}
+              <div className="mt-2 flex items-center justify-between">
                 <p className="text-sm opacity-80">Total</p>
-                <p className="text-lg font-extrabold">{money(total)}</p>
+                <p className="text-lg font-extrabold">{money(grandTotal)}</p>
               </div>
 
               <div className="mt-2 flex gap-2">

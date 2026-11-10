@@ -246,6 +246,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
     { href: "/dashboard/plan", icon: "💎", label: "Mi plan", permissions: ["store"], adminOnly: true },
     { href: "/dashboard/store/users", icon: "👤", label: "Usuarios", permissions: ["users"] },
     { href: "/dashboard/puntos", icon: "📍", label: "Puntos", permissions: POINTS_PERMISSIONS },
+    { href: "/dashboard/vender-mas", icon: "🧩", label: "Funciones opcionales", short: "Opcionales", permissions: ["store", "orders", "products_prices", "catalogs", "products"] },
     { href: "/dashboard/datos", icon: "🔄", label: "Importar y exportar", short: "Datos", permissions: ["exports", "products", "clients", "receivables", "payables", "suppliers", "categories", "inventory_adjust"] },
     { href: "/dashboard/seguridad", icon: "🛡️", label: "Copias y seguridad", short: "Seguridad", permissions: ["security"] },
   ],

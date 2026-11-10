@@ -787,6 +787,17 @@ export const RELEASES: Release[] = [
       { icon: "😀", text: "Cambia su título, emoji y productos" },
     ],
   },
+  {
+    id: 75, date: "2026-11-10", title: "Funciones opcionales para vender más",
+    summary: "Nueva sección Configuración → Funciones opcionales: un interruptor por función, todas apagadas hasta que las enciendas. Carritos abandonados (quién dejó su WhatsApp y no envió el pedido, para escribirle con un toque), «Avísame cuando llegue» en productos agotados, cupones de descuento (por % o por valor, con fechas, límite de usos y catálogos; no se suman a las ofertas) y la barra «te faltan $X para el envío gratis» con tus propios mensajes. La campana te avisa cuando hay carritos por recuperar o cuando llegó lo que alguien esperaba.",
+    paths: ["/dashboard/vender-mas"],
+    demo: [
+      { icon: "🧩", text: "Configuración → Funciones opcionales" },
+      { icon: "🔘", text: "Enciende la que quieras" },
+      { icon: "🎟️", text: "Crea un cupón como BIENVENIDO" },
+      { icon: "🛒", text: "Escríbele a quien dejó su carrito" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -32,6 +32,7 @@ import { searchDelay } from "@/lib/search-timing";
 import { SmartLogo } from "@/components/ui/SmartLogo";
 import { endsInText, fetchPublicDeals, fetchPublicItems, type PublicDeal, type PublicItem } from "@/lib/catalog/public-prices";
 import { BestSellersStrip } from "@/components/catalog/BestSellers";
+import { NotifyMe } from "@/components/catalog/NotifyMe";
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -2150,19 +2151,38 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                         )}
                       </div>
 
-                      <button
-                        className={cx("t-btn inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-extrabold", !isOut && "catalog-cta-pop")}
-                        style={{
-                          background: isFeatured && !isOut ? "linear-gradient(135deg,#facc15,#f59e0b 55%,#ea580c)" : "var(--t-cta)",
-                          color: isFeatured && !isOut ? "#1c1917" : "var(--t-cta-text, #fff)",
-                          boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
-                        }}
-                        onClick={() => addToCartWithQty(p, Number(price ?? 0))}
-                        disabled={isOut}
-                        title={isOut ? "Producto agotado" : "Agregar al carrito"}
-                      >
-                        {isOut ? "Agotado" : <><ShoppingCart size={16} aria-hidden /> Agregar</>}
-                      </button>
+                      {isOut && catalog?.slug ? (
+                        <NotifyMe storeSlug={store?.slug ?? ""} catalogSlug={catalog.slug} accessKey={key} productId={p.id} productName={p.name} compact
+                          fallback={
+                          <button
+                            className={cx("t-btn inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-extrabold", !isOut && "catalog-cta-pop")}
+                            style={{
+                              background: isFeatured && !isOut ? "linear-gradient(135deg,#facc15,#f59e0b 55%,#ea580c)" : "var(--t-cta)",
+                              color: isFeatured && !isOut ? "#1c1917" : "var(--t-cta-text, #fff)",
+                              boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                            }}
+                            onClick={() => addToCartWithQty(p, Number(price ?? 0))}
+                            disabled={isOut}
+                            title={isOut ? "Producto agotado" : "Agregar al carrito"}
+                          >
+                            {isOut ? "Agotado" : <><ShoppingCart size={16} aria-hidden /> Agregar</>}
+                          </button>
+                          } />
+                      ) : (
+                        <button
+                          className={cx("t-btn inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-extrabold", !isOut && "catalog-cta-pop")}
+                          style={{
+                            background: isFeatured && !isOut ? "linear-gradient(135deg,#facc15,#f59e0b 55%,#ea580c)" : "var(--t-cta)",
+                            color: isFeatured && !isOut ? "#1c1917" : "var(--t-cta-text, #fff)",
+                            boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                          }}
+                          onClick={() => addToCartWithQty(p, Number(price ?? 0))}
+                          disabled={isOut}
+                          title={isOut ? "Producto agotado" : "Agregar al carrito"}
+                        >
+                          {isOut ? "Agotado" : <><ShoppingCart size={16} aria-hidden /> Agregar</>}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

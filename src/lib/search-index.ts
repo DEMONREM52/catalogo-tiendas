@@ -100,6 +100,10 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/apartados?tab=cotizaciones", emoji: "📝", label: "Cotizaciones", keywords: "presupuestos clientes", perms: ["pos", "orders"] },
   { href: "/dashboard/caja", emoji: "💵", label: "Caja", keywords: "arqueo cierre efectivo", perms: ["cash", "cash_manage"] },
   { href: "/dashboard/garantias", emoji: "🛠️", label: "Garantías y devoluciones", keywords: "cambios devoluciones", perms: ["pos", "inventory", "sales_return"] },
+  { href: "/dashboard/vender-mas", emoji: "🧩", label: "Funciones opcionales", keywords: "encender apagar carritos abandonados avisame cupones envio gratis recompra conteo", perms: ["store", "orders", "products_prices", "catalogs", "products"] },
+  { href: "/dashboard/vender-mas?ver=carritos", emoji: "🛒", label: "Carritos abandonados", keywords: "clientes que no compraron whatsapp recuperar", perms: ["orders"] },
+  { href: "/dashboard/vender-mas?ver=avisame", emoji: "🔔", label: "Avísame cuando llegue", keywords: "agotado esperando clientes aviso", perms: ["orders", "products"] },
+  { href: "/dashboard/vender-mas?ver=cupones", emoji: "🎟️", label: "Cupones de descuento", keywords: "codigo descuento promo cupon", perms: ["products_prices", "catalogs"] },
   { href: "/dashboard/promociones", emoji: "🏷️", label: "Promociones y combos", keywords: "descuentos ofertas", perms: ["products_prices", "profit_rules", "price_approve"] },
   { href: "/dashboard/operaciones", emoji: "🗂️", label: "Centro de operaciones", keywords: "documentos movimientos ventas del dia", perms: ["orders", "pos"] },
 

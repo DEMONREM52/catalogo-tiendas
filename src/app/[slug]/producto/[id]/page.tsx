@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { BuyBox } from "@/components/catalog/BuyBox";
+import { NotifyMe } from "@/components/catalog/NotifyMe";
 import { RelatedProducts } from "@/components/catalog/RelatedProducts";
 import { endsInText, fetchPublicDeals, fetchPublicItems, type PublicDeal, type PublicItem } from "@/lib/catalog/public-prices";
 import { ProductShowcase } from "@/components/ProductShowcase";
@@ -351,6 +352,11 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
               {description ? <RichText text={description} className="mt-7 space-y-1 break-words text-base leading-7 opacity-80" /> : null}
 
               <div className="mt-auto pt-8">
+                {stock !== null && Number(stock) <= 0 && inCatalog ? (
+                  <div className="mb-3">
+                    <NotifyMe storeSlug={store.slug} catalogSlug={via?.slug ?? null} accessKey={via?.key ?? null} productId={product.id} productName={product.name} />
+                  </div>
+                ) : null}
                 <BuyBox productId={product.id} name={product.name} price={shownPrice || 0} stock={stock === null ? null : Number(stock)}
                   catalogPath={catalogPath} accessKey={via?.key ?? null} storeSlug={store.slug} explicit={Boolean(via)} whatsapp={store.whatsapp || null} shareText={shareText} />
                 <ul className="mt-5 grid grid-cols-2 gap-2 text-xs font-bold">

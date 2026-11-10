@@ -69,14 +69,30 @@ export function useStoreAlerts(storeId: string | null | undefined) {
     // + pedidos sin confirmar y sin completar (20261303).
     // + productos a los que ya les toca publicarse (20261305).
     // + tareas de productos asignadas a la persona (20261306).
-    const [base, extra, offline, orders, publish, tasks] = await Promise.all([
+    // + carritos abandonados y «avísame» que ya llegó (20261312, solo si están encendidos).
+    const [base, extra, offline, orders, publish, tasks, sell] = await Promise.all([
       sb.rpc("erp_alerts", { p_store: storeId }),
       sb.rpc("erp_extra_alerts", { p_store: storeId }),
       sb.rpc("erp_offline_alerts", { p_store: storeId }),
       sb.rpc("erp_order_alerts", { p_store: storeId }),
       sb.rpc("erp_publish_alerts", { p_store: storeId }),
       sb.rpc("erp_product_task_alerts", { p_store: storeId }),
+      sb.rpc("vm_alerts", { p_store: storeId }),
     ]);
+    const vm = !sell.error && sell.data ? (sell.data as { ok?: boolean; carts?: number; waitlist_ready?: number }) : null;
+    const sellAlerts: StoreAlert[] = [];
+    if (vm?.ok && Number(vm.carts) > 0) sellAlerts.push({
+      key: `vm-carts-${vm.carts}`, severity: "info", icon: "shopping-bag", count: Number(vm.carts),
+      title: `🛒 ${vm.carts} carrito${Number(vm.carts) === 1 ? "" : "s"} sin terminar`,
+      body: "Clientes que dejaron su WhatsApp y no enviaron el pedido. Escríbeles con un toque.",
+      href: "/dashboard/vender-mas?ver=carritos",
+    });
+    if (vm?.ok && Number(vm.waitlist_ready) > 0) sellAlerts.push({
+      key: `vm-waitlist-${vm.waitlist_ready}`, severity: "good", icon: "megaphone", count: Number(vm.waitlist_ready),
+      title: `🔔 Ya llegó lo que ${vm.waitlist_ready} cliente${Number(vm.waitlist_ready) === 1 ? "" : "s"} esperaba${Number(vm.waitlist_ready) === 1 ? "" : "n"}`,
+      body: "Entró mercancía de productos que pidieron con «Avísame». Avísales por WhatsApp.",
+      href: "/dashboard/vender-mas?ver=avisame",
+    });
     const ordersOk = !orders.error && Array.isArray(orders.data);
     const rows = [
       // Con los avisos nuevos de pedidos, el viejo («sin confirmar hace más de un día») sobra.
@@ -86,6 +102,7 @@ export function useStoreAlerts(storeId: string | null | undefined) {
       ...(!offline.error && Array.isArray(offline.data) ? (offline.data as StoreAlert[]) : []),
       ...(!publish.error && Array.isArray(publish.data) ? (publish.data as StoreAlert[]) : []),
       ...(!tasks.error && Array.isArray(tasks.data) ? (tasks.data as StoreAlert[]) : []),
+      ...sellAlerts,
     ].filter((a) => SEVERITY[a.severity]);
     if (!base.error || !extra.error) {
       setAlerts(rows.sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order));
