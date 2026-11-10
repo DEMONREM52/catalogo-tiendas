@@ -290,15 +290,17 @@ export default function PosPage() {
 
   const effectiveClient = useMemo(() => {
     if (selectedClient) return selectedClient;
+    const typed = customerName.trim();
+    const named = Boolean(typed) && typed !== DEFAULT_CLIENT_NAME;
     return {
       id: "consumer-final",
-      name: DEFAULT_CLIENT_NAME,
+      name: named ? typed : DEFAULT_CLIENT_NAME,
       email: null,
       mobile: null,
-      document_number: "CF",
+      document_number: named && customerDocument.trim() ? customerDocument.trim() : "CF",
       price_list: DEFAULT_PRICE_LIST,
     } as Client;
-  }, [selectedClient]);
+  }, [selectedClient, customerName, customerDocument]);
 
   const productMap = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
@@ -1027,9 +1029,28 @@ export default function PosPage() {
       void restoreApprovals(used);
     });
     setDocumentKind(doc.doc_kind === "factura" ? "factura" : "remision");
-    setCustomerName(doc.customer_name || DEFAULT_CLIENT_NAME);
     setCustomerNote(doc.customer_note ?? "");
-    setCustomerDocument(doc.customer_doc ?? "");
+    // El cliente del documento: si está registrado se elige (con su lista, crédito y datos); si no, se dejan
+    // su nombre, documento y WhatsApp. Antes quedaba «Consumidor final» aunque la venta tuviera cliente.
+    const fold = (t?: string | null) => (t ?? "").normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
+    const docNum = (doc.customer_doc ?? "").replace(/\D/g, "");
+    const client = (docNum ? clients.find((c) => (c.document_number ?? "").replace(/\D/g, "") === docNum) : undefined)
+      ?? (doc.customer_name && fold(doc.customer_name) !== fold(DEFAULT_CLIENT_NAME) ? clients.find((c) => fold(c.name) === fold(doc.customer_name)) : undefined);
+    if (client) {
+      setSelectedClientId(client.id);
+    } else {
+      const keep = { name: doc.customer_name?.trim() || DEFAULT_CLIENT_NAME, whatsapp: doc.customer_whatsapp ?? "", doc: doc.customer_doc ?? "" };
+      if (selectedClientId) {
+        pendingCustomer.current = keep; // lo aplica el efecto del cliente al quitar el que estaba elegido
+        setSelectedClientId("");
+      } else {
+        setCustomerName(keep.name);
+        setCustomerWhatsApp(keep.whatsapp);
+        setCustomerDocument(keep.doc);
+      }
+    }
+    const seller = doc.seller_name ? sellersForPoint(sellers, pointId).find((r) => fold(r.name) === fold(doc.seller_name)) : undefined;
+    if (seller) setSellerId(seller.user_id);
     void Swal.fire({
       icon: "info",
       title: `Editando ${doc.doc_number ?? `#${doc.receipt_no}`}`,
@@ -2101,7 +2122,7 @@ export default function PosPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
                   <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : "Venta sin cliente registrado · Lista P3"}
+                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : effectiveClient.name !== DEFAULT_CLIENT_NAME ? `Cliente sin registrar${customerDocument.trim() ? ` · Doc ${docWithDv(customerDocument.trim())}` : ""} · Lista P3` : "Venta sin cliente registrado · Lista P3"}
                   </span>
                 </span>
                 <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
