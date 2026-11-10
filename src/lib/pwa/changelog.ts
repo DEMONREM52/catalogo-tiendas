@@ -759,16 +759,33 @@ export const RELEASES: Release[] = [
     id: 72, date: "2026-11-09", title: "Botón de comprar siempre a la vista",
     summary: "En la página del producto la barra de compra queda fija abajo (celular y computador): cambias la cantidad ahí mismo, el carrito naranja se mueve suave para invitar a agregar y «Comprar» en verde lleva directo a pedir.",
     paths: ["/dashboard/products"],
+    demo: [
+      { icon: "📱", text: "Abre un producto desde el catálogo" },
+      { icon: "➕", text: "Cambia la cantidad en la barra de abajo" },
+      { icon: "🛒", text: "Toca el carrito para seguir comprando" },
+      { icon: "⚡", text: "O «Comprar» para pedir de una" },
+    ],
   },
   {
     id: 73, date: "2026-11-09", title: "Productos destacados que resaltan",
     summary: "Los productos ⭐ destacados salen primero en el catálogo con borde dorado que gira, cinta «Destacado» con brillo y botón de agregar dorado, y aparecen en la franja «Destacados». Puedes destacar varios a la vez desde el Radar (selecciona y toca «⭐ Destacar»), uno por uno en Producto → Precios, o por catálogo en Catálogos → Productos.",
     paths: ["/dashboard/products", "/dashboard/social"],
+    demo: [
+      { icon: "📡", text: "En el Radar selecciona productos" },
+      { icon: "⭐", text: "Toca «⭐ Destacar»" },
+      { icon: "✨", text: "Salen primero y dorados en el catálogo" },
+    ],
   },
   {
     id: 74, date: "2026-11-10", title: "«Lo más vendido» por catálogo",
     summary: "En Campañas → Lo más vendido hay una pestaña General y una por cada catálogo. La general escoge en qué catálogos sale; cada catálogo puede tener la suya propia (automático, a mano o apagado, sus productos, título, subtítulo, emoji, cuántos mostrar). En automático, un catálogo con punto (como Zamora) muestra lo más vendido de ese punto. Los precios son siempre los de cada catálogo. Además, el carrito de la página del producto lleva al catálogo de donde vino el producto (Zamora, mayoristas…).",
     paths: ["/dashboard/social"],
+    demo: [
+      { icon: "🔥", text: "Campañas → Lo más vendido" },
+      { icon: "🛍️", text: "Escoge en qué catálogos sale" },
+      { icon: "✨", text: "En un catálogo toca «Personalizar»" },
+      { icon: "😀", text: "Cambia su título, emoji y productos" },
+    ],
   },
 ];
 
