@@ -825,6 +825,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Crea la venta a crédito" },
     ],
   },
+  {
+    id: 79, date: "2026-11-10", title: "Volver a pedir: hazla de nuevo en el POS",
+    summary: "En el comprobante de una venta, «🔁 Hacer de nuevo en el POS» te lleva al POS con los mismos productos ya agregados (a los precios de hoy) y con el cliente, el punto, el vendedor y el tipo de documento de la original. Cambia el cliente, agrega o quita productos y cobra.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🧾", text: "Abre el comprobante de una venta" },
+      { icon: "🔁", text: "Toca «Hacer de nuevo en el POS»" },
+      { icon: "✏️", text: "Cambia cliente, vendedor o productos" },
+      { icon: "✅", text: "Cobra la venta nueva" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

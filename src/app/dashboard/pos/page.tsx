@@ -246,6 +246,7 @@ export default function PosPage() {
     remision_prefix?: string | null;
   } | null>(null);
   const [customerNote, setCustomerNote] = useState("");
+  const pendingCustomer = useRef<{ name: string; whatsapp: string; doc: string } | null>(null);
   const [points, setPoints] = useState<PointOption[]>([]);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
   const [lockedPoint, setLockedPoint] = useState(false);
@@ -540,10 +541,13 @@ export default function PosPage() {
       setCustomerPriceList(selectedClient.price_list ?? DEFAULT_PRICE_LIST);
       if (selectedClient.credit_enabled && selectedClient.credit_days) setDueDays(selectedClient.credit_days);
     } else {
-      setCustomerName(DEFAULT_CLIENT_NAME);
+      // Al repetir un pedido de un cliente no registrado, se dejan sus datos en vez de «Consumidor final».
+      const keep = pendingCustomer.current;
+      pendingCustomer.current = null;
+      setCustomerName(keep?.name || DEFAULT_CLIENT_NAME);
       setCustomerEmail("");
-      setCustomerWhatsApp("");
-      setCustomerDocument("");
+      setCustomerWhatsApp(keep?.whatsapp ?? "");
+      setCustomerDocument(keep?.doc ?? "");
       setCustomerPriceList(DEFAULT_PRICE_LIST);
     }
   }, [selectedClient]);
@@ -1702,7 +1706,8 @@ export default function PosPage() {
   }
 
   // «Volver a pedir» desde un comprobante: /dashboard/pos?reorder=<token> arma el carrito con esos productos
-  // a los precios de hoy del punto (se pueden cambiar antes de cobrar).
+  // a los precios de hoy del punto y deja puestos el cliente, el punto, el vendedor y el tipo de documento del
+  // original. Todo se puede cambiar antes de cobrar.
   const reorderDone = useRef(false);
   useEffect(() => {
     if (reorderDone.current || !storeId || loading || !allProducts.length || (pointId && !pointStock)) return;
@@ -1712,7 +1717,7 @@ export default function PosPage() {
     window.history.replaceState(null, "", window.location.pathname);
     void (async () => {
       const { data, error } = await supabaseBrowser().rpc("get_order_by_token_v2", { p_token: reorderToken });
-      const order = (data as { order?: { store_id?: string; receipt_no?: number } } | null)?.order;
+      const order = (data as { order?: { store_id?: string; receipt_no?: number; customer_name?: string | null; customer_whatsapp?: string | null; customer_note?: string | null } } | null)?.order;
       if (error || !order || order.store_id !== storeId) {
         await Swal.fire({ icon: "warning", title: "No se pudo cargar el pedido", text: "Ese pedido no existe o es de otra tienda.", background: "var(--t-bg-base)", color: "var(--t-text)" });
         return;
@@ -1728,12 +1733,43 @@ export default function PosPage() {
       if (cart.length && !window.confirm("Tienes productos en el carrito. ¿Reemplazarlos por el pedido a repetir?")) return;
       setEditingDoc(null);
       setCart(next);
+      // Cliente, punto, vendedor y documento del original (si existen todavía).
+      const { data: docData } = await supabaseBrowser().rpc("erp_order_doc_by_token", { p_token: reorderToken });
+      const doc = (docData ?? null) as { doc_kind?: "factura" | "remision" | null; seller_name?: string | null; customer_doc?: string | null; point?: { name?: string | null } | null } | null;
+      const fold = (t?: string | null) => (t ?? "").normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
+      const docNum = (doc?.customer_doc ?? "").replace(/\D/g, "");
+      const client = (docNum ? clients.find((c) => (c.document_number ?? "").replace(/\D/g, "") === docNum) : undefined)
+        ?? (order.customer_name && fold(order.customer_name) !== fold(DEFAULT_CLIENT_NAME) ? clients.find((c) => fold(c.name) === fold(order.customer_name)) : undefined);
+      if (client) {
+        setSelectedClientId(client.id);
+      } else {
+        const keep = { name: order.customer_name?.trim() || DEFAULT_CLIENT_NAME, whatsapp: order.customer_whatsapp ?? "", doc: doc?.customer_doc ?? "" };
+        if (selectedClientId) {
+          pendingCustomer.current = keep; // lo aplica el efecto del cliente al quitarlo
+          setSelectedClientId("");
+        } else {
+          setCustomerName(keep.name);
+          setCustomerWhatsApp(keep.whatsapp);
+          setCustomerDocument(keep.doc);
+        }
+      }
+      setCustomerNote(order.customer_note ?? "");
+      if (doc?.doc_kind === "factura" || doc?.doc_kind === "remision") setDocumentKind(doc.doc_kind);
+      let targetPoint = pointId;
+      const samePoint = doc?.point?.name ? points.find((pt) => fold(pt.name) === fold(doc.point?.name)) : undefined;
+      if (samePoint && !lockedPoint && samePoint.id !== pointId) {
+        targetPoint = samePoint.id;
+        setPointStock(null);
+        setPointId(samePoint.id);
+      }
+      const seller = doc?.seller_name ? sellersForPoint(sellers, targetPoint).find((r) => fold(r.name) === fold(doc.seller_name)) : undefined;
+      if (seller) setSellerId(seller.user_id);
       const short = next.filter((i) => (pointStock ? pointStock.get(i.productId) ?? 0 : Infinity) < i.qty).map((i) => i.name);
       const esc = (t: string) => t.replace(/[<>&]/g, "");
       await Swal.fire({
         icon: next.length ? "success" : "warning",
         title: next.length ? "🔁 Pedido listo para repetir" : "No hay productos para repetir",
-        html: `${next.length} producto${next.length === 1 ? "" : "s"} con los precios de hoy. Revisa, cambia lo que necesites y cobra.${
+        html: `${next.length} producto${next.length === 1 ? "" : "s"} con los precios de hoy${client || order.customer_name ? `, para <b>${esc(client?.name ?? order.customer_name ?? "")}</b>` : ""}. Revisa el cliente, el punto y el vendedor, cambia lo que necesites y cobra.${
           missing.length ? `<br/><br/><b>Ya no están disponibles:</b><br/>${missing.map((m) => `• ${esc(m)}`).join("<br/>")}` : ""}${
           short.length ? `<br/><br/><b>Sin unidades suficientes en este punto:</b><br/>${short.map((m) => `• ${esc(m)}`).join("<br/>")}` : ""}`,
         background: "var(--t-bg-base)",
@@ -1741,7 +1777,7 @@ export default function PosPage() {
         confirmButtonColor: "#8b5cf6",
       });
     })();
-  }, [storeId, loading, allProducts, pointId, pointStock, priceOf, currentPriceList, cart.length]);
+  }, [storeId, loading, allProducts, pointId, pointStock, priceOf, currentPriceList, cart.length, clients, points, sellers, lockedPoint, selectedClientId, setPointStock]);
 
   // En computador el cursor queda en el buscador de productos al abrir (en celular no, para no tapar con el teclado).
   useEffect(() => {

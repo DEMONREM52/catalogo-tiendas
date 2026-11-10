@@ -389,16 +389,21 @@ export function OrderScreen(props: {
           {p.reorderCatalog || p.reorderPos ? (
             <section className="rounded-3xl border p-4" style={card}>
               <p className="flex items-center gap-1.5 text-sm font-black"><RotateCcw size={15} /> Volver a pedir</p>
-              <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Arma un pedido nuevo con estos mismos productos, a los precios de hoy. Lo puedes cambiar antes de enviarlo.</p>
+              {p.reorderPos ? (
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Haz de nuevo la venta en el POS con estos mismos productos ya agregados, a los precios de hoy. Llega con el cliente, el punto y el vendedor de esta, y puedes cambiar todo antes de cobrar.</p>
+              ) : (
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Arma un pedido nuevo con estos mismos productos, a los precios de hoy. Lo puedes cambiar antes de enviarlo.</p>
+              )}
               <div className="mt-3 grid gap-2 text-sm">
-                {p.reorderCatalog ? (
-                  <Link href={p.reorderCatalog} className="flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 font-black text-white transition hover:brightness-110" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>
-                    🛍️ Pedir otra vez
+                {p.reorderPos ? (
+                  <Link href={p.reorderPos} className="flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 font-black text-white transition hover:brightness-110" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>
+                    🔁 Hacer de nuevo en el POS
                   </Link>
                 ) : null}
-                {p.reorderPos ? (
-                  <Link href={p.reorderPos} className="flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
-                    💳 Cargar en el POS
+                {p.reorderCatalog ? (
+                  <Link href={p.reorderCatalog} className={p.reorderPos ? "flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 font-bold transition hover:-translate-y-0.5" : "flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 font-black text-white transition hover:brightness-110"}
+                    style={p.reorderPos ? { borderColor: "var(--t-card-border)" } : { background: "linear-gradient(135deg,#8b5cf6,#ec4899)" }}>
+                    🛍️ {p.reorderPos ? "Pedir otra vez en el catálogo" : "Pedir otra vez"}
                   </Link>
                 ) : null}
               </div>
