@@ -3,9 +3,9 @@
 import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Building2, Check, CreditCard, Landmark, Lock, MapPin, Phone, StickyNote, Tag, User, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
 import { WithDv } from "../nit";

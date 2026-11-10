@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { BellOff, Check, History, Loader2, Megaphone, Undo2, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { PublishKit } from "./PublishKit";
 import {

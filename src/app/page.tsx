@@ -17,7 +17,7 @@ const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_STORE_URL || "";
 // Landing de ejemplo (una publicada, ej. remhub.co/tu-tienda/oferta/tenis) para «Ver una landing de ejemplo».
 const DEMO_LANDING_URL = process.env.NEXT_PUBLIC_DEMO_LANDING_URL || "";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m as motion, useInView, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   Banknote,

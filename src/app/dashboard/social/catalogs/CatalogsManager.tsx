@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import {
   BadgeDollarSign,
   Copy,
@@ -25,7 +25,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { FileDown, QrCode } from "lucide-react";
 import { QrDialog } from "@/components/pwa/QrDialog";
 import { supabaseBrowser } from "@/lib/supabase/client";

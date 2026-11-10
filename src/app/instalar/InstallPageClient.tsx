@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Apple, Check, Download, Monitor, MoreVertical, PlusSquare, QrCode, Share, Smartphone } from "lucide-react";
 import { InstallSheet, usePwa } from "@/components/pwa/InstallSheet";
 import { REMHUB_INSTALL } from "@/components/pwa/InstallButton";

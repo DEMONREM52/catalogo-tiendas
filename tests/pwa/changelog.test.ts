@@ -29,3 +29,8 @@ test("novedades: las que avisan traen qué cambió", () => {
     if (r.paths.length) assert.ok(r.demo?.length, `«${r.title}» avisa pero no trae simulador`);
   }
 });
+
+test("novedades: el navegador recibe solo el número (next.config → NEXT_PUBLIC_REMHUB_RELEASE)", async () => {
+  const cfg = (await import("../../next.config")).default as { env?: Record<string, string> };
+  assert.equal(cfg.env?.NEXT_PUBLIC_REMHUB_RELEASE, String(BUILD_RELEASE));
+});

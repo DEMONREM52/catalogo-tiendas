@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 
 /** Piezas comunes de las ventanas del ERP (cuentas por pagar, cuenta con puntos…). */
 

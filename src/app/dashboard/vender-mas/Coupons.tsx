@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { DateField } from "@/components/forms/Fields";

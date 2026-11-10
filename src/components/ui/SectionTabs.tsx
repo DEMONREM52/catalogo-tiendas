@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 
 /**
  * Pestañas de las secciones del panel, iguales en todas partes.

@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { ArrowDown, ArrowLeft, ArrowUp, Eye, ImagePlus, Laptop, Maximize2, Minimize2, Monitor, Plus, Rocket, Save, Search, Smartphone, Tablet, Trash2, X } from "lucide-react";
 import { fiscalApi } from "@/lib/fiscal/client";
 import type { ImportedProduct } from "@/lib/landing/import";

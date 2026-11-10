@@ -2,9 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Banknote, CreditCard, Landmark, Smartphone, Wallet } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Field, MoneyField } from "./Fields";
 import { CloseButton } from "@/components/ui/IconButton";
 

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { CalendarCheck, Check, Settings } from "lucide-react";
 import { PublishButton } from "@/components/products/PublishButton";
 import { publishStatusText, type PublishState, type RadarProduct } from "@/lib/products/radar";

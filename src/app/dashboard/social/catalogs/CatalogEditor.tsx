@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import {
   BadgeDollarSign,
   Boxes,
@@ -24,7 +24,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { DashboardStore } from "@/lib/store-utils";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";

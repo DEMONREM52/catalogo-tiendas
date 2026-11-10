@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Check, Clock, History, Plus, Search, Settings2, ShieldCheck, Tags, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { fetchProductCosts } from "@/lib/profit/costs";

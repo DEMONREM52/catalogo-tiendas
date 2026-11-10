@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Loader2, RefreshCw, Wrench } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { enablePush } from "@/lib/pwa/push";

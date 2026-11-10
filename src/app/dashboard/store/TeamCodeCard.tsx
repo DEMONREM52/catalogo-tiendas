@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Check, Copy, Dices, KeyRound, Loader2, Save } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 

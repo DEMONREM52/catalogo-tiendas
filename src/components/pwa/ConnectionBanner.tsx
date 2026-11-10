@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { Database, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { checkConnection, setSimulatedOffline, useNetStatus } from "@/lib/net/status";

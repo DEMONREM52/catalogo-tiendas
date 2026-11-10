@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Bell, Cake, Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
 import { NoticeTray } from "./NoticeTray";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
 import { smartFilter } from "@/lib/search";

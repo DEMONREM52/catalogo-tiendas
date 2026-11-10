@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Printer, X } from "lucide-react";
 import { MODE_INFO, savePrinterSettings, usePrinterSettings, type PrinterMode, type PrinterSettings } from "@/lib/print/settings";
 import { bluetoothConnected, modeSupported, openDrawer, pairBluetooth, pairSerial, pairUsb, printTicket } from "@/lib/print/transports";

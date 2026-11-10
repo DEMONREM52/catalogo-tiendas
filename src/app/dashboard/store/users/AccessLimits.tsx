@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField, ddmmyyyy } from "@/components/forms/Fields";
 import { PERMISSION_LIST, permissionLabel } from "@/lib/permissions";

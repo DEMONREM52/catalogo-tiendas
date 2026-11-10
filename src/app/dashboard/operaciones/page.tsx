@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import {
   ArrowRightLeft, Banknote, ChevronRight, ClipboardCheck, PackagePlus, PackageSearch, Receipt, RefreshCw, Search, ShoppingBag,
   ShoppingCart, Truck, Wallet, Wrench, X, type LucideIcon,

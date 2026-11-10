@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, AtSign, Check, Copy, Crown, Eye, EyeOff, KeyRound, Loader2, MapPin, MessageCircle, ShieldCheck, Sparkles, UserRound, Users, X,
 } from "lucide-react";

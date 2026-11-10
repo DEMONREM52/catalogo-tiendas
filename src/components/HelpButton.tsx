@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { openCommandPalette, openShortcuts } from "./CommandPalette";
+import { openCommandPalette, openShortcuts } from "./command-events";
 import { HELP, helpFor } from "./tour/tours";
 import { startTour } from "./tour/GuidedTour";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData } from "@/lib/admin-data";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";

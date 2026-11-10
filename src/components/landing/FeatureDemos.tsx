@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m as motion, useInView, useReducedMotion } from "framer-motion";
 
 /**
  * Ejemplos animados para las tarjetas de «Funciones»: cada una muestra en pequeño lo que hace.

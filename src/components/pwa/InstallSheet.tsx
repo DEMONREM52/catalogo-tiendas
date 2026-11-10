@@ -2,21 +2,12 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, Copy, Download, ExternalLink, Loader2, MoreVertical, PlusSquare, Share, Smartphone, X } from "lucide-react";
-import { detectPlatform, getPwaServerState, getPwaState, promptInstall, subscribePwa, type PlatformInfo } from "@/lib/pwa/client";
+import { detectPlatform, promptInstall, type PlatformInfo } from "@/lib/pwa/client";
 
-export type InstallIdentity = {
-  /** «RemHub» o el nombre del catálogo. */
-  name: string;
-  /** Icono que verá el usuario (el de RemHub o el del catálogo). */
-  iconUrl: string;
-  kind: "remhub" | "catalog";
-};
-
-export function usePwa() {
-  return useSyncExternalStore(subscribePwa, getPwaState, getPwaServerState);
-}
+import { usePwa, type InstallIdentity } from "./usePwa";
+export { usePwa, type InstallIdentity } from "./usePwa";
 
 function Step({ n, children, icon }: { n: number; children: ReactNode; icon?: ReactNode }) {
   return (

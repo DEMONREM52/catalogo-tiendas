@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 
 /**
  * Línea fina debajo de un buscador que se llena mientras espera para buscar (el temporizador de

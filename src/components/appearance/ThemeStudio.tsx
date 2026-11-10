@@ -4,8 +4,8 @@
 // Nada se guarda mientras se mueve un control: solo con «Guardar». «Cancelar» deja todo exactamente como estaba.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import Swal from "sweetalert2";
+import { AnimatePresence, m as motion } from "framer-motion";
+import Swal from "@/lib/swal";
 import { ArrowLeft, Check, Copy, Download, Eye, Pencil, Plus, RotateCcw, Search, Star, Trash2, Upload, Wand2, X } from "lucide-react";
 import {
   OBSIDIAN, OFFICIAL_THEMES, PEARL, accessibilityReport, cleanName, exportTheme, fixReadability, hexToRgb, importTheme, isReadable,

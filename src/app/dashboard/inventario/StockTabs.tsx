@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import PointBillingPanel from "@/app/dashboard/store/billing/PointBillingPanel";
+import nextDynamic from "next/dynamic";
 import {
   Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast,
   type ErpCtx, type Warehouse,
 } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+
+// El editor de puntos (logo, numeración, resolución) solo se descarga en la pestaña «Puntos y bodegas».
+const PointBillingPanel = nextDynamic(() => import("@/app/dashboard/store/billing/PointBillingPanel"), { loading: () => <SkeletonList rows={3} avatar={false} label="Cargando puntos…" /> });
 
 type Overview = {
   inventory_value: number | null;

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { InstallSheet, usePwa, type InstallIdentity } from "./InstallSheet";
+import nextDynamic from "next/dynamic";
+import { usePwa, type InstallIdentity } from "./usePwa";
+
+// La ventana con las instrucciones se descarga al tocar «Instalar», no al abrir cada página.
+const InstallSheet = nextDynamic(() => import("./InstallSheet").then((m) => m.InstallSheet), { ssr: false });
 
 export const REMHUB_INSTALL: InstallIdentity = { name: "RemHub", iconUrl: "/icons/remhub-192.png", kind: "remhub" };
 
@@ -21,13 +25,15 @@ export function InstallButton({
 }) {
   const pwa = usePwa();
   const [open, setOpen] = useState(false);
+  // Una vez abierta se queda montada: así la animación de cerrar se ve completa.
+  const [used, setUsed] = useState(false);
   if (pwa.standalone) return null;
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={className} style={style} title={title ?? `Instalar ${identity.name}`}>
+      <button type="button" onClick={() => { setUsed(true); setOpen(true); }} className={className} style={style} title={title ?? `Instalar ${identity.name}`}>
         {children}
       </button>
-      <InstallSheet open={open} onClose={() => setOpen(false)} identity={identity} />
+      {used ? <InstallSheet open={open} onClose={() => setOpen(false)} identity={identity} /> : null}
     </>
   );
 }

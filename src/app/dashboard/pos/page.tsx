@@ -3,10 +3,11 @@
 import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission, type DashboardStore } from "@/lib/store-utils";
-import { ThirdPartyForm } from "../clientes/ThirdPartyForm";
+import nextDynamic from "next/dynamic";
+import { preloadWhenIdle } from "@/lib/idle-preload";
 import { errorText as fiscalErrorText, fiscalApi, newIdempotencyKey } from "@/lib/fiscal/client";
 import type { PointReadiness } from "@/lib/fiscal/types";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
@@ -31,7 +32,7 @@ import { deviceId } from "@/lib/offline/device";
 import { storedSessionUser } from "@/lib/supabase/offline-session";
 import { canReachData, isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
 import { cacheAge, cacheLoad, cacheSave, withTimeout } from "@/lib/offline/cache";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Pause, Play, ShoppingCart, UserRound, X } from "lucide-react";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
@@ -43,6 +44,12 @@ import { CashStatusChip } from "../caja/CashStatusChip";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { PosToolbar, requestPasses, usePromotions, type Passes } from "./PosExtras";
+
+// La ventana de «Cliente nuevo» se descarga aparte, cuando el navegador queda libre: el POS abre antes y la
+// ventana igual queda guardada para cuando no haya internet.
+const loadThirdPartyForm = () => import("../clientes/ThirdPartyForm").then((m) => m.ThirdPartyForm);
+const ThirdPartyForm = nextDynamic(loadThirdPartyForm, { ssr: false });
+preloadWhenIdle(loadThirdPartyForm);
 
 type PriceLevel = 1 | 2 | 3 | 4 | 5;
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ChevronDown, CloudOff, Printer, RefreshCw, Trash2, Upload } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { draftKind, getDrafts, removeDraft, subscribeDrafts, updateDraft, type PosDraft } from "@/lib/pos/drafts";
 import { resolveOfflineIssue, syncOfflineDrafts } from "@/lib/pos/sync";
 import { useNetStatus } from "@/lib/net/status";

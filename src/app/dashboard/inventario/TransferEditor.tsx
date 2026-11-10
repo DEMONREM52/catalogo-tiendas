@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductPicker, ProductSearchModal, Thumb, useThumbs } from "./LineEditor";
 import { Btn, errorMessage, toast, type ProductHit } from "./shared";

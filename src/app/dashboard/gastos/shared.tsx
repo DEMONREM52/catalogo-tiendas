@@ -1,6 +1,6 @@
 "use client";
 
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 export { Sheet, PaymentSheet, confirmDiscard, type PaymentInput } from "@/components/forms/Sheet";
 export { Field, MoneyField, NumberField, DateField, ChoiceChips, ddmmyyyy } from "@/components/forms/Fields";
 

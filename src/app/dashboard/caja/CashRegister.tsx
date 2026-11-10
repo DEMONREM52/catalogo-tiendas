@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyField, NumberField } from "@/components/forms/Fields";
 import { Chip, Field, Modal } from "../inventario/dialog";
 import { Btn, Empty, Kpi, Panel, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange } from "../inventario/shared";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 const METHOD: Record<string, string> = { efectivo: "Efectivo", cash: "Efectivo", transferencia: "Transferencia", nequi: "Nequi", daviplata: "Daviplata", tarjeta: "Tarjeta", card: "Tarjeta", mixto: "Mixto", credito: "Crédito" };

@@ -5,7 +5,7 @@ import {
   ALargeSmall, AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, CaseLower, CaseSensitive, CaseUpper, Code, Eye, Heading1, Heading2, Heading3,
   Highlighter, Italic, Link, List, ListOrdered, Minus, Palette, Pilcrow, Redo2, RemoveFormatting, Smile, Strikethrough, TextQuote, Underline, Undo2,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { editorDomToRich, hasFormat, richToEditorHtml } from "@/lib/rich-text";
 
 /**

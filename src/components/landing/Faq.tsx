@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m as motion, useInView, useReducedMotion } from "framer-motion";
 import { ChevronDown, CreditCard, Download, MessageCircle, Rocket, Search, ShieldCheck, Store, Tags, Target, type LucideIcon } from "lucide-react";
 
 /**

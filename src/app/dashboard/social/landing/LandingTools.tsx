@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { ArrowLeft, Check, Copy, ExternalLink, MessageCircle, QrCode, RefreshCw } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fiscalApi } from "@/lib/fiscal/client";

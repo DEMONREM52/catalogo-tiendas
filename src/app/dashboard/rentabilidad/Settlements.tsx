@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Banknote, Check, ChevronDown, Download, FileCheck2, History, Plus, RefreshCw, Undo2, Users, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cardStyle, cop, downloadCsv, esc, inputStyle, rpcError, swalTheme, type Point } from "./shared";
 import { DateField, Field, NumberField } from "@/components/forms/Fields";

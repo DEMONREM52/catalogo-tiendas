@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import type { Attachment } from "@/app/dashboard/pedidos/internos/chat-media";
 import { chatRpc, chatSend, collectMentions, forwardMessage, newRequestUrl, useChatExtras, useProductCards, type ChatPerson, type Scope } from "./chat-api";
 import { isAutoLabel, jumpTo, showReaders, type ChatAction, type ChatMsg } from "./ChatParts";

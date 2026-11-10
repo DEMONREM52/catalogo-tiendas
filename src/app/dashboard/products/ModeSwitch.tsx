@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { LayoutGrid, Radar } from "lucide-react";
 
 /** Interruptor entre la vista sencilla de productos y el Radar (súper administración). */

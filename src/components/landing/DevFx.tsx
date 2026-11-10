@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 
 /**
  * Detalles «de programador» para la portada: símbolos de código flotando, una terminal que escribe sola,

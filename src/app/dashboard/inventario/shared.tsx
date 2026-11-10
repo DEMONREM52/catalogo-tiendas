@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 
 /** Ejecuta una carga asíncrona al montar y cuando cambia su dependencia. */
 export function useRunOnChange(load: () => void | Promise<void>) {

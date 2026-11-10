@@ -8,16 +8,10 @@
  * Al publicar algo que la gente deba notar: agregar una entrada al final con el siguiente `id`.
  * `paths` son inicios de ruta («/dashboard/pedidos» cubre todo lo de pedidos). Sin `paths` = no se avisa.
  */
-export type ReleaseStep = { icon: string; text: string };
-export type Release = {
-  id: number;
-  date: string;
-  title: string;
-  summary: string;
-  paths: string[];
-  important?: boolean;
-  demo?: ReleaseStep[];
-};
+import type { Release } from "./release";
+
+export type { Release, ReleaseStep } from "./release";
+export { isPanelPath, releaseTouches } from "./release";
 
 export const RELEASES: Release[] = [
   {
@@ -824,16 +818,3 @@ export const RELEASES: Release[] = [
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
 export const BUILD_RELEASE = RELEASES.reduce((m, r) => Math.max(m, r.id), 0);
-
-/** Rutas del panel interno: solo ahí se avisa de novedades. Catálogos, landings y páginas públicas nunca ven el aviso. */
-const PANEL_PATHS = ["/dashboard", "/admin", "/traslado"];
-export function isPanelPath(pathname: string) {
-  return PANEL_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
-
-/** ¿La novedad toca esta ruta? (Una «importante» se muestra en todo el panel, pero nunca fuera de él.) */
-export function releaseTouches(r: Release, pathname: string) {
-  if (!isPanelPath(pathname)) return false;
-  if (r.important) return true;
-  return r.paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { RefreshCw, ShieldCheck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { PERMISSION_GROUPS } from "@/lib/permissions";

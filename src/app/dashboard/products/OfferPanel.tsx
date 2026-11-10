@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { BadgePercent, Loader2, Lock, Star, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { DateField } from "@/components/forms/Fields";

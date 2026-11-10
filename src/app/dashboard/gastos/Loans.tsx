@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useUrlAction } from "@/lib/url-intent";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Banknote, Copy, ExternalLink, FileBarChart, HandCoins, MessageCircle, Pause, Pencil, PenLine, Play, Plus, Printer, Search, ShoppingBag, Trash2, X } from "lucide-react";
 import { storeName } from "./PayrollReport";
 import { loanDeclaration, loanSignUrl, type LoanSignature, type LoanTerms } from "@/lib/loan-sign";

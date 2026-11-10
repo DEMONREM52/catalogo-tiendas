@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { ScrollButtons } from "@/components/ui/ScrollButtons";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";

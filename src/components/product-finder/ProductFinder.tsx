@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Camera, Check, ChevronRight, ImagePlus, Loader2, Plus, RotateCcw, ScanSearch, ScanText, Search, Type, X } from "lucide-react";
 import { embedImageBlob, imageSearchSupported, onEmbedProgress, warmUpImageSearch, type EmbedProgress } from "@/lib/image-search/embed";
 import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";

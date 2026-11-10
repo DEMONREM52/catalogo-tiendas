@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, Copy, Download, QrCode, Share2, X } from "lucide-react";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 

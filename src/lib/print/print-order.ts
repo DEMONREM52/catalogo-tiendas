@@ -1,6 +1,6 @@
 "use client";
 
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { loadOrderTicket } from "./order-ticket";
 import { getPrinterSettings, isDirect } from "./settings";
 import { printTicket, type PrintResult } from "./transports";

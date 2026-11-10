@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ChevronUp, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, RefreshCw, Video, VideoOff, Volume1, Volume2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { inOneTab } from "@/lib/sounds/one-tab";

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ArrowRight, Minus, Plus, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cartUsesMinimums, useCart } from "./CartProvider";
 import { track } from "@/lib/tracking";

@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Camera, Loader2, Minus, Plus, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ScanCounter } from "@/components/ScanCounter";

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BarChart3, CheckCircle2, ExternalLink, Info, Save } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Tracking = {

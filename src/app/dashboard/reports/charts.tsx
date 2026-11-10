@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { bucketLabel, formatMoney, formatMoneyCompact, type ReportBucket } from "@/lib/reports";
 
 function useWidth<T extends HTMLElement>() {

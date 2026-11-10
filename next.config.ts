@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { LEGACY_HOSTS, PRODUCTION_ORIGIN } from "./src/lib/share/origin";
+import { BUILD_RELEASE } from "./src/lib/pwa/changelog";
 
 /**
  * Encabezados de seguridad para todas las páginas y rutas.
@@ -27,6 +28,9 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  // Número de la novedad más reciente (lib/pwa/changelog.ts). El navegador solo recibe este número, no la lista
+  // completa de textos: la lista se pide a /api/version cuando hay algo que mostrar (ver lib/pwa/release.ts).
+  env: { NEXT_PUBLIC_REMHUB_RELEASE: String(BUILD_RELEASE) },
   // Los metadatos (manifest, icono de iPhone, vista previa) van completos en el <head> para todos los
   // navegadores, no al final de la página: Safari los toma de ahí al «Agregar a pantalla de inicio».
   htmlLimitedBots: /.*/,

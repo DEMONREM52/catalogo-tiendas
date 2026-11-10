@@ -6,20 +6,27 @@ import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, Fi
 import { SectionTabs } from "@/components/ui/SectionTabs";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { AdjustmentsTab, AuditTab, KardexTab } from "./OperationsTabs";
-import { TransfersTab } from "./TransfersTab";
-import { ManifestsTab } from "./ManifestsUI";
-import { PurchasesTab, SuppliersTab } from "./PurchasesTabs";
-import { PayablesTab } from "./Payables";
-import { InternalCreditTab } from "./InternalCredit";
 import { OverviewTab, WarehousesTab } from "./StockTabs";
-import { StockBrowser } from "./StockBrowser";
-import { StaleStockTab } from "./StaleStock";
-import { ExpiryTab } from "./InventoryExtras";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { CountsTab } from "./CountsTab";
 import { useFeature } from "@/lib/useFeature";
+import nextDynamic from "next/dynamic";
+
+// Cada pestaña se descarga al abrirla (antes bajaban todas juntas, ~350 KB): Inventario abre mucho más rápido.
+const tabLoading = () => <SkeletonList rows={5} avatar={false} label="Cargando…" />;
+const StockBrowser = nextDynamic(() => import("./StockBrowser").then((m) => m.StockBrowser), { loading: tabLoading });
+const TransfersTab = nextDynamic(() => import("./TransfersTab").then((m) => m.TransfersTab), { loading: tabLoading });
+const AdjustmentsTab = nextDynamic(() => import("./OperationsTabs").then((m) => m.AdjustmentsTab), { loading: tabLoading });
+const KardexTab = nextDynamic(() => import("./OperationsTabs").then((m) => m.KardexTab), { loading: tabLoading });
+const AuditTab = nextDynamic(() => import("./OperationsTabs").then((m) => m.AuditTab), { loading: tabLoading });
+const CountsTab = nextDynamic(() => import("./CountsTab").then((m) => m.CountsTab), { loading: tabLoading });
+const StaleStockTab = nextDynamic(() => import("./StaleStock").then((m) => m.StaleStockTab), { loading: tabLoading });
+const ExpiryTab = nextDynamic(() => import("./InventoryExtras").then((m) => m.ExpiryTab), { loading: tabLoading });
+const PurchasesTab = nextDynamic(() => import("./PurchasesTabs").then((m) => m.PurchasesTab), { loading: tabLoading });
+const SuppliersTab = nextDynamic(() => import("./PurchasesTabs").then((m) => m.SuppliersTab), { loading: tabLoading });
+const PayablesTab = nextDynamic(() => import("./Payables").then((m) => m.PayablesTab), { loading: tabLoading });
+const InternalCreditTab = nextDynamic(() => import("./InternalCredit").then((m) => m.InternalCreditTab), { loading: tabLoading });
+const ManifestsTab = nextDynamic(() => import("./ManifestsUI").then((m) => m.ManifestsTab), { loading: tabLoading });
 
 type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry" | "conteos";
 

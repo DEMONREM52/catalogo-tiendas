@@ -1,6 +1,6 @@
 "use client";
 
-import { BUILD_RELEASE, releaseTouches, type Release } from "./changelog";
+import { BUILD_RELEASE, releaseTouches, type Release } from "./release";
 
 /**
  * Instalación y actualización de la app (PWA) en el navegador.

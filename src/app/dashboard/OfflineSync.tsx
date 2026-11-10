@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { clearPracticeDrafts, getDrafts, restoreDrafts, subscribeDrafts } from "@/lib/pos/drafts";
 import { syncOfflineDrafts } from "@/lib/pos/sync";
 import { useNetStatus } from "@/lib/net/status";

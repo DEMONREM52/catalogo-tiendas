@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { KeyRound, Pencil, PlugZap, Plus, Power, ShieldCheck, Wifi } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { errorText, fiscalApi, fiscalRpc } from "@/lib/fiscal/client";
 import { PROVIDER_CREDENTIAL_FIELDS, PROVIDER_SETTINGS_HELP } from "@/lib/fiscal/provider-fields";
 import type { ProviderAccount } from "@/lib/fiscal/types";

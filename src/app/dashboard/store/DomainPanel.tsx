@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRunOnChange } from "../inventario/shared";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Check, Copy, ExternalLink, Globe, Loader2, RefreshCw, Search, Star, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { PRODUCTION_HOST, PRODUCTION_ORIGIN } from "@/lib/share/origin";

@@ -3,7 +3,7 @@
 import { IconBtn } from "@/app/dashboard/IconBtn";
 import { WithDv, docWithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AttachmentPicker, uploadStaged, type Staged } from "./AttachmentsUI";
 import { LineEditor, type Line, type LineEditorHandle } from "./LineEditor";

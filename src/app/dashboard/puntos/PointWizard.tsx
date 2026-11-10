@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { DOC_TYPE_INFO, type PointReadiness } from "@/lib/fiscal/types";

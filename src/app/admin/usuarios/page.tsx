@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 import { STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";

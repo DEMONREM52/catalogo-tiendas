@@ -3,12 +3,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import {
   BellOff, Check, CheckCheck, ChevronDown, ChevronUp, Copy, CornerUpLeft, Forward, Info, Loader2, PackagePlus, Pencil, Phone, Pin, PinOff,
   Search, Star, StarOff, Trash2, Video, X,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MessageMedia, type Attachment } from "@/app/dashboard/pedidos/internos/chat-media";
 import { EDIT_WINDOW_MS, chatRpc, mentionTag, newRequestUrl, type ChatPerson, type Extra, type Extras, type ProductCardData, type Reader, type Scope } from "./chat-api";

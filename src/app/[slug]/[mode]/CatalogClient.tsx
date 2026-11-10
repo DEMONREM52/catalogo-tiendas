@@ -6,8 +6,8 @@ import { RichText } from "@/components/RichText";
 import { ArrowRight, ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, Lock, MapPin, MessageCircle, Pause, Play, ScanSearch, Search, ShoppingCart, Sparkles, X } from "lucide-react";
 import { CatalogFinderButton, type CatalogFinderContext } from "@/components/product-finder/CatalogFinder";
 import { InstallButton } from "@/components/pwa/InstallButton";
-import { AnimatePresence, motion } from "framer-motion";
-import Swal from "sweetalert2";
+import { AnimatePresence, m as motion } from "framer-motion";
+import Swal from "@/lib/swal";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { StoreContactIcon } from "@/components/StoreContactIcon";

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { TAB_COLORS } from "@/components/ui/SectionTabs";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import Swal from "sweetalert2";
+import { m as motion } from "framer-motion";
+import Swal from "@/lib/swal";
 import type { User } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
@@ -17,7 +17,6 @@ import { pendingDraftCount } from "@/lib/pos/drafts";
 import { resilientUser, signOutEverywhere } from "@/lib/supabase/offline-session";
 import { ERP_PERMISSIONS } from "@/lib/store-user-auth";
 import NotificationBell from "./NotificationBell";
-import { BirthdayHub } from "./BirthdayHub";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { ManifestLink } from "@/components/pwa/ManifestLink";
 import { forgetStaffAccess } from "@/lib/session-resume";
@@ -26,7 +25,6 @@ import {
 } from "@/lib/store-utils";
 import { useNicknameUpdates } from "./Nickname";
 import { StockRequestWatcher } from "./pedidos/internos/StockRequestWatcher";
-import { CallManager } from "./pedidos/internos/CallManager";
 import { DmWatcher } from "./mensajes/DmWatcher";
 import { ImageIndexer } from "./ImageIndexer";
 import { InventoryAlertWatcher } from "./inventario/InventoryAlertWatcher";
@@ -41,11 +39,10 @@ import { OutsideScheduleScreen, SimulationBanner, readSimulation, useMyAccess, t
 import { logSessionEvent } from "@/lib/audit-client";
 import { currentStoreSubdomain, logoutRedirect, requestStorePass, storeSpaceJump } from "@/lib/store-space";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
-import { CommandPalette, openCommandPalette, type PaletteLink } from "@/components/CommandPalette";
+import type { PaletteLink } from "@/components/CommandPalette";
+import { openCommandPalette } from "@/components/command-events";
 import { SEARCH_INDEX } from "@/lib/search-index";
 import { markLiteDevice } from "@/lib/lite-device";
-import { HelpButton } from "@/components/HelpButton";
-import { GuidedTourHost } from "@/components/tour/GuidedTour";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
 import nextDynamic from "next/dynamic";
 import { useAnimatedBackground } from "@/components/ThemeControl";
@@ -55,6 +52,13 @@ import { SmartLogo } from "@/components/ui/SmartLogo";
 // Fondo animado (red con pulsos): se descarga aparte y solo si está encendido.
 const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.PanelBackdrop), { ssr: false });
 const MouseGlow = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.MouseGlow), { ssr: false });
+// Piezas del panel que no hacen falta para ver la página: se descargan justo después, en archivos aparte
+// (buscador Ctrl+K, ayuda y recorridos, cumpleaños, llamadas). Así el panel se puede usar antes en celulares sencillos.
+const CommandPalette = nextDynamic(() => import("@/components/CommandPalette").then((m) => m.CommandPalette), { ssr: false });
+const HelpButton = nextDynamic(() => import("@/components/HelpButton").then((m) => m.HelpButton), { ssr: false });
+const GuidedTourHost = nextDynamic(() => import("@/components/tour/GuidedTour").then((m) => m.GuidedTourHost), { ssr: false });
+const BirthdayHub = nextDynamic(() => import("./BirthdayHub").then((m) => m.BirthdayHub), { ssr: false });
+const CallManager = nextDynamic(() => import("./pedidos/internos/CallManager").then((m) => m.CallManager), { ssr: false });
 
 type Role = "admin" | "store";
 

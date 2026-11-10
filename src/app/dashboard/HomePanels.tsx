@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 

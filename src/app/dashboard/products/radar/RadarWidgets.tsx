@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { X } from "lucide-react";
 import { ddmmyyyy, healthColor, healthLabel } from "@/lib/products/radar";
 

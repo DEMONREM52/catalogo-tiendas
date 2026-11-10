@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Plus, X } from "lucide-react";
 import { MoneyField } from "@/components/forms/Fields";
 

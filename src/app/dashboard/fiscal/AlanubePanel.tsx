@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { errorText, fiscalApi } from "@/lib/fiscal/client";
 import type { ProviderAccount } from "@/lib/fiscal/types";
 import { Button, notify, swal } from "./ui";

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Check, HandCoins, Plus, Receipt, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField, Field, MoneyField, NumberField } from "@/components/forms/Fields";
 import { Sheet as FormSheet } from "@/components/forms/Sheet";

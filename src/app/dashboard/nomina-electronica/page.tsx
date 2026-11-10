@@ -2,7 +2,7 @@
 
 import { BankSelect, NO_AUTOFILL } from "@/components/forms/BankSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { DateField } from "@/components/forms/Fields";
 import { errorText, fiscalApi, fiscalRpc } from "@/lib/fiscal/client";

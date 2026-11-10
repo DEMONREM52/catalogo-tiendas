@@ -4,9 +4,9 @@
 // («necesito más», «otro color», «dañado»…) y «✓ Atendido» para que nada se quede sin resolver.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, Loader2, MessageCircle, Send, Trash2, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export type ItemComment = {

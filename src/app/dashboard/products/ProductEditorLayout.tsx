@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, CircleDot, Loader2, Save } from "lucide-react";
 import { SectionTabs } from "@/components/ui/SectionTabs";
 

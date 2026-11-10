@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { WithDv } from "@/app/dashboard/nit";
 import { useCallback, useEffect, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import PointBillingPanel from "./PointBillingPanel";
 import BoldPanel from "./BoldPanel";
 import { supabaseBrowser } from "@/lib/supabase/client";

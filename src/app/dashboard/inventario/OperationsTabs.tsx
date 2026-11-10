@@ -8,7 +8,7 @@ import {
   inputClass, inputStyle, tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type Warehouse,
 } from "./shared";
 import { DateField } from "@/components/forms/Fields";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 import { SkeletonList } from "@/components/ui/Skeleton";
 

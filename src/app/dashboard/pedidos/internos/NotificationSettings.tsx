@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { BellRing, Check, ChevronDown, Dices, Play, RotateCcw, Smartphone, Store, Undo2, Volume2, VolumeX, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { disablePush, enablePush, getPushState, sendTestPush, type PushState } from "@/lib/pwa/push";
 import { PushDiagnostics } from "./PushDiagnostics";

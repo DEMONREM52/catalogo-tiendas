@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRunOnChange } from "../inventario/shared";
 import { AlertTriangle, CalendarClock, Download, HandCoins, MessageCircle, RefreshCw, Search, TrendingUp, Users, Wallet } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { askPayment } from "./StatementDrawer";

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ScanEye, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AuditEventCard } from "./AuditEventCard";

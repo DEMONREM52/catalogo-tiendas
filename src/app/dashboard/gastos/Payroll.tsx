@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Check, ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Printer, Settings2, Trash2, Undo2, UserPlus, Users, XCircle } from "lucide-react";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import {
   ChoiceChips, DateField, Field, METHODS, MoneyField, NumberField, PERIOD_LABEL, PaymentSheet, Sheet, ask, askDelete, cardStyle, cop, done, downloadCsv, esc, fail, fdate, field, ghostBtn,

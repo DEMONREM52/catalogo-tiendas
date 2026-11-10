@@ -2,9 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { CheckCheck, Eye, EyeOff, Loader2, MapPin, PackageMinus, PackagePlus, Search, Star, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { catalogPrice, PRICE_LEVELS, productPriceForLevel, type StoreCatalog } from "@/lib/catalogs";

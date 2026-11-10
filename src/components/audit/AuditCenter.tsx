@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Download, RefreshCw, ScanEye, ShieldCheck, ShieldAlert } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ChoiceChips, DateField } from "@/components/forms/Fields";
 import { AuditEventCard } from "./AuditEventCard";

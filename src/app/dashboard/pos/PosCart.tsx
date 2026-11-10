@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ChevronDown, Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { OtherPointsStock } from "./OtherPointsStock";

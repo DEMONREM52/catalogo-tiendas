@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { inOneTab } from "@/lib/sounds/one-tab";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { BellRing, ChevronDown, ChevronUp, Wallet, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";

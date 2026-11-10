@@ -2,9 +2,9 @@
 
 import { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, Link2, PenLine, Share2, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { SignaturePad, type SignaturePadHandle } from "@/app/traslado/[token]/SignaturePad";
 import { srError, type SrDetail, type SrSignature, type SrSignStep } from "./types";

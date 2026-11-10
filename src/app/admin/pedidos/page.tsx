@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { fetchAdminData, requestAdmin } from "@/lib/admin-data";
 import { smartFilter } from "@/lib/search";
 import { DateField } from "@/components/forms/Fields";

@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Lock, MapPin, MessageCircle, ShoppingBag } from "lucide-react";
 import { catalogPrice, PRICE_LEVELS, type StoreCatalog } from "@/lib/catalogs";
 import type { PreviewItem, ThemeOption } from "./types";

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { Check, Copy, Eraser, Lock, Save, Search, ShieldAlert, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import {
   PERMISSION_GROUPS, PERMISSION_LIST, PERMISSION_PRESETS, PERMISSION_REQUIRES, cleanPermissions, permissionLabel, togglePermission,

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ArrowLeft, BellOff, Camera, Image as ImageIcon, Loader2, Lock, Megaphone, Mic, Music, Package, Paperclip, Phone, Search, Send, Trash2, Users, Video, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "../pedidos/internos/chat-media";
 import { startChatCall } from "../pedidos/internos/CallManager";

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { MessageCircle, PackagePlus, Repeat, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isOwnRecent, loadStoreSoundConfig, soundFor } from "@/lib/sounds/notify";

@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { storeHref } from "@/lib/share/store-path";
 import { Eye, Megaphone, Pencil, Power, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { ShareProductButton } from "@/components/ShareProductButton";

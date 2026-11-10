@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { TriangleAlert } from "lucide-react";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Send, Unlock } from "lucide-react";
 import { errorText, fiscalApi, fiscalRpc } from "@/lib/fiscal/client";
 import type { FiscalAccess } from "./useFiscal";

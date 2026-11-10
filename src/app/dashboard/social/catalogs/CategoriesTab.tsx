@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Eye, EyeOff, ImagePlus, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";

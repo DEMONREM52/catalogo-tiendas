@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { RefreshCw, Sparkles, X } from "lucide-react";
 import { applyUpdate, startPwa, takeUpdateNews } from "@/lib/pwa/client";
-import type { Release } from "@/lib/pwa/changelog";
-import { usePwa } from "./InstallSheet";
+import type { Release } from "@/lib/pwa/release";
+import { usePwa } from "./usePwa";
 import { ConnectionBanner } from "./ConnectionBanner";
 
 /**

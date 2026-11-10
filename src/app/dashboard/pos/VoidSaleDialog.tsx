@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Ban, Boxes, CreditCard, FileWarning, Loader2, RotateCcw, ShieldAlert, Undo2, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 

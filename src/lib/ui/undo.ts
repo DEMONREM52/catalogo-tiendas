@@ -1,6 +1,6 @@
 "use client";
 
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 
 /**
  * «Hecho · Deshacer»: en acciones pequeñas (quitar un producto de una lista) no se pregunta «¿Seguro?».

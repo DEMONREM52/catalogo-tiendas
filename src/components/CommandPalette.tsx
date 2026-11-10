@@ -9,6 +9,7 @@ import { parseQuery, scoreItem } from "@/lib/fuzzy-search";
 import { announceUrlChange } from "@/lib/url-intent";
 import { peekSearch, searchDelay, storeSearch, useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
+import { OPEN_PALETTE_EVENT, OPEN_SHORTCUTS_EVENT, openCommandPalette, openShortcuts } from "./command-events";
 
 /**
  * Buscador global (Ctrl+K / ⌘K): páginas, cada pestaña de cada módulo, acciones («nuevo vale», «crear factura»),
@@ -34,10 +35,9 @@ const saveRecent = (h: { href: string; label: string }) => {
   } catch { /* sin almacenamiento */ }
 };
 
-const OPEN_EVENT = "remhub-open-palette";
-export const openCommandPalette = () => window.dispatchEvent(new Event(OPEN_EVENT));
-const HELP_EVENT = "remhub-open-shortcuts";
-export const openShortcuts = () => window.dispatchEvent(new Event(HELP_EVENT));
+const OPEN_EVENT = OPEN_PALETTE_EVENT;
+const HELP_EVENT = OPEN_SHORTCUTS_EVENT;
+export { openCommandPalette, openShortcuts };
 
 const clean = (t: string) => t.replace(/[,()*%\\"]/g, " ").trim();
 const isTyping = (el: EventTarget | null) => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { fetchAdminData } from "@/lib/admin-data";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";

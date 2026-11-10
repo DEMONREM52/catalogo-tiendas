@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Check, ChevronDown, Copy, KeyRound, Plug, Plus, RefreshCw, Star, Trash2, Zap } from "lucide-react";
 import { errorText, fiscalApi } from "@/lib/fiscal/client";
 import { SkeletonList } from "@/components/ui/Skeleton";

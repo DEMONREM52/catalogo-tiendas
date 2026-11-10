@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m as motion, useInView, useReducedMotion } from "framer-motion";
 import { IMPLEMENTATION_EXTRAS, IMPLEMENTATION_PACKAGES, IMPLEMENTATION_TERMS, TRADITIONAL_VS_REMHUB } from "@/lib/saas/implementation";
 
 const cop = (n: number) => "$ " + Math.round(n).toLocaleString("es-CO");

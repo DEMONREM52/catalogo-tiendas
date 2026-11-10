@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Database, Eye, EyeOff, Gift, Globe2, Info, Link2, MapPin, Megaphone, MessageCircle, Palette, Plus, Power, Save, ShieldCheck, Star, Store, Trash2, Zap } from "lucide-react";
 import { SettingsSections, SubCard } from "./SettingsSections";
 import { TeamCodeCard } from "./TeamCodeCard";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { ImageUpload } from "./ImageUpload";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";

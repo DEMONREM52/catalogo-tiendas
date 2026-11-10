@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Check, ExternalLink, Search, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";

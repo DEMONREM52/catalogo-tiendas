@@ -4,9 +4,9 @@
 import { useEffect, useState, useSyncExternalStore, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from "react";
 import { SectionTabs } from "@/components/ui/SectionTabs";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, Copy, Loader2, X } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { ENV_INFO, STATUS_INFO, type FiscalEnvironment, type FiscalStatus, type FiscalTone } from "@/lib/fiscal/types";
 
 export const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };

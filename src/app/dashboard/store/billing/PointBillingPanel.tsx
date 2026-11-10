@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import Swal from "sweetalert2";
+import { AnimatePresence, m as motion } from "framer-motion";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../ImageUpload";
 import { DateField } from "@/components/forms/Fields";

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 
 type Level = { score: 0 | 1 | 2 | 3 | 4; label: string; color: string; tip: string };
 

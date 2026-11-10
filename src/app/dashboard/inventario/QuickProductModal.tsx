@@ -8,7 +8,7 @@ import { requestImageIndex } from "@/lib/image-search/indexer";
 import { EMPTY_PRODUCT_DETAILS } from "@/lib/product-details";
 import { MoneyInput } from "../MoneyInput";
 import { checkProductCode, cleanProductCode } from "../products/product-code";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { errorMessage, inputClass, inputStyle, money, toast, type ProductHit } from "./shared";
 import type { Line } from "./LineEditor";
 import { PctInput } from "./PctInput";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Sheet } from "@/components/forms/Sheet";

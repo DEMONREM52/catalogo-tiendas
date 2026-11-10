@@ -1,7 +1,7 @@
 "use client";
 
 import { Share2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 
 export function ShareProductButton({
   title,

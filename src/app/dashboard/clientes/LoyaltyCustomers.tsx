@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useLoyaltyBrand } from "@/lib/loyalty/brand";

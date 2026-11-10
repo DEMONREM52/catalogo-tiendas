@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import Link from "next/link";
 import { Lock, Percent, Receipt, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";

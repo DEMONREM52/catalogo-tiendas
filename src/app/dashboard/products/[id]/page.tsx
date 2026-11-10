@@ -6,7 +6,7 @@ import { PublishButton } from "@/components/products/PublishButton";
 import { OfferPanel } from "../OfferPanel";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ImageUpload } from "../../store/ImageUpload";

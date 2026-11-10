@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, ClipboardList, Eye, Loader2, RotateCcw, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ddmmyyyy, ISSUES, type IssueKey } from "@/lib/products/radar";
 import { Sheet } from "./RadarWidgets";

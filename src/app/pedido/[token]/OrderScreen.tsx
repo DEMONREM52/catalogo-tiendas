@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import Link from "next/link";
 import { Check, Copy, FileDown, Lock, MessageCircle, Minus, Plus, Printer, RotateCcw, Save, Share2 } from "lucide-react";
 import { PAY_LABEL, payLabel, type ReceiptPayment } from "./receipt-extras";

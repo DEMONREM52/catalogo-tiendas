@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRunOnChange } from "../inventario/shared";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { MapPin, Plus, Search, Users, Warehouse } from "lucide-react";
 import { smartFilter } from "@/lib/search";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";

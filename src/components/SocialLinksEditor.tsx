@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m as motion } from "framer-motion";
 import { Eye, EyeOff, ExternalLink, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import {
   SOCIAL_BRANDS,

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { m as motion } from "framer-motion";
 import { ExternalLink, Loader2, Save, X, Zap } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { ImageUpload } from "../../store/ImageUpload";

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useUrlAction } from "@/lib/url-intent";
 import { AnimatePresence } from "framer-motion";
 import { Banknote, Camera, Check, Download, FileText, Hash, Paperclip, Pencil, Plus, Receipt, Search, Store, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { compressImage, MAX_PDF_BYTES } from "../inventario/attachments";
 import { PAY_METHODS } from "@/components/forms/Sheet";

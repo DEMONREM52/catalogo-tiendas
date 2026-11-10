@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useLoyaltyBrand, type LoyaltyBrand } from "@/lib/loyalty/brand";
 import { DateField } from "@/components/forms/Fields";
