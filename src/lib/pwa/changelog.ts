@@ -809,6 +809,17 @@ export const RELEASES: Release[] = [
       { icon: "📷", text: "Stock → Conteos: cuenta una zona" },
     ],
   },
+  {
+    id: 77, date: "2026-11-10", title: "Primeros pasos guiados y tienda demo",
+    summary: "Los primeros pasos de una tienda nueva ahora marcan el siguiente paso, incluyen «confirma tu primera venta» y celebran cuando terminas (se pueden apagar en Funciones opcionales). Para el administrador de RemHub: tienda de demostración en Admin → Tienda demo. Escoges una tienda de prueba y el usuario con el que entran los visitantes, tomas una foto y cada cierto tiempo (tú lo escoges) vuelve sola a como estaba. Los visitantes entran desde remhub.co/demo.",
+    paths: ["/admin/demo", "/dashboard/vender-mas"],
+    demo: [
+      { icon: "🧪", text: "Admin → Tienda demo" },
+      { icon: "🏪", text: "Escribe la tienda y el usuario demo" },
+      { icon: "📸", text: "Toma la foto de la base" },
+      { icon: "🚀", text: "Comparte remhub.co/demo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

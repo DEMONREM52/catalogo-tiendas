@@ -109,7 +109,7 @@ export function shortLinkTarget(links: Record<string, string> | null | undefined
 }
 
 /** Primeras partes de ruta de remhub.co que no son tiendas. */
-const PLATFORM_ROOTS = new Set(["", "_next", "api", "acceso", "admin", "comprobante", "dashboard", "documento", "entrar", "forgot-password", "instalar", "login",
+const PLATFORM_ROOTS = new Set(["", "_next", "api", "acceso", "admin", "comprobante", "dashboard", "demo", "documento", "entrar", "forgot-password", "instalar", "login",
   "offline", "pedido", "registro", "reset-password", "tienda-pausada", "traslado", "firma-vale", "firma-pedido", "firma-liquidacion", "robots.txt", "sitemap.xml", "manifest.webmanifest", "sw.js", "favicon.ico"]);
 
 /** remhub.co/lavitrina/zamora → { slug: "lavitrina", rest: "/zamora" } (null si la ruta no es de una tienda). */

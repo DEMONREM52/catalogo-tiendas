@@ -1563,3 +1563,22 @@ html.lite .catalog-featured-card::before, html.lite .featured-shine::after { ani
   .ship-fill { transition: none; }
 }
 html.lite .vm-card-on::after, html.lite .ship-truck, html.lite .ship-truck-go, html.lite .notify-bell, html.lite .vm-tray, html.lite .vm-row { animation: none !important; }
+
+/* ===== Primeros pasos (20261314) ===== */
+.onb-next { animation: onb-glow 2.6s ease-in-out infinite; }
+@keyframes onb-glow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--t-accent) 0%, transparent); } 50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--t-accent) 22%, transparent); } }
+.onb-done { animation: vm-pop .5s cubic-bezier(.2,1.6,.4,1) both; }
+.onb-confetti span { position: absolute; top: -20px; font-size: 22px; animation: onb-fall 2.4s ease-in both; pointer-events: none; }
+@keyframes onb-fall { 0% { transform: translateY(0) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(220px) rotate(220deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .onb-next, .onb-done, .onb-confetti span { animation: none !important; } .onb-confetti { display: none; } }
+html.lite .onb-next, html.lite .onb-confetti span { animation: none !important; }
+
+/* ===== Página /demo (20261314) ===== */
+.demo-orb { position: absolute; border-radius: 9999px; filter: blur(10px); pointer-events: none; }
+.demo-orb-a { top: -180px; right: -160px; width: 520px; height: 520px; background: radial-gradient(circle, rgba(168,85,247,.45), transparent 70%); animation: demo-float 9s ease-in-out infinite; }
+.demo-orb-b { bottom: -220px; left: -180px; width: 560px; height: 560px; background: radial-gradient(circle, rgba(236,72,153,.3), transparent 70%); animation: demo-float 11s ease-in-out infinite reverse; }
+@keyframes demo-float { 0%, 100% { transform: translate(0, 0) } 50% { transform: translate(20px, 26px) } }
+.demo-cta { box-shadow: 0 20px 50px -18px rgba(236,72,153,.9); animation: demo-pulse 2.6s ease-in-out infinite; }
+@keyframes demo-pulse { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.035) } }
+.demo-card { animation: vm-in .45s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .demo-orb-a, .demo-orb-b, .demo-cta, .demo-card { animation: none !important; } }

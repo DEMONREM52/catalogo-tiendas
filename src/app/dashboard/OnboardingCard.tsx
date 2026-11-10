@@ -18,6 +18,7 @@ const LABELS: Record<string, [string, string, string]> = {
   products5: ["Sube al menos 5 productos con foto", "Con fotos se vende mucho más.", "/dashboard/products"],
   catalog: ["Arma tu catálogo", "Elige qué productos y qué precios ve cada público.", "/dashboard/social"],
   share: ["Comparte tu enlace y recibe tu primer pedido", "Mándalo por WhatsApp a tus clientes y súbelo a tus estados.", ""],
+  sale: ["Confirma tu primera venta", "Confirma un pedido en Pedidos o vende en el POS. ¡Ahí empieza todo!", "/dashboard/pedidos"],
   team: ["Invita a alguien de tu equipo", "Cada persona con su usuario y sus permisos.", "/dashboard/store/users"],
 };
 
@@ -30,13 +31,17 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
   const [examples, setExamples] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // Al terminar todo se celebra una vez y luego se oculta sola.
+  const doneKey = `remhub:onboarding-done:${storeId}`;
+  const [celebrated, setCelebrated] = useState(() => { try { return window.localStorage.getItem(doneKey) === "1"; } catch { return false; } });
 
   useEffect(() => {
     if (hidden) return;
     let alive = true;
     void supabaseBrowser().rpc("saas_onboarding", { p_store: storeId }).then(({ data, error }) => {
-      const v = data as { ok?: boolean; steps?: Step[] } | null;
-      if (alive && !error && v?.ok) setSteps(v.steps ?? []);
+      const v = data as { ok?: boolean; on?: boolean; steps?: Step[] } | null;
+      // Apagado en Funciones opcionales (20261314): no se muestra.
+      if (alive && !error && v?.ok) setSteps(v.on === false ? [] : v.steps ?? []);
     });
     return () => { alive = false; };
   }, [storeId, hidden, reload]);
@@ -56,8 +61,24 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
     setReload((n) => n + 1);
   }
 
-  if (hidden || !steps || steps.every((s) => s.done)) return null;
+  if (hidden || !steps || !steps.length) return null;
+  if (steps.every((s) => s.done)) {
+    if (celebrated) return null;
+    return (
+      <section className="onb-done relative overflow-hidden rounded-[28px] border p-6 text-center" style={{ borderColor: "color-mix(in oklab, #10b981 45%, var(--t-card-border))", background: "linear-gradient(135deg, color-mix(in oklab, #10b981 12%, var(--t-card-bg)), color-mix(in oklab, #8b5cf6 10%, var(--t-card-bg)))" }}>
+        <div className="onb-confetti" aria-hidden>{["🎉", "✨", "🛍️", "🚀", "💜", "🎊"].map((e, i) => <span key={i} style={{ left: `${8 + i * 16}%`, animationDelay: `${i * 120}ms` }}>{e}</span>)}</div>
+        <p className="text-4xl" aria-hidden>🏆</p>
+        <h2 className="mt-2 text-xl font-black">¡Tu tienda está lista para vender!</h2>
+        <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>Completaste todos los primeros pasos. Ahora mira las Funciones opcionales para vender aún más.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Link href="/dashboard/vender-mas" prefetch={false} className="rounded-xl px-4 py-2.5 text-sm font-black text-white" style={{ background: "linear-gradient(135deg,#8b5cf6,#10b981)" }}>🧩 Ver funciones opcionales</Link>
+          <button type="button" onClick={() => { try { window.localStorage.setItem(doneKey, "1"); } catch { /* sin almacenamiento */ } setCelebrated(true); }} className="rounded-xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>Listo, cerrar</button>
+        </div>
+      </section>
+    );
+  }
   const done = steps.filter((s) => s.done).length;
+  const nextKey = steps.find((s) => !s.done)?.key;
   const pct = Math.round((done / steps.length) * 100);
   const shareUrl = `${storeSpaceOrigin(slug) ?? `${PRODUCTION_ORIGIN}/${slug}`}/`;
 
@@ -109,7 +130,11 @@ export function OnboardingCard({ storeId, slug }: { storeId: string; slug: strin
               {s.done || !href ? (
                 <div className="flex items-start gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>{body}</div>
               ) : (
-                <Link href={href} prefetch={false} className="flex items-start gap-3 rounded-2xl border p-3 transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>{body}</Link>
+                <Link href={href} prefetch={false} className={`flex items-start gap-3 rounded-2xl border p-3 transition hover:-translate-y-0.5 ${s.key === nextKey ? "onb-next" : ""}`}
+                  style={{ borderColor: s.key === nextKey ? "var(--t-accent)" : "var(--t-card-border)", background: s.key === nextKey ? "color-mix(in oklab, var(--t-accent) 9%, transparent)" : undefined }}>
+                  {body}
+                  {s.key === nextKey ? <span className="ml-auto shrink-0 self-center rounded-full px-2.5 py-1 text-[10px] font-black text-white" style={{ background: "var(--t-accent)" }}>Sigue aquí →</span> : null}
+                </Link>
               )}
             </li>
           );

@@ -11,6 +11,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { isNetworkError, reportNetworkError, useNetStatus } from "@/lib/net/status";
 import { cacheAge, cacheClear, withTimeout } from "@/lib/offline/cache";
 import { PlanNotice } from "./PlanNotice";
+import { DemoBanner } from "./DemoBanner";
 import { OfflineSync } from "./OfflineSync";
 import { pendingDraftCount } from "@/lib/pos/drafts";
 import { resilientUser, signOutEverywhere } from "@/lib/supabase/offline-session";
@@ -1085,6 +1086,7 @@ export default function DashboardShell({
               background: "var(--t-card-bg)",
             }}
           >
+            {role === "store" && store ? <DemoBanner storeId={store.id} /> : null}
             {role === "store" ? <ModuleNav canOpen={canOpen} isAdmin={storeIsOwner || storeMemberRole === "store_admin"} /> : null}
             {children}
           </section>

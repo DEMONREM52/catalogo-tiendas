@@ -371,6 +371,9 @@ export default function HomePage() {
               <Link href="/registro" className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-xl transition hover:-translate-y-0.5" style={{ background: "var(--t-cta)" }}>
                 <Sparkles size={17} /> Crear mi tienda gratis
               </Link>
+              <Link href="/demo" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "color-mix(in oklab, var(--t-cta) 55%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-cta) 10%, var(--t-card-bg))" }}>
+                🧪 Probar la demo del panel
+              </Link>
               {DEMO_URL ? (
                 <a href={DEMO_URL} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
                   <Store size={16} /> Ver una tienda de ejemplo
