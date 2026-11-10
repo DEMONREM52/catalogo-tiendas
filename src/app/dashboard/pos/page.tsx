@@ -168,10 +168,13 @@ const DEFAULT_PRICE_LIST = 3;
 type PointOption = { id: string; name: string; kind?: "point" | "warehouse"; is_default?: boolean; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
 type SellerOption = { user_id: string; name: string; role: string; point_id?: string | null };
 
-/** Vendedores del punto: solo los usuarios creados para ese punto (si aún no existe el dato, todos). */
+/**
+ * Vendedores del punto: los usuarios de ese punto y, en TODOS los puntos, el dueño, los administradores y quien no
+ * tiene punto asignado (ve toda la tienda). Si la base aún no manda el punto de cada uno, salen todos.
+ */
 function sellersForPoint(rows: SellerOption[], pointId: string) {
   if (!rows.some((r) => r.point_id !== undefined)) return rows;
-  return rows.filter((r) => r.point_id && r.point_id === pointId);
+  return rows.filter((r) => r.role === "owner" || r.role === "store_admin" || !r.point_id || r.point_id === pointId);
 }
 
 /** Error de la base al vender o editar, en palabras: qué producto falló y qué hacer. */

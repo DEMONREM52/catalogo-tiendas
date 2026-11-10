@@ -289,6 +289,13 @@ function PointDossier({ id }: { id: string }) {
             </div>
           ))}
           {!data.users.length ? <Notice tone="warn">Aún no hay usuarios en este punto.</Notice> : null}
+          <div className="rounded-xl border border-dashed p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+            <p className="font-bold">👑 También venden aquí (en todos los puntos)</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--t-muted)" }}>
+              {["El dueño", ...team.filter((m) => m.role === "store_admin").map(memberName)].join(" · ")}
+              {" — "}no se asignan a un punto: en el POS escogen el punto y salen como vendedores en cualquiera.
+            </p>
+          </div>
           {canAdmin && team.some((m) => m.role !== "store_admin" && m.point_id !== p.id) ? (
             <Field label="Asignar un usuario existente a este punto">
               <select className={inputCls} style={inputStyle} value="" onChange={(e) => e.target.value && void assign(e.target.value)}>
