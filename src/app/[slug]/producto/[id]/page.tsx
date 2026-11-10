@@ -229,7 +229,8 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
   const endsText = deal?.before ? endsInText(deal.ends_at, Date.now()) : null;
   try {
     const [bestRes, sameCat] = await Promise.all([
-      sb.rpc("store_public_best_sellers", { p_store: store.slug, p_limit: 10 }),
+      sb.rpc("store_public_best_sellers", { p_store: store.slug, p_limit: 10, p_catalog: catalogSlug })
+        .then((r) => (r.error && /Could not find the function|schema cache/i.test(r.error.message) ? sb.rpc("store_public_best_sellers", { p_store: store.slug, p_limit: 10 }) : r)),
       product.category_id
         ? sb.from("products").select("id").eq("store_id", store.id).eq("category_id", product.category_id).eq("active", true).neq("id", product.id).or("stock.is.null,stock.gt.0").limit(12)
         : Promise.resolve({ data: [] as Array<{ id: string }> }),

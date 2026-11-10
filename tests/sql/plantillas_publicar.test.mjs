@@ -91,5 +91,38 @@ ok((await pub()).ids.length === 0, "Apagado: no sale");
 ok((await call(VEND, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "off", null, [], 60, true])).ok === false, "Sin permiso: no lo cambia");
 ok((await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6)", [A, "raro", null, [], 60, true])).ok === false, "Modo raro: no");
 
+console.log("— 20261311: lo más vendido por catálogo");
+await raw("alter table store_catalogs add column if not exists slug text");
+const M3 = fs.readFileSync(path.join(MIG, "20261311_mas_vendido_por_catalogo.sql"), "utf8");
+await db.exec(M3); await db.exec(M3);
+cfg = await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [A, "auto", "Top", [], 60, true, ["Zamora", "mayor", "../x"], 3, "Lo que más sale", "🏆"]);
+ok(cfg.ok && JSON.stringify(cfg.config.catalog_slugs.sort()) === JSON.stringify(["mayor", "zamora"]) && cfg.config.max_items === 3 && cfg.config.icon === "🏆", "Guarda catálogos, cantidad, subtítulo y emoji", cfg);
+const pubCat = async (cat) => { await db.exec("set role anon"); try { return (await db.query("select public.store_public_best_sellers('tienda-a', 12, $1) r", [cat])).rows[0].r; } finally { await db.exec("reset role"); } };
+best = await pubCat("zamora");
+ok(best.ids.length === 2 && best.subtitle === "Lo que más sale" && best.icon === "🏆", "En Zamora sale (máx. 3)", best);
+ok((await pubCat("detal")).ids.length === 0, "En el catálogo al detal no sale (no está escogido)");
+ok((await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [A, "auto", null, [], 60, true, [], 50, null, null])).ok === false, "Más de 30 productos: no");
+await call(OWNER, "best_sellers_config_save($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [A, "auto", null, [], 60, true, [], 12, null, null]);
+ok((await pubCat("detal")).ids.length === 2, "Sin catálogos escogidos: sale en todos");
+// Independiente por catálogo
+cfg = await call(OWNER, "best_sellers_catalog_save($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [A, "Mayor", "manual", "Lo top mayorista", [X2], 60, false, 6, null, "💎"]);
+ok(cfg.ok && cfg.catalogs.mayor?.mode === "manual", "El catálogo mayor tiene la suya", cfg.catalogs);
+best = await pubCat("mayor");
+ok(JSON.stringify(best.ids) === JSON.stringify([X2]) && best.title === "Lo top mayorista" && best.own === true && best.badges === false, "Mayor: solo su escogido, con su título", best);
+ok((await pubCat("detal")).ids.length === 2, "Detal sigue con la general");
+await call(OWNER, "best_sellers_catalog_save($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [A, "detal", "off", null, [], 60, true, 12, null, null]);
+ok((await pubCat("detal")).ids.length === 0, "Detal apagado solo en ese catálogo");
+ok((await pubCat("zamora")).ids.length === 2, "Los demás siguen igual");
+cfg = await call(OWNER, "best_sellers_catalog_reset($1, $2)", [A, "detal"]);
+ok(!cfg.catalogs.detal && (await pubCat("detal")).ids.length === 2, "Volver a la general");
+// Catálogo con punto: cuenta las ventas de ese punto
+const [{ id: PT }] = await raw("insert into erp_warehouses (store_id, code, name, active, kind) values ($1, 'ZAM', 'Zamora', true, 'point') returning id", [A]);
+await raw("insert into store_catalogs (store_id, name, slug, point_id) values ($1, 'Zamora', 'zamora', $2)", [A, PT]);
+const [{ id: OZ }] = await raw("insert into orders (store_id, token, total, status) values ($1, md5(random()::text), 1, 'completed') returning id", [A]);
+await raw("insert into order_items (order_id, product_id, quantity, price) values ($1, $2, 1, 1)", [OZ, X2]);
+await raw("insert into erp_order_meta (order_id, store_id, point_id, doc_kind, doc_number) values ($1, $2, $3, 'remision', 'Z-1')", [OZ, A, PT]);
+best = await pubCat("zamora");
+ok(JSON.stringify(best.ids) === JSON.stringify([X2]), "Zamora (con punto): solo lo vendido en Zamora", best);
+
 console.log(`\n${pass} bien, ${fail} mal`);
 process.exit(fail ? 1 : 0);

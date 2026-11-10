@@ -342,19 +342,22 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     const storeRef = { id: store.id, slug: store.slug };
     void (async () => {
       const sb = supabaseBrowser();
-      const { data, error } = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12 });
+      let res = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12, p_catalog: catalog?.slug ?? safeMode });
+      // Sin 20261311 todavía: la versión sin catálogo.
+      if (res.error && /Could not find the function|schema cache/i.test(res.error.message)) res = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12 });
+      const { data, error } = res;
       if (error || !data) return;
-      const d = (Array.isArray(data) ? { ids: data } : data) as { ids?: unknown[]; title?: string | null; badges?: boolean };
+      const d = (Array.isArray(data) ? { ids: data } : data) as { ids?: unknown[]; title?: string | null; badges?: boolean; subtitle?: string | null; icon?: string | null };
       const ids = (d.ids ?? []).map(String);
       if (!ids.length) return;
       const items = await fetchPublicItems(sb, storeRef, catalog?.slug ?? safeMode, key, ids);
       if (!alive) return;
-      setBestMeta({ title: d.title?.trim() || "Lo más vendido", badges: d.badges !== false });
+      setBestMeta({ title: d.title?.trim() || "Lo más vendido", badges: d.badges !== false, subtitle: d.subtitle ?? null, icon: d.icon ?? null });
       setBestSellers(ids.map((id) => items.get(id)).filter((x): x is PublicItem => Boolean(x)));
     })();
     return () => { alive = false; };
   }, [store?.id, store?.slug, catalog?.slug, safeMode, key]);
-  const [bestMeta, setBestMeta] = useState({ title: "Lo más vendido", badges: true });
+  const [bestMeta, setBestMeta] = useState<{ title: string; badges: boolean; subtitle: string | null; icon: string | null }>({ title: "Lo más vendido", badges: true, subtitle: null, icon: null });
 
   // Ofertas («antes/ahora») y destacados de este catálogo (20261309). El precio que se cobra ya viene con la oferta.
   const [deals, setDeals] = useState<Map<string, PublicDeal>>(new Map());
@@ -1939,6 +1942,8 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
             items={bestSellers}
             deals={deals}
             title={bestMeta.title}
+            subtitle={bestMeta.subtitle}
+            icon={bestMeta.icon}
             money={money}
             hrefFor={(id) => productUrl(id)}
             onAdd={(it) => void addToCartWithQty({

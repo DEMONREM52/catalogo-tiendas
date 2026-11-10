@@ -765,6 +765,11 @@ export const RELEASES: Release[] = [
     summary: "Los productos ⭐ destacados salen primero en el catálogo con borde dorado que gira, cinta «Destacado» con brillo y botón de agregar dorado, y aparecen en la franja «Destacados». Puedes destacar varios a la vez desde el Radar (selecciona y toca «⭐ Destacar»), uno por uno en Producto → Precios, o por catálogo en Catálogos → Productos.",
     paths: ["/dashboard/products", "/dashboard/social"],
   },
+  {
+    id: 74, date: "2026-11-10", title: "«Lo más vendido» por catálogo",
+    summary: "En Campañas → Lo más vendido hay una pestaña General y una por cada catálogo. La general escoge en qué catálogos sale; cada catálogo puede tener la suya propia (automático, a mano o apagado, sus productos, título, subtítulo, emoji, cuántos mostrar). En automático, un catálogo con punto (como Zamora) muestra lo más vendido de ese punto. Los precios son siempre los de cada catálogo. Además, el carrito de la página del producto lleva al catálogo de donde vino el producto (Zamora, mayoristas…).",
+    paths: ["/dashboard/social"],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

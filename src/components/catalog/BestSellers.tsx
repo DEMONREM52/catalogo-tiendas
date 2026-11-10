@@ -9,7 +9,7 @@ import type { PublicDeal, PublicItem } from "@/lib/catalog/public-prices";
  * Franja que se desliza con productos: «Lo más vendido» (con #1, #2…), «Ofertas especiales» (antes/ahora y %)
  * o «Destacados». Liviana: solo CSS (sin librerías de animación) y fotos con carga diferida.
  */
-export function BestSellersStrip({ items, money, hrefFor, onAdd, title = "Lo más vendido", variant = "best", deals }: {
+export function BestSellersStrip({ items, money, hrefFor, onAdd, title = "Lo más vendido", variant = "best", deals, subtitle, icon }: {
   items: PublicItem[];
   money: (n: number) => string;
   hrefFor: (id: string) => string | null;
@@ -17,9 +17,12 @@ export function BestSellersStrip({ items, money, hrefFor, onAdd, title = "Lo má
   title?: string;
   variant?: "best" | "offers" | "featured";
   deals?: Map<string, PublicDeal>;
+  /** Texto pequeño de arriba y emoji del título (configurables en «Lo más vendido»). */
+  subtitle?: string | null;
+  icon?: string | null;
 }) {
   const accent = variant === "offers" ? "#ef4444" : variant === "featured" ? "#eab308" : "#f59e0b";
-  const kicker = variant === "offers" ? "Precios rebajados por tiempo limitado" : variant === "featured" ? "Escogidos para ti" : "Lo que todos están llevando";
+  const kicker = subtitle?.trim() ? subtitle.trim() : variant === "offers" ? "Precios rebajados por tiempo limitado" : variant === "featured" ? "Escogidos para ti" : "Lo que todos están llevando";
   const KIcon = variant === "offers" ? BadgePercent : variant === "featured" ? Star : Flame;
   return (
     <section className="best-strip mt-7" aria-label={title}>
@@ -29,7 +32,7 @@ export function BestSellersStrip({ items, money, hrefFor, onAdd, title = "Lo má
             <KIcon size={14} className="best-flame" aria-hidden /> {kicker}
           </p>
           <h2 className="mt-1 flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
-            {title} {variant === "best" ? <TrendingUp size={20} aria-hidden style={{ color: "#10b981" }} /> : null}
+            {icon ? <span className="best-crown inline-block" aria-hidden>{icon}</span> : null}{title} {variant === "best" && !icon ? <TrendingUp size={20} aria-hidden style={{ color: "#10b981" }} /> : null}
           </h2>
         </div>
         <span className="hidden text-xs sm:block" style={{ color: "var(--t-muted)" }}>Desliza →</span>
