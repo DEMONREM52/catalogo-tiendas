@@ -1516,14 +1516,36 @@ export default function PosPage() {
         idemKey.current = null;
         if (customerDocument.trim()) await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
       } else if (pointId || sellerId) {
-        const { data: tag } = await sb.rpc("erp_tag_order", {
-          p_store: store.id,
-          p_token: token,
-          p_point: pointId || null,
-          p_seller: sellerId || null,
-          p_kind: documentKind,
-        });
-        docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
+        // Punto, vendedor y número del documento. Si falla NO se sigue en silencio (antes la venta quedaba como
+        // borrador, sin punto ni vendedor): se muestra el motivo y se puede reintentar.
+        for (;;) {
+          const { data: tag, error: tagError } = await sb.rpc("erp_tag_order", {
+            p_store: store.id,
+            p_token: token,
+            p_point: pointId || null,
+            p_seller: sellerId || null,
+            p_kind: documentKind,
+          });
+          if (!tagError) {
+            docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
+            break;
+          }
+          const retry = await Swal.fire({
+            icon: "error",
+            title: "La venta se creó, pero sin punto ni vendedor",
+            html: `No se pudo guardar el punto, el vendedor y el número de la ${documentKind === "factura" ? "factura" : "remisión"}.<br/><small>${String(tagError.message ?? tagError).replace(/[<>&]/g, "")}</small>`,
+            background: "#0b0b0b",
+            color: "#fff",
+            showCancelButton: true,
+            confirmButtonText: "Reintentar",
+            cancelButtonText: "Dejarla así",
+            confirmButtonColor: "#8b5cf6",
+          });
+          if (!retry.isConfirmed) {
+            fiscalNote += "<br/><small style=\"color:#f59e0b\">⚠️ Quedó sin punto ni vendedor: revísala en Pedidos.</small>";
+            break;
+          }
+        }
         if (customerDocument.trim()) {
           // Permite buscar el documento por cédula/NIT; si el SQL no está aplicado se ignora.
           await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
@@ -2041,7 +2063,7 @@ export default function PosPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
                   <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito" : " · 💳 crédito") : ""}` : "Venta sin cliente registrado · Lista P3"}
+                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : "Venta sin cliente registrado · Lista P3"}
                   </span>
                 </span>
                 <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
@@ -2195,68 +2217,6 @@ export default function PosPage() {
             </button>
           ) : null}
 
-          <div>
-            <label className="text-sm font-semibold">Tipo de pago</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {[
-                { value: "contado", label: "Contado" },
-                { value: "credito", label: "Crédito" },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className="rounded-2xl border px-4 py-2 text-sm font-semibold"
-                  style={{
-                    borderColor: "var(--t-card-border)",
-                    background:
-                      paymentType === option.value
-                        ? "var(--t-cta)"
-                        : "color-mix(in oklab, var(--t-card-bg) 92%, transparent)",
-                    color:
-                      paymentType === option.value ? "#0b0b0b" : "var(--t-text)",
-                  }}
-                  onClick={() => setPaymentType(option.value as "contado" | "credito")}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
- 
-          {paymentType === "credito" ? (
-            <div className="space-y-2">
-              {!selectedClient ? (
-                <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                  💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
-                </p>
-              ) : creditUnavailable ? (
-                <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
-              ) : creditState?.for === selectedClient.id ? (
-                <div
-                  className="rounded-xl border p-3"
-                  style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
-                >
-                  <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
-                  <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
-                    {creditState.can_sell
-                      ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
-                      : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
-              )}
-              <label className="text-sm font-semibold">Días de crédito</label>
-              <input
-                {...inputProps()}
-                type="number"
-                min={1}
-                value={dueDays}
-                onChange={(e) => setDueDays(Number(e.target.value))}
-                placeholder="30"
-              />
-            </div>
-          ) : null}
  
           <div>
             <label className="text-sm font-semibold">Tipo de comprobante</label>
@@ -2452,7 +2412,83 @@ export default function PosPage() {
               </div>
             ) : null}
 
-            {cart.length && paymentType === "contado" && !editingDoc ? <PosPayment total={total} value={payment} onChange={setPayment} /> : null}
+            {cart.length && !editingDoc ? (
+              <div className="mt-3">
+                {/* Primero se escoge si es de contado o a crédito; debajo sale solo lo que aplica. */}
+                <div className="grid grid-cols-2 gap-1 rounded-2xl border p-1" role="radiogroup" aria-label="Tipo de pago" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
+                  {([
+                    { value: "contado", label: "💵 De contado", hint: "Paga ahora" },
+                    { value: "credito", label: "💳 A crédito", hint: selectedClient?.credit_enabled ? "Queda en su cartera" : "Cliente con cupo" },
+                  ] as const).map((o) => {
+                    const on = paymentType === o.value;
+                    return (
+                      <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => setPaymentType(o.value)}
+                        className="rounded-xl px-3 py-2 text-left transition"
+                        style={on ? { background: "var(--t-accent)", color: "#fff", boxShadow: "0 6px 18px color-mix(in oklab, var(--t-accent) 35%, transparent)" } : { color: "var(--t-text)" }}>
+                        <span className="block text-sm font-black">{o.label}</span>
+                        <span className="block text-[11px]" style={{ opacity: on ? 0.9 : 0.6 }}>{o.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {paymentType === "contado" && selectedClient?.credit_enabled && !selectedClient.credit_blocked ? (
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>💡 {selectedClient.name} tiene crédito. Si se lo vas a fiar, toca <b>«💳 A crédito»</b>.</p>
+                ) : null}
+                {paymentType === "contado" ? <PosPayment total={total} value={payment} onChange={setPayment} /> : (
+                  <div className="mt-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
+                    <p className="mb-2 text-xs font-black">💳 Venta a crédito{selectedClient ? ` · ${selectedClient.name}` : ""}</p>
+                      {paymentType === "credito" ? (
+                        <div className="space-y-2">
+                          {!selectedClient ? (
+                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                              💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
+                            </p>
+                          ) : creditUnavailable ? (
+                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
+                          ) : creditState?.for === selectedClient.id ? (
+                            <div
+                              className="rounded-xl border p-3"
+                              style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
+                            >
+                              <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+                              <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
+                                {creditState.can_sell
+                                  ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
+                                  : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
+                          )}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="text-sm font-semibold" htmlFor="pos-due-days">¿En cuántos días paga?</label>
+                            {dueDays > 0 ? <span className="text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>Vence el {new Date(Date.now() + dueDays * 86400000).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}</span> : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {[8, 15, 30, 60].map((d) => (
+                              <button key={d} type="button" onClick={() => setDueDays(d)} className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
+                                style={dueDays === d ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
+                                {d} días
+                              </button>
+                            ))}
+                            <input
+                              id="pos-due-days"
+                              {...inputProps()}
+                              type="number"
+                              min={1}
+                              value={dueDays}
+                              onChange={(e) => setDueDays(Number(e.target.value))}
+                              placeholder="Otro"
+                              aria-label="Otro número de días"
+                              className={`${inputProps().className ?? ""} !mt-0 !w-24`}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <button
               onClick={createInvoice}
@@ -2485,6 +2521,7 @@ export default function PosPage() {
                     ? "Crear factura electrónica"
                     : "Crear factura"
                   : "Crear remisión"}
+              {!editingDoc && !saving && paymentType === "credito" ? " a crédito" : ""}
               {cart.length && !saving ? ` · ${money(total)}` : ""}
             </button>
             <p className="mt-2 hidden text-center text-[10px] sm:block" style={{ color: "var(--t-muted)" }}>⌨️ F2 buscar · Enter agrega con el lector · F4 cobrar · F8 en espera</p>

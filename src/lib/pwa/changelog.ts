@@ -814,6 +814,17 @@ export const RELEASES: Release[] = [
       { icon: "🚀", text: "Comparte remhub.co/demo" },
     ],
   },
+  {
+    id: 78, date: "2026-11-10", title: "POS: contado o crédito junto al pago",
+    summary: "Al cobrar escoges primero «💵 De contado» o «💳 A crédito», justo encima de cómo paga: a crédito ya no salen efectivo ni vuelto, sino el cupo del cliente, botones de 8, 15, 30 o 60 días y la fecha en que vence. El dueño y los administradores salen como vendedores en todos los puntos. Y si una venta no alcanza a guardar el punto y el vendedor, ahora te avisa y puedes reintentar.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🛒", text: "Agrega productos al POS" },
+      { icon: "💳", text: "Toca «A crédito» junto al pago" },
+      { icon: "📅", text: "Escoge en cuántos días paga" },
+      { icon: "✅", text: "Crea la venta a crédito" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
