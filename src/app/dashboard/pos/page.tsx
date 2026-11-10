@@ -1538,7 +1538,7 @@ export default function PosPage() {
             icon: "error",
             title: "La venta se creó, pero sin punto ni vendedor",
             html: /erp_order_meta_doc_unique|duplicate key/i.test(String(tagError.message ?? ""))
-              ? `El número que le toca a este punto (<b>${String(tagError.message ?? "").match(/doc_number)=([^,]+, ([^)]+))/)?.[1]?.replace(/[<>&]/g, "") ?? ""}</b>) ya lo tiene otra venta: dos puntos comparten el mismo prefijo.<br/><small>Dale a este punto un prefijo propio (o sube su consecutivo) en <b>Editar prefijos y puntos</b> y reintenta.</small>`
+              ? `El número que le toca a este punto (<b>${`${tagError.details ?? ""} ${tagError.message ?? ""}`.match(/, ([^,()]+)\) already exists/)?.[1]?.replace(/[<>&]/g, "") ?? ""}</b>) ya lo tiene otra venta: dos puntos comparten el mismo prefijo.<br/><small>Dale a este punto un prefijo propio (o sube su consecutivo) en <b>Editar prefijos y puntos</b> y reintenta.</small>`
               : `No se pudo guardar el punto, el vendedor y el número de la ${documentKind === "factura" ? "factura" : "remisión"}.<br/><small>${String(tagError.message ?? tagError).replace(/[<>&]/g, "")}</small>`,
             background: "#0b0b0b",
             color: "#fff",
