@@ -129,6 +129,15 @@ export default function PointBillingPanel({ storeId, onChanged }: { storeId: str
     if (invoice && invoice === remision) {
       return void Swal.fire({ ...swal, icon: "warning", title: "Los prefijos de factura y remisión deben ser distintos" });
     }
+    // Cada punto necesita sus propios prefijos: si dos puntos comparten «REM», el segundo choca con el número
+    // que ya usó el primero (REM-00001) y la venta queda sin punto ni número.
+    const clash = points.find((o) => o.id !== p.id && [o.invoice_prefix, o.remision_prefix].some((x) => {
+      const v = (x ?? "").trim().toUpperCase();
+      return v && (v === invoice || v === remision);
+    }));
+    if (clash) {
+      return void Swal.fire({ ...swal, icon: "warning", title: "Ese prefijo ya lo usa otro punto", html: `«${clash.name.replace(/[<>&]/g, "")}» ya usa ese prefijo. Dale a este punto unas letras propias (por ejemplo <b>${remision || "REM"}${(draft.name ?? "").trim().slice(0, 1).toUpperCase() || "B"}</b>) para que los números no se repitan.` });
+    }
     const patch: Record<string, unknown> = {
       invoice_prefix: invoice,
       remision_prefix: remision,
