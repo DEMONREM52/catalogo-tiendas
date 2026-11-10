@@ -1051,6 +1051,18 @@ export default function PosPage() {
     }
     const seller = doc.seller_name ? sellersForPoint(sellers, pointId).find((r) => fold(r.name) === fold(doc.seller_name)) : undefined;
     if (seller) setSellerId(seller.user_id);
+    // ¿Fue a crédito? Si la venta tiene cuenta por cobrar, se muestra «Crédito» con sus días (si no, contado).
+    setPaymentType("contado");
+    void supabaseBrowser().from("erp_receivables").select("issue_date,due_date,status").eq("order_id", doc.order_id).neq("status", "void").limit(1)
+      .then(({ data }) => {
+        const r = (data ?? [])[0] as { issue_date?: string | null; due_date?: string | null } | undefined;
+        if (!r) return;
+        setPaymentType("credito");
+        if (r.issue_date && r.due_date) {
+          const days = Math.round((Date.parse(`${r.due_date}T12:00:00`) - Date.parse(`${r.issue_date}T12:00:00`)) / 86400000);
+          if (days > 0) setDueDays(days);
+        }
+      }, () => undefined);
     void Swal.fire({
       icon: "info",
       title: `Editando ${doc.doc_number ?? `#${doc.receipt_no}`}`,
@@ -1228,13 +1240,28 @@ export default function PosPage() {
     void Swal.fire({ icon: "info", title: "Borrador cargado", text: "Revisa precios y existencias y pulsa el botón para registrarla.", timer: 2200, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
   }
 
-  function cancelEdit() {
+  /** Deja el POS listo para una venta nueva: sin productos, en consumidor final, de contado y con quien atiende como vendedor. */
+  function resetForNewSale() {
     setEditingDoc(null);
     forgetApproval();
     setCart([]);
     setCustomerNote("");
-    setCustomerDocument("");
-    setCustomerName(selectedClient?.name ?? DEFAULT_CLIENT_NAME);
+    setPayment(EMPTY_PAYMENT);
+    setPaymentType("contado");
+    if (selectedClientId) {
+      setSelectedClientId(""); // el efecto del cliente vuelve a «Consumidor final»
+    } else {
+      setCustomerName(DEFAULT_CLIENT_NAME);
+      setCustomerDocument("");
+      setCustomerWhatsApp("");
+      setCustomerEmail("");
+    }
+    const ofPoint = sellersForPoint(sellers, pointId);
+    setSellerId(ofPoint.find((r) => r.user_id === meId)?.user_id || ofPoint[0]?.user_id || "");
+  }
+
+  function cancelEdit() {
+    resetForNewSale();
   }
 
   async function saveEdit(doc: PosDocument) {
@@ -1255,19 +1282,28 @@ export default function PosPage() {
       if (customerDocument.trim() !== (doc.customer_doc ?? "")) {
         await sb.rpc("erp_pos_set_customer_doc", { p_token: doc.token, p_doc: customerDocument.trim() });
       }
+      // Vendedor: si se cambió al editar, también se guarda (20261315).
+      let sellerNote = "";
+      if (sellerId) {
+        const { error: sellerError } = await sb.rpc("erp_pos_order_set_seller", { p_order: doc.order_id, p_seller: sellerId });
+        if (sellerError) {
+          sellerNote = /erp_pos_order_set_seller|Could not find the function|schema cache/i.test(sellerError.message)
+            ? "<br/><small style=\"color:#f59e0b\">El vendedor no se cambió: falta correr la migración 20261315.</small>"
+            : `<br/><small style="color:#f59e0b">El vendedor no se cambió: ${sellerError.message.replace(/[<>&]/g, "")}</small>`;
+        }
+      }
       const label = doc.doc_number ?? `#${doc.receipt_no}`;
-      setEditingDoc(null);
-      forgetApproval();
-      setCart([]);
-      setCustomerNote("");
+      const savedTotal = total;
+      const sellerName = sellers.find((r) => r.user_id === sellerId)?.name ?? "";
+      resetForNewSale();
       setDocsRefresh((n) => n + 1);
       const res = await Swal.fire({
         icon: "success",
         title: `${label} actualizado`,
-        html: `<b>Total:</b> ${money(total)}`,
+        html: `<b>Total:</b> ${money(savedTotal)}${sellerName && !sellerNote ? `<br/><b>Vendedor:</b> ${sellerName.replace(/[<>&]/g, "")}` : ""}${sellerNote}<br/><small>El POS quedó listo para una venta nueva.</small>`,
         showCancelButton: true,
         confirmButtonText: "Ver e imprimir",
-        cancelButtonText: "Seguir vendiendo",
+        cancelButtonText: "Nueva venta",
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
         confirmButtonColor: "#22c55e",
