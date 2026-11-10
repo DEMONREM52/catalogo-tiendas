@@ -70,7 +70,7 @@ export function useStoreAlerts(storeId: string | null | undefined) {
     // + productos a los que ya les toca publicarse (20261305).
     // + tareas de productos asignadas a la persona (20261306).
     // + carritos abandonados y «avísame» que ya llegó (20261312, solo si están encendidos).
-    const [base, extra, offline, orders, publish, tasks, sell] = await Promise.all([
+    const [base, extra, offline, orders, publish, tasks, sell, ops] = await Promise.all([
       sb.rpc("erp_alerts", { p_store: storeId }),
       sb.rpc("erp_extra_alerts", { p_store: storeId }),
       sb.rpc("erp_offline_alerts", { p_store: storeId }),
@@ -78,7 +78,9 @@ export function useStoreAlerts(storeId: string | null | undefined) {
       sb.rpc("erp_publish_alerts", { p_store: storeId }),
       sb.rpc("erp_product_task_alerts", { p_store: storeId }),
       sb.rpc("vm_alerts", { p_store: storeId }),
+      sb.rpc("vm_ops_alerts", { p_store: storeId }),
     ]);
+    const opsData = !ops.error && ops.data ? (ops.data as { ok?: boolean; counts_pending?: number }) : null;
     const vm = !sell.error && sell.data ? (sell.data as { ok?: boolean; carts?: number; waitlist_ready?: number }) : null;
     const sellAlerts: StoreAlert[] = [];
     if (vm?.ok && Number(vm.carts) > 0) sellAlerts.push({
@@ -86,6 +88,12 @@ export function useStoreAlerts(storeId: string | null | undefined) {
       title: `🛒 ${vm.carts} carrito${Number(vm.carts) === 1 ? "" : "s"} sin terminar`,
       body: "Clientes que dejaron su WhatsApp y no enviaron el pedido. Escríbeles con un toque.",
       href: "/dashboard/vender-mas?ver=carritos",
+    });
+    if (opsData?.ok && Number(opsData.counts_pending) > 0) sellAlerts.push({
+      key: `vm-counts-${opsData.counts_pending}`, severity: "warning", icon: "box", count: Number(opsData.counts_pending),
+      title: `📷 ${opsData.counts_pending} conteo${Number(opsData.counts_pending) === 1 ? "" : "s"} por aprobar`,
+      body: "Revisa las diferencias y aprueba para que se ajusten las existencias.",
+      href: "/dashboard/inventario?tab=conteos",
     });
     if (vm?.ok && Number(vm.waitlist_ready) > 0) sellAlerts.push({
       key: `vm-waitlist-${vm.waitlist_ready}`, severity: "good", icon: "megaphone", count: Number(vm.waitlist_ready),

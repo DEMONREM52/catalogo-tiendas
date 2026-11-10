@@ -26,10 +26,24 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ ok: false, error: "digest" }, { status: 500 });
 
   const day = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  // «Cierre del día» se puede apagar en Funciones opcionales (20261312); sin la migración sigue como siempre.
+  const rowsAll = (data ?? []) as Array<{ store_id: string; summary: Summary; users: string[] }>;
+  const ids = rowsAll.map((r) => r.store_id);
+  const off = new Set<string>();
+  const pendingBy = new Map<string, number>();
+  if (ids.length) {
+    const { data: f, error: fe } = await admin.from("erp_store_features").select("store_id,enabled").eq("feature", "cierre_dia").in("store_id", ids);
+    if (!fe) for (const r of (f ?? []) as Array<{ store_id: string; enabled: boolean }>) if (!r.enabled) off.add(r.store_id);
+    // Pedidos que siguen sin confirmar (para «lo pendiente por aprobar»).
+    const { data: pend } = await admin.from("orders").select("store_id").eq("status", "pending").in("store_id", ids).limit(5000);
+    for (const r of (pend ?? []) as Array<{ store_id: string }>) pendingBy.set(r.store_id, (pendingBy.get(r.store_id) ?? 0) + 1);
+  }
   let sent = 0;
   let whatsapp = 0;
-  for (const row of (data ?? []) as Array<{ store_id: string; summary: Summary; users: string[] }>) {
+  for (const row of rowsAll) {
+    if (off.has(row.store_id)) continue;
     const s = row.summary;
+    const pending = pendingBy.get(row.store_id) ?? 0;
     const top = s.points[0];
     const best = s.sellers[0];
     const short = s.cash.filter((c) => Number(c.difference) < 0);
@@ -39,6 +53,7 @@ export async function GET(request: Request) {
       short.length ? `🔴 ${short.length} caja(s) con faltante` : s.cash.length ? "cajas cuadradas" : "",
       s.cash_open.length ? `${s.cash_open.length} caja(s) sin cerrar` : "",
       s.transfers_pending ? `${s.transfers_pending} traslado(s) pendientes` : "",
+      pending ? `🧾 ${pending} pedido(s) sin confirmar` : "",
       s.out_count ? `${s.out_count} agotado(s) hoy` : "",
       s.below_cost ? `⚠️ ${s.below_cost} venta(s) bajo costo` : "",
     ].filter(Boolean);
@@ -61,5 +76,5 @@ export async function GET(request: Request) {
     whatsapp += (await notifyStoreWhatsApp(admin, row.store_id, "daily_close", name,
       `📊 ${name} · cierre de hoy: ${money(s.total)} en ${s.count} venta(s)${parts.length ? ` · ${parts.join(" · ")}` : ""}.`, day)).sent;
   }
-  return NextResponse.json({ ok: true, stores: (data ?? []).length, sent, whatsapp });
+  return NextResponse.json({ ok: true, stores: rowsAll.length - off.size, skipped: off.size, sent, whatsapp });
 }

@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { DateField } from "@/components/forms/Fields";
+import { OfferImageButton } from "@/components/products/OfferImageButton";
 
 /**
  * Oferta y destacado del producto: «Antes $20.000 · Ahora $15.000 (-25 %)», con fecha de fin opcional y etiqueta.
@@ -78,6 +79,7 @@ export function OfferPanel({ storeId, productId, normalPrice }: { storeId: strin
         </div>
         {saved?.running ? <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">ACTIVA</span> : null}
       </div>
+      {saved?.running ? <div className="px-3 pb-2"><OfferImageButton storeId={storeId} productId={productId} /></div> : null}
       {!canEdit ? <p className="flex items-center gap-1.5 px-3 pb-3 text-xs" style={{ color: "var(--t-muted)" }}><Lock size={12} /> Solo quien tiene «Cambiar precios» pone ofertas.</p> : null}
       <fieldset disabled={!canEdit || busy} className="space-y-3 px-3 pb-3">
         <div className="grid gap-3 sm:grid-cols-2">

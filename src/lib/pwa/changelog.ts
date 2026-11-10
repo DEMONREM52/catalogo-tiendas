@@ -798,6 +798,17 @@ export const RELEASES: Release[] = [
       { icon: "🛒", text: "Escríbele a quien dejó su carrito" },
     ],
   },
+  {
+    id: 76, date: "2026-11-10", title: "Más funciones opcionales: clientes, traslados y conteos",
+    summary: "En Funciones opcionales ahora también puedes encender: imagen de oferta para estados (precio de antes tachado, el de ahora y el %), recompra y cumpleaños de clientes (a quién escribirle porque ya debería volver, quién cumple esta semana y el historial de cada cliente), traslados sugeridos («Zamora tiene 20 y no vende; Manhattan está en 0», arma el traslado con un toque) y conteo por zonas con aprobación (cuentas con la cámara sin cerrar la tienda y se ajusta solo la diferencia cuando alguien lo aprueba). El cierre del día también se puede apagar y ahora dice cuántos pedidos siguen sin confirmar.",
+    paths: ["/dashboard/vender-mas", "/dashboard/clientes", "/dashboard/inventario"],
+    demo: [
+      { icon: "🧩", text: "Enciende la función en Funciones opcionales" },
+      { icon: "🎂", text: "Clientes → Recompra: felicita y escribe" },
+      { icon: "🔀", text: "Traslados → Ver desbalances" },
+      { icon: "📷", text: "Stock → Conteos: cuenta una zona" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
+import { Bell, Cake, Database, FileText, MessageCircle, Pencil, Plus, Power, Search, Star, Trash2, Users, Wallet } from "lucide-react";
 import { NoticeTray } from "./NoticeTray";
 import Swal from "sweetalert2";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -14,11 +14,13 @@ import { CreditMeter, KindBadge } from "./CreditMeter";
 import { ReceivablesTab } from "./ReceivablesTab";
 import { FrequentCustomers } from "./FrequentCustomers";
 import { LoyaltyCustomers } from "./LoyaltyCustomers";
+import { Repurchase } from "./Repurchase";
+import { useFeature } from "@/lib/useFeature";
 import { StatementDrawer } from "./StatementDrawer";
 import { ThirdPartyForm } from "./ThirdPartyForm";
 import { KINDS, errorText, initials, kindInfo, loadBalances, loadThirdParties, money, waLink, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 
-type Tab = "terceros" | "cartera" | "avisos" | "frecuentes" | "puntos";
+type Tab = "terceros" | "cartera" | "avisos" | "frecuentes" | "puntos" | "recompra";
 type CreditFilter = "all" | "with" | "overdue" | "over" | "blocked";
 const PAGE = 60;
 
@@ -42,6 +44,8 @@ export default function TercerosPage() {
   const [statementFor, setStatementFor] = useState<ThirdParty | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Recompra y cumpleaños (opcional, 20261313): la pestaña solo sale si la tienda la encendió.
+  const repurchaseOn = useFeature(store?.id, "recompra") && perm.clients;
   const reloadBalances = useCallback(async (storeId: string) => setBalances(await loadBalances(storeId)), []);
 
   useEffect(() => {
@@ -53,6 +57,7 @@ export default function TercerosPage() {
         if (params.get("tab") === "avisos") setTab("avisos");
         if (params.get("tab") === "frecuentes") setTab("frecuentes");
         if (params.get("tab") === "puntos") setTab("puntos");
+        if (params.get("tab") === "recompra") setTab("recompra");
         if (params.get("q")) setQ(params.get("q") ?? "");
         if (!access.store) throw new Error("No tienes acceso a ninguna tienda.");
         const can = (p: string) => hasStorePermission(access, p);
@@ -213,7 +218,7 @@ export default function TercerosPage() {
       ) : null}
 
       <div className="flex gap-1 overflow-x-auto rounded-full border p-1 text-sm font-bold [scrollbar-width:none] sm:w-fit" style={{ borderColor: "var(--t-card-border)" }}>
-        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"], ["avisos", <Bell key="b" size={15} />, "Avisos del día"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
+        {([["terceros", <Users key="u" size={15} />, "Terceros"], ...(perm.receivables ? [["cartera", <Wallet key="w" size={15} />, "Cartera"], ["avisos", <Bell key="b" size={15} />, "Avisos del día"]] : []), ["frecuentes", <Star key="s" size={15} />, "Frecuentes"], ...(repurchaseOn ? [["recompra", <Cake key="r" size={15} />, "Recompra"]] : []), ["puntos", <Star key="p" size={15} />, "Puntos"]] as Array<[Tab, React.ReactNode, string]>).map(([k, icon, label]) => (
           <button
             key={k}
             type="button"
@@ -232,7 +237,9 @@ export default function TercerosPage() {
         ))}
       </div>
 
-      {tab === "puntos" && store ? (
+      {tab === "recompra" && store && repurchaseOn ? (
+        <Repurchase storeId={store.id} storeName={store.name} />
+      ) : tab === "puntos" && store ? (
         <LoyaltyCustomers storeId={store.id} canAdjust={canLoyalty} />
       ) : tab === "frecuentes" && store ? (
         <FrequentCustomers storeId={store.id} storeName={store.name} />

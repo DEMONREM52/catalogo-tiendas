@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { URL_CHANGE_EVENT } from "@/lib/url-intent";
-import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench } from "lucide-react";
+import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench, ScanLine } from "lucide-react";
 import { SectionTabs } from "@/components/ui/SectionTabs";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -18,8 +18,10 @@ import { StaleStockTab } from "./StaleStock";
 import { ExpiryTab } from "./InventoryExtras";
 import { Empty, WAREHOUSE_COLUMNS, errorMessage, type ErpCtx, type Warehouse } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { CountsTab } from "./CountsTab";
+import { useFeature } from "@/lib/useFeature";
 
-type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry";
+type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry" | "conteos";
 
 const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; permissions: string[] }> = [
   { key: "overview", icon: <BarChart3 />, color: "#8b5cf6", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
@@ -27,6 +29,7 @@ const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; 
   { key: "warehouses", icon: <WarehouseIcon />, color: "#6366f1", label: "Puntos y bodegas", permissions: ["inventory"] },
   { key: "transfers", icon: <Truck />, color: "#f97316", label: "Traslados", permissions: ["transfers", "inventory"] },
   { key: "adjustments", icon: <Wrench />, color: "#f59e0b", label: "Ajustes", permissions: ["inventory_adjust", "inventory"] },
+  { key: "conteos", icon: <ScanLine />, color: "#14b8a6", label: "Conteos", permissions: ["inventory", "inventory_adjust"] },
   { key: "kardex", icon: <BookOpen />, color: "#14b8a6", label: "Kardex", permissions: ["inventory"] },
   { key: "stale", icon: <Hourglass />, color: "#64748b", label: "Sin movimiento", permissions: ["inventory", "reports"] },
   { key: "expiry", icon: <CalendarClock />, color: "#f43f5e", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
@@ -41,7 +44,7 @@ const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; 
 // Las pestañas se agrupan en secciones: primero se elige la sección y debajo salen solo sus pestañas.
 type GroupKey = "stock" | "buy" | "control";
 const GROUPS: Array<{ key: GroupKey; icon: ReactNode; color: string; label: string; hint: string; tabs: TabKey[] }> = [
-  { key: "stock", icon: <Boxes />, color: "#0ea5e9", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "kardex"] },
+  { key: "stock", icon: <Boxes />, color: "#0ea5e9", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "conteos", "kardex"] },
   { key: "buy", icon: <Receipt />, color: "#10b981", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "suppliers", "payables", "internal"] },
   { key: "control", icon: <PackageSearch />, color: "#f59e0b", label: "Control", hint: "Lo quieto, lo que vence, manifiestos y auditoría", tabs: ["stale", "expiry", "manifests", "audit"] },
 ];
@@ -106,7 +109,9 @@ export default function InventarioPage() {
     };
   }, [loadWarehouses]);
 
-  const visibleTabs = useMemo(() => (ctx ? TABS.filter((t) => t.permissions.some((p) => ctx.can(p)) && !(ctx.pointId && POINT_HIDDEN.includes(t.key))) : []), [ctx]);
+  // Conteo por zonas (opcional, 20261313): la pestaña solo sale si la tienda lo encendió.
+  const countsOn = useFeature(ctx?.storeId, "conteo_zonas");
+  const visibleTabs = useMemo(() => (ctx ? TABS.filter((t) => t.permissions.some((p) => ctx.can(p)) && !(ctx.pointId && POINT_HIDDEN.includes(t.key)) && (t.key !== "conteos" || countsOn)) : []), [ctx, countsOn]);
   const current = visibleTabs.find((t) => t.key === tab) ?? visibleTabs[0];
   const groups = useMemo(() => GROUPS.map((g) => ({ ...g, visible: visibleTabs.filter((t) => g.tabs.includes(t.key)) })).filter((g) => g.visible.length), [visibleTabs]);
 
@@ -146,6 +151,7 @@ export default function InventarioPage() {
       {current.key === "warehouses" ? <WarehousesTab ctx={ctx} warehouses={warehouses} onChanged={() => void loadWarehouses(ctx.storeId)} /> : null}
       {current.key === "transfers" ? <TransfersTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "adjustments" ? <AdjustmentsTab ctx={ctx} warehouses={warehouses} /> : null}
+      {current.key === "conteos" ? <CountsTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "kardex" ? <KardexTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "stale" ? <StaleStockTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "expiry" ? <ExpiryTab ctx={ctx} warehouses={warehouses} /> : null}

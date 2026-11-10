@@ -18,6 +18,8 @@ import {
   tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type ProductHit, type Warehouse,
 } from "./shared";
 import { TransfersReport } from "./TransfersReport";
+import { RebalancePanel, type RebalancePlan } from "./Rebalance";
+import { useFeature } from "@/lib/useFeature";
 import { searchDelay } from "@/lib/search-timing";
 
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
@@ -181,6 +183,9 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const active = warehouses.filter((w) => w.active);
   const names = useMemo(() => new Map(warehouses.map((w) => [w.id, w.name])), [warehouses]);
   const canTransfer = ctx.can("transfers");
+  // Traslados sugeridos (opcional, 20261313).
+  const rebalanceOn = useFeature(ctx.storeId, "traslados_sugeridos") && canTransfer;
+  const [rebalance, setRebalance] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rebalanceo") === "1");
 
   const [pickedFrom, setFrom] = useState("");
   const from = ctx.pointId ?? pickedFrom;
@@ -637,6 +642,29 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 <span>💾 Borrador guardado {timeAgo(draftAt)} en este equipo. Si sales, aquí sigue hasta que lo envíes.</span>
                 <button type="button" className="ml-auto font-bold" style={{ color: "#ef4444" }} onClick={() => void discardDraft()}>Descartar</button>
               </div>
+            ) : null}
+            {rebalanceOn ? (
+              <button type="button" onClick={() => setRebalance(true)}
+                className="flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5"
+                style={{ borderColor: "color-mix(in oklab, #0ea5e9 45%, var(--t-card-border))", background: "color-mix(in oklab, #0ea5e9 8%, transparent)" }}>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl" style={{ background: "color-mix(in oklab, #0ea5e9 18%, transparent)" }} aria-hidden>🔀</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-black">Ver desbalances entre puntos</span>
+                  <span className="block text-xs" style={{ color: "var(--t-muted)" }}>Dónde sobra y dónde se está acabando. Arma el traslado con un toque.</span>
+                </span>
+                <span className="text-lg" aria-hidden>→</span>
+              </button>
+            ) : null}
+            {rebalance && rebalanceOn ? (
+              <RebalancePanel storeId={ctx.storeId} pointId={ctx.pointId} onClose={() => setRebalance(false)}
+                onUse={(p: RebalancePlan) => {
+                  setFrom(p.from);
+                  setTargets(p.targets);
+                  setLines(p.lines);
+                  setMatrix(p.matrix);
+                  setRebalance(false);
+                  void toast(`Traslado armado: ${p.lines.length} producto(s)`, "success", "Revisa las cantidades, quién lo lleva y quién lo revisó antes de enviarlo.");
+                }} />
             ) : null}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>1 · Sale de</p>

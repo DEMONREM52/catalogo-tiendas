@@ -87,6 +87,7 @@ export async function saveFeature(storeId: string, key: FeatureKey, enabled: boo
   if (error) return { ok: false as const, message: missing(error.message) ? "Falta correr en Supabase la migración 20261312_vender_mas_opcional.sql." : error.message };
   const r = data as { ok: boolean; message?: string; features?: FeatureMap } | null;
   if (!r?.ok || !r.features) return { ok: false as const, message: r?.message ?? "No se pudo guardar." };
+  featureCache.delete(storeId);
   return { ok: true as const, features: r.features };
 }
 
@@ -100,3 +101,11 @@ export const waLink = (phone: string, text: string) => {
   const full = digits.length === 10 && digits.startsWith("3") ? `57${digits}` : digits;
   return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
 };
+
+// Una lectura por tienda mientras la pestaña esté abierta (las bandejas recargan con loadFeatures).
+const featureCache = new Map<string, Promise<FeatureMap | null>>();
+export function cachedFeatures(storeId: string) {
+  if (!featureCache.has(storeId)) featureCache.set(storeId, loadFeatures(storeId).then((r) => (r.ok ? r.features : null)).catch(() => null));
+  return featureCache.get(storeId)!;
+}
+export function forgetFeatures(storeId: string) { featureCache.delete(storeId); }

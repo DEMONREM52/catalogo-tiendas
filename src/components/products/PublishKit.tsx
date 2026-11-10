@@ -9,6 +9,7 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { normalizeProductDetails } from "@/lib/product-details";
 import { richToPlain } from "@/lib/rich-text";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+import { OfferImageButton } from "./OfferImageButton";
 import { fetchPublicDeals, type PublicDeal } from "@/lib/catalog/public-prices";
 import { BUILTIN_TEMPLATES, renderTemplate, type CatalogOption, type PublishTemplate, type TemplateVars } from "@/lib/products/publish-templates";
 import { TemplateEditor } from "./TemplateEditor";
@@ -240,6 +241,7 @@ export function PublishKit({ storeId, productId, onShared }: { storeId: string |
                   </button>
                   <button type="button" className={`${btn} border-transparent text-white`} style={{ background: "#25d366" }} onClick={whatsapp}><MessageCircle size={13} /> WhatsApp</button>
                 </div>
+                <div className="mt-1.5"><OfferImageButton storeId={storeId} productId={productId} catalogSlug={tpl.catalog_slug ?? null} compact /></div>
                 <p className="mt-1.5 text-[10px]" style={{ color: "var(--t-muted)" }}>Al compartir o abrir WhatsApp queda marcado como publicado solo. Los cambios en este cuadro son solo para esta vez.</p>
               </>
             )}
