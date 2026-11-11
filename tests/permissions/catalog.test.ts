@@ -39,8 +39,11 @@ test("lo guardado antes del desglose hereda los permisos nuevos; lo nuevo no", (
 test("marcar un permiso hijo marca su base y quitar la base quita los hijos", () => {
   const on = togglePermission([], "products_delete");
   assert.ok(on.includes("products") && on.includes("products_delete"));
-  const off = togglePermission(["products", "products_delete", "catalogs", "pos"], "products");
-  assert.deepEqual(off.sort(), ["pos"]);
+  const off = togglePermission(["products", "products_delete", "products_view", "catalogs", "pos"], "products");
+  // «Catálogos» ya no depende de editar productos (20261316): se queda, con «Ver productos».
+  assert.deepEqual(off.sort(), ["catalogs", "pos", "products_view"]);
+  const cat = togglePermission([], "catalogs");
+  assert.ok(cat.includes("products_view") && !cat.includes("products"), "Catálogos solo pide ver productos");
   assert.equal(riskScore([]), 0);
   assert.equal(riskScore(PERMISSION_LIST.map((p) => p.value)), 100);
 });

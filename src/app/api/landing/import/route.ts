@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     // `html`: el código de la página pegado a mano (plan B cuando la tienda no deja leerla desde el servidor).
     const body = await readJson<{ store_id?: string; url?: string; html?: string; copy_images?: boolean }>(request, 4_500_000);
     if (!isUuid(body.store_id)) throw new FiscalApiError("Falta la tienda.", 400, "INVALID");
-    await requirePermission(ctx, body.store_id, ["products"]);
+    await requirePermission(ctx, body.store_id, ["products", "landing"]);
     let target: URL;
     try { target = new URL(String(body.url ?? "").trim()); } catch { throw new FiscalApiError("Pega el enlace completo del producto (https://…).", 422, "INVALID"); }
 

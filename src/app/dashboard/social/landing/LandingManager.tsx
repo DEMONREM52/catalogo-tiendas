@@ -44,7 +44,7 @@ export default function LandingManager() {
       if (!access.store) throw new Error("No se encontró la tienda de esta sesión.");
       const s = access.store;
       setStore({ id: s.id, slug: s.slug, name: s.name, logo_url: s.logo_url, whatsapp: s.whatsapp });
-      setCanEdit(hasStorePermission(access, "products"));
+      setCanEdit(hasStorePermission(access, "products") || hasStorePermission(access, "landing"));
       setCanOrders(hasStorePermission(access, "orders"));
       const sb = supabaseBrowser();
       const [cats, list] = await Promise.all([

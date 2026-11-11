@@ -156,7 +156,7 @@ no le devuelve un permiso a quien el dueño se lo quitó.
 
 Cada uno necesita una migración que cambie las funciones y las políticas de la base, no solo la pantalla.
 
-1. **Catálogos y landing independientes de productos.** Que las políticas de `store_catalogs`, campañas y landings acepten `catalogs` y `landing`, para dar marketing sin dejar editar productos.
+1. ✅ **Catálogos y landing independientes de productos (20261316).** La base acepta «Productos» **o** el permiso propio: catálogos, sus categorías, `catalog_admin_*`, redes y campañas e imágenes de catálogo → `catalogs`; `erp_landing_*` → `landing`. Las funciones se reescriben desde su definición real en producción cambiando solo la revisión del permiso. En la app, ambos piden solo «Ver productos». Prueba `tests/sql/catalogos_landing_permisos.test.mjs` 19/19. Pendiente: quitarle «Catálogos» a alguien que tiene «Productos» no lo bloquea en la base (Productos sigue sirviendo).
 2. **POS fino:**
    - dar descuentos;
    - vender a crédito;

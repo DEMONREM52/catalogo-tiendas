@@ -124,7 +124,7 @@ export default function CatalogsManager() {
       const access = await getDashboardStore();
       if (!access.store) throw new Error("No se encontró la tienda de esta sesión.");
       setStore(access.store);
-      setCanEdit(hasStorePermission(access, "products"));
+      setCanEdit(hasStorePermission(access, "products") || hasStorePermission(access, "catalogs"));
       const sb = supabaseBrowser();
       const [catalogsRes, whRes, themesRes, summaryRes] = await Promise.all([
         sb.from("store_catalogs").select(CATALOG_COLUMNS).eq("store_id", access.store.id).order("sort_order").order("created_at"),

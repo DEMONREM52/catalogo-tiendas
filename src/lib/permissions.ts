@@ -66,8 +66,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     key: "marketing", title: "Catálogos y marketing", icon: "🛍️", hint: "Catálogos, campañas y landing pages",
     items: [
-      P("catalogs", "Catálogos y campañas", "medium", "Crear y editar catálogos, campañas, tarjetas para compartir y catálogo en PDF (necesita «Editar productos»)", "Catálogos y campañas"),
-      P("landing", "Landing pages 🚀", "medium", "Crear landing pages, su inventario, pauta y medición (necesita «Editar productos»)", "Landing pages"),
+      P("catalogs", "Catálogos y campañas", "medium", "Crear y editar catálogos, campañas, tarjetas para compartir y catálogo en PDF (sin poder editar productos)", "Catálogos y campañas"),
+      P("landing", "Landing pages 🚀", "medium", "Crear landing pages, su inventario, pauta y medición (sin poder editar productos)", "Landing pages"),
     ],
   },
   {
@@ -192,8 +192,9 @@ export const PERMISSION_REQUIRES: Partial<Record<StoreMenuPermission, StoreMenuP
   products_create: ["products"],
   products_import: ["products"],
   products_delete: ["products"],
-  catalogs: ["products"],
-  landing: ["products"],
+  // Desde 20261316 la base acepta «Catálogos» y «Landing» sin «Editar productos»: solo necesitan ver productos.
+  catalogs: ["products_view"],
+  landing: ["products_view"],
   users_passwords: ["users"],
   users_delete: ["users"],
   security: ["users"],

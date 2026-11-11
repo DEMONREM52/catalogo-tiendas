@@ -276,8 +276,8 @@ export default function SocialDashboard() {
       try {
         const access = await getDashboardStore();
         if (!access.store) throw new Error("No se encontró la tienda de esta sesión.");
-        if (!hasStorePermission(access, "products")) {
-          throw new Error("Necesitas el permiso de Productos para administrar RemHub Social.");
+        if (!hasStorePermission(access, "products") && !hasStorePermission(access, "catalogs")) {
+          throw new Error("Necesitas el permiso de Catálogos y campañas para administrar RemHub Social.");
         }
         const sb = supabaseBrowser();
         const { data, error: userError } = await sb.auth.getUser();
