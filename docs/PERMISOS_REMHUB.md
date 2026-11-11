@@ -167,7 +167,7 @@ Cada uno necesita una migración que cambie las funciones y las políticas de la
 4. **Inventario:**
    - ver existencias de otros puntos;
    - recibir traslados aparte de enviarlos;
-   - conteos físicos.
+   - ✅ conteos físicos (20261320): `inventory_counts` sale de «inventory» (marca `perm_cnt`). Contar, guardar, enviar, volver a abrir y borrar piden «Inventario» y además «Conteos físicos» o «Ajustes de inventario» (`vm__can_count`); aprobar sigue pidiendo «Ajustes de inventario». Prueba `tests/sql/conteos_fisicos.test.mjs` 18/18.
 5. **Informes por tipo:**
    - ventas;
    - vendedores;
@@ -181,4 +181,4 @@ Cada uno necesita una migración que cambie las funciones y las políticas de la
 
 Pruebas: `tests/sql/permisos_desglosados.test.mjs` · 14/14 (nadie pierde nada, dos corridas no cambian lo quitado, eliminar productos exige su permiso) y `tests/permissions/catalog.test.ts` (catálogo, plantillas y herencia).
 
-Pantalla: `src/app/dashboard/store/users` — asistente por pasos (`UserEditor`), matriz por áreas con riesgo (`PermissionMatrix`) y mapa de permisos del equipo. Ahora son 67 permisos en 15 áreas.
+Pantalla: `src/app/dashboard/store/users` — asistente por pasos (`UserEditor`), matriz por áreas con riesgo (`PermissionMatrix`) y mapa de permisos del equipo. Ahora son 72 permisos en 15 áreas.

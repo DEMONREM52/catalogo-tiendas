@@ -858,6 +858,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Guarda: la base lo exige también" },
     ],
   },
+  {
+    id: 82, date: "2026-11-11", title: "Conteos físicos con permiso propio",
+    summary: "En Usuarios → Inventario ahora está «Conteos físicos»: decide quién cuenta por zonas sin darle el resto. Quien ya tenía Inventario lo conserva. Aprobar un conteo sigue pidiendo «Ajustes de inventario».",
+    paths: ["/dashboard/inventario", "/dashboard/store/users"],
+    demo: [
+      { icon: "👤", text: "Edita un usuario" },
+      { icon: "📋", text: "Marca o quita «Conteos físicos»" },
+      { icon: "🔧", text: "Para aprobar conteos, «Ajustes de inventario»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

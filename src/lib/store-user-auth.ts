@@ -25,6 +25,7 @@ export const STORE_MENU_PERMISSIONS = [
   "orders",
   "inventory",
   "inventory_adjust",
+  "inventory_counts",
   "inventory_alerts",
   "transfers",
   "stock_requests",
@@ -80,12 +81,17 @@ export const STORE_MENU_PERMISSIONS = [
 export const PERMISSIONS_V2_MARK = "perm_v2";
 /** Marca del desglose del POS (20261319). Sin ella, quien tiene «pos» hereda crédito, apartados, cotizaciones y ver todas las ventas. */
 export const POS_FINE_MARK = "perm_pos2";
+/** Marca de «Conteos físicos» (20261320). Sin ella, quien tiene «inventory» hereda los conteos. */
+export const COUNTS_MARK = "perm_cnt";
+/** Todas las marcas: no son permisos, las pone el servidor al guardar. */
+export const PERMISSION_MARKS: readonly string[] = [PERMISSIONS_V2_MARK, POS_FINE_MARK, COUNTS_MARK];
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];
 
 export const ERP_PERMISSIONS: StoreMenuPermission[] = [
   "inventory",
   "inventory_adjust",
+  "inventory_counts",
   "transfers",
   "purchases",
   "purchases_void",

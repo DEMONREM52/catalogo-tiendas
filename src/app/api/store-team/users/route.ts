@@ -4,8 +4,7 @@ import {
   displayStoreUsername,
   isValidStoreUsername,
   normalizeStoreUsername,
-  PERMISSIONS_V2_MARK,
-  POS_FINE_MARK,
+  PERMISSION_MARKS,
   STORE_MENU_PERMISSIONS,
   STORE_STAFF_MIN_PASSWORD,
   storeStaffAuthEmail,
@@ -155,7 +154,7 @@ async function resolvePointIds(admin: SupabaseClient, storeId: string, value: un
 
 function assertCanGrantPermissions(manager: ManagerAccess, permissions: string[]) {
   if (manager.isOwner || manager.role === "store_admin") return;
-  if (permissions.some((permission) => permission !== PERMISSIONS_V2_MARK && permission !== POS_FINE_MARK && !manager.permissions.includes(permission))) {
+  if (permissions.some((permission) => !PERMISSION_MARKS.includes(permission) && !manager.permissions.includes(permission))) {
     throw new ApiError("No puedes asignar permisos que tú no tienes en esta tienda.", 403);
   }
 }
@@ -175,12 +174,12 @@ function respondWithError(error: unknown) {
 
 /** Solo permisos conocidos, sin repetir, y con la marca de la versión desglosada (lo guardado ya no hereda). */
 function normalizePermissions(value: unknown) {
-  if (!Array.isArray(value)) return [PERMISSIONS_V2_MARK, POS_FINE_MARK];
+  if (!Array.isArray(value)) return [...PERMISSION_MARKS];
   return [...new Set(value.filter(
     (permission): permission is string =>
       typeof permission === "string" &&
       STORE_MENU_PERMISSIONS.includes(permission as (typeof STORE_MENU_PERMISSIONS)[number]),
-  )), PERMISSIONS_V2_MARK, POS_FINE_MARK];
+  )), ...PERMISSION_MARKS];
 }
 
 async function resolvePointId(admin: SupabaseClient, storeId: string, value: unknown) {
@@ -246,7 +245,7 @@ export async function POST(request: Request) {
 
     const manager = await requireStoreManager(admin, userId, storeId);
     const permissions =
-      requestedRole === "store_admin" ? [...STORE_MENU_PERMISSIONS, PERMISSIONS_V2_MARK, POS_FINE_MARK] : requestedPermissions;
+      requestedRole === "store_admin" ? [...STORE_MENU_PERMISSIONS, ...PERMISSION_MARKS] : requestedPermissions;
     assertCanGrantPermissions(manager, permissions);
     if (requestedRole === "store_admin" && !manager.isOwner && !manager.isAdmin) {
       throw new ApiError("Solo el dueño o administrador global puede crear otro administrador de tienda.", 403);

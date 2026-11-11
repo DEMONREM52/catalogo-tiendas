@@ -36,7 +36,7 @@ const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; 
   { key: "warehouses", icon: <WarehouseIcon />, color: "#6366f1", label: "Puntos y bodegas", permissions: ["inventory"] },
   { key: "transfers", icon: <Truck />, color: "#f97316", label: "Traslados", permissions: ["transfers", "inventory"] },
   { key: "adjustments", icon: <Wrench />, color: "#f59e0b", label: "Ajustes", permissions: ["inventory_adjust", "inventory"] },
-  { key: "conteos", icon: <ScanLine />, color: "#14b8a6", label: "Conteos", permissions: ["inventory", "inventory_adjust"] },
+  { key: "conteos", icon: <ScanLine />, color: "#14b8a6", label: "Conteos", permissions: ["inventory_counts", "inventory_adjust"] },
   { key: "kardex", icon: <BookOpen />, color: "#14b8a6", label: "Kardex", permissions: ["inventory"] },
   { key: "stale", icon: <Hourglass />, color: "#64748b", label: "Sin movimiento", permissions: ["inventory", "reports"] },
   { key: "expiry", icon: <CalendarClock />, color: "#f43f5e", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
