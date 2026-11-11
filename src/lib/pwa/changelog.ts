@@ -847,6 +847,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Vende con las existencias de ese punto" },
     ],
   },
+  {
+    id: 81, date: "2026-11-11", title: "Permisos del POS uno por uno",
+    summary: "En Usuarios → Ventas y caja ahora puedes quitar por separado «Vender a crédito», «Apartados», «Cotizaciones» y «Ver ventas de otros vendedores». Quien ya tenía POS los conserva todos; sin «Ver ventas de otros», en Documentos cada vendedor ve solo las suyas.",
+    paths: ["/dashboard/pos", "/dashboard/store/users", "/dashboard/apartados"],
+    demo: [
+      { icon: "👤", text: "Edita un usuario" },
+      { icon: "💳", text: "Quita «Vender a crédito» si solo vende de contado" },
+      { icon: "🧾", text: "Quita «Ver ventas de otros» para que vea solo las suyas" },
+      { icon: "✅", text: "Guarda: la base lo exige también" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -233,7 +233,7 @@ const MODULE_TABS: Record<ModuleKey, ModuleTab[]> = {
   billing: [
     { href: "/dashboard/pos", icon: "💳", label: "POS / Vender", short: "POS", permissions: ["pos"] },
     { href: "/dashboard/caja", icon: "💵", label: "Caja", permissions: ["cash", "cash_manage"] },
-    { href: "/dashboard/apartados", icon: "📌", label: "Apartados y cotizaciones", short: "Apartados", permissions: ["pos", "orders"] },
+    { href: "/dashboard/apartados", icon: "📌", label: "Apartados y cotizaciones", short: "Apartados", permissions: ["pos_layaways", "pos_quotes", "orders"] },
     { href: "/dashboard/promociones", icon: "🏷️", label: "Promociones y combos", short: "Promos", permissions: ["products_prices", "profit_rules", "price_approve"] },
     { href: "/dashboard/garantias", icon: "🛠️", label: "Garantías y devoluciones", short: "Garantías", permissions: ["pos", "inventory", "sales_return"] },
     { href: "/dashboard/fiscal", icon: "🏛️", label: "Factura electrónica", short: "Electrónica", permissions: FISCAL_PERMISSIONS },

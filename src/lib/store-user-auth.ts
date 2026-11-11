@@ -2,6 +2,10 @@ export const STORE_MENU_PERMISSIONS = [
   "store",
   "billing",
   "pos",
+  "pos_credit",
+  "pos_layaways",
+  "pos_quotes",
+  "pos_all_sales",
   "cash",
   "cash_manage",
   "sales_void",
@@ -74,6 +78,8 @@ export const STORE_MENU_PERMISSIONS = [
  * nuevos de su permiso grande (como funcionaba) hasta que se corra la migración 20261285 o se le vuelvan a guardar.
  */
 export const PERMISSIONS_V2_MARK = "perm_v2";
+/** Marca del desglose del POS (20261319). Sin ella, quien tiene «pos» hereda crédito, apartados, cotizaciones y ver todas las ventas. */
+export const POS_FINE_MARK = "perm_pos2";
 
 export type StoreMenuPermission = (typeof STORE_MENU_PERMISSIONS)[number];
 

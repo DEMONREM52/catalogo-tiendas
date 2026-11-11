@@ -1,4 +1,4 @@
-import { PERMISSIONS_V2_MARK, STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";
+import { PERMISSIONS_V2_MARK, POS_FINE_MARK, STORE_MENU_PERMISSIONS, type StoreMenuPermission } from "@/lib/store-user-auth";
 
 /** Qué tanto daño puede hacer un permiso en manos equivocadas. */
 export type PermissionRisk = "low" | "medium" | "high" | "critical";
@@ -24,7 +24,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     key: "sales", title: "Ventas y caja", icon: "💳", hint: "Vender, anular, devoluciones, precios y caja",
     items: [
-      P("pos", "POS / Facturar", "medium", "Vender, crear remisiones y facturas, apartados y cotizaciones, editar documentos sin confirmar", "POS · Apartados · Garantías"),
+      P("pos", "POS / Facturar", "medium", "Vender de contado, crear remisiones y facturas, editar sus documentos sin confirmar", "POS · Garantías"),
+      P("pos_credit", "Vender a crédito", "medium", "En el POS, fiar a un cliente con crédito (dentro de su cupo y plazo). Activar cupos es «Créditos y cupos»"),
+      P("pos_layaways", "Apartados", "low", "Apartar productos con abono, recibir abonos y cancelar apartados", "Apartados"),
+      P("pos_quotes", "Cotizaciones", "low", "Crear y compartir cotizaciones y venderlas desde el POS", "Apartados y cotizaciones"),
+      P("pos_all_sales", "Ver ventas de otros vendedores", "medium", "En POS → Documentos ve y edita las ventas de todos en su punto. Sin esto, solo las suyas"),
       P("sales_void", "Anular documentos sin confirmar", "medium", "Anular facturas y remisiones que aún no se confirman (no mueven inventario)"),
       P("sales_return", "Devolución de venta", "high", "Anular facturas y remisiones ya confirmadas: devuelve el inventario al punto y anula la cartera", "Garantías y devoluciones"),
       P("price_approve", "Autorizar precios 🔓", "high", "Vender a cualquier precio y aprobar (con aviso y sonido) las solicitudes de vender por debajo del límite. Los límites se configuran en Rentabilidad → Límites de precio", "Promociones"),
@@ -174,6 +178,10 @@ export const RISK_INFO: Record<PermissionRisk, { label: string; color: string; w
  * Solo los casos claros (la pantalla o el dato que usan exige el otro). Se puede tener el base sin el «hijo».
  */
 export const PERMISSION_REQUIRES: Partial<Record<StoreMenuPermission, StoreMenuPermission[]>> = {
+  pos_credit: ["pos"],
+  pos_layaways: ["pos"],
+  pos_quotes: ["pos"],
+  pos_all_sales: ["pos"],
   clients_delete: ["clients"],
   inventory_adjust: ["inventory"],
   purchases_void: ["purchases"],
@@ -210,20 +218,24 @@ export const LEGACY_CHILDREN: Partial<Record<StoreMenuPermission, StoreMenuPermi
 };
 /** Los mensajes antes eran de todos. */
 export const LEGACY_FOR_EVERYONE: StoreMenuPermission[] = ["messages"];
+/** Lo que salió de «pos» en 20261319. */
+export const POS_FINE_CHILDREN: StoreMenuPermission[] = ["pos_credit", "pos_layaways", "pos_quotes", "pos_all_sales"];
 
 /** Permisos efectivos de una lista guardada (agrega lo heredado si se guardó antes del desglose). */
 export function expandLegacyPermissions(perms: readonly string[] | null | undefined): string[] {
-  const list = [...(perms ?? [])];
-  if (list.includes(PERMISSIONS_V2_MARK)) return list;
-  const set = new Set(list);
-  for (const [parent, kids] of Object.entries(LEGACY_CHILDREN)) if (set.has(parent)) kids!.forEach((k) => set.add(k));
-  LEGACY_FOR_EVERYONE.forEach((k) => set.add(k));
+  const set = new Set(perms ?? []);
+  if (!set.has(PERMISSIONS_V2_MARK)) {
+    for (const [parent, kids] of Object.entries(LEGACY_CHILDREN)) if (set.has(parent)) kids!.forEach((k) => set.add(k));
+    LEGACY_FOR_EVERYONE.forEach((k) => set.add(k));
+  }
+  // POS fino (20261319): mientras la lista no tenga su marca, «pos» trae lo que antes venía adentro.
+  if (!set.has(POS_FINE_MARK) && set.has("pos")) POS_FINE_CHILDREN.forEach((k) => set.add(k));
   return [...set];
 }
 
 /** Lo que se guarda: sin la marca (la pone el servidor) y sin repetidos. */
 export function cleanPermissions(perms: readonly string[]) {
-  return [...new Set(perms.filter((p) => p !== PERMISSIONS_V2_MARK))];
+  return [...new Set(perms.filter((p) => p !== PERMISSIONS_V2_MARK && p !== POS_FINE_MARK))];
 }
 
 /** Marca o quita un permiso respetando lo que necesita (y lo que depende de él). */
@@ -258,8 +270,8 @@ export function riskScore(perms: readonly string[]) {
 /** Plantillas para asignar permisos con un clic (luego se pueden ajustar). */
 export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: string; hint: string; permissions: StoreMenuPermission[] }> = [
   { key: "admin", label: "Administrador", icon: "👑", hint: "Todos los permisos (luego puedes quitar alguno)", permissions: [...STORE_MENU_PERMISSIONS] },
-  { key: "seller", label: "Vendedor", icon: "🛒", hint: "Vende, atiende pedidos y clientes", permissions: ["pos", "cash", "clients", "orders", "stock_requests", "products_view", "messages"] },
-  { key: "cashier", label: "Cajero", icon: "💵", hint: "Vende, cobra, anula sin confirmar y emite", permissions: ["pos", "cash", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal", "fiscal_send", "products_view", "messages"] },
+  { key: "seller", label: "Vendedor", icon: "🛒", hint: "Vende, atiende pedidos y clientes", permissions: ["pos", "pos_credit", "pos_layaways", "pos_quotes", "cash", "clients", "orders", "stock_requests", "products_view", "messages"] },
+  { key: "cashier", label: "Cajero", icon: "💵", hint: "Vende, cobra, anula sin confirmar y emite", permissions: ["pos", "pos_credit", "pos_layaways", "pos_quotes", "pos_all_sales", "cash", "sales_void", "clients", "orders", "receivables", "stock_requests", "fiscal", "fiscal_send", "products_view", "messages"] },
   { key: "collector", label: "Cartera", icon: "📒", hint: "Cobra, maneja créditos e informes", permissions: ["clients", "receivables", "credit", "reports", "exports", "messages"] },
   { key: "warehouse", label: "Bodega", icon: "📦", hint: "Inventario, compras y traslados", permissions: ["inventory", "inventory_adjust", "inventory_alerts", "transfers", "purchases", "suppliers", "stock_requests_manage", "products_view", "costs_view", "messages"] },
   { key: "buyer", label: "Compras", icon: "🛍️", hint: "Facturas de proveedor y cuentas por pagar", permissions: ["purchases", "suppliers", "payables", "inventory", "products_view", "costs_view", "clients", "messages"] },
@@ -268,8 +280,8 @@ export const PERMISSION_PRESETS: Array<{ key: string; label: string; icon: strin
   { key: "accounting", label: "Contabilidad", icon: "🧮", hint: "Cartera, pagos, fiscal y exportes", permissions: ["clients", "receivables", "payables", "purchases", "purchases_void", "suppliers", "costs_view", "reports", "audit", "exports", "billing", "fiscal", "fiscal_send", "fiscal_notes", "fiscal_download", "fiscal_config", "fiscal_numbering", "fiscal_audit", "expenses", "messages"] },
   { key: "auditor", label: "Auditor", icon: "🔎", hint: "Solo mira: auditoría, informes y costos", permissions: ["audit", "reports", "costs_view", "exports", "fiscal", "fiscal_audit", "fiscal_download", "products_view", "inventory", "messages"] },
   { key: "viewer", label: "Solo consulta", icon: "👀", hint: "Ve productos, existencias e informes", permissions: ["products_view", "inventory", "reports", "messages"] },
-  { key: "point_admin", label: "Administrador de punto", icon: "📍", hint: "Todo lo del día a día de su punto", permissions: ["pos", "cash", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "internal_credit", "reports", "audit", "fiscal", "fiscal_send", "fiscal_download", "expenses", "messages"] },
-  { key: "manager", label: "Supervisor", icon: "🧭", hint: "Ventas, inventario, compras y precios", permissions: ["pos", "cash", "cash_manage", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "products_create", "products_prices", "costs_view", "categories", "inventory", "transfers", "purchases", "purchases_void", "suppliers", "reports", "audit", "stock_requests", "stock_requests_manage", "notifications_config", "catalogs", "messages"] },
+  { key: "point_admin", label: "Administrador de punto", icon: "📍", hint: "Todo lo del día a día de su punto", permissions: ["pos", "pos_credit", "pos_layaways", "pos_quotes", "pos_all_sales", "cash", "sales_void", "sales_return", "orders", "clients", "receivables", "products_view", "inventory", "transfers", "stock_requests", "stock_requests_manage", "notifications_config", "internal_credit", "reports", "audit", "fiscal", "fiscal_send", "fiscal_download", "expenses", "messages"] },
+  { key: "manager", label: "Supervisor", icon: "🧭", hint: "Ventas, inventario, compras y precios", permissions: ["pos", "pos_credit", "pos_layaways", "pos_quotes", "pos_all_sales", "cash", "cash_manage", "sales_void", "sales_return", "price_approve", "orders", "clients", "receivables", "credit", "products_view", "products", "products_create", "products_prices", "costs_view", "categories", "inventory", "transfers", "purchases", "purchases_void", "suppliers", "reports", "audit", "stock_requests", "stock_requests_manage", "notifications_config", "catalogs", "messages"] },
 ];
 
 /**

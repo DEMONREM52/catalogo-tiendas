@@ -108,7 +108,7 @@ type Combo = { id: string; name: string; sku: string | null; price: number; item
 
 export function PosToolbar({
   storeId, storeName, pointId, cart, total, customerName, customerPhone, customerDoc, priceOf,
-  onAddCombo, onSetPrices, onClear,
+  onAddCombo, onSetPrices, onClear, canLayaway = true, canQuote = true,
 }: {
   storeId: string; storeName: string; pointId: string; cart: CartLite[]; total: number; customerName: string; customerPhone: string;
   /** Cédula o NIT del cliente: los puntos son del documento (20261230), no del nombre. */
@@ -118,6 +118,9 @@ export function PosToolbar({
   onAddCombo: (lines: Array<{ productId: string; name: string; qty: number; price: number }>, passes: Passes, comboName: string) => void;
   onSetPrices: (prices: Record<string, number>, passes: Passes, note: string) => void;
   onClear: () => void;
+  /** Permisos «Apartados» y «Cotizaciones» (20261319). */
+  canLayaway?: boolean;
+  canQuote?: boolean;
 }) {
   const [open, setOpen] = useState<null | "combo" | "layaway" | "quote" | "points" | "qr">(null);
   const [loyalty, setLoyalty] = useState<{ enabled: boolean; points: number; value: number; point_value: number; min_redeem: number } | null>(null);
@@ -145,8 +148,8 @@ export function PosToolbar({
     <>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button type="button" className={btn} style={bs} onClick={() => setOpen("combo")} title="Agregar un combo">🎁 Combos</button>
-        {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("layaway")} title="El cliente abona y las unidades quedan reservadas">📌 Apartar</button> : null}
-        {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("quote")} title="Guardar como cotización y compartirla">📝 Cotizar</button> : null}
+        {cart.length && canLayaway ? <button type="button" className={btn} style={bs} onClick={() => setOpen("layaway")} title="El cliente abona y las unidades quedan reservadas">📌 Apartar</button> : null}
+        {cart.length && canQuote ? <button type="button" className={btn} style={bs} onClick={() => setOpen("quote")} title="Guardar como cotización y compartirla">📝 Cotizar</button> : null}
         {loyalty && loyalty.points > 0 && cart.length ? <button type="button" className={btn} style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, var(--t-card-border))", background: "rgba(245,158,11,.1)" }} onClick={() => setOpen("points")} title={brand.name}>⭐ {loyalty.points} {brand.unit} ({money(loyalty.value)})</button> : null}
         {cart.length ? <button type="button" className={btn} style={bs} onClick={() => setOpen("qr")} title="Mostrar el QR de pago con el valor">📱 Cobrar con QR</button> : null}
       </div>

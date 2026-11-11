@@ -196,6 +196,8 @@ export default function PosPage() {
   // Ventana completa para crear un tercero desde el POS.
   const [newClient, setNewClient] = useState<{ key: number; prefill: { name?: string; document_number?: string } } | null>(null);
   const [canCredit, setCanCredit] = useState(false);
+  // POS fino (20261319): vender a crédito, apartar y cotizar se pueden quitar uno por uno.
+  const [posPerms, setPosPerms] = useState({ credit: true, layaway: true, quote: true });
   const [listOverride, setListOverride] = useState<number | null>(null);
   const [pointId, setPointId] = useState("");
   // Existencias del punto en vivo: si otra persona vende, el número baja aquí sin recargar (20261220).
@@ -640,6 +642,11 @@ export default function PosPage() {
       }
       setStore(access.store);
       setCanCredit(hasStorePermission(access, "credit"));
+      setPosPerms({
+        credit: hasStorePermission(access, "pos_credit") || hasStorePermission(access, "credit"),
+        layaway: hasStorePermission(access, "pos_layaways"),
+        quote: hasStorePermission(access, "pos_quotes") || hasStorePermission(access, "orders"),
+      });
       const sb = supabaseBrowser();
 
       type Settings = { electronic_provider?: string | null; invoice_prefix?: string | null; remision_prefix?: string | null } | null;
@@ -1391,6 +1398,10 @@ export default function PosPage() {
 
     if (editingDoc) return saveEdit(editingDoc);
 
+    if (paymentType === "credito" && !posPerms.credit) {
+      await Swal.fire({ icon: "info", title: "Sin permiso para vender a crédito", text: "Pídele a la tienda madre el permiso «Vender a crédito», o cobra de contado.", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+      return;
+    }
     // Sin internet o con la base caída: la venta se guarda como borrador (el crédito necesita validar el cupo en línea).
     if (!canReachData()) {
       if (paymentType === "credito") {
@@ -2499,6 +2510,8 @@ export default function PosPage() {
                 onAddCombo={addComboLines}
                 onSetPrices={applyPrices}
                 onClear={clearAfterLayaway}
+                canLayaway={posPerms.layaway}
+                canQuote={posPerms.quote}
               />
             ) : null}
 
@@ -2524,12 +2537,13 @@ export default function PosPage() {
                 <div className="grid grid-cols-2 gap-1 rounded-2xl border p-1" role="radiogroup" aria-label="Tipo de pago" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
                   {([
                     { value: "contado", label: "💵 De contado", hint: "Paga ahora" },
-                    { value: "credito", label: "💳 A crédito", hint: selectedClient?.credit_enabled ? "Queda en su cartera" : "Cliente con cupo" },
+                    { value: "credito", label: "💳 A crédito", hint: !posPerms.credit ? "🔒 Sin permiso" : selectedClient?.credit_enabled ? "Queda en su cartera" : "Cliente con cupo" },
                   ] as const).map((o) => {
                     const on = paymentType === o.value;
+                    const locked = o.value === "credito" && !posPerms.credit;
                     return (
-                      <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => setPaymentType(o.value)}
-                        className="rounded-xl px-3 py-2 text-left transition"
+                      <button key={o.value} type="button" role="radio" aria-checked={on} disabled={locked} title={locked ? "Necesitas el permiso «Vender a crédito»" : undefined} onClick={() => setPaymentType(o.value)}
+                        className="rounded-xl px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
                         style={on ? { background: "var(--t-accent)", color: "#fff", boxShadow: "0 6px 18px color-mix(in oklab, var(--t-accent) 35%, transparent)" } : { color: "var(--t-text)" }}>
                         <span className="block text-sm font-black">{o.label}</span>
                         <span className="block text-[11px]" style={{ opacity: on ? 0.9 : 0.6 }}>{o.hint}</span>

@@ -157,12 +157,9 @@ no le devuelve un permiso a quien el dueño se lo quitó.
 Cada uno necesita una migración que cambie las funciones y las políticas de la base, no solo la pantalla.
 
 1. ✅ **Catálogos y landing independientes de productos (20261316).** La base acepta «Productos» **o** el permiso propio: catálogos, sus categorías, `catalog_admin_*`, redes y campañas e imágenes de catálogo → `catalogs`; `erp_landing_*` → `landing`. Las funciones se reescriben desde su definición real en producción cambiando solo la revisión del permiso. En la app, ambos piden solo «Ver productos». Prueba `tests/sql/catalogos_landing_permisos.test.mjs` 19/19. Pendiente: quitarle «Catálogos» a alguien que tiene «Productos» no lo bloquea en la base (Productos sigue sirviendo).
-2. **POS fino:**
-   - dar descuentos;
-   - vender a crédito;
-   - reimprimir;
-   - apartados y cotizaciones aparte de facturar;
-   - ver ventas de otros vendedores.
+2. ✅ **POS fino (20261319).** Salieron de «pos»: `pos_credit` Vender a crédito (`erp_credit_register`; «Créditos y cupos» también sirve), `pos_layaways` Apartados (`erp_layaway_*`), `pos_quotes` Cotizaciones (`erp_quote_*`; «Pedidos» también sirve) y `pos_all_sales` Ver ventas de otros vendedores (`erp_pos_documents`; sin él, solo las suyas). Quien tenía «pos» recibe los cuatro (marca `perm_pos2`; antes de correrla, la app los hereda). Prueba `tests/sql/pos_fino.test.mjs` 21/21. No se hicieron:
+   - **descuentos:** ya los cubren los límites de precio por usuario y «Autorizar precios»;
+   - **reimprimir:** el comprobante es un enlace por token, así que no se puede bloquear de verdad.
 3. **Terceros:**
    - ver datos de contacto;
    - crear sin editar;
