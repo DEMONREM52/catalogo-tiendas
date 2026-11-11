@@ -276,7 +276,7 @@ export default function StoreUsersPage() {
           <ul className="mt-5 grid gap-3 lg:grid-cols-2">
             <AnimatePresence initial={false}>
               {visible.map((m) => (
-                <MemberCard key={m.user_id} m={m} pointName={points.find((pt) => pt.id === m.point_id)?.name ?? null} extraNames={(m.point_ids ?? []).map((id) => points.find((pt) => pt.id === id)?.name ?? "Punto")}
+                <MemberCard key={m.user_id} m={m} pointName={points.find((pt) => pt.id === m.point_id)?.name ?? null} extraNames={(m.point_ids ?? []).map((id) => points.find((pt) => pt.id === id)?.name ?? "Punto")} sellNames={(m.sell_point_ids ?? []).map((id) => points.find((pt) => pt.id === id)?.name ?? "Punto")}
                   limits={limits} busy={busy} canPasswords={canPasswords} canDelete={canDelete} canManageAdmin={isOwner} perms={effective(m)}
                   onEdit={(step, area) => setEditor({ mode: "edit", member: m, step, area })}
                   onSimulate={() => store && startSimulation({ storeId: store.id, userId: m.user_id, name: m.display_name || m.username || "usuario", permissions: effective(m), pointName: m.role === "store_admin" ? null : points.find((pt) => pt.id === m.point_id)?.name ?? null })}
@@ -314,8 +314,8 @@ export default function StoreUsersPage() {
   );
 }
 
-function MemberCard({ m, pointName, extraNames, limits, busy, canPasswords, canDelete, canManageAdmin, perms, onEdit, onSimulate, onLink, onToggle, onDelete }: {
-  m: MemberRow; pointName: string | null; extraNames: string[]; limits: AccessOverview | null; busy: boolean; canPasswords: boolean; canDelete: boolean; canManageAdmin: boolean; perms: string[];
+function MemberCard({ m, pointName, extraNames, sellNames, limits, busy, canPasswords, canDelete, canManageAdmin, perms, onEdit, onSimulate, onLink, onToggle, onDelete }: {
+  m: MemberRow; pointName: string | null; extraNames: string[]; sellNames: string[]; limits: AccessOverview | null; busy: boolean; canPasswords: boolean; canDelete: boolean; canManageAdmin: boolean; perms: string[];
   onEdit: (step?: "person" | "access" | "permissions" | "limits" | "summary", area?: string) => void; onSimulate: () => void; onLink: () => void; onToggle: () => void; onDelete: () => void;
 }) {
   const [more, setMore] = useState(false);
@@ -341,6 +341,7 @@ function MemberCard({ m, pointName, extraNames, limits, busy, canPasswords, canD
             <span className="inline-flex items-center gap-1 font-mono font-semibold" style={{ color: "var(--t-text)" }}><AtSign size={12} />{m.username ?? "acceso por correo"}</span>
             <span className="inline-flex items-center gap-1"><MapPin size={12} />{admin ? "Todos los puntos" : pointName ?? "Todos los puntos"}</span>
           </div>
+          {sellNames.length && !admin ? <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>También vende en: <b>{sellNames.join(", ")}</b></p> : null}
           {extraNames.length && !admin ? <p className="mt-0.5 text-[11px]" style={{ color: "var(--t-muted)" }}>También consulta: <b>{extraNames.join(", ")}</b></p> : null}
         </div>
       </div>

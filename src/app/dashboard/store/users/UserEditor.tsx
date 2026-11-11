@@ -23,6 +23,7 @@ export type MemberRow = {
   permissions: string[];
   point_id?: string | null;
   point_ids?: string[] | null;
+  sell_point_ids?: string[] | null;
   active: boolean;
   created_at: string;
 };
@@ -91,6 +92,7 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
   const [admin, setAdmin] = useState(member?.role === "store_admin");
   const [pointId, setPointId] = useState(member?.point_id ?? "");
   const [extraPoints, setExtraPoints] = useState<string[]>(member?.point_ids ?? []);
+  const [sellPoints, setSellPoints] = useState<string[]>(member?.sell_point_ids ?? []);
   const [perms, setPerms] = useState<string[]>(member?.permissions ?? ["pos", "messages"]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +131,7 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
   const userChanged = editing && cleanUser !== (member!.username ?? "");
   const pointChanged = editing && (pointId || null) !== (member!.point_id ?? null);
   const extraChanged = editing && JSON.stringify([...extraPoints].sort()) !== JSON.stringify([...(member!.point_ids ?? [])].sort());
+  const sellChanged = editing && JSON.stringify([...sellPoints].sort()) !== JSON.stringify([...(member!.sell_point_ids ?? [])].sort());
   const roleChanged = editing && admin !== (member!.role === "store_admin");
   const permsChanged = editing && (added.length > 0 || removed.length > 0);
   const dirty = !editing || nameChanged || userChanged || pointChanged || extraChanged || roleChanged || permsChanged || (changePassword && password.length > 0);
@@ -171,8 +174,13 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
         if (roleChanged) body.role = admin ? "store_admin" : "seller";
         if (!admin && (permsChanged || roleChanged)) body.permissions = cleanPermissions(perms);
         // Un administrador completo trabaja en todos los puntos: se le quita el punto asignado.
-        if (admin && roleChanged) { body.point_id = null; body.point_ids = []; }
-        else if (pointChanged || extraChanged) { body.point_id = pointId || null; body.point_ids = pointId ? extraPoints.filter((x) => x !== pointId) : []; }
+        if (admin && roleChanged) { body.point_id = null; body.point_ids = []; body.sell_point_ids = []; }
+        else if (pointChanged || extraChanged || sellChanged) {
+          const sells = pointId ? sellPoints.filter((x) => x !== pointId) : [];
+          body.point_id = pointId || null;
+          body.point_ids = pointId ? extraPoints.filter((x) => x !== pointId && !sells.includes(x)) : [];
+          if (sellChanged || pointChanged) body.sell_point_ids = sells;
+        }
         if (Object.keys(body).length <= 2) { onClose(); return; }
         const res = await fetch("/api/store-team/users", { method: "PATCH", headers, body: JSON.stringify(body) });
         const out = await res.json().catch(() => ({}));
@@ -329,10 +337,27 @@ function Sheet({ mode, member, startStep, startArea, store, points, employees, m
                           </div>
                           {pointId && editing ? (
                             <div>
-                              <p className="text-sm font-black">También puede consultar</p>
-                              <p className="mb-2 text-xs" style={{ color: "var(--t-muted)" }}>Opera solo en su punto; en estos ve documentos e informes según sus permisos.</p>
+                              <p className="text-sm font-black">También trabaja y vende en</p>
+                              <p className="mb-2 text-xs" style={{ color: "var(--t-muted)" }}>En el POS escoge entre su punto y estos: vende, ve sus existencias y sus documentos.</p>
                               <div className="flex flex-wrap gap-1.5">
                                 {points.filter((pt) => pt.id !== pointId).map((pt) => {
+                                  const on = sellPoints.includes(pt.id);
+                                  return (
+                                    <button key={pt.id} type="button" aria-pressed={on} onClick={() => { setSellPoints(on ? sellPoints.filter((x) => x !== pt.id) : [...sellPoints, pt.id]); if (!on) setExtraPoints(extraPoints.filter((x) => x !== pt.id)); }} className="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                                      style={on ? { background: "var(--t-accent)", color: "var(--t-on-accent, #fff)", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
+                                      🛒 {pt.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+                          {pointId && editing ? (
+                            <div>
+                              <p className="text-sm font-black">También puede consultar</p>
+                              <p className="mb-2 text-xs" style={{ color: "var(--t-muted)" }}>Solo consulta: ve documentos e informes según sus permisos, pero no vende ahí.</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {points.filter((pt) => pt.id !== pointId && !sellPoints.includes(pt.id)).map((pt) => {
                                   const on = extraPoints.includes(pt.id);
                                   return (
                                     <button key={pt.id} type="button" onClick={() => setExtraPoints(on ? extraPoints.filter((x) => x !== pt.id) : [...extraPoints, pt.id])} className="rounded-full border px-3 py-1.5 text-xs font-semibold transition"

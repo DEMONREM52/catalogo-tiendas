@@ -836,6 +836,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Cobra la venta nueva" },
     ],
   },
+  {
+    id: 80, date: "2026-11-11", title: "Un vendedor en dos o más puntos",
+    summary: "En Usuarios, al editar a alguien con punto, marca «También trabaja y vende en»: en el POS escoge entre sus puntos, ve sus existencias y sus documentos, y sale como vendedor en todos ellos. «También puede consultar» sigue siendo solo para ver.",
+    paths: ["/dashboard/pos", "/dashboard/store/users"],
+    demo: [
+      { icon: "👤", text: "Edita un usuario con punto" },
+      { icon: "🛒", text: "Marca «También trabaja y vende en»" },
+      { icon: "📍", text: "En el POS escoge el punto donde está hoy" },
+      { icon: "✅", text: "Vende con las existencias de ese punto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

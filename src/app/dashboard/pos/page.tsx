@@ -166,15 +166,16 @@ const DEFAULT_CLIENT_NAME = "CONSUMIDOR FINAL";
 const DEFAULT_PRICE_LIST = 3;
 
 type PointOption = { id: string; name: string; kind?: "point" | "warehouse"; is_default?: boolean; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
-type SellerOption = { user_id: string; name: string; role: string; point_id?: string | null };
+type SellerOption = { user_id: string; name: string; role: string; point_id?: string | null; sell_point_ids?: string[] | null };
 
 /**
- * Vendedores del punto: los usuarios de ese punto y, en TODOS los puntos, el dueño, los administradores y quien no
- * tiene punto asignado (ve toda la tienda). Si la base aún no manda el punto de cada uno, salen todos.
+ * Vendedores del punto: los usuarios de ese punto (principal o «también vende en») y, en TODOS los puntos, el dueño,
+ * los administradores y quien no tiene punto asignado (ve toda la tienda). Si la base aún no manda el punto de cada
+ * uno, salen todos.
  */
 function sellersForPoint(rows: SellerOption[], pointId: string) {
   if (!rows.some((r) => r.point_id !== undefined)) return rows;
-  return rows.filter((r) => r.role === "owner" || r.role === "store_admin" || !r.point_id || r.point_id === pointId);
+  return rows.filter((r) => r.role === "owner" || r.role === "store_admin" || !r.point_id || r.point_id === pointId || (r.sell_point_ids ?? []).includes(pointId));
 }
 
 /** Error de la base al vender o editar, en palabras: qué producto falló y qué hacer. */
@@ -250,6 +251,9 @@ export default function PosPage() {
   const [points, setPoints] = useState<PointOption[]>([]);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
   const [lockedPoint, setLockedPoint] = useState(false);
+  // Puntos donde puede vender (null = todos): una venta guardada o una cotización no lo llevan a otro punto.
+  const sellPointsRef = useRef<string[] | null>(null);
+  const pointOk = (id: string | null | undefined) => Boolean(id) && (!sellPointsRef.current || sellPointsRef.current.includes(id as string));
   const [sellerId, setSellerId] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingDoc, setEditingDoc] = useState<PosDocument | null>(null);
@@ -419,7 +423,7 @@ export default function PosPage() {
     void restoreApprovals(saved.approvals);
     setSelectedClientId(saved.selectedClientId);
     setDocumentKind(saved.documentKind === "factura" ? "factura" : "remision");
-    if (!lockedPoint && saved.pointId) setPointId(saved.pointId);
+    if (!lockedPoint && pointOk(saved.pointId)) setPointId(saved.pointId!);
     if (saved.sellerId) setSellerId(saved.sellerId);
     window.setTimeout(() => {
       setCustomerName(saved.customerName || DEFAULT_CLIENT_NAME);
@@ -574,13 +578,13 @@ export default function PosPage() {
   async function loadErp(storeId: string) {
     const sb = supabaseBrowser();
     const cacheKey = `pos-erp:${storeId}`;
-    type ErpCache = { points: PointOption[]; sellers: SellerOption[]; myPoint: string | null };
+    type ErpCache = { points: PointOption[]; sellers: SellerOption[]; myPoint: string | null; sellPoints?: string[] | null };
     // La sesión guardada basta para saber quién vende (no hace falta preguntarle al servidor).
     // Sin conexión (aunque el token haya vencido) se usa la sesión guardada en el equipo.
     const me = (await sb.auth.getSession()).data.session?.user.id ?? storedSessionUser()?.id;
     let erp: ErpCache;
     try {
-      const [pointsRes, sellersRes, myPointRes] = await withTimeout(Promise.all([
+      const [pointsRes, sellersRes, myPointRes, sellPointsRes] = await withTimeout(Promise.all([
         sb
           .from("erp_warehouses")
           // Se puede vender desde puntos y bodegas: cada uno con sus propias existencias.
@@ -591,10 +595,13 @@ export default function PosPage() {
           .order("name"),
         sb.rpc("erp_sellers", { p_store: storeId }),
         sb.rpc("erp_my_point", { p_store: storeId }),
+        // Puntos donde vende (20261318). Sin la migración, solo su punto principal.
+        sb.rpc("erp_my_sell_points", { p_store: storeId }),
       ]), 20_000, "carga de puntos");
       if (pointsRes.error && isNetworkError(pointsRes.error)) throw pointsRes.error;
       // Si erp_ops.sql aún no está aplicado el POS sigue funcionando sin punto ni vendedor.
-      erp = { points: (pointsRes.data ?? []) as PointOption[], sellers: (sellersRes.data ?? []) as SellerOption[], myPoint: myPointRes.data as string | null };
+      erp = { points: (pointsRes.data ?? []) as PointOption[], sellers: (sellersRes.data ?? []) as SellerOption[], myPoint: myPointRes.data as string | null,
+        sellPoints: sellPointsRes.error ? undefined : (sellPointsRes.data as string[] | null) };
       if (!pointsRes.error) void cacheSave(cacheKey, erp);
     } catch (e) {
       const cached = isNetworkError(e) ? await cacheLoad<ErpCache>(cacheKey) : null;
@@ -604,16 +611,20 @@ export default function PosPage() {
     const pointRows = erp.points;
     const sellerRows = erp.sellers;
     const myPoint = erp.myPoint;
-    const visiblePoints = myPoint ? pointRows.filter((pt) => pt.id === myPoint) : pointRows;
+    // Un usuario de punto vende en su punto principal y en los que le marcaron en «Trabaja y vende en».
+    const sellIds = myPoint ? (erp.sellPoints?.length ? erp.sellPoints : [myPoint]) : null;
+    const visiblePoints = sellIds ? pointRows.filter((pt) => sellIds.includes(pt.id)) : pointRows;
+    sellPointsRef.current = sellIds ? visiblePoints.map((pt) => pt.id) : null;
     setPoints(visiblePoints);
-    setLockedPoint(Boolean(myPoint));
+    setLockedPoint(Boolean(sellIds) && visiblePoints.length <= 1);
     setSellers(sellerRows);
     const initialPoint =
+      (myPoint && visiblePoints.some((pt) => pt.id === myPoint) ? myPoint : "") ||
       visiblePoints.find((pt) => pt.kind === "point")?.id ||
       visiblePoints.find((pt) => pt.is_default)?.id ||
       visiblePoints[0]?.id ||
       "";
-    setPointId((current) => current || initialPoint);
+    setPointId((current) => (current && visiblePoints.some((pt) => pt.id === current) ? current : initialPoint));
     const ofPoint = sellersForPoint(sellerRows, initialPoint);
     setSellerId((current) => current || ofPoint.find((r) => r.user_id === me)?.user_id || ofPoint[0]?.user_id || "");
     setMeId(me ?? "-");
@@ -866,7 +877,7 @@ export default function PosPage() {
       if (src.customer_phone) setCustomerWhatsApp(src.customer_phone);
       if (layId) {
         layawayRef.current = { id: src.id, number: src.number };
-        if (src.point_id && src.point_id !== pointId && !lockedPoint) setPointId(src.point_id);
+        if (src.point_id && src.point_id !== pointId && !lockedPoint && pointOk(src.point_id)) setPointId(src.point_id);
         mergePasses(await requestPasses(storeId, src.point_id ?? pointId, "layaway", src.id, next.map((i) => ({ product_id: i.productId, price: i.price, qty: i.qty }))));
         setFromDoc(`📌 Entregando apartado #${src.number} (ya está pagado). Cobra con «Contado»: la caja se ajusta sola con los abonos.`);
       } else {
@@ -1226,7 +1237,7 @@ export default function PosPage() {
     setCustomerDocument(d.customerDocument);
     setSelectedClientId(d.selectedClientId);
     setDocumentKind(d.documentKind);
-    if (!lockedPoint && d.pointId) setPointId(d.pointId);
+    if (!lockedPoint && pointOk(d.pointId)) setPointId(d.pointId!);
     if (d.sellerId) setSellerId(d.sellerId);
     if (d.payment) {
       setPaymentType("contado");

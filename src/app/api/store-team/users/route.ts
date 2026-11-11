@@ -406,7 +406,7 @@ export async function PATCH(request: Request) {
       throw new ApiError("Solo el dueño puede administrar el acceso de otro administrador.", 403);
     }
 
-    const patch: { point_id?: string | null; point_ids?: string[]; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer"; username?: string; display_name?: string } = {};
+    const patch: { point_id?: string | null; point_ids?: string[]; sell_point_ids?: string[]; permissions?: string[]; active?: boolean; role?: "store_admin" | "seller" | "accounting" | "viewer"; username?: string; display_name?: string } = {};
     if (body.permissions !== undefined) {
       patch.permissions = normalizePermissions(body.permissions);
       assertCanGrantPermissions(manager, patch.permissions);
@@ -422,6 +422,14 @@ export async function PATCH(request: Request) {
       if (manager.pointId) throw new ApiError("Solo la tienda madre define los puntos adicionales de un usuario.", 403);
       const home = pointPatch !== undefined ? pointPatch : (target.point_id as string | null);
       patch.point_ids = home ? extraPoints.filter((id) => id !== home) : [];
+    }
+    // «Trabaja y vende en» (20261318): puntos donde también vende, aparte de los de solo consulta.
+    const sellPoints = await resolvePointIds(admin, storeId, body.sell_point_ids);
+    if (sellPoints !== undefined) {
+      if (manager.pointId) throw new ApiError("Solo la tienda madre define en qué puntos vende un usuario.", 403);
+      const home = pointPatch !== undefined ? pointPatch : (target.point_id as string | null);
+      patch.sell_point_ids = home ? sellPoints.filter((id) => id !== home) : [];
+      if (patch.point_ids) patch.point_ids = patch.point_ids.filter((id) => !patch.sell_point_ids!.includes(id));
     }
     if (body.role !== undefined) {
       const allowedRoles = ["store_admin", "seller", "accounting", "viewer"] as const;
