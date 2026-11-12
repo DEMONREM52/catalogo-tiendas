@@ -22,6 +22,7 @@ import { RebalancePanel, type RebalancePlan } from "./Rebalance";
 import { useFeature } from "@/lib/useFeature";
 import { searchDelay } from "@/lib/search-timing";
 import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
+import { useTransferVoice, type TransferVoiceApi } from "./useTransferVoice";
 
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
 type Matrix = Record<string, Record<string, number>>;
@@ -507,7 +508,10 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setNotes("");
   }
 
-  async function send() {
+  // REM (voz): sabe si el último envío quedó hecho.
+  const sentRef = useRef(false);
+  async function send(opts?: { confirmed?: boolean }) {
+    sentRef.current = false;
     if (!from) return void toast("Elige la bodega o punto de origen", "warning");
     if (!targets.length) return void toast("Elige al menos un destino", "warning");
     if (overdrawn) return void toast("Hay productos con más unidades que las disponibles", "warning");
@@ -538,7 +542,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     }
 
     const units = plan.reduce((sum, leg) => sum + leg.items.reduce((s, i) => s + i.qty, 0), 0);
-    if (!(await confirmAction("Enviar mercancía", `Se crearán ${plan.length} traslado(s) con ${units} unidades. Quedarán en tránsito hasta que cada destino las reciba.`, "Enviar"))) return;
+    if (!opts?.confirmed && !(await confirmAction("Enviar mercancía", `Se crearán ${plan.length} traslado(s) con ${units} unidades. Quedarán en tránsito hasta que cada destino las reciba.`, "Enviar"))) return;
 
     setBusy(true);
     const sb = supabaseBrowser();
@@ -549,6 +553,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       setBusy(false);
       return void toast("No se pudo enviar", "error", friendlyStockError(errorMessage(error)) ?? errorMessage(error));
     }
+    sentRef.current = true;
     resetPlan();
     clearDraft(draftKey);
     setDraftAt(null);
@@ -632,6 +637,30 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   }
 
   const destinations = active.filter((w) => w.id !== from);
+
+  // REM: armar el traslado hablando (botón 🎙️ REM del encabezado). Lee siempre lo último de la pantalla.
+  const voiceApi = useRef<TransferVoiceApi | null>(null);
+  // Sin dependencias a propósito: se actualiza en cada render (solo guarda funciones, no llama a setNotes).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    voiceApi.current = {
+      storeId: ctx.storeId, pointId: ctx.pointId, places: active, from, targets, lines, matrix, carrier, checkedBy, availOf,
+      setOrigin: (id) => { setFrom(id); setTargets((prev) => prev.filter((t) => t !== id)); resetPlan(); },
+      setTargets: (ids) => setTargets(ids),
+      put: (hit, dest, qty) => {
+        setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? prev : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
+        setQty(hit.id, dest, qty);
+        setFlashId(hit.id);
+        window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
+      },
+      remove: removeLine,
+      setCarrier: (v) => setCarrier(v.toUpperCase()),
+      setCheckedBy: (v) => setCheckedBy(v.toUpperCase()),
+      setNotes,
+      send: async () => { await send({ confirmed: true }); return sentRef.current; },
+    };
+  });
+  useTransferVoice(voiceApi, canTransfer && !editingId);
 
   return (
     <div className="space-y-5">

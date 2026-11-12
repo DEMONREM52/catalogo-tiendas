@@ -889,6 +889,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Toca el resultado: se agrega o se filtra" },
     ],
   },
+  {
+    id: 85, date: "2026-11-12", title: "🎙️ REM: arma traslados hablando",
+    summary: "Toca 🎙️ REM arriba y di «quiero hacer un traslado». REM te contesta con voz, entiende de dónde a dónde, las referencias dichas («tres de la A B guion doce cuarenta») y te lee opciones si hay varias. Nada se envía sin que digas «sí».",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🎙️", text: "Toca REM y di: quiero hacer un traslado" },
+      { icon: "🏬", text: "«De bodega principal a Zamora»" },
+      { icon: "📦", text: "«Tres de la AB-1240» · «la dos» · «quita el último»" },
+      { icon: "✅", text: "«Listo» → REM resume → «Sí» y se envía" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

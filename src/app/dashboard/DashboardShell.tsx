@@ -54,6 +54,7 @@ const PanelBackdrop = nextDynamic(() => import("@/components/landing/DevBackgrou
 const MouseGlow = nextDynamic(() => import("@/components/landing/DevBackground").then((m) => m.MouseGlow), { ssr: false });
 // Piezas del panel que no hacen falta para ver la página: se descargan justo después, en archivos aparte
 // (buscador Ctrl+K, ayuda y recorridos, cumpleaños, llamadas). Así el panel se puede usar antes en celulares sencillos.
+const RemButton = nextDynamic(() => import("@/components/rem/RemButton").then((m) => m.RemButton), { ssr: false });
 const CommandPalette = nextDynamic(() => import("@/components/CommandPalette").then((m) => m.CommandPalette), { ssr: false });
 const HelpButton = nextDynamic(() => import("@/components/HelpButton").then((m) => m.HelpButton), { ssr: false });
 const GuidedTourHost = nextDynamic(() => import("@/components/tour/GuidedTour").then((m) => m.GuidedTourHost), { ssr: false });
@@ -1038,6 +1039,7 @@ export default function DashboardShell({
                 🔍 <span className="hidden md:inline">Buscar</span><kbd className="hidden rounded border px-1 text-[10px] md:inline" style={{ borderColor: "var(--t-card-border)" }}>Ctrl K</kbd>
               </button>
             ) : null}
+            {role === "store" && store?.id ? <RemButton canTransfer={canOpen("transfers")} /> : null}
             {role === "store" && store?.id ? <CommandPalette storeId={store.id} links={paletteLinks} can={canOpen} /> : null}
             {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
             {role === "store" && store?.id ? <GuidedTourHost /> : null}

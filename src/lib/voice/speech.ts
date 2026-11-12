@@ -1,0 +1,148 @@
+/**
+ * REM: escuchar y hablar con lo que trae el navegador (gratis, sin servidor de RemHub).
+ *   · Escuchar: SpeechRecognition (Chrome/Edge en Android y computador, Safari 14.5+). Firefox no lo trae.
+ *   · Hablar: speechSynthesis con una voz en español del equipo.
+ */
+
+type RecognitionAlt = { transcript: string; confidence: number };
+type RecognitionResult = { isFinal: boolean; length: number; [i: number]: RecognitionAlt };
+type RecognitionEvent = { resultIndex: number; results: { length: number; [i: number]: RecognitionResult } };
+type Recognition = {
+  lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number;
+  onresult: ((e: RecognitionEvent) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void; stop(): void; abort(): void;
+};
+type RecognitionCtor = new () => Recognition;
+
+function ctor(): RecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+/** ¿Este navegador puede escuchar y hablar? */
+export function voiceSupported(): boolean {
+  return Boolean(ctor()) && typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+export class VoiceError extends Error {
+  constructor(public code: "permission" | "network" | "mic" | "other", message: string) { super(message); }
+}
+
+let current: Recognition | null = null;
+
+/**
+ * Escucha una frase. Devuelve las posibles lecturas (la primera es la más probable); [] si no se dijo nada.
+ * `onInterim` muestra lo que va entendiendo mientras se habla.
+ */
+export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: number } = {}): Promise<string[]> {
+  const Ctor = ctor();
+  if (!Ctor) return Promise.reject(new VoiceError("other", "Este navegador no puede escuchar. Usa Chrome."));
+  stopListening();
+  return new Promise((resolve, reject) => {
+    const rec = new Ctor();
+    current = rec;
+    rec.lang = "es-CO";
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 3;
+    let alts: string[] = [];
+    let settled = false;
+    const done = (fn: () => void) => { if (settled) return; settled = true; window.clearTimeout(timer); if (current === rec) current = null; fn(); };
+    const timer = window.setTimeout(() => { try { rec.stop(); } catch { /* ya paró */ } }, opts.timeoutMs ?? 12_000);
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) {
+          const list: string[] = [];
+          for (let k = 0; k < r.length; k++) if (r[k]?.transcript?.trim()) list.push(r[k].transcript.trim());
+          alts = list;
+        } else interim += r[0]?.transcript ?? "";
+      }
+      if (interim) opts.onInterim?.(interim);
+      else if (alts[0]) opts.onInterim?.(alts[0]);
+    };
+    rec.onerror = (e) => {
+      if (e.error === "no-speech" || e.error === "aborted") return done(() => resolve([]));
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return done(() => reject(new VoiceError("permission", "No hay permiso para usar el micrófono.")));
+      if (e.error === "network") return done(() => reject(new VoiceError("network", "Sin internet: el reconocimiento de voz lo necesita.")));
+      if (e.error === "audio-capture") return done(() => reject(new VoiceError("mic", "No se encontró el micrófono.")));
+      done(() => reject(new VoiceError("other", `No se pudo escuchar (${e.error}).`)));
+    };
+    rec.onend = () => done(() => resolve(alts));
+    try { rec.start(); } catch (err) { done(() => reject(new VoiceError("other", err instanceof Error ? err.message : "No se pudo escuchar."))); }
+  });
+}
+
+export function stopListening() {
+  const rec = current;
+  current = null;
+  try { rec?.abort(); } catch { /* ya paró */ }
+}
+
+let voice: SpeechSynthesisVoice | null | undefined;
+
+async function spanishVoice(): Promise<SpeechSynthesisVoice | null> {
+  if (voice !== undefined) return voice;
+  const synth = window.speechSynthesis;
+  let list = synth.getVoices();
+  if (!list.length) {
+    // Chrome carga las voces después.
+    await new Promise<void>((r) => { const t = window.setTimeout(r, 1200); synth.addEventListener("voiceschanged", () => { window.clearTimeout(t); r(); }, { once: true }); });
+    list = synth.getVoices();
+  }
+  const es = list.filter((v) => v.lang.toLowerCase().startsWith("es"));
+  const order = ["es-co", "es-419", "es-mx", "es-us", "es-es"];
+  es.sort((a, b) => {
+    const ia = order.indexOf(a.lang.toLowerCase()); const ib = order.indexOf(b.lang.toLowerCase());
+    const ra = (ia < 0 ? 9 : ia) - (a.localService ? 0.5 : 0); const rb = (ib < 0 ? 9 : ib) - (b.localService ? 0.5 : 0);
+    return ra - rb;
+  });
+  voice = es[0] ?? null;
+  return voice;
+}
+
+/** Dice el texto en voz alta y espera a que termine (o a que se calle con `stopSpeaking`). */
+export async function speak(text: string): Promise<void> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const v = await spanishVoice();
+  await new Promise<void>((resolve) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = v?.lang ?? "es-CO";
+    if (v) u.voice = v;
+    u.rate = 1.05;
+    // Chrome a veces no avisa que terminó: tiempo máximo según el largo.
+    const t = window.setTimeout(resolve, 2500 + text.length * 85);
+    u.onend = () => { window.clearTimeout(t); resolve(); };
+    u.onerror = () => { window.clearTimeout(t); resolve(); };
+    synth.speak(u);
+  });
+}
+
+export function stopSpeaking() {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+/** Pitido corto para saber que REM ya escucha. */
+export function beep(kind: "listen" | "done" = "listen") {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.frequency.value = kind === "listen" ? 880 : 520;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.18);
+    o.onended = () => void ctx.close();
+  } catch { /* sin sonido */ }
+}
