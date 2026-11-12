@@ -8,6 +8,7 @@ import { SupportDocumentButton } from "./SupportDocument";
 import { Btn, Empty, Panel, StatusPill, dateTime, inputClass, inputStyle, money, tableWrap, td, th } from "./shared";
 import { emptyFilters, filtersActive, quickRange, type PurchaseFilters, type PurchaseRow, type usePurchaseSearch } from "./purchase-search";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 type Search = ReturnType<typeof usePurchaseSearch>;
 type Item = { product_id: string; qty: number; unit_cost: number; line_total: number | null; products: { name: string; sku: string | null } | null };
@@ -198,7 +199,7 @@ export function PurchaseHistory({
                           {items === "loading" ? <SkeletonList rows={3} label="Cargando productos…" /> : items.length === 0 ? (
                             <p className="text-xs" style={{ color: "var(--t-muted)" }}>Sin productos.</p>
                           ) : (
-                            <ItemsTable key={f.q} items={items} term={f.q} hitIds={new Set((hit ?? []).map((m) => m.product_id))} />
+                            <ItemsTable key={f.q} items={items} term={f.q} hitIds={new Set((hit ?? []).map((m) => m.product_id))} storeId={storeId} />
                           )}
                         </td>
                       </tr>
@@ -251,7 +252,7 @@ function Marked({ text, words }: { text: string; words: string[] }) {
 }
 
 /** Productos de un ingreso: lo buscado queda resaltado y arriba; se puede buscar dentro de la factura o ver solo lo que coincide. */
-function ItemsTable({ items, term, hitIds }: { items: Item[]; term: string; hitIds: Set<string> }) {
+function ItemsTable({ items, term, hitIds, storeId }: { items: Item[]; term: string; hitIds: Set<string>; storeId?: string }) {
   const [local, setLocal] = useState(term);
   const [onlyHits, setOnlyHits] = useState(false);
   const words = foldText(local).split(/\s+/).filter((w) => w.length >= 2);
@@ -278,6 +279,7 @@ function ItemsTable({ items, term, hitIds }: { items: Item[]; term: string; hitI
           placeholder={`🔍 Buscar en esta factura (${items.length} productos)`}
           aria-label="Buscar en esta factura"
         />
+        <ProductPhotoButton storeId={storeId} onlyIds={items.map((i) => i.product_id)} pickLabel="Buscar" compact className="py-1.5" onPick={(h) => setLocal(photoFilterText(h))} />
         {words.length || (local === term && hitIds.size) ? (
           <span className="text-xs font-semibold" style={{ color: hits ? "#facc15" : "var(--t-muted)" }}>
             {hits ? `★ ${hits} de ${items.length} coincide${hits === 1 ? "" : "n"}` : "Ninguno coincide"}

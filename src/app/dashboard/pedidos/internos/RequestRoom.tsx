@@ -23,6 +23,7 @@ import { EmojiButton } from "@/components/chat/EmojiPicker";
 import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 const QUICK = {
@@ -502,6 +503,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 <button type="button" onClick={() => setItemQuery("")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full" aria-label="Limpiar búsqueda"><X size={14} /></button>
               </>
             ) : null}
+            {data ? <ProductPhotoButton storeId={data.request.store_id} onlyIds={data.items.map((i) => i.product_id)} pickLabel="Buscar" compact className="-mr-2 border-0 px-1.5" onPick={(h) => setItemQuery(photoFilterText(h))} /> : null}
           </label>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full sm:h-2" style={{ background: "var(--t-card-border)" }}>
             <motion.div className="h-full rounded-full" style={{ background: "linear-gradient(90deg,#22c55e,#4ade80)" }} animate={{ width: `${data.items.length ? (doneCount / data.items.length) * 100 : 0}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />

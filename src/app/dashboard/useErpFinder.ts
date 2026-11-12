@@ -13,6 +13,7 @@ const toHit = (r: Row, priceLevel: 1 | 3): FinderHit => ({
   name: r.name,
   image_url: r.image_url,
   code: r.sku ?? (r.product_no ? String(r.product_no) : null),
+  sku: r.sku,
   price: Number((priceLevel === 1 ? r.price_1 : r.price_3) ?? 0),
   meta: [r.product_no ? `N.º ${r.product_no}` : null, r.active === false ? "Inactivo" : null].filter(Boolean).join(" · ") || null,
   score: r.score ?? null,
@@ -36,7 +37,22 @@ export function useErpFinderSource(storeId: string | null | undefined, opts: { a
       const { data, error } = await supabaseBrowser().rpc("erp_product_image_search", {
         p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_active_only: activeOnly, p_terms: terms,
       });
-      if (error) throw error;
+      if (error) {
+        // Sin permiso para el buscador interno (p. ej. el administrador de la plataforma en otra tienda):
+        // se usa la búsqueda por foto pública de la tienda (solo productos visibles).
+        const pub = await supabaseBrowser().rpc("store_public_image_search", { p_store: storeId, p_embedding: embedding, p_model: IMAGE_MODEL, p_limit: 24, p_terms: terms });
+        if (pub.error) throw error;
+        const found = ((pub.data ?? {}) as { indexed?: number; items?: Array<{ id: string; score: number; match?: FinderHit["match"] }> });
+        const ids = (found.items ?? []).map((i) => i.id);
+        const { data: rows } = ids.length
+          ? await supabaseBrowser().from("products").select("id,name,sku,product_no,image_url,active,price_1,price_3").in("id", ids)
+          : { data: [] as Row[] };
+        const byId = new Map(((rows ?? []) as Row[]).map((r) => [r.id, r]));
+        return {
+          indexed: Number(found.indexed ?? 0),
+          items: (found.items ?? []).flatMap((i) => (byId.get(i.id) ? [toHit({ ...byId.get(i.id)!, score: Number(i.score), match: i.match ?? null }, priceLevel)] : [])),
+        };
+      }
       const res = (data ?? {}) as { indexed?: number; items?: Row[] };
       return { indexed: Number(res.indexed ?? 0), items: (res.items ?? []).map((r) => toHit(r, priceLevel)) };
     },

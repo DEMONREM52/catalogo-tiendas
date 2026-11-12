@@ -6,6 +6,7 @@ import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchAdminData } from "@/lib/admin-data";
 import { ImageUpload } from "@/app/dashboard/store/ImageUpload";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 type StoreMini = { id: string; name: string; slug: string; wholesale_key: string | null };
 type Cat = { id: string; name: string };
@@ -844,12 +845,15 @@ export default function AdminProductosPage() {
                 <option value="out">Stock: Agotados</option>
               </select>
 
-              <input
-                className={inputBase()}
-                placeholder='Buscar tipo WhatsApp: "zapatera" / "belleza secador"...'
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <input
+                  className={`${inputBase()} min-w-0 flex-1`}
+                  placeholder='Buscar tipo WhatsApp: "zapatera" / "belleza secador"...'
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+                <ProductPhotoButton storeId={storeId || null} pickLabel="Ver" onPick={(h) => setQ(h.name)} />
+              </div>
             </div>
             {storeId ? (
               <div className="mt-3 flex flex-wrap gap-2">

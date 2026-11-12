@@ -50,3 +50,21 @@ Con **ahorro de datos** o con **red 2G o 3G** no se descarga nada en segundo pla
 - Usa el mismo motor: el del equipo en computadores y el modo liviano en celulares lentos.
 - Una foto rota se marca para no reintentarla.
 - Si falla el modelo o el servidor, el análisis se detiene y se guarda lo hecho. Antes, una falla del modelo podía marcar fotos buenas como rotas.
+
+## Dónde está (todos los buscadores de productos)
+
+El botón reutilizable es `ProductPhotoButton` (`src/app/dashboard/PhotoSearchControls.tsx`).
+
+- Abre el mismo buscador por foto o por nombre/código, con la cámara en la página y el modo liviano.
+- `onlyIds` limita los resultados a los productos de un documento: factura, traslado o pedido.
+- `photoFilterText(hit)` da la referencia o el nombre, para filtrar listas.
+- Si el buscador interno no deja (por ejemplo, el administrador de la plataforma en otra tienda), `useErpFinderSource` usa la búsqueda por foto pública de la tienda.
+
+| Qué hace al elegir | Pantallas |
+|---|---|
+| **Agrega el producto** | Inventario (`ProductPicker` y «Agregar producto» de `LineEditor`):<br>• compras;<br>• traslados;<br>• conteos;<br>• crédito con puntos;<br>• manifiestos;<br>• movimientos;<br>• producto en el chat;<br>• pedidos internos.<br><br>Fuera de Inventario:<br>• nuevo pedido interno;<br>• promociones y combos;<br>• lo más vendido;<br>• landing;<br>• garantías;<br>• vencimientos;<br>• vales en productos;<br>• asociar producto del XML. |
+| **Filtra la lista** | • Existencias;<br>• stock;<br>• valorización por punto;<br>• mercancía quieta;<br>• informe y lista de traslados;<br>• productos del catálogo;<br>• radar;<br>• pedidos de clientes;<br>• rentabilidad (márgenes, resumen, simulador y desglose);<br>• clientes frecuentes;<br>• auditoría;<br>• campañas y tarjetas para compartir;<br>• Administración → Productos. |
+| **Busca dentro del documento** | • Factura del historial de compras;<br>• editar un traslado;<br>• productos de un traslado;<br>• recibir un traslado;<br>• chulear un pedido interno. |
+| **Ya lo tenían** | • POS;<br>• Productos;<br>• Lista de productos;<br>• catálogo público;<br>• página del producto. |
+
+**Sin cámara a propósito:** el enlace público para recibir un traslado (`/traslado/[token]`). Quien lo abre no tiene sesión, y la búsqueda interna la exige.

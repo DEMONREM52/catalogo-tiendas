@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, inputClass, inputStyle, money, type ErpCtx, type Warehouse } from "./shared";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Productos quietos (20261225): con unidades y sin ventas en 60/90/180 días, con la plata parada.
@@ -63,6 +64,7 @@ export function StaleStockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wa
           {active.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
         <input className={`${inputClass} min-w-48 flex-1`} style={inputStyle} placeholder="Buscar producto…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <ProductPhotoButton storeId={ctx.storeId} pickLabel="Ver" onPick={(h) => setQ(photoFilterText(h))} />
         {shown.length ? <Btn variant="ghost" onClick={exportCsv}>⬇️ Exportar</Btn> : null}
       </div>
       {error ? <p className="mt-3 text-sm text-amber-500">⚠️ {error}</p> : null}

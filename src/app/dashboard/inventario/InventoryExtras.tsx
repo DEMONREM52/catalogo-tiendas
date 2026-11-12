@@ -7,6 +7,7 @@ import { DateField } from "@/components/forms/Fields";
 import { Thumb } from "./LineEditor";
 import { Btn, Empty, Panel, errorMessage, inputClass, inputStyle, money, toast, type ErpCtx, type Warehouse } from "./shared";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Ayudas opcionales de inventario (20261226):
@@ -194,7 +195,10 @@ export function ExpiryTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Wareho
       {adding ? (
         <div className="mt-3 grid gap-2 rounded-2xl border p-3 sm:grid-cols-5" style={{ borderColor: "var(--t-card-border)" }}>
           <div className="relative sm:col-span-2">
-            <input className={inputClass} style={inputStyle} placeholder="Producto…" value={form.product_id ? form.name : q} onChange={(e) => { setForm({ ...form, product_id: "", name: "" }); setQ(e.target.value); }} />
+            <div className="flex gap-2">
+              <input className={`${inputClass} min-w-0 flex-1`} style={inputStyle} placeholder="Producto…" value={form.product_id ? form.name : q} onChange={(e) => { setForm({ ...form, product_id: "", name: "" }); setQ(e.target.value); }} />
+              <ProductPhotoButton storeId={ctx.storeId} activeOnly onPick={(h) => { setForm({ ...form, product_id: h.id, name: h.name }); setHits([]); }} />
+            </div>
             {hits.length && !form.product_id ? (
               <div className="absolute z-10 mt-1 w-full rounded-xl border p-1 shadow-xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
                 {hits.map((h) => <button key={h.id} type="button" className="block w-full rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[color:var(--t-card-bg)]" onClick={() => { setForm({ ...form, product_id: h.id, name: h.name }); setHits([]); }}>{h.name}{h.sku ? ` · ${h.sku}` : ""}</button>)}

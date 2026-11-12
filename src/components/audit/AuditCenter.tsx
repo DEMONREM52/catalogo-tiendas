@@ -9,6 +9,7 @@ import { ChoiceChips, DateField } from "@/components/forms/Fields";
 import { AuditEventCard } from "./AuditEventCard";
 import { MODULES, RESULT, actionLabel, diffRows, fmtValue, moduleInfo, useAuditAccess, type AuditEvent, type AuditFilters } from "./audit-labels";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 type Overview = {
   ok: boolean; scope: string; limited?: boolean; total?: number; critical?: number; security?: number;
@@ -180,7 +181,10 @@ export function AuditCenter({ storeId, points = [], initial = {} }: { storeId: s
             </label>
           ) : null}
           <label className="block text-xs font-bold">Buscar
-            <input value={filters.q ?? ""} onChange={(e) => set({ q: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") apply(); }} placeholder="Usuario, producto, valor, motivo…" className="mt-1 w-full rounded-xl border px-3 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} />
+            <span className="mt-1 flex gap-2">
+              <input value={filters.q ?? ""} onChange={(e) => set({ q: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") apply(); }} placeholder="Usuario, producto, valor, motivo…" className="min-w-0 flex-1 rounded-xl border px-3 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} />
+              <ProductPhotoButton storeId={storeId} pickLabel="Ver sus cambios" onPick={(h) => set({ q: h.name })} />
+            </span>
           </label>
         </div>
         <div className="mt-3 space-y-2 text-xs">

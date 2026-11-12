@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { DateField } from "@/components/forms/Fields";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Garantías y devoluciones (20261229): qué trajo el cliente, qué falla, a quién se mandó y cómo terminó.
@@ -125,7 +126,10 @@ export default function WarrantiesPage() {
           <select className={field} style={fs} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} aria-label="Tipo"><option value="warranty">Garantía (falla)</option><option value="return">Devolución (no lo quiere)</option></select>
           <select className={field} style={fs} value={form.point_id} onChange={(e) => setForm({ ...form, point_id: e.target.value })} aria-label="Punto"><option value="">Punto…</option>{points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <div className="relative sm:col-span-2">
-            <input className={field} style={fs} placeholder="Producto *" value={form.product_id ? form.product_name : q} onChange={(e) => { setForm({ ...form, product_id: "", product_name: "" }); setQ(e.target.value); }} />
+            <div className="flex gap-2">
+              <input className={`${field} min-w-0 flex-1`} style={fs} placeholder="Producto *" value={form.product_id ? form.product_name : q} onChange={(e) => { setForm({ ...form, product_id: "", product_name: "" }); setQ(e.target.value); }} />
+              <ProductPhotoButton storeId={store?.id} onPick={(h) => { setForm({ ...form, product_id: h.id, product_name: h.name }); setHits([]); }} />
+            </div>
             {hits.length && !form.product_id ? (
               <div className="absolute z-10 mt-1 w-full rounded-xl border p-1 shadow-xl" style={{ ...fs, background: "var(--t-bg-base)" }}>
                 {hits.map((h) => <button key={h.id} type="button" className="block w-full rounded-lg px-2 py-1.5 text-left text-sm" onClick={() => { setForm({ ...form, product_id: h.id, product_name: h.name }); setHits([]); }}>{h.name}</button>)}

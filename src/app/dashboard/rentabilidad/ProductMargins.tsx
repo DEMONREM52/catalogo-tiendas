@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { DateField } from "@/components/forms/Fields";
 import { cardStyle, type Point } from "./shared";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Margen real por producto (20261225): lo que deja cada producto, no solo lo que se vende.
@@ -85,6 +86,7 @@ export function ProductMargins({ storeId, points }: { storeId: string; points: P
           {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="min-w-40 flex-1 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} />
+        <ProductPhotoButton storeId={storeId} pickLabel="Ver" onPick={(h) => setQ(h.name)} />
         {shown.length ? <button type="button" onClick={exportCsv} className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>⬇️ Exportar</button> : null}
       </div>
       {error ? <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p> : null}

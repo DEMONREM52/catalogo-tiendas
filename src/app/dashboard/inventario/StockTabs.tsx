@@ -8,6 +8,7 @@ import {
   type ErpCtx, type Warehouse,
 } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 // El editor de puntos (logo, numeración, resolución) solo se descarga en la pestaña «Puntos y bodegas».
 const PointBillingPanel = nextDynamic(() => import("@/app/dashboard/store/billing/PointBillingPanel"), { loading: () => <SkeletonList rows={3} avatar={false} label="Cargando puntos…" /> });
@@ -114,7 +115,10 @@ export function StockTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehou
         </label>
       }
     >
-      <input className={`${inputClass} mb-3`} style={inputStyle} placeholder="Buscar por nombre o SKU…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
+      <div className="mb-3 flex gap-2">
+        <input className={`${inputClass} min-w-0 flex-1`} style={inputStyle} placeholder="Buscar por nombre o SKU…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
+        <ProductPhotoButton storeId={ctx.storeId} pickLabel="Ver" onPick={(h) => { setQuery(photoFilterText(h)); setPage(0); }} />
+      </div>
       {loading && rows.length === 0 ? (
         <SkeletonList rows={5} avatar={false} label="Cargando…" />
       ) : rows.length === 0 ? (

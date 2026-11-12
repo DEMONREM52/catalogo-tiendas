@@ -15,6 +15,7 @@ import type { Loan, LoanPayment as Payment } from "./LoansReport";
 import { LoansReportSheet } from "./LoansReportSheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Vales y préstamos a empleados (20261240): productos que se lleva (salen del inventario) o dinero prestado
@@ -453,6 +454,10 @@ function LoanForm({ storeId, points, employees, initial, onClose, onSaved }: { s
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca el producto por nombre o código…" className="w-full rounded-xl border py-2 pl-9 pr-3 text-sm outline-none" style={inputStyle} />
               </div>
+              <ProductPhotoButton storeId={storeId} activeOnly pickLabel="Agregar" onPick={async (h) => {
+                const { data } = await supabaseBrowser().from("products").select("id,name,sku,price_1,price_3,image_url").eq("id", h.id).maybeSingle();
+                if (data) add(data as Prod);
+              }} />
               <ChoiceChips value={priceLevel} onChange={setPriceLevel} options={[{ value: "price_1", label: "Precio 1" }, { value: "price_3", label: "Precio detal" }]} />
             </div>
             {hits.length ? (

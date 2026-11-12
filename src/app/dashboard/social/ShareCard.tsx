@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { storeSpaceOrigin } from "@/lib/share/store-host";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Tarjeta para compartir el catálogo (estados de WhatsApp, historias y publicaciones de Instagram).
@@ -478,7 +479,8 @@ export function ShareCard() {
               <div className="mt-2 rounded-xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
                 <div className="relative mb-2">
                   <Search size={14} className="absolute left-2.5 top-2.5 opacity-50" />
-                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="w-full rounded-lg border py-1.5 pl-8 pr-2 text-xs" style={{ borderColor: "var(--t-card-border)", background: "var(--t-input-bg, var(--t-card-bg))", color: "var(--t-text)" }} />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="w-full rounded-lg border py-1.5 pl-8 pr-10 text-xs" style={{ borderColor: "var(--t-card-border)", background: "var(--t-input-bg, var(--t-card-bg))", color: "var(--t-text)" }} />
+                  <span className="absolute right-0.5 top-0.5"><ProductPhotoButton storeId={store?.id} compact className="h-7 border-0 px-2" pickLabel="Buscar" onPick={(h) => setQ(h.name)} /></span>
                 </div>
                 <p className="mb-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Toca hasta 6. Salen en el orden en que los tocas.</p>
                 <div className="grid max-h-56 grid-cols-4 gap-2 overflow-auto sm:grid-cols-6">

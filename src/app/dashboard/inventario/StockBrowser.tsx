@@ -9,6 +9,7 @@ import { ExportGate } from "@/components/ExportGate";
 import { logExport, useCan } from "@/lib/permission-runtime";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 type Row = {
   id: string; name: string; sku: string | null; barcode: string | null; image_url: string | null; active: boolean;
@@ -163,9 +164,12 @@ export function StockBrowser({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       ) : null}
 
       <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <div className="relative">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-          <input className={field} style={{ ...inputStyle, paddingLeft: "2.2rem" }} placeholder="Buscar por nombre, SKU o código de barras…" value={f.q} onChange={(e) => patch({ q: e.target.value })} />
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+            <input className={field} style={{ ...inputStyle, paddingLeft: "2.2rem" }} placeholder="Buscar por nombre, SKU o código de barras…" value={f.q} onChange={(e) => patch({ q: e.target.value })} />
+          </div>
+          <ProductPhotoButton storeId={ctx.storeId} pickLabel="Ver existencias" onPick={(h) => patch({ q: photoFilterText(h) })} />
         </div>
         <select className={`${field} ${showMore ? "" : "hidden"} sm:block`} style={inputStyle} value={warehouse} disabled={Boolean(ctx.pointId)} onChange={(e) => patch({ warehouse: e.target.value })} aria-label="Punto o bodega">
           <option value="">🏬 Todos los lugares (total)</option>

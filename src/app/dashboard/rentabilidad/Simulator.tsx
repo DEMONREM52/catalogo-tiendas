@@ -9,6 +9,7 @@ import { Field, MoneyField, NumberField } from "@/components/forms/Fields";
 import { fetchProductCosts } from "@/lib/profit/costs";
 import { distribute, marginOnSale, markupOnCost, priceFromCost, saleLine, toCents, type PriceMode, type PriceResult, type RoundingDir, type RoundingStep } from "@/lib/profit/engine";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 type Product = { id: string; name: string; sku: string | null; cost_price: number | null; price_1: number | null; price_2: number | null; price_3: number | null; price_4: number | null; price_5: number | null };
 type Point = { id: string; name: string };
@@ -156,9 +157,12 @@ export function Simulator({ storeId }: { storeId: string }) {
         <section className="space-y-4">
           <div className="rounded-2xl border p-4" style={card}>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>1 · Producto y costo</p>
-            <div className="relative">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-              <input className="w-full rounded-xl border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar entre ${products.length} productos por nombre o código…`} />
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+                <input className="w-full rounded-xl border py-2 pr-3 text-sm outline-none" style={{ paddingLeft: "2.1rem", borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar entre ${products.length} productos por nombre o código…`} />
+              </div>
+              <ProductPhotoButton storeId={storeId} pickLabel="Simular" onPick={(h) => setQ(h.name)} />
             </div>
             {found.length ? (
               <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">

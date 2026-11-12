@@ -8,6 +8,7 @@ import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
 import { EmojiPicker } from "@/components/products/EmojiPicker";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * «Lo más vendido» en los catálogos (20261308 / 20261311):
@@ -291,6 +292,11 @@ export function BestSellersSettings() {
                           <label className="mt-1 flex items-center gap-2 rounded-xl border px-3" style={field}>
                             <Search size={14} style={{ color: "var(--t-muted)" }} />
                             <input value={q} onChange={(e) => { setQ(e.target.value); if (e.target.value.trim().length < 2) setFound([]); }} placeholder="Buscar producto para agregar…" className="w-full bg-transparent py-2.5 text-sm outline-none" />
+                            <ProductPhotoButton storeId={store?.id} activeOnly compact className="-mr-2 border-0 px-2" pickLabel="Agregar" onPick={(h) => {
+                              if (current.product_ids.includes(h.id) || current.product_ids.length >= 30) return;
+                              setNames((m) => new Map(m).set(h.id, { id: h.id, name: h.name, image_url: h.image_url }));
+                              setCurrent({ product_ids: [...current.product_ids, h.id] });
+                            }} />
                           </label>
                           {found.length ? (
                             <ul className="mt-1 max-h-56 overflow-y-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>

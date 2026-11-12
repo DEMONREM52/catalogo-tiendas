@@ -12,6 +12,8 @@ import { srError } from "./types";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { DateField } from "@/components/forms/Fields";
 import { draftAge, readStockDraft, saveStockDraft, type StockRequestDraft } from "@/lib/stock-request-draft";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
+import { productHitFromPhoto } from "../../inventario/LineEditor";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
 // levels (opcional): existencias por punto; las líneas que traen esto (p. ej. desde la lista general) se conservan al cambiar de punto.
@@ -283,7 +285,7 @@ export function NewStockRequest({
                   <Search size={15} className="pointer-events-none absolute left-3.5 top-3.5 opacity-60" />
                   <input
                     className={field}
-                    style={{ ...fieldStyle, paddingLeft: "2.4rem" }}
+                    style={{ ...fieldStyle, paddingLeft: "2.4rem", paddingRight: "3.4rem" }}
                     placeholder={`Buscar producto para pedir a ${toName}…`}
                     value={q}
                     onFocus={() => setFocus(true)}
@@ -297,6 +299,12 @@ export function NewStockRequest({
                       }
                     }}
                   />
+                  <span className="absolute right-1.5 top-1.5">
+                    <ProductPhotoButton storeId={storeId} activeOnly compact className="h-9 border-0" pickLabel="Pedir" onPick={async (h) => {
+                      const row = await productHitFromPhoto(storeId, h, to || null);
+                      if (row) add({ product_id: row.id, name: row.name, sku: row.sku, qty: 1, there: row.wh_qty, here: null });
+                    }} />
+                  </span>
                   {focus ? (
                     <div className="absolute left-0 right-0 z-10 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
                       {loading && !hits.length ? <p className="p-3 text-sm" style={{ color: "var(--t-muted)" }}>Buscando…</p> : null}

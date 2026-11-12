@@ -17,6 +17,7 @@ import type { LandingData, LandingItem } from "@/app/[slug]/oferta/[page]/Landin
 import { Field, Pill, Switch, errorText, inputCls, inputStyle, softBox, swalTheme } from "../catalogs/ui";
 import { richToPlain } from "@/lib/rich-text";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 export type CatalogOption = { id: string; slug: string; name: string; access_key: string | null; active: boolean; point_id: string | null; point_name?: string | null };
 export type StoreInfo = { id: string; slug: string; name: string; logo_url: string | null; whatsapp: string | null };
@@ -304,6 +305,11 @@ function ProductPicker({ storeId, exclude, onPick, placeholder }: { storeId: str
       <div className="flex items-center gap-2 rounded-xl border px-3" style={inputStyle}>
         <Search size={15} style={{ color: "var(--t-muted)" }} />
         <input value={q} onChange={(e) => { setQ(e.target.value); if (e.target.value.trim().length < 2) setHits([]); }} placeholder={placeholder} className="w-full bg-transparent py-2.5 text-sm outline-none" />
+        <ProductPhotoButton storeId={storeId} activeOnly compact className="-mr-2 border-0 px-2" pickLabel="Agregar" onPick={async (h) => {
+          if (exclude.includes(h.id)) return;
+          const { data } = await supabaseBrowser().from("products").select("id,name,image_url,sku,stock").eq("id", h.id).maybeSingle();
+          if (data) onPick(data as ProductHit);
+        }} />
       </div>
       {hits.length ? (
         <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-xl" style={{ ...softBox, background: "var(--t-bg-base)" }}>

@@ -8,6 +8,8 @@ import type { Staged } from "./AttachmentsUI";
 import { useProductSearch, type Line } from "./LineEditor";
 import { QuickProductModal } from "./QuickProductModal";
 import { Btn, errorMessage, inputClass, inputStyle, money, toast, type ProductHit } from "./shared";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
+import { productHitFromPhoto } from "./LineEditor";
 
 type Choice = { product_id: string; name: string; sku: string | null; stock: number; tax_rate: number; how: string } | null;
 type MatchLine = { idx: number; how: string | null; product_id: string | null; name: string | null; sku: string | null; tax_rate: number | null; stock: number };
@@ -257,6 +259,7 @@ function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId: strin
       <div className="flex gap-1">
         <input autoFocus className={inputClass} style={inputStyle} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto, SKU o código"
           onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter" && hits[0]) onPick(hits[0]); }} />
+        <ProductPhotoButton storeId={storeId} activeOnly compact className="px-2" pickLabel="Asociar" onPick={async (h) => { const row = await productHitFromPhoto(storeId, h); if (row) onPick(row); }} />
         <button type="button" className="px-2 text-xs" onClick={onCancel}>✕</button>
       </div>
       {loading ? <p className="text-xs">Buscando…</p> : null}

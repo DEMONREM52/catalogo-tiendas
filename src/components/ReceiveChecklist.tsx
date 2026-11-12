@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Minus, Plus, Search, X } from "lucide-react";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 export type ReceiveItem = { id: string; name: string; sku?: string | null; image_url?: string | null; sent: number };
 
@@ -25,8 +26,10 @@ function readChecked(key?: string): string[] {
  * Lo contado se guarda en este equipo (storageKey) para no perderlo si se cierra la página.
  */
 export function ReceiveChecklist({
-  items, value, onChange, storageKey, max = "sent",
+  items, value, onChange, storageKey, max = "sent", storeId,
 }: {
+  /** Con la tienda, el buscador ofrece buscar con una foto (solo en el panel). */
+  storeId?: string;
   items: ReceiveItem[];
   value: Record<string, number>;
   onChange: (next: Record<string, number>) => void;
@@ -88,7 +91,8 @@ export function ReceiveChecklist({
           ) : null}
         </div>
         {items.length > 5 ? (
-          <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: query ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          <div className="mt-2 flex items-center gap-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: query ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             <Search size={15} style={{ color: "var(--t-muted)" }} />
             <input
               value={query} onChange={(e) => setQuery(e.target.value)} type="search" enterKeyHint="done"
@@ -106,6 +110,8 @@ export function ReceiveChecklist({
               </>
             ) : null}
           </label>
+            {storeId ? <ProductPhotoButton storeId={storeId} onlyIds={items.map((i) => i.id)} pickLabel="Buscar" onPick={(h) => setQuery(photoFilterText(h))} /> : null}
+          </div>
         ) : null}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--t-card-border)" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${items.length ? (done / items.length) * 100 : 0}%`, background: "linear-gradient(90deg,#22c55e,#4ade80)" }} />

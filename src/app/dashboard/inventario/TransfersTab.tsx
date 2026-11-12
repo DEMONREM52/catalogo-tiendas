@@ -21,6 +21,7 @@ import { TransfersReport } from "./TransfersReport";
 import { RebalancePanel, type RebalancePlan } from "./Rebalance";
 import { useFeature } from "@/lib/useFeature";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 type PlanLine = { product_id: string; name: string; sku: string | null; available: number };
 type Matrix = Record<string, Record<string, number>>;
@@ -106,9 +107,10 @@ function matchesItem(item: TransferItem, query: string) {
   return words.every((w) => hay.includes(w));
 }
 
-function ItemSearch({ value, onChange, found, total }: { value: string; onChange: (v: string) => void; found: number; total: number }) {
+function ItemSearch({ value, onChange, found, total, storeId, ids }: { value: string; onChange: (v: string) => void; found: number; total: number; storeId?: string; ids?: string[] }) {
   return (
-    <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: value ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+    <div className="mt-2 flex items-center gap-2">
+    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: value ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
       <span aria-hidden>🔍</span>
       <input
         type="search" value={value} onChange={(e) => onChange(e.target.value)}
@@ -123,11 +125,13 @@ function ItemSearch({ value, onChange, found, total }: { value: string; onChange
         </>
       ) : null}
     </label>
+    {storeId ? <ProductPhotoButton storeId={storeId} onlyIds={ids} pickLabel="Buscar" onPick={(h) => onChange(photoFilterText(h))} /> : null}
+    </div>
   );
 }
 
 /** Productos de un traslado: resumen corto y, al tocarlo, la lista con fotos. */
-function TransferItemsList({ items }: { items: TransferItem[] }) {
+function TransferItemsList({ items, storeId }: { items: TransferItem[]; storeId?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const units = items.reduce((a, i) => a + Number(i.qty || 0), 0);
@@ -147,7 +151,7 @@ function TransferItemsList({ items }: { items: TransferItem[] }) {
         <span aria-hidden>{open ? "▲" : "▼"}</span>
       </button>
       {open && items.length > 6 ? (
-        <ItemSearch value={query} onChange={setQuery} found={shown.length} total={items.length} />
+        <ItemSearch value={query} onChange={setQuery} found={shown.length} total={items.length} storeId={storeId} ids={items.map((i) => i.product_id)} />
       ) : null}
       {open && query && !shown.length ? (
         <p className="mt-2 text-xs" style={{ color: "var(--t-muted)" }}>Ningún producto de este traslado coincide con «{query}».</p>
@@ -822,9 +826,12 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       >
         {/* Buscador y filtros */}
         <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="relative">
-            <input className={inputClass} style={inputStyle} value={qLive} onChange={(e) => setQLive(e.target.value)} placeholder="🔍 #12, producto, código o persona (envió, revisó, trasladó, recibió)" aria-label="Buscar traslados" />
-            {qLive ? <button type="button" onClick={() => setQLive("")} className="absolute right-2 top-1/2 -translate-y-1/2 px-2 text-sm" style={{ color: "var(--t-muted)" }} aria-label="Borrar búsqueda">✕</button> : null}
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <input className={inputClass} style={inputStyle} value={qLive} onChange={(e) => setQLive(e.target.value)} placeholder="🔍 #12, producto, código o persona (envió, revisó, trasladó, recibió)" aria-label="Buscar traslados" />
+              {qLive ? <button type="button" onClick={() => setQLive("")} className="absolute right-2 top-1/2 -translate-y-1/2 px-2 text-sm" style={{ color: "var(--t-muted)" }} aria-label="Borrar búsqueda">✕</button> : null}
+            </div>
+            <ProductPhotoButton storeId={ctx.storeId} pickLabel="Ver traslados" onPick={(h) => setQLive(photoFilterText(h))} />
           </div>
           <select className={inputClass} style={inputStyle} value={tf.origin} onChange={(e) => setTfField("origin", e.target.value)} aria-label="Sale de">
             <option value="">Sale de: todas</option>
@@ -915,6 +922,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     ) : null}
                     {/* El mismo conteo que en Pedidos internos y en el enlace del traslado. */}
                     <ReceiveChecklist
+                      storeId={ctx.storeId}
                       items={row.erp_transfer_items.map((i) => {
                         const p = Array.isArray(i.products) ? i.products[0] : i.products;
                         return { id: i.product_id, name: itemName(i), sku: p?.sku ?? null, image_url: p?.image_url ?? null, sent: i.qty };
@@ -938,7 +946,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                     onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void load(); }}
                   />
                 ) : (
-                  <TransferItemsList items={row.erp_transfer_items} />
+                  <TransferItemsList items={row.erp_transfer_items} storeId={ctx.storeId} />
                 )}
 
                 {receiving?.id !== row.id && (row.track_token || (canTransfer && row.status === "in_transit")) ? (

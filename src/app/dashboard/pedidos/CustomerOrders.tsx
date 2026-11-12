@@ -7,6 +7,7 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { ilikeTokenFilters, searchTokens, smartFilter } from "@/lib/search";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /** =========================
  * Helpers (UI)
@@ -476,6 +477,7 @@ export function CustomerOrders() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
           <div className="flex gap-2">
             <input className={`${inputBase()} min-w-0 flex-1`} placeholder="Buscar: número, REMZ-…, cliente, producto, código, vendedor…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <ProductPhotoButton storeId={storeId} pickLabel="Ver sus pedidos" onPick={(h) => setQ(h.name)} />
             <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className="shrink-0 rounded-xl border px-3 text-xs font-bold sm:hidden"
               style={showFilters || point !== "all" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>⚙️ Filtros</button>
           </div>

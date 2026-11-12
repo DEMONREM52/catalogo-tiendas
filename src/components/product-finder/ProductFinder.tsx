@@ -17,6 +17,8 @@ export type FinderHit = {
   name: string;
   image_url: string | null;
   code?: string | null;
+  /** Referencia (SKU) tal cual, para filtrar listas que buscan por SKU. */
+  sku?: string | null;
   price?: number | null;
   meta?: string | null;
   score?: number | null;

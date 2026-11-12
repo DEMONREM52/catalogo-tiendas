@@ -6,6 +6,7 @@ import { Chip, Modal } from "./dialog";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { Btn, errorMessage, money, toast } from "./shared";
 import type { PdfCharge, PdfMove } from "./valuationPdf";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Liquidación de un punto: la mercancía que tiene hoy valorizada a costo real, a precio de bodega (lo que debe por ella)
@@ -385,6 +386,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <input className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--t-card-border)", background: "transparent", color: "var(--t-text)" }}
               value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Buscar producto o código" aria-label="Buscar producto" />
+            <ProductPhotoButton storeId={storeId} pickLabel="Ver" onPick={(h) => setQ(photoFilterText(h))} />
             <select className="rounded-xl border px-2 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)", color: "var(--t-text)" }} value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Ordenar">
               <option value="sale">Más valor en venta</option>
               <option value="profit">Más ganancia del punto</option>

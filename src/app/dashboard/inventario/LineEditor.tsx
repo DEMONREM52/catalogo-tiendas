@@ -11,6 +11,47 @@ import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "../PhotoSearchControls";
+import type { FinderHit } from "@/components/product-finder/ProductFinder";
+
+/**
+ * Producto elegido con la búsqueda por foto → la misma fila que da el buscador (con existencias de la bodega).
+ * null si no está disponible aquí (inactivo, o sin existencias cuando solo se aceptan con existencias).
+ */
+export async function productHitFromPhoto(storeId: string, hit: FinderHit, warehouseId?: string | null, inStockOnly?: boolean): Promise<ProductHit | null> {
+  const sb = supabaseBrowser();
+  for (const q of [hit.code, hit.name].filter((x): x is string => Boolean(x))) {
+    const { data } = await sb.rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: warehouseId ?? null, p_in_stock: Boolean(inStockOnly), p_limit: 40 });
+    const row = ((data ?? []) as ProductHit[]).find((r) => r.id === hit.id);
+    if (row) return row;
+  }
+  return null;
+}
+
+/** Botón 📷 de los buscadores de inventario: elige con foto y entrega la fila lista (o avisa por qué no). */
+function InventoryPhotoButton({ storeId, warehouseId, inStockOnly, excludeIds, onPick, onMessage }: {
+  storeId: string;
+  warehouseId?: string | null;
+  inStockOnly?: boolean;
+  excludeIds?: string[];
+  onPick: (product: ProductHit) => void;
+  onMessage: (text: string | null) => void;
+}) {
+  return (
+    <ProductPhotoButton
+      storeId={storeId}
+      activeOnly
+      pickLabel="Agregar"
+      onPick={async (hit) => {
+        onMessage(null);
+        if (excludeIds?.includes(hit.id)) { onMessage(`«${hit.name}» ya está en la lista.`); return; }
+        const row = await productHitFromPhoto(storeId, hit, warehouseId, inStockOnly);
+        if (row) onPick(row);
+        else onMessage(inStockOnly ? `«${hit.name}» no tiene existencias en esta bodega.` : `«${hit.name}» no está disponible aquí (puede estar inactivo).`);
+      }}
+    />
+  );
+}
 
 /** Trae las miniaturas de los productos indicados (una sola consulta por lote nuevo). */
 export function useThumbs(ids: string[]) {
@@ -222,6 +263,7 @@ export function ProductPicker({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [photoMsg, setPhotoMsg] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -258,24 +300,28 @@ export function ProductPicker({
 
   return (
     <div ref={boxRef} className="relative">
-      <input
-        ref={inputRef}
-        className={inputClass}
-        style={inputStyle}
-        placeholder={placeholder}
-        value={query}
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={listId}
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          keys.setActive(0);
-          setOpen(true);
-        }}
-        onKeyDown={keys.onKeyDown}
-      />
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          className={`${inputClass} min-w-0 flex-1`}
+          style={inputStyle}
+          placeholder={placeholder}
+          value={query}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          autoComplete="off"
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            keys.setActive(0);
+            setOpen(true);
+          }}
+          onKeyDown={keys.onKeyDown}
+        />
+        <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
+      </div>
+      {photoMsg ? <p className="mt-1 text-xs font-semibold" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}
       {open ? (
         <div
           ref={listRef}
@@ -341,6 +387,7 @@ export function ProductSearchModal({
   stockLabel?: (hit: ProductHit) => string;
 }) {
   const [query, setQuery] = useState("");
+  const [photoMsg, setPhotoMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   // Solo en el navegador (el portal necesita document.body).
@@ -411,8 +458,8 @@ export function ProductSearchModal({
                 ✕
               </button>
             </header>
-            <div className="px-4 sm:px-5">
-              <div className="relative">
+            <div className="flex gap-2 px-4 sm:px-5">
+              <div className="relative min-w-0 flex-1">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base opacity-70">🔎</span>
                 <input
                   ref={inputRef}
@@ -432,7 +479,9 @@ export function ProductSearchModal({
                   <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
                 ) : null}
               </div>
+              <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
             </div>
+            {photoMsg ? <p className="px-4 pt-1 text-xs font-semibold sm:px-5" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}
             <div ref={listRef} className="mt-2 min-h-[30vh] flex-1 overflow-y-auto overscroll-contain px-2 pb-2 sm:px-3">
               {error ? <p className="p-3 text-sm" style={{ color: "#ef4444" }}>{error}</p> : null}
               {!error && loading && visible.length === 0

@@ -10,6 +10,7 @@ import { DateField } from "@/components/forms/Fields";
 import { SkeletonCards } from "@/components/ui/Skeleton";
 import { downloadXlsx } from "@/lib/data/xlsx";
 import type { ErpCtx, Warehouse } from "./shared";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Informe de traslados a la medida (20261279): qué se trasladó, a qué puntos, cuánto, cuánto vale y qué no llegó.
@@ -216,7 +217,10 @@ export function TransfersReport({ ctx, warehouses, onClose }: { ctx: ErpCtx; war
         <div className="grid gap-2 sm:grid-cols-3">
           <select value={f.status} onChange={(e) => set("status", e.target.value)} aria-label="Estado">{STATUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           <select value={f.category} onChange={(e) => set("category", e.target.value)} aria-label="Categoría"><option value="">Todas las categorías</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          <input value={f.q} onChange={(e) => set("q", e.target.value)} placeholder="🔎 Producto, referencia o #número" aria-label="Buscar" />
+          <div className="flex gap-2">
+            <input className="min-w-0 flex-1" value={f.q} onChange={(e) => set("q", e.target.value)} placeholder="🔎 Producto, referencia o #número" aria-label="Buscar" />
+            <ProductPhotoButton storeId={ctx.storeId} pickLabel="Ver traslados" onPick={(h) => set("q", photoFilterText(h))} />
+          </div>
         </div>
         {([["origins", "🏭 Sale de"], ["dests", "🏬 Llega a"]] as const).map(([k, label]) => (
           <div key={k} className="flex flex-wrap items-center gap-1.5 text-xs">

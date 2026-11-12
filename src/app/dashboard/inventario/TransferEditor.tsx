@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductPicker, ProductSearchModal, Thumb, useThumbs } from "./LineEditor";
 import { Btn, errorMessage, toast, type ProductHit } from "./shared";
 import { friendlyStockError } from "@/lib/stock/live-stock";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Corregir un traslado en tránsito antes de que lo revisen (20261217): cantidades, quitar y agregar productos.
@@ -127,8 +128,11 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
         addedQty={addedQty} title={`Agregar al traslado #${number}`} onPick={(hit) => { setModal(false); add(hit); }} />
 
       {lines.length > 8 ? (
-        <input className="w-full rounded-xl border bg-transparent px-3 py-2 text-xs outline-none" style={{ ...box, color: "var(--t-text)" }}
-          value={q} onChange={(e) => setQ(e.target.value)} placeholder={`🔍 Buscar dentro de este traslado (${lines.length} productos)`} aria-label="Buscar en el traslado" />
+        <div className="flex gap-2">
+          <input className="min-w-0 flex-1 rounded-xl border bg-transparent px-3 py-2 text-xs outline-none" style={{ ...box, color: "var(--t-text)" }}
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder={`🔍 Buscar dentro de este traslado (${lines.length} productos)`} aria-label="Buscar en el traslado" />
+          <ProductPhotoButton storeId={storeId} onlyIds={lines.map((l) => l.product_id)} pickLabel="Buscar" compact onPick={(h) => setQ(photoFilterText(h))} />
+        </div>
       ) : null}
 
       <ul className="space-y-1.5">

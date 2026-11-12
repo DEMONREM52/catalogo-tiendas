@@ -10,6 +10,7 @@ import { MoneyInput } from "@/app/dashboard/MoneyInput";
 import { catalogPrice, PRICE_LEVELS, productPriceForLevel, type StoreCatalog } from "@/lib/catalogs";
 import type { BaseCategory, CatalogCategoryRow, CatalogProductRow } from "./types";
 import { Pill, Switch, ToggleRow, errorText, inputCls, inputStyle, money, softBox, swalTheme } from "./ui";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 type Item = {
   id: string;
@@ -261,7 +262,8 @@ export function ProductsTab({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_200px_220px]">
-        <div className="relative sm:col-span-2 lg:col-span-1">
+        <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+        <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
           <input className={inputCls} style={{ ...inputStyle, paddingLeft: "2.25rem" }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, SKU o código de barras…" />
           {q ? (
@@ -269,6 +271,8 @@ export function ProductsTab({
               <X size={15} style={{ color: "var(--t-muted)" }} />
             </button>
           ) : null}
+        </div>
+        <ProductPhotoButton storeId={draft.store_id} pickLabel="Ver en el catálogo" onPick={(h) => setQ(photoFilterText(h))} />
         </div>
         <select className={inputCls} style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Categoría">
           <option value="">Todas las categorías</option>

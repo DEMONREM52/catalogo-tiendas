@@ -30,6 +30,7 @@ import {
 import { reviewCommercialContent } from "@/lib/content-review";
 import { ilikeTokenFilters } from "@/lib/search";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 type ProductOption = {
   id: string;
@@ -954,9 +955,12 @@ export default function SocialDashboard() {
               {!campaignCoverUrl ? <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">Sube una imagen de portada para poder guardar la campaña.</p> : null}
             </div>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-3.5 opacity-40" size={17} />
-            <input className={`${fieldClass} pl-10`} value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Busca productos para incluir…" />
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-3.5 opacity-40" size={17} />
+              <input className={`${fieldClass} pl-10`} value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Busca productos para incluir…" />
+            </div>
+            <ProductPhotoButton storeId={store?.id} activeOnly pickLabel="Buscar" onPick={(h) => setProductSearch(photoFilterText(h))} />
           </div>
           <div className="grid max-h-80 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-3">
             {productOptions.map((product) => (
@@ -1007,7 +1011,10 @@ export default function SocialDashboard() {
           <div className="space-y-3">
             <label className="block text-sm font-semibold">
               Buscar producto
-              <input className={`${fieldClass} mt-1`} value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Escribe para buscar en tu tienda…" />
+              <span className="mt-1 flex gap-2">
+                <input className={`${fieldClass} min-w-0 flex-1`} value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Escribe para buscar en tu tienda…" />
+                <ProductPhotoButton storeId={store?.id} activeOnly pickLabel="Elegir" onPick={(h) => { setProductSearch(photoFilterText(h)); if (productOptions.some((p) => p.id === h.id)) selectProduct(h.id); }} />
+              </span>
             </label>
             <label className="block text-sm font-semibold">
               Producto

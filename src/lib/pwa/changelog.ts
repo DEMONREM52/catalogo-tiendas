@@ -879,6 +879,16 @@ export const RELEASES: Release[] = [
       { icon: "⚡", text: "En celulares lentos: Modo liviano" },
     ],
   },
+  {
+    id: 84, date: "2026-11-12", title: "📷 Buscar con foto en todos los buscadores de productos",
+    summary: "Al lado de cada buscador de productos hay un botón de cámara: inventario, compras, traslados, conteos, pedidos internos, promociones, catálogos, landing, garantías, vales, rentabilidad, auditoría y más. Toma la foto y el producto se agrega, se filtra o se abre según la pantalla.",
+    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/dashboard/promociones", "/dashboard/social", "/dashboard/garantias", "/dashboard/gastos", "/dashboard/rentabilidad", "/dashboard/clientes", "/dashboard/auditoria", "/dashboard/products/radar"],
+    demo: [
+      { icon: "🔎", text: "Busca el botón 📷 al lado del buscador" },
+      { icon: "📸", text: "Toma la foto del producto o su etiqueta" },
+      { icon: "✅", text: "Toca el resultado: se agrega o se filtra" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

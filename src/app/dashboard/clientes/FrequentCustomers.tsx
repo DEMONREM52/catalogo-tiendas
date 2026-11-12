@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, Search } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Clientes frecuentes (20261223): quién compra más, cada cuánto vuelve y a quién conviene escribirle.
@@ -80,6 +81,7 @@ export function FrequentCustomers({ storeId, storeName }: { storeId: string; sto
           <input className="w-full rounded-full border py-2 pr-4 text-sm outline-none" style={{ ...box, paddingLeft: "2.3rem", color: "var(--t-text)" }}
             placeholder="Buscar cliente, celular o producto…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <ProductPhotoButton storeId={storeId} pickLabel="Ver quién lo compra" className="rounded-full" onPick={(h) => setQ(h.name)} />
       </div>
       {error ? <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, transparent)" }}>⚠️ {error}</p> : null}
       {rows === null ? <SkeletonList rows={4} avatar={false} label="Cargando clientes…" /> : null}

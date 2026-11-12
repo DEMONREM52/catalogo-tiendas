@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { DateField } from "@/components/forms/Fields";
 import { searchDelay } from "@/lib/search-timing";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Promociones programadas y combos (20261228).
@@ -156,7 +157,10 @@ function Promotions({ storeId, promos, cats, points, names, onChanged }: { store
             </select>
           ) : form.scope === "product" ? (
             <div className="relative">
-              <input className={field} style={fs} placeholder="Buscar producto para agregar…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <div className="flex gap-2">
+                <input className={`${field} min-w-0 flex-1`} style={fs} placeholder="Buscar producto para agregar…" value={q} onChange={(e) => setQ(e.target.value)} />
+                <ProductPhotoButton storeId={storeId} activeOnly pickLabel="Agregar" onPick={(h) => { if (!form.products.some((p) => p.id === h.id)) setForm({ ...form, products: [...form.products, { id: h.id, name: h.name, sku: h.sku ?? null, price_3: h.price ?? null }] }); }} />
+              </div>
               {hits.length ? (
                 <div className="absolute z-10 mt-1 w-full rounded-xl border p-1 shadow-xl" style={{ ...fs, background: "var(--t-bg-base)" }}>
                   {hits.map((h) => <button key={h.id} type="button" className="block w-full rounded-lg px-2 py-1.5 text-left text-sm" onClick={() => { if (!form.products.some((p) => p.id === h.id)) setForm({ ...form, products: [...form.products, h] }); setQ(""); }}>{h.name} <span style={{ color: "var(--t-muted)" }}>{money(Number(h.price_3))}</span></button>)}
@@ -237,7 +241,10 @@ function Combos({ storeId, combos, onChanged }: { storeId: string; combos: Combo
           <input className={field} style={fs} placeholder="Precio del combo $" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/\D/g, "") ? Number(e.target.value.replace(/\D/g, "")).toLocaleString("es-CO") : "")} />
         </div>
         <div className="relative">
-          <input className={field} style={fs} placeholder="Buscar producto para el combo…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="flex gap-2">
+            <input className={`${field} min-w-0 flex-1`} style={fs} placeholder="Buscar producto para el combo…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <ProductPhotoButton storeId={storeId} activeOnly pickLabel="Agregar" onPick={(h) => setItems((c) => (c.some((x) => x.id === h.id) ? c : [...c, { id: h.id, name: h.name, sku: h.sku ?? null, price_3: h.price ?? null, qty: 1 }]))} />
+          </div>
           {hits.length ? (
             <div className="absolute z-10 mt-1 w-full rounded-xl border p-1 shadow-xl" style={{ ...fs, background: "var(--t-bg-base)" }}>
               {hits.map((h) => <button key={h.id} type="button" className="block w-full rounded-lg px-2 py-1.5 text-left text-sm" onClick={() => { setItems((c) => (c.some((x) => x.id === h.id) ? c : [...c, { ...h, qty: 1 }])); setQ(""); }}>{h.name} <span style={{ color: "var(--t-muted)" }}>{money(Number(h.price_3))}</span></button>)}

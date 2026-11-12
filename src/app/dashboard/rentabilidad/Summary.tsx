@@ -7,6 +7,7 @@ import { smartFilter } from "@/lib/search";
 import { Stat, cardStyle, cop, downloadCsv, inputStyle, margin, markup, pctText, rpcError, type Point } from "./shared";
 import { ExportGate } from "@/components/ExportGate";
 import { logExport } from "@/lib/permission-runtime";
+import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 
 type Kpis = { revenue: number; cost: number; profit: number; mother: number; point: number; orders: number; units: number; lines: number; lines_estimated: number; lines_loss: number };
 type ByPoint = { point_id: string | null; name: string; revenue: number; cost: number; profit: number; mother: number; point: number; orders: number };
@@ -180,9 +181,12 @@ export function Summary({ storeId, points, myPoints }: { storeId: string; points
                   <button key={key} type="button" onClick={() => setSort(key)} className="rounded-full px-3 py-1" style={sort === key ? { background: "var(--t-accent)", color: "#fff" } : { border: "1px solid var(--t-card-border)", color: "var(--t-muted)" }}>{label}</button>
                 ))}
               </div>
-              <div className="relative w-full sm:w-56">
-                <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="w-full rounded-full border py-1.5 pr-3 text-sm outline-none" style={{ ...inputStyle, paddingLeft: "2rem" }} />
+              <div className="flex w-full gap-2 sm:w-64">
+                <div className="relative min-w-0 flex-1">
+                  <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="w-full rounded-full border py-1.5 pr-3 text-sm outline-none" style={{ ...inputStyle, paddingLeft: "2rem" }} />
+                </div>
+                <ProductPhotoButton storeId={storeId} pickLabel="Ver" onPick={(h) => setQ(h.name)} compact className="rounded-full" />
               </div>
             </div>
             <div className="max-h-[28rem] overflow-auto">

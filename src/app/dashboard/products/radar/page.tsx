@@ -24,6 +24,7 @@ import { DEFAULT_SETTINGS, RadarSettings, type RadarSettingsValue } from "./Rada
 import { AssignDialog, TasksPanel, useProductTasks, type ProductTask } from "./TasksPanel";
 import { PublishCalendar } from "./PublishCalendar";
 import { QuickEdit } from "./QuickEdit";
+import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
  * Radar de productos (súper administración): qué le falta a cada producto, cuáles ya toca publicar, cuáles están
@@ -422,6 +423,7 @@ export default function ProductRadarPage() {
                     <Search size={15} style={{ color: "var(--t-muted)" }} />
                     <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, código o barras…" className="w-full bg-transparent py-2.5 text-sm outline-none" />
                     {q ? <button type="button" onClick={() => setQ("")} aria-label="Borrar"><X size={14} /></button> : null}
+                    <ProductPhotoButton storeId={storeId} pickLabel="Ver" onPick={(h) => setQ(photoFilterText(h))} compact className="-mr-2 border-0 px-2" />
                   </label>
                   {data.points.length > 1 && !proMissing ? (
                     <select value={point} onChange={(e) => setPoint(e.target.value)} className="rounded-xl border px-3 py-2.5 text-sm" style={{ ...selectStyle, borderColor: point ? "#0ea5e9" : "var(--t-card-border)" }} title="Unidades y ventas de un solo punto">
