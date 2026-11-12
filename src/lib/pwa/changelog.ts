@@ -868,6 +868,17 @@ export const RELEASES: Release[] = [
       { icon: "🔧", text: "Para aprobar conteos, «Ajustes de inventario»" },
     ],
   },
+  {
+    id: 83, date: "2026-11-12", title: "Buscar por foto, ahora hasta en celulares viejos",
+    summary: "La cámara se abre dentro de RemHub (ya no se pierde la foto si el celular cierra el navegador), con linterna, zoom y tocar para enfocar. En celulares lentos se activa solo el «Modo liviano»: RemHub analiza la foto y el celular no descarga nada pesado.",
+    paths: ["/dashboard/pos", "/dashboard/products", "/dashboard/lista-productos"],
+    demo: [
+      { icon: "📷", text: "Toca la cámara en el buscador" },
+      { icon: "🔲", text: "Pon el producto dentro del cuadro" },
+      { icon: "🔦", text: "Linterna o ×2 si está oscuro o pequeño" },
+      { icon: "⚡", text: "En celulares lentos: Modo liviano" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

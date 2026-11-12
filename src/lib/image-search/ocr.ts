@@ -38,7 +38,8 @@ export function warmUpOcr() {
 
 // Foto en grises, a un tamaño cómodo para leer (las letras pequeñas se agrandan); invert = letras claras sobre fondo oscuro.
 async function prepare(blob: Blob, invert: boolean) {
-  const bitmap = await createImageBitmap(blob);
+  // Se abre ya reducida (una foto de 12 MP completa ocupa ~50 MB de memoria); si el navegador no lo permite, completa.
+  const bitmap = await createImageBitmap(blob, { resizeWidth: 1400, resizeQuality: "high" }).catch(() => createImageBitmap(blob));
   const longSide = Math.max(bitmap.width, bitmap.height);
   const scale = longSide < 900 ? 900 / longSide : longSide > 1800 ? 1800 / longSide : 1;
   const canvas = document.createElement("canvas");

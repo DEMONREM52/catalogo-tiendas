@@ -1,7 +1,7 @@
 "use client";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { IMAGE_MODEL, embedImageBlob, fetchImageBlob, imageSearchSupported, loadImageEmbedder } from "./embed";
+import { IMAGE_MODEL, embedPhoto, fetchImageBlob, imageSearchSupported } from "./embed";
 
 /**
  * Analiza en segundo plano las fotos de los productos (las que aún no tienen huella) para que la
@@ -85,18 +85,33 @@ export async function runImageIndex(storeId: string) {
       return;
     }
     set({ state: "running" });
-    await loadImageEmbedder();
     while (batch && batch.items.length) {
       const out: Array<Record<string, unknown>> = [];
       for (const item of batch.items) {
         while (document.hidden) await sleep(3000);
+        let blob: Blob | null = null;
         try {
-          const blob = await fetchImageBlob(item.image_url);
-          out.push({ ...item, embedding: await embedImageBlob(blob) });
+          blob = await fetchImageBlob(item.image_url);
         } catch {
           // Imagen rota o que no deja descargarse: se marca para no reintentar cada vez.
           out.push({ ...item, failed: true });
         }
+        let embedding: number[] | null = null;
+        if (blob) {
+          try {
+            embedding = (await embedPhoto(blob, "index")).embedding;
+          } catch (error) {
+            // Foto que no se puede abrir: se marca. Si falló el modelo o el servidor, se para (se reintenta después)
+            // y se guarda lo que ya se alcanzó.
+            if (error instanceof Error && /preparar la foto|decode|EncodingError|source image/i.test(error.message + error.name)) {
+              out.push({ ...item, failed: true });
+            } else {
+              if (out.length) await supabaseBrowser().rpc("product_image_save", { p_store: storeId, p_model: IMAGE_MODEL, p_items: out });
+              throw error;
+            }
+          }
+        }
+        if (embedding) out.push({ ...item, embedding });
         await idle();
       }
       const { error } = await supabaseBrowser().rpc("product_image_save", { p_store: storeId, p_model: IMAGE_MODEL, p_items: out });

@@ -28,6 +28,23 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  // Búsqueda por foto en el servidor (/api/photo-embed): el motor del modelo se carga tal cual desde node_modules
+  // y solo se lleva el archivo .wasm que usa Node (no los de navegador, que pesan más de 100 MB).
+  serverExternalPackages: ["onnxruntime-web"],
+  outputFileTracingIncludes: {
+    "/api/photo-embed": [
+      "./node_modules/onnxruntime-web/dist/ort.node.min.mjs",
+      "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs",
+      "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm",
+    ],
+  },
+  outputFileTracingExcludes: {
+    "/api/photo-embed": [
+      "./node_modules/onnxruntime-web/dist/*.map",
+      "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{jsep,jspi,asyncify}.*",
+      "./node_modules/onnxruntime-web/dist/ort.{all,webgl,webgpu,wasm}*",
+    ],
+  },
   // Número de la novedad más reciente (lib/pwa/changelog.ts). El navegador solo recibe este número, no la lista
   // completa de textos: la lista se pide a /api/version cuando hay algo que mostrar (ver lib/pwa/release.ts).
   env: { NEXT_PUBLIC_REMHUB_RELEASE: String(BUILD_RELEASE) },

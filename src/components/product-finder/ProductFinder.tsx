@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { Camera, Check, ChevronRight, ImagePlus, Loader2, Plus, RotateCcw, ScanSearch, ScanText, Search, Type, X } from "lucide-react";
-import { embedImageBlob, imageSearchSupported, onEmbedProgress, warmUpImageSearch, type EmbedProgress } from "@/lib/image-search/embed";
+import { Camera, Check, ChevronRight, ImagePlus, Loader2, Plus, RotateCcw, ScanSearch, ScanText, Search, Type, X, Zap } from "lucide-react";
+import { embedPhoto, imageSearchSupported, onEmbedProgress, previewDataUrl, warmUpImageSearch, type EmbedEngine, type EmbedProgress } from "@/lib/image-search/embed";
+import { deviceProfile, setForcedLite } from "@/lib/image-search/device";
+import { PhotoCamera, cameraInPageSupported } from "./PhotoCamera";
 import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";
 import { DROP_BLOCKED_MSG, dragHasImage, imageFileFrom, imageFromDrop } from "@/lib/image-drop";
 import { searchDelay, useSearchValue } from "@/lib/search-timing";
@@ -116,6 +118,13 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
   const reqId = useRef(0);
   const photoReq = useRef(0);
   const embeddingRef = useRef<number[] | null>(null);
+  // La última foto (para leer su texto cuando se pide, en celulares lentos).
+  const lastPhotoRef = useRef<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [engine, setEngine] = useState<EmbedEngine | null>(null);
+  const [device] = useState(() => deviceProfile());
+  const [lite, setLite] = useState(device.forcedLite);
+  const autoLite = device.weak || !device.localPossible;
 
   // Escape cierra; se bloquea el scroll de la página.
   useEffect(() => {
@@ -137,9 +146,10 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
       const t = window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 160);
       return () => window.clearTimeout(t);
     }
+    // En celulares lentos no se descarga nada al abrir: la foto la analiza RemHub y el texto se lee si se pide.
     warmUpImageSearch();
-    warmUpOcr();
-  }, [mode]);
+    if (!device.weak && !device.saveData) warmUpOcr();
+  }, [mode, device]);
 
   useEffect(() => onEmbedProgress((p) => setProgress(p)), []);
 
@@ -195,35 +205,43 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
     if (!source.searchPhoto) return;
     const id = ++photoReq.current;
     embeddingRef.current = null;
+    lastPhotoRef.current = file;
+    setCameraOpen(false);
     setPhotoMsg(null);
     setPhotoHits(null);
     setTerms(null);
+    setEngine(null);
     setPhotoState("loading");
-    // El texto de la foto se lee al mismo tiempo que se calcula su huella.
-    setReading(true);
-    const ocr = readPhotoText(file);
+    // Equipos buenos: el texto de la foto se lee al mismo tiempo que se calcula su huella.
+    // Celulares lentos: solo si se pide (botón «Leer el texto»), para no pegar el celular.
+    const autoOcr = !device.weak && !device.saveData;
+    setReading(autoOcr);
+    const ocr = autoOcr ? readPhotoText(file) : null;
     try {
       setPhotoUrl(await previewOf(file));
-      const embedding = await embedImageBlob(file);
+      const { embedding, engine: used } = await embedPhoto(file, "search");
       if (id !== photoReq.current) return;
       embeddingRef.current = embedding;
+      setEngine(used);
       setPhotoState("searching");
       const first = await runPhotoSearch(embedding, [], id);
       if (!first) return;
       setPhotoState("idle");
-      const words = await ocr;
+      const words = ocr ? await ocr : null;
       if (id !== photoReq.current) return;
       setTerms(words);
       setReading(false);
-      const res = words.length ? (await runPhotoSearch(embedding, words, id)) ?? first : first;
+      const res = words?.length ? (await runPhotoSearch(embedding, words, id)) ?? first : first;
       if (!res.indexed && !res.items.length) setPhotoMsg("Las fotos de este catálogo todavía se están preparando para la búsqueda por foto. Mientras tanto, busca por nombre o código.");
       else if (!res.items.length) setPhotoMsg("No encontramos productos parecidos. Prueba con otra foto, más de cerca y con buena luz.");
     } catch (error) {
       if (id !== photoReq.current) return;
       setReading(false);
       setPhotoState("error");
-      setPhotoMsg(error instanceof Error && /fetch|network|import/i.test(error.message)
-        ? "No se pudo preparar la búsqueda por foto. Revisa tu conexión a internet e inténtalo de nuevo."
+      const text = error instanceof Error ? error.message : "";
+      setPhotoMsg(/fetch|network|import|Load failed|abort/i.test(text)
+        ? "No se pudo analizar la foto: revisa tu conexión a internet e inténtalo de nuevo."
+        : /Demasiadas|ocupado/i.test(text) ? text
         : "No se pudo analizar la foto. Intenta con otra imagen.");
     }
   }
@@ -246,6 +264,29 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
     } finally {
       if (id === photoReq.current) setPhotoState("idle");
     }
+  }
+
+  // Celulares lentos: leer el texto de la foto solo cuando se pide.
+  async function readTextNow() {
+    const file = lastPhotoRef.current;
+    if (!file || reading) return;
+    setReading(true);
+    try {
+      const words = await readPhotoText(file);
+      await changeTerms(words);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function openCamera() {
+    if (cameraInPageSupported()) setCameraOpen(true);
+    else cameraRef.current?.click();
+  }
+
+  function toggleLite(on: boolean) {
+    setForcedLite(on);
+    setLite(on);
   }
 
   function addTerm() {
@@ -392,6 +433,14 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
           ) : (
             <>
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+              {cameraOpen ? (
+                <PhotoCamera
+                  weak={device.weak}
+                  onShot={(photo) => void searchByPhoto(photo)}
+                  onFallback={() => { setCameraOpen(false); cameraRef.current?.click(); }}
+                  onClose={() => setCameraOpen(false)}
+                />
+              ) : null}
               <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
               {!photoUrl && !busyPhoto ? (
                 <div
@@ -406,7 +455,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                     Toma una foto del producto, de su caja o de su etiqueta. Buscamos por cómo se ve y también por lo que diga escrito (código, marca, modelo…).
                   </p>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    <button type="button" onClick={() => cameraRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
+                    <button type="button" onClick={openCamera} className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5" style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
                       <Camera size={17} /> Tomar foto
                     </button>
                     <button type="button" onClick={() => galleryRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5" style={{ borderColor: "var(--t-card-border)" }}>
@@ -415,6 +464,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                   </div>
                   <p className="mt-3 hidden text-[11px] sm:block" style={{ color: "var(--t-muted)" }}>También puedes arrastrar una imagen a esta ventana (de una carpeta o de otra página) o pegarla con Ctrl + V.</p>
                   {photoMsg ? <p className="mt-3 rounded-2xl border p-3 text-xs leading-5" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>ℹ️ {photoMsg}</p> : null}
+                  <LiteSwitch on={lite || autoLite} auto={autoLite} reason={device.reason} onChange={toggleLite} />
                 </div>
               ) : (
                 <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-5 short:grid short:grid-cols-[14rem_minmax(0,1fr)] short:items-start short:gap-3">
@@ -447,13 +497,18 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                             <>
                               <p className="text-sm font-bold">{photoHits?.length ? `${photoHits.length} resultados` : "Resultado de tu foto"}</p>
                               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Primero los más parecidos.</p>
+                              {engine === "server" ? (
+                                <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold" style={{ color: "var(--t-accent)" }} title="La foto se analizó en RemHub para no pegar el celular">
+                                  <Zap size={10} /> Modo liviano
+                                </p>
+                              ) : null}
                             </>
                           )}
                         </div>
                       </div>
                       {!busyPhoto ? (
                         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-                          <button type="button" onClick={() => cameraRef.current?.click()} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-bold text-white short:py-1.5" style={{ background: "var(--t-accent)" }}>
+                          <button type="button" onClick={openCamera} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-bold text-white short:py-1.5" style={{ background: "var(--t-accent)" }}>
                             <Camera size={14} /> Otra foto
                           </button>
                           <button type="button" onClick={() => galleryRef.current?.click()} className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-2 py-2 text-xs font-bold short:py-1.5" style={{ borderColor: "var(--t-card-border)" }}>
@@ -463,6 +518,11 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                       ) : null}
 
                       {/* Texto leído en la foto: se puede quitar o agregar palabras */}
+                      {photoUrl && !reading && terms === null && !busyPhoto && lastPhotoRef.current ? (
+                        <button type="button" onClick={() => void readTextNow()} className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-accent)" }}>
+                          <ScanText size={14} /> Leer el texto de la foto (código, marca…)
+                        </button>
+                      ) : null}
                       {photoUrl && (reading || terms) ? (
                         <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--t-card-border)" }}>
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -552,19 +612,26 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
 }
 
 async function previewOf(file: Blob): Promise<string> {
-  // Miniatura (se guarda para retomar la búsqueda al volver).
+  // Miniatura (se guarda para retomar la búsqueda al volver). Se abre ya reducida: no llena la memoria.
   try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 360 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    return canvas.toDataURL("image/jpeg", 0.72);
+    return await previewDataUrl(file, 360);
   } catch {
     return URL.createObjectURL(file);
   }
+}
+
+/** Modo liviano: la foto la analiza RemHub (para celulares lentos). Automático si el celular no da. */
+function LiteSwitch({ on, auto, reason, onChange }: { on: boolean; auto: boolean; reason: string | null; onChange: (on: boolean) => void }) {
+  return (
+    <label className={`mt-3 flex items-start gap-2 rounded-2xl border p-2.5 text-left text-[11px] leading-4 ${auto ? "" : "cursor-pointer"}`} style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+      <input type="checkbox" className="mt-0.5" checked={on} disabled={auto} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <b className="inline-flex items-center gap-1" style={{ color: "var(--t-text)" }}><Zap size={11} /> Modo liviano</b>
+        {" "}— RemHub analiza la foto: el celular no descarga nada pesado ni se pega.
+        {auto ? <> Activado solo en este equipo{reason ? ` (${reason})` : ""}.</> : " Actívalo si tu celular es lento."}
+      </span>
+    </label>
+  );
 }
 
 function Hint({ icon, text }: { icon: ReactNode; text: string }) {
