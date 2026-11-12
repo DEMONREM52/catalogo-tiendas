@@ -418,13 +418,46 @@ export default function ProductRadarPage() {
             </div>
             {listView && !twins && !taskFilter ? (
               <>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
-                  <label className="flex items-center gap-2 rounded-xl border px-3 sm:col-span-2 lg:col-span-1" style={{ borderColor: "var(--t-card-border)", background: "var(--t-input-bg, transparent)" }}>
-                    <Search size={15} style={{ color: "var(--t-muted)" }} />
-                    <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, código o barras…" className="w-full bg-transparent py-2.5 text-sm outline-none" />
-                    {q ? <button type="button" onClick={() => setQ("")} aria-label="Borrar"><X size={14} /></button> : null}
-                    <ProductPhotoButton storeId={storeId} pickLabel="Ver" onPick={(h) => setQ(photoFilterText(h))} compact className="-mr-2 border-0 px-2" />
-                  </label>
+                {/* Buscador completo: nombre, código, código de barras o foto */}
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--t-muted)" }} />
+                    <input
+                      type="search"
+                      enterKeyHint="search"
+                      autoComplete="off"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
+                      placeholder='Busca por nombre, código, código de barras o con una foto 📷 (ej: "olla", "125", "V322")'
+                      aria-label="Buscar en el radar"
+                      className="w-full rounded-2xl border py-3 pl-11 pr-10 text-[15px] outline-none"
+                      style={{ borderColor: q ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-input-bg, var(--t-card-bg))", color: "var(--t-text)" }}
+                    />
+                    {q ? (
+                      <button type="button" onClick={() => setQ("")} className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full" style={{ color: "var(--t-muted)" }} aria-label="Borrar búsqueda">
+                        <X size={15} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <ProductPhotoButton
+                    storeId={storeId}
+                    label="Foto"
+                    title="Buscar en el radar con una foto"
+                    subtitle="Toma una foto del producto, su caja o su etiqueta, o escribe su nombre o código. Te lo mostramos en el radar con todo lo que le falta."
+                    pickLabel="Ver en el radar"
+                    className="rounded-2xl px-4"
+                    onPick={(h) => {
+                      // Se ve aunque esté en otra pestaña, con otra falencia marcada o inactivo.
+                      setView("all");
+                      setIssue(null);
+                      clearFilters();
+                      if (h.meta?.includes("Inactivo")) setOnlyActive(false);
+                      setQ(photoFilterText(h));
+                    }}
+                  />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(4,auto)] lg:justify-start">
                   {data.points.length > 1 && !proMissing ? (
                     <select value={point} onChange={(e) => setPoint(e.target.value)} className="rounded-xl border px-3 py-2.5 text-sm" style={{ ...selectStyle, borderColor: point ? "#0ea5e9" : "var(--t-card-border)" }} title="Unidades y ventas de un solo punto">
                       <option value="">📍 Todos los puntos</option>
