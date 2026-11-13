@@ -14,7 +14,7 @@
 import { useEffect, useRef } from "react";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "./rem";
 import { compactCode, normalize, parseCorrection, parseTransferCommand, plural, spokenReference, type TransferCommand } from "./spanish";
-import { forget, learn, resolveSpoken, type Ranked } from "./fuzzy";
+import { forget, learn, missToLearn, resolveSpoken, type Miss, type Ranked } from "./fuzzy";
 
 export type VoiceHit = { id: string; name: string; sku: string | null; barcode?: string | null; /** Existencias (null = no se sabe o no se dice). */ avail: number | null };
 export type VoiceLine = { id: string; name: string; sku: string | null; qty: number };
@@ -111,6 +111,8 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
   const st = useRef({
     pending: null as Pending, awaiting: null as Parameters<typeof parseTransferCommand>[1], last: "", lastAdded: [] as string[],
     photo: false, turn: 0, lastAdd: null as LastAdd | null,
+    /** Lo último que no encontró (para aprender cuando enseguida se encuentre dicho de otra forma). */
+    miss: null as Miss,
   });
   const pickedRef = useRef<(hit: VoiceHit) => boolean>(() => false);
 
@@ -204,15 +206,18 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
     /** De lo dicho al producto: seguro → se agrega; duda → pregunta; varios → opciones. */
     async function resolveAndAdd(ask: Ask, alts: string[], lead = ""): Promise<RemReply> {
       const a = A();
+      // Lo que no encontró hace un momento y se parece a esto: se aprende con lo que se elija ahora.
+      if (!ask.learnAlso) { const also = missToLearn(s.miss, ask.query, s.turn); if (also) ask = { ...ask, learnAlso: also }; }
       const res = await resolveSpoken<VoiceHit>((q, limit) => a.search(q, limit), [ask.query, ...alts]);
       if (res.kind === "sure") {
-        if (ask.learnAlso) learn(ask.learnAlso, res.hit);
+        if (ask.learnAlso) { learn(ask.learnAlso, res.hit); s.miss = null; }
         const learned = res.ranked[0]?.hit.id === res.hit.id && res.ranked[0].score === 1;
         const r = chosen(res.hit, ask.qty, ask.add, ask.extra, { ask, others: res.ranked.filter((x) => x.hit.id !== res.hit.id), learned });
         return lead ? { ...r, say: `${lead}${r.say}`, show: `${lead}${r.show ?? r.say}` } : r;
       }
       if (res.kind === "ask") return askGuess({ type: "guess", ranked: res.ranked, index: 0, ...ask }, lead);
       if (res.kind === "choose") return askChoice(res.ranked.map((r) => r.hit), ask, `${lead}No lo encontré exacto. `);
+      s.miss = { query: ask.query, turn: s.turn };
       return reply(`${lead}No encontré «${ask.query}». Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
     }
 
@@ -250,7 +255,7 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         }
         case "choice": {
           if (p?.type !== "choice") return reply("No te estaba dando opciones. Dime el producto.");
-          if (cmd.index === 0) { clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
+          if (cmd.index === 0) { s.miss = { query: p.query, turn: s.turn }; clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
           const hit = p.hits[cmd.index - 1];
           if (!hit) return reply(`Solo hay ${p.hits.length} opciones. ¿Cuál?`);
           remember(p, hit);
@@ -294,16 +299,18 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           if (p?.type === "submit") { clear(); return reply("Bueno, todavía no. Sigue o corrige lo que necesites."); }
           if (p?.type === "guess") {
             if (p.index + 1 < p.ranked.length) return askGuess({ ...p, index: p.index + 1 }, "¿Entonces ");
+            s.miss = { query: p.query, turn: s.turn };
             clear();
             return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
           }
-          if (p?.type === "choice") { clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
+          if (p?.type === "choice") { s.miss = { query: p.query, turn: s.turn }; clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
           if (p) { clear(); return reply("Bueno, no lo agrego. ¿Siguiente?"); }
           // «No» justo después de que REM agregó algo: lo quita y pregunta por el siguiente parecido.
           if (justAdded) {
             revert(justAdded);
             const next = justAdded.others.filter((r) => r.score >= 0.45);
             if (next.length) return askGuess({ type: "guess", ranked: next, index: 0, ...justAdded.ask }, `Quité ${short(justAdded.hit.name)}. `);
+            s.miss = { query: justAdded.ask.query, turn: s.turn };
             return reply(`Quité ${short(justAdded.hit.name)}. Dímelo de otra forma, o di foto.`);
           }
           return reply("Bueno. ¿Qué hacemos?");

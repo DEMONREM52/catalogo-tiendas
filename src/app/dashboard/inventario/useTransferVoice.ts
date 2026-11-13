@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "@/lib/voice/rem";
 import { compactCode, matchPlace, matchPlaces, normalize, parseCorrection, parseTransferCommand, plural, spokenReference, type TransferCommand } from "@/lib/voice/spanish";
-import { forget, learn, resolveSpoken, type Ranked } from "@/lib/voice/fuzzy";
+import { forget, learn, resolveSpoken, type Ranked, missToLearn, type Miss } from "@/lib/voice/fuzzy";
 import type { ProductHit, Warehouse } from "./shared";
 
 export type TransferVoiceLine = { product_id: string; name: string; sku: string | null; available: number };
@@ -98,7 +98,7 @@ function findLine(lines: TransferVoiceLine[], spoken: string): TransferVoiceLine
 }
 
 export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null>, enabled: boolean) {
-  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false, photo: false, turn: 0, lastAdd: null as LastAdd | null });
+  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false, photo: false, turn: 0, lastAdd: null as LastAdd | null, miss: null as Miss });
   const pickedRef = useRef<(hit: ProductHit) => void>(() => {});
 
   useEffect(() => {
@@ -214,9 +214,11 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
     /** De lo dicho al producto (en el origen, con existencias): seguro → se pone; duda → pregunta; varios → opciones. */
     async function resolveAndAdd(ask: Ask, alts: string[], lead = ""): Promise<RemReply> {
       const a = api();
+      // Lo que no encontró hace un momento y se parece a esto: se aprende con lo que se elija ahora.
+      if (!ask.learnAlso) { const also = missToLearn(st.miss, ask.query, st.turn); if (also) ask = { ...ask, learnAlso: also }; }
       const res = await resolveSpoken<ProductHit>((q, limit) => searchIn(a.storeId, a.from, q, limit ?? 6), [ask.query, ...alts]);
       if (res.kind === "sure") {
-        if (ask.learnAlso) learn(ask.learnAlso, res.hit);
+        if (ask.learnAlso) { learn(ask.learnAlso, res.hit); st.miss = null; }
         const learned = res.ranked[0]?.hit.id === res.hit.id && res.ranked[0].score === 1;
         const r = chosen(res.hit, ask.qty, ask.dest, true, { ask, others: res.ranked.filter((x) => x.hit.id !== res.hit.id), learned });
         return lead ? { ...r, say: `${lead}${r.say}`, show: `${lead}${r.show ?? r.say}` } : r;
@@ -226,6 +228,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         const r = askChoice(res.ranked.map((x) => x.hit), ask, true);
         return { ...r, say: `${lead}No lo encontré exacto. ${r.say}`, show: `${lead}No lo encontré exacto. ${r.show ?? r.say}` };
       }
+      st.miss = { query: ask.query, turn: st.turn };
       return reply(`${lead}No encontré «${ask.query}» con existencias en ${nameOf(api().from).toLowerCase()}. Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
     }
 
@@ -317,7 +320,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
         case "choice": {
           if (pending?.type !== "choice") return reply("No te estaba dando opciones. Dime el producto.");
-          if (cmd.index === 0) { st.pending = null; st.awaiting = null; return reply("Bueno. Dime el producto de otra forma."); }
+          if (cmd.index === 0) { st.miss = { query: pending.query, turn: st.turn }; st.pending = null; st.awaiting = null; return reply("Bueno. Dime el producto de otra forma."); }
           const hit = pending.hits[cmd.index - 1];
           if (!hit) return reply(`Solo hay ${pending.hits.length} opciones. ¿Cuál?`);
           remember(pending, hit);
@@ -362,6 +365,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
           if (pending?.type === "send") { st.pending = null; st.awaiting = null; st.finishing = false; return reply("Bueno, no lo envío. Sigue agregando o corrige lo que necesites."); }
           if (pending?.type === "guess") {
             if (pending.index + 1 < pending.ranked.length) return askGuess({ ...pending, index: pending.index + 1 }, "¿Entonces ");
+            st.miss = { query: pending.query, turn: st.turn };
             st.pending = null; st.awaiting = null;
             return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
           }
@@ -371,6 +375,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
             revert(justAdded);
             const next = justAdded.others.filter((r) => r.score >= 0.45);
             if (next.length) return askGuess({ type: "guess", ranked: next, index: 0, ...justAdded.ask }, `Quité ${short(justAdded.hit.name)}. `);
+            st.miss = { query: justAdded.ask.query, turn: st.turn };
             return reply(`Quité ${short(justAdded.hit.name)}. Dímelo de otra forma, o di foto.`);
           }
           return reply("Bueno. ¿Qué hacemos?");

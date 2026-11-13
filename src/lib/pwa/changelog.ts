@@ -993,6 +993,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Lo agrega con 3" },
     ],
   },
+  {
+    id: 95, date: "2026-11-13", title: "🔮 REM ahora es una esfera que siempre está ahí",
+    summary: "REM es una esfera de cristal morada que flota sobre todo el panel y reacciona cuando escucha y cuando habla. Enciéndelo una vez con el botón REM y queda ahí: llámalo diciendo «Rem…», interrúmpelo hablando y toca la esfera para ver la conversación o apagarlo. Abre cualquier sección («Rem, abre los gastos») y aprende de los errores en tu equipo.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🔮", text: "La esfera flota y reacciona a tu voz" },
+      { icon: "🗣️", text: "«Rem, abre los gastos»" },
+      { icon: "💬", text: "Tócala: ves la conversación o la apagas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

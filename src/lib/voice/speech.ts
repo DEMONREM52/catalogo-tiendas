@@ -6,7 +6,7 @@
  * En computador la conversación es «a dos voces» (`capture`): REM escucha mientras habla, se calla apenas
  * la persona empieza a hablar y espera a que termine la frase completa (aguanta pausas). Lo que REM
  * mismo dice, si el micrófono lo oye por el parlante, se reconoce y se ignora.
- * En celular, abrir el micrófono corta la voz: se escucha después de hablar (y tocar 🔊 lo calla).
+ * En celular, abrir el micrófono corta la voz: se escucha después de hablar (y tocar la esfera lo calla).
  */
 
 import { isQuickAnswer, normalize } from "./spanish";
@@ -73,6 +73,72 @@ function errorOf(code: string): VoiceError | null {
   if (code === "network") return new VoiceError("network", "Sin internet: el reconocimiento de voz lo necesita.");
   if (code === "audio-capture") return new VoiceError("mic", "No se encontró el micrófono.");
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Nivel de voz (0 a 1) para que la esfera de REM reaccione al hablar y al escuchar.
+// Sube con el micrófono (computador), con cada palabra que REM dice y con lo que se va reconociendo.
+
+let levelNow = 0;
+let levelAt = 0;
+
+/** Empuja el nivel (se va apagando solo). */
+export function pulseLevel(v: number) {
+  const cur = voiceLevel();
+  levelNow = Math.min(1, Math.max(cur, v));
+  levelAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+/** Nivel actual, ya con la caída (≈ medio segundo). */
+export function voiceLevel(): number {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  return levelNow * Math.max(0, 1 - (now - levelAt) / 550);
+}
+
+let meter: { stop: () => void } | null = null;
+
+/**
+ * Medidor del micrófono para la esfera (solo computador: en celular abrir el micrófono dos veces corta el reconocimiento).
+ * Sin control automático de volumen, para no cambiarle el nivel al micrófono que usa el reconocimiento.
+ */
+export function startMicMeter(): () => void {
+  if (meter || !duplexCapable() || typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return () => {};
+  let stopped = false;
+  let raf = 0;
+  let ctx: AudioContext | null = null;
+  let stream: MediaStream | null = null;
+  const me = {
+    stop: () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+      stream?.getTracks().forEach((t) => t.stop());
+      void ctx?.close().catch(() => {});
+      if (meter === me) meter = null;
+    },
+  };
+  meter = me;
+  void navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } }).then((s) => {
+    if (stopped) { s.getTracks().forEach((t) => t.stop()); return; }
+    stream = s;
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    ctx = new Ctx();
+    const an = ctx.createAnalyser();
+    an.fftSize = 512;
+    ctx.createMediaStreamSource(s).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const tick = () => {
+      if (stopped) return;
+      an.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (const b of buf) { const x = (b - 128) / 128; sum += x * x; }
+      const rms = Math.sqrt(sum / buf.length);
+      if (rms > 0.015) pulseLevel(Math.min(1, rms * 6));
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }).catch(() => { if (meter === me) meter = null; });
+  return () => me.stop();
 }
 
 /** Lo que esté escuchando ahora (una sola cosa a la vez). */
@@ -212,7 +278,7 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
       finals = fin;
       interim = inter;
       const said = textNow();
-      if (said) opts.onInterim?.(said);
+      if (said) { opts.onInterim?.(said); pulseLevel(0.55); }
       if (!speaking || startedDuringSpeech) {
         window.clearTimeout(silence);
         // Respuesta corta ya cerrada: rápido. Frase: aguanta pausas para seguir hablando.
@@ -340,6 +406,7 @@ export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: n
           alts = list;
         } else interim += r[0]?.transcript ?? "";
       }
+      if (interim || alts[0]) pulseLevel(0.55);
       if (interim) opts.onInterim?.(interim);
       else if (alts[0]) opts.onInterim?.(alts[0]);
     };
@@ -400,6 +467,9 @@ export async function speak(text: string): Promise<void> {
     u.rate = 1.05;
     // Chrome a veces no avisa que terminó: tiempo máximo según el largo.
     const t = window.setTimeout(resolve, 2500 + said.length * 85);
+    // La esfera «habla»: cada palabra la hace latir.
+    u.onboundary = () => pulseLevel(0.75);
+    u.onstart = () => pulseLevel(0.6);
     u.onend = () => { window.clearTimeout(t); resolve(); };
     u.onerror = () => { window.clearTimeout(t); resolve(); };
     synth.speak(u);
@@ -442,6 +512,8 @@ const WAKE = [
   new RegExp(`(?:^|\\s)(?:oye|olle|hey|hola)(?:rem|ren|ram)(?:\\s+(.*))?$`),
   // «REM, quiero hacer un traslado»: el nombre solo, al empezar la frase.
   /^(?:rem|r e m)(?:\s+(.*))?$/,
+  // «Bueno, REM, abre los gastos»: el nombre en medio de la frase (solo las formas que no son otra palabra).
+  /(?:^|\s)(?:rem|reem|rhem|remm)(?:\s+(.*))?$/,
 ];
 
 /** Frase con «Oye REM» → lo que se dijo después ("" si nada). null si no llamó a REM. */
@@ -488,7 +560,7 @@ export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceErr
       const res = e.results[e.results.length - 1];
       if (!res) return;
       const text = res[0]?.transcript?.trim() ?? "";
-      if (text) onHeard?.(text);
+      if (text) { onHeard?.(text); pulseLevel(0.3); }
       let rest: string | null = null;
       for (let k = 0; k < res.length && rest === null; k++) rest = wakeRest(res[k]?.transcript ?? "");
       if (rest === null) return;

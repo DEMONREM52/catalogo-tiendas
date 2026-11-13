@@ -252,6 +252,31 @@ export function learn(query: string, hit: Learned) {
   } catch { /* sin almacenamiento */ }
 }
 
+/**
+ * Autoaprendizaje de los errores: REM no encontró «termólico» y, enseguida, «termo licuadora HM 03» sí.
+ * Si las dos frases se parecen (una palabra que suena igual al empezar o el mismo número), la que falló
+ * queda aprendida como ese producto (al confirmarse). Si después se le dice «no», la olvida.
+ */
+export type Miss = { query: string; turn: number } | null;
+
+/** ¿Dos frases dichas se parecen lo bastante como para ser la misma cosa mal oída? */
+export function relatedSpoken(a: string, b: string): boolean {
+  const pa = spokenParts(a); const pb = spokenParts(b);
+  const keys = (p: SpokenParts) => [...p.words, ...p.codes].map((w) => phonetic(w)).filter((w) => w.length >= 3);
+  const ka = keys(pa); const kb = keys(pb);
+  if (ka.some((x) => kb.some((y) => x.slice(0, 3) === y.slice(0, 3)))) return true;
+  const digits = (p: SpokenParts) => p.codes.map((c) => c.replace(/\D/g, "")).filter((d) => d.length >= 2);
+  const da = digits(pa); const db = digits(pb);
+  return da.some((x) => db.includes(x));
+}
+
+/** La frase que falló hace poco (máx. 3 turnos) y se parece a esta: se aprende junto con lo que se elija ahora. */
+export function missToLearn(miss: Miss, query: string, turn: number): string | undefined {
+  if (!miss || turn - miss.turn > 3) return undefined;
+  if (learnKey(miss.query) === learnKey(query)) return undefined;
+  return relatedSpoken(miss.query, query) ? miss.query : undefined;
+}
+
 /** Olvida lo aprendido para esa frase (se dijo «no» a lo que REM puso por lo aprendido). */
 export function forget(query: string) {
   const k = learnKey(query);

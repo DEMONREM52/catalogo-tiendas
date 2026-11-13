@@ -1,8 +1,40 @@
 # REM: asistente de voz
 
-Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si esa opción está encendida. REM contesta con voz.
+REM es **una esfera de cristal morada** que flota sobre todo el panel, también encima de las ventanas. Es una sola y siempre la misma: no se abre una nueva cada vez.
 
-**Todo es gratis.** No usa IA ni pasa por un servidor de RemHub.
+- **Encender:** botón **REM** del encabezado. Queda encendido en ese equipo, también al recargar, hasta decir «apágate» o tocar ⏻.
+- **Llamarlo:** decir **«Rem…»** («Rem, abre los gastos»), tocar el botón REM o 🎙️ en la conversación.
+- **La esfera reacciona:**
+  - En reposo respira.
+  - Al escuchar crece y brilla con la voz. En computador lo mide el micrófono; en celular, lo que va reconociendo.
+  - Al hablar late con cada palabra; al pensar gira rápido.
+  - Un punto verde indica que espera «Rem».
+- **Tocar la esfera:** abre o cierra la conversación (como ChatGPT). Si REM está hablando, lo calla y escucha.
+- **Conversación:** muestra todo lo hablado (queda guardado en el equipo), el botón Hablar / Interrumpir / Detener, el interruptor «Rem», ⏻ para apagar y ✕ para ocultarla.
+- **Junto a la esfera:** con la conversación cerrada, sale en una burbuja lo que va oyendo y lo que responde.
+- **Moverla:** se arrastra a donde no estorbe y queda guardado.
+- **Interrumpir:** en computador, hablándole encima. En celular, tocando la esfera.
+
+**Todo es gratis.** No usa IA de pago ni pasa por un servidor de RemHub.
+
+## Abrir cualquier sección
+
+«Rem, abre los gastos», «llévame a la nómina», «muéstrame la rentabilidad por punto», «ve a clientes».
+
+- Usa la misma lista del buscador Ctrl+K, ya filtrada por los permisos de quien habla: no abre nada que la persona no pueda abrir a mano (`src/lib/voice/navigate.ts`, con pruebas en `tests/voice/navigate.test.ts`).
+- Sin verbo («nómina») solo abre si se parece mucho.
+- En medio de un traslado o una venta exige un parecido todavía mayor, para no salirse de la pantalla por una frase.
+
+## Aprende solo (en este equipo)
+
+- **Productos:**
+  - Si no encontró «termólico» y enseguida «termo licuadora HM 03» sí, la frase que falló queda aprendida como ese producto.
+  - Las dos frases tienen que parecerse (una palabra que empieza a sonar igual, o el mismo número) y haber pasado máximo 3 turnos (`missToLearn` en `fuzzy.ts`).
+  - Lo mismo cuando se rechazan sus propuestas («no») y se dice de otra forma.
+  - Si después se le dice «no» a lo aprendido, lo olvida.
+- **Frases:** si no entendió algo y enseguida, dicho de otra forma, abrió una sección o una pantalla, la frase que falló queda guardada y la próxima vez lleva directo (`learnPhrase`, máximo 300).
+- **Correcciones:** «no, es la VTS 30», como antes.
+- La conversación muestra cuántas cosas lleva aprendidas.
 
 ## Qué sabe hacer
 
@@ -64,16 +96,18 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 
 **Ventanas que tapan el encabezado** (Nuevo pedido interno): traen su propio botón 🎙️ REM junto a la ✕ (`RemCallButton`, que llama `callRem()`).
 
-## «Oye REM»
+## Llamarlo con «Rem» / «Oye REM»
 
-Se enciende con el interruptor de arriba del panel de REM. Queda guardado solo en ese equipo. Ahí mismo muestra qué oyó mientras espera.
+Se enciende con el interruptor «Rem» de la conversación. Viene encendido en computador y apagado en celular, donde gasta batería y suena al reiniciar. Queda guardado solo en ese equipo. Ahí mismo muestra qué oyó mientras espera.
+
+- **El nombre en medio de la frase también lo llama:** «bueno, Rem, abre los gastos». Solo valen las formas que no son otra palabra: «rem», «reem», «rhem».
 
 - **Cuándo escucha:** solo con RemHub abierto y la pestaña a la vista. Se apaga sola si se cambia de pestaña o se bloquea la pantalla.
 - **Qué lo llama:** «oye», «hey», «hola» u «ok» seguido de «REM», o la frase que empieza por «REM» («REM, quiero hacer un traslado»).
   - Acepta cómo lo suele escribir el reconocedor: «oye ren», «olle rem», «oyeren», «hey Ram», «R.E.M.» (`wakeRest` en `speech.ts`, con pruebas).
   - «remisión», «remera» o «memoria RAM» no lo despiertan.
   - Se puede decir todo de una vez: «Oye REM, quiero hacer un traslado».
-- **Probar:** en «¿Qué le puedo decir?» → «🧪 Probar «Oye REM»». Dice si así se despierta y muestra lo que oyó. Con la opción encendida, el panel muestra «Lo último que oí» mientras espera.
+- **Probar:** en «¿Qué le puedo decir?» → «🧪 Probar el llamado». Dice si así se despierta y muestra lo que oyó. Con la opción encendida, el panel muestra «Lo último que oí» mientras espera.
 - **Si el navegador no deja escuchar sin tocar la pantalla** (pasa al abrir la página), espera el primer toque y vuelve a escuchar.
 - **Pronunciación:** REM dice «Rem» (`spokenText`). «REM» en mayúsculas la voz lo leía «rien», y «Rrem», «rariem».
 - **Reacciona rápido:** usa lo que va oyendo y no espera a que el reconocedor cierre la frase, que con ruido puede tardar mucho. Al oír «oye REM» espera 1,2 segundos por si sigue la orden.
@@ -92,7 +126,10 @@ Se enciende con el interruptor de arriba del panel de REM. Queda guardado solo e
 - **Conversación de listas:** `src/lib/voice/useListVoice.ts`. Cada pantalla le da un adaptador: cómo buscar, cómo poner la cantidad, qué falta y qué hacer al decir «listo».
   - La usan conteos (`CountsTab`), pedidos internos (`NewStockRequest`), compras (`PurchasesTabs`) y el POS.
 - **Traslados:** `src/app/dashboard/inventario/useTransferVoice.ts`. Va aparte porque maneja origen, varios destinos y responsables.
-- **Botón y panel:** `src/components/rem/RemButton.tsx`. Ahí está a qué pantalla lleva cada frase (`INTENTS`) y qué permisos pide.
+- **Botón, conversación y orden de la charla:** `src/components/rem/RemButton.tsx`. Ahí está a qué pantalla lleva cada frase (`INTENTS`) y qué permisos pide.
+- **La esfera:** `src/components/rem/RemOrb.tsx`. Lee el nivel de voz (`voiceLevel`, `pulseLevel` y `startMicMeter` en `speech.ts`) en cada cuadro, sin re-render de React.
+  - El medidor del micrófono solo corre en computador y mientras conversa. En celular, abrir el micrófono dos veces corta el reconocimiento.
+  - Va sin control automático de volumen, para no cambiarle el nivel al micrófono del reconocimiento.
 
 ## Para agregar REM a otra pantalla
 
