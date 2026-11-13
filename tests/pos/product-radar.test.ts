@@ -97,4 +97,21 @@ test("plan del día: lo atrasado primero y lo publicado hoy cuenta", () => {
   const plan = planToday(rows, "2026-11-09", 3, (r) => productIssues(r, ctx()).map((i) => i.key));
   assert.deepEqual(plan.done.map((r) => r.id), ["hoy"]);
   assert.deepEqual(plan.todo.map((r) => r.id), ["atrasado", "toca"]);
+  assert.equal(plan.fresh, 1, "«nunca» es la única sugerencia sin recordatorio");
+});
+
+test("plan del día: «Ver otros» cambia las sugerencias pero deja lo que toca", () => {
+  const rows = [
+    base({ id: "toca", pub: { every_days: 1, every: 1, last: "2026-11-08T14:00:00Z", by: null, times: 3, next_due: "2026-11-09" } }),
+    base({ id: "nunca1", stock: 90, pub: { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null } }),
+    base({ id: "nunca2", stock: 50, pub: { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null } }),
+    base({ id: "nunca3", stock: 10, pub: { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null } }),
+  ];
+  const issues = (r: RadarProduct) => productIssues(r, ctx()).map((i) => i.key);
+  const first = planToday(rows, "2026-11-09", 2, issues);
+  assert.deepEqual(first.todo.map((r) => r.id), ["toca", "nunca1"]);
+  assert.equal(first.fresh, 3);
+  const next = planToday(rows, "2026-11-09", 2, issues, new Set(["nunca1", "toca"]));
+  assert.deepEqual(next.todo.map((r) => r.id), ["toca", "nunca2"], "lo que toca por recordatorio no se salta");
+  assert.equal(next.fresh, 2);
 });

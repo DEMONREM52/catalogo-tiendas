@@ -921,6 +921,16 @@ export const RELEASES: Release[] = [
       { icon: "🔘", text: "Botón 🎙️ REM junto a la ✕ de la ventana" },
     ],
   },
+  {
+    id: 88, date: "2026-11-13", title: "🗓️ Plan de hoy: «Ver otros» y meta a la mano",
+    summary: "En el Radar, «Ver otros» cambia los productos sugeridos por otros nuevos. Los que toca publicar por recordatorio (📌) se quedan. La meta del día se cambia ahí mismo, sin entrar a ajustes.",
+    paths: ["/dashboard/products/radar"],
+    demo: [
+      { icon: "🔄", text: "Toca «Ver otros» para ver productos nuevos" },
+      { icon: "📌", text: "Los de recordatorio no se cambian" },
+      { icon: "🎯", text: "Cambia «Meta 10» junto al contador" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

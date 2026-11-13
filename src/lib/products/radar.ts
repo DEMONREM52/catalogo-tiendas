@@ -260,8 +260,11 @@ export function transferHint(p: RadarProduct, currentPoint: string | null): { po
 /**
  * Plan del día: hasta `target` productos para publicar hoy. Primero los que toca (los más atrasados), luego los quietos
  * con más unidades y los que nunca se han publicado. Los que ya se publicaron hoy cuentan como hechos.
+ *
+ * `skip`: sugerencias que se pidió cambiar («Ver otros»). Los que toca por recordatorio nunca se saltan.
+ * `fresh`: cuántas sugerencias (sin recordatorio) quedan sin saltar, mostradas o no.
  */
-export function planToday<T extends RadarProduct>(rows: T[], today: string, target: number, issuesOf: (r: T) => IssueKey[]): { done: T[]; todo: T[] } {
+export function planToday<T extends RadarProduct>(rows: T[], today: string, target: number, issuesOf: (r: T) => IssueKey[], skip?: ReadonlySet<string>): { done: T[]; todo: T[]; fresh: number } {
   const done = rows.filter((r) => r.active && r.pub.last && bogotaToday(new Date(r.pub.last)) === today);
   const doneIds = new Set(done.map((r) => r.id));
   const score = (r: T) => {
@@ -271,9 +274,10 @@ export function planToday<T extends RadarProduct>(rows: T[], today: string, targ
   };
   const candidates = rows
     .filter((r) => r.active && !doneIds.has(r.id) && (r.stock === null || Number(r.stock) > 0))
-    .filter((r) => isPublishDue(r.pub, today) || !r.pub.last || issuesOf(r).includes("no_sales"))
+    .filter((r) => isPublishDue(r.pub, today) || ((!r.pub.last || issuesOf(r).includes("no_sales")) && !skip?.has(r.id)))
     .map((r) => ({ r, s: score(r) }))
     .sort((a, b) => b.s - a.s || a.r.name.localeCompare(b.r.name))
     .map((x) => x.r);
-  return { done, todo: candidates.slice(0, Math.max(0, target - done.length)) };
+  const fresh = candidates.filter((r) => !isPublishDue(r.pub, today)).length;
+  return { done, todo: candidates.slice(0, Math.max(0, target - done.length)), fresh };
 }

@@ -72,6 +72,8 @@ export default function ProductRadarPage() {
   const [point, setPoint] = useState("");
   const [settings, setSettings] = useState<RadarSettingsValue>(DEFAULT_SETTINGS);
   const [history, setHistory] = useState<Array<{ day: string; avg: number }>>([]);
+  // «Ver otros» del plan de hoy: sugerencias saltadas hoy, en este equipo. Lo que toca por recordatorio nunca se salta.
+  const [skip, setSkip] = useState<{ day: string; ids: string[] }>({ day: "", ids: [] });
   const [photoChecks, setPhotoChecks] = useState<Map<string, PhotoCheck>>(new Map());
   const [view, setView] = useState<View>(readView);
   const [issue, setIssue] = useState<IssueKey | null>(null);
@@ -133,10 +135,17 @@ export default function ProductRadarPage() {
       const d = s as { ok?: boolean; settings?: RadarSettingsValue } | null;
       if (d?.ok && d.settings) setSettings(d.settings);
     });
+    const saved = window.setTimeout(() => {
+      try {
+        const v = JSON.parse(localStorage.getItem(`remhub:radar-skip:${storeId}`) ?? "null") as { day?: string; ids?: string[] } | null;
+        if (v?.day && Array.isArray(v.ids)) setSkip({ day: v.day, ids: v.ids });
+      } catch { /* sin almacenamiento */ }
+    }, 0);
     void sb.rpc("product_radar_history", { p_store: storeId, p_days: 120 }).then(({ data: h }) => {
       const d = h as { ok?: boolean; days?: Array<{ day: string; avg: number }> } | null;
       if (d?.ok) setHistory(d.days ?? []);
     });
+    return () => window.clearTimeout(saved);
   }, [storeId]);
 
   // Cambiar de vista o filtro vuelve a la primera página.
@@ -183,7 +192,34 @@ export default function ProductRadarPage() {
     });
   }, [storeId, data, point, proMissing, rows, activeAvg]);
 
-  const plan = useMemo(() => data ? planToday(rows, data.today, settings.daily_target, (r) => r.issues.map((i) => i.key)) : { done: [] as Row[], todo: [] as Row[] }, [rows, data, settings.daily_target]);
+  const skipToday = useMemo(() => new Set(data && skip.day === data.today ? skip.ids : []), [data, skip]);
+  const plan = useMemo(() => data ? planToday(rows, data.today, settings.daily_target, (r) => r.issues.map((i) => i.key), skipToday) : { done: [] as Row[], todo: [] as Row[], fresh: 0 }, [rows, data, settings.daily_target, skipToday]);
+
+  function saveSkip(ids: string[]) {
+    if (!data || !storeId) return;
+    const next = { day: data.today, ids };
+    setSkip(next);
+    try { localStorage.setItem(`remhub:radar-skip:${storeId}`, JSON.stringify(next)); } catch { /* sin almacenamiento */ }
+  }
+  /** Cambia las sugeridas por las siguientes; al acabarse, vuelve a empezar. */
+  function shufflePlan() {
+    if (!data) return;
+    const shown = plan.todo.filter((r) => !isPublishDue(r.pub, data.today)).map((r) => r.id);
+    if (!shown.length) return;
+    if (plan.fresh > shown.length) return saveSkip([...skipToday, ...shown]);
+    saveSkip([]);
+    toast(skipToday.size ? "Ya viste todas las sugerencias: vuelvo a las primeras" : "No hay más productos para sugerir hoy", "info");
+  }
+  /** La meta del día, desde el mismo plan (se guarda en los ajustes del Radar). */
+  async function changeTarget(n: number) {
+    if (!storeId || n === settings.daily_target) return;
+    const prev = settings;
+    const next = { ...settings, daily_target: n };
+    setSettings(next);
+    const { data: r, error: err } = await supabaseBrowser().rpc("product_radar_settings_save", { p_store: storeId, p_daily_target: n, p_push_hour: next.push_hour, p_health_goal: next.health_goal });
+    const d = r as { ok?: boolean; message?: string } | null;
+    if (err || !d?.ok) { setSettings(prev); toast(err?.message ?? d?.message ?? "No se guardó la meta", "error"); }
+  }
 
   const visible = useMemo(() => {
     if (!data) return [];
@@ -398,6 +434,7 @@ export default function ProductRadarPage() {
           {!proMissing ? (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
               <PlanToday done={plan.done} todo={plan.todo} target={settings.daily_target} today={data.today} storeId={storeId}
+                fresh={plan.fresh} skipped={skipToday.size} onShuffle={shufflePlan} onRestart={() => saveSkip([])} onTarget={(n) => void changeTarget(n)}
                 onPub={updatePub} onOpen={(id) => setQuick(id)} onSettings={() => setShowSettings(true)} />
               <HealthTrend days={history} goal={settings.health_goal} current={activeAvg} />
             </div>
