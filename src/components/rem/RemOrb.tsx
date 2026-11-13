@@ -14,14 +14,21 @@ import { voiceLevel } from "@/lib/voice/speech";
 export type OrbPhase = "idle" | "listening" | "thinking" | "speaking";
 export type OrbPlace = { cx: number; cy: number; size: number };
 
+// Celular y computador guardan su propio lugar: arrastrarla en el computador no la manda a una esquina del celular.
 const POS_KEY = "remhub:rem-orb-pos";
-const GAP = 8;
+const posKey = (w: number) => (w < 640 ? `${POS_KEY}:movil` : POS_KEY);
 
 type Pos = { r: number; b: number };
 
-function readPos(): Pos | null {
+/** Márgenes: en celular más grandes, para que las esquinas redondeadas y la barra de inicio no la tapen. */
+function margins(w: number) {
+  const mobile = w < 640;
+  return { side: mobile ? 14 : 8, bottom: mobile ? 22 : 8, top: mobile ? 84 : 8 };
+}
+
+function readPos(w: number): Pos | null {
   try {
-    const v = JSON.parse(localStorage.getItem(POS_KEY) ?? "null") as Pos | null;
+    const v = JSON.parse(localStorage.getItem(posKey(w)) ?? "null") as Pos | null;
     return v && Number.isFinite(v.r) && Number.isFinite(v.b) ? v : null;
   } catch { return null; }
 }
@@ -49,21 +56,41 @@ export function RemOrb({ phase, awake, onTap, onPlace, caption, label }: {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   useEffect(() => {
+    const measure = () => ({ w: document.documentElement.clientWidth || window.innerWidth, h: window.innerHeight });
     const t = window.setTimeout(() => {
-      const w = window.innerWidth;
-      setView({ w, h: window.innerHeight });
-      setPos(readPos() ?? { r: 16, b: w < 640 ? 96 : 24 });
+      const v = measure();
+      setView(v);
+      setPos(readPos(v.w) ?? { r: 16, b: v.w < 640 ? 96 : 24 });
     }, 0);
-    const onResize = () => setView({ w: window.innerWidth, h: window.innerHeight });
+    const onResize = () => setView(measure());
     window.addEventListener("resize", onResize);
-    return () => { window.clearTimeout(t); window.removeEventListener("resize", onResize); };
+    window.addEventListener("orientationchange", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
   }, []);
 
-  // Siempre dentro de la pantalla (aunque se achique la ventana).
-  const r = clamp(pos.r, GAP, view.w - size - GAP);
-  const b = clamp(pos.b, GAP, view.h - size - GAP);
+  // Siempre dentro de la pantalla (aunque se achique la ventana) y sin tapar el encabezado en celular.
+  const m = margins(view.w);
+  const fitR = (v: number) => clamp(v, m.side, view.w - size - m.side);
+  const fitB = (v: number) => clamp(v, m.bottom, view.h - size - m.top);
+  const r = fitR(pos.r);
+  const b = fitB(pos.b);
 
-  useEffect(() => { onPlace({ cx: view.w - r - size / 2, cy: view.h - b - size / 2, size }); }, [r, b, size, view.w, view.h, onPlace]);
+  // Dónde quedó de verdad (con el margen del iPhone sumado): para pegar la conversación a la esfera.
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const t = window.requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      onPlace({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, size });
+    });
+    return () => window.cancelAnimationFrame(t);
+  }, [r, b, size, view.w, view.h, onPlace]);
 
   // La animación con la voz: un valor --lvl (0 a 1) que mueve tamaño, brillo y halo. Sin re-render de React.
   useEffect(() => {
@@ -97,7 +124,7 @@ export function RemOrb({ phase, awake, onTap, onPlace, caption, label }: {
     const dx = e.clientX - d.sx; const dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < 7) return;
     d.moved = true;
-    setPos({ r: clamp(d.r0 - dx, GAP, view.w - size - GAP), b: clamp(d.b0 - dy, GAP, view.h - size - GAP) });
+    setPos({ r: fitR(d.r0 - dx), b: fitB(d.b0 - dy) });
   }
   function up() {
     const d = drag.current;
@@ -105,7 +132,7 @@ export function RemOrb({ phase, awake, onTap, onPlace, caption, label }: {
     if (!d?.moved) return;
     suppress.current = true;
     setPos((p) => {
-      try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch { /* sin almacenamiento */ }
+      try { localStorage.setItem(posKey(view.w), JSON.stringify(p)); } catch { /* sin almacenamiento */ }
       return p;
     });
   }
@@ -117,7 +144,7 @@ export function RemOrb({ phase, awake, onTap, onPlace, caption, label }: {
     <>
       <style>{ORB_CSS}</style>
       <button ref={root} type="button" className="rem-orb" data-phase={phase} aria-label={label} title={label}
-        style={{ right: r, bottom: b, width: size, height: size }}
+        style={{ right: `calc(${r}px + env(safe-area-inset-right, 0px))`, bottom: `calc(${b}px + env(safe-area-inset-bottom, 0px))`, width: size, height: size }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; }}
         onClick={() => { if (suppress.current) { suppress.current = false; return; } onTap(); }}>
         <span className="rem-orb-glow" aria-hidden />
@@ -135,7 +162,7 @@ export function RemOrb({ phase, awake, onTap, onPlace, caption, label }: {
           style={{
             right: left ? r + size + 10 : undefined,
             left: left ? undefined : view.w - r + 10,
-            bottom: above ? undefined : b + size / 2 - 18,
+            bottom: above ? undefined : `calc(${b + size / 2 - 18}px + env(safe-area-inset-bottom, 0px))`,
             top: above ? view.h - b - size / 2 - 18 : undefined,
           }}>
           {caption}

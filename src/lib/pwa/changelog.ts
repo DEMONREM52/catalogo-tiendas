@@ -1033,6 +1033,16 @@ export const RELEASES: Release[] = [
       { icon: "🕒", text: "«¿Qué hora es?»" },
     ],
   },
+  {
+    id: 99, date: "2026-11-13", title: "🔮 La esfera de REM ya no se pierde en el celular",
+    summary: "En el celular la esfera queda a la vista, lejos de las esquinas y de la barra del iPhone, y guarda su propio lugar (arrastrarla en el computador no la mueve en el celular). «Abre productos» ya abre Productos y no «Productos sin movimiento».",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "📱", text: "La esfera siempre a la vista" },
+      { icon: "✋", text: "Arrástrala: recuerda su lugar en cada equipo" },
+      { icon: "📦", text: "«Abre productos» → Productos" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -38,10 +38,16 @@ export function navTarget<T extends NavLink>(text: string, links: T[], strict = 
   const known = q.words.filter((w) => links.some((l) => scoreItem(l, { words: [w], create: false, raw: w }) >= 8));
   if (!known.length) return null;
   if (known.length < q.words.length) q = { ...q, words: known, raw: known.join(" ") };
-  let best: { link: T; score: number } | null = null;
+  // Para elegir entre parecidos: gana la que más se ajusta al nombre completo («Productos» antes que «Productos sin
+  // movimiento») y, si no se dijo «nuevo»/«crear», una página antes que una acción. El umbral se mide sin este extra.
+  let best: { link: T; score: number; rank: number } | null = null;
   for (const l of links) {
     const score = scoreItem(l, q);
-    if (score > 0 && (!best || score > best.score)) best = { link: l, score };
+    if (score <= 0) continue;
+    const labelWords = parseQuery(l.label).words;
+    const cover = labelWords.length ? Math.min(1, q.words.length / labelWords.length) : 0;
+    const rank = score + 6 * cover - (l.action && !q.create ? 3 : 0);
+    if (!best || rank > best.rank) best = { link: l, score, rank };
   }
   if (!best) return null;
   return best.score >= (asked ? (strict ? 9 : 6) : 10) ? best : null;

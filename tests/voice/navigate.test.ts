@@ -74,3 +74,14 @@ test("charla básica y secciones con nombres de punto", async () => {
   assert.equal(navTarget("puedes abrir la rentabilidad de Zamora", SEARCH_INDEX)?.link.label, "Rentabilidad por punto");
   assert.equal(navTarget("abre la rentabilidad que tiene Zamora ahora mismo", SEARCH_INDEX)?.link.label, "Rentabilidad por punto");
 });
+
+// En el celular: «abre productos» abrió «Productos sin movimiento» (empataban y ganaba la primera de la lista).
+test("entre parecidos gana el nombre completo y una página antes que una acción", async () => {
+  const { SEARCH_INDEX } = await import("@/lib/search-index");
+  const links = [...SEARCH_INDEX, { href: "/dashboard/products", label: "Productos", perms: [] }, { href: "/dashboard/clientes", label: "Clientes", perms: [] }];
+  assert.equal(navTarget("abre productos", links)?.link.label, "Productos");
+  assert.equal(navTarget("abre los productos", links)?.link.label, "Productos");
+  assert.equal(navTarget("abre clientes", links)?.link.label, "Clientes");
+  assert.equal(navTarget("nuevo traslado", links)?.link.label, "Nuevo traslado");
+  assert.equal(navTarget("abre los gastos", links)?.link.label, "Gastos");
+});
