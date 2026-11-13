@@ -892,7 +892,8 @@ export const RELEASES: Release[] = [
   {
     id: 85, date: "2026-11-12", title: "🎙️ REM: arma traslados hablando",
     summary: "Toca 🎙️ REM arriba y di «quiero hacer un traslado». REM te contesta con voz, entiende de dónde a dónde, las referencias dichas («tres de la A B guion doce cuarenta») y te lee opciones si hay varias. Nada se envía sin que digas «sí».",
-    paths: ["/dashboard/inventario"],
+    // REM está en el encabezado de todas las páginas del panel.
+    paths: ["/dashboard"],
     demo: [
       { icon: "🎙️", text: "Toca REM y di: quiero hacer un traslado" },
       { icon: "🏬", text: "«De bodega principal a Zamora»" },
@@ -903,7 +904,7 @@ export const RELEASES: Release[] = [
   {
     id: 86, date: "2026-11-13", title: "🎙️ REM ahora también en conteos, pedidos internos, compras y POS",
     summary: "Dile a REM «quiero hacer un conteo», «un pedido interno», «registrar una compra» o «vender» y dicta los productos. En conteos: «zapatera hay doce». En compras: «diez de la AB-1240 a doce mil». Di «foto» para buscar con la cámara. Opcional: llamarlo diciendo «Oye REM».",
-    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/dashboard/pos"],
+    paths: ["/dashboard"],
     demo: [
       { icon: "🎙️", text: "Toca REM: «quiero hacer un conteo»" },
       { icon: "📋", text: "«Zapatera negra hay doce»" },
@@ -914,7 +915,7 @@ export const RELEASES: Release[] = [
   {
     id: 87, date: "2026-11-13", title: "🎙️ REM sigue solo al abrir el pedido interno",
     summary: "Al decirle «quiero pedir mercancía a la bodega», REM abre el nuevo pedido y sigue la conversación sin que lo vuelvas a tocar. Dentro de la ventana del pedido hay un botón 🎙️ REM para llamarlo.",
-    paths: ["/dashboard/pedidos"],
+    paths: ["/dashboard"],
     demo: [
       { icon: "🎙️", text: "«Quiero pedir mercancía a la bodega»" },
       { icon: "📦", text: "Se abre el pedido y REM pregunta los productos" },
