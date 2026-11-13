@@ -212,8 +212,8 @@ export function NewStockRequest({
       title: "Pedido interno",
       examples: ["Pídele a la bodega principal", "Cinco de la A B guion doce cuarenta", "La dos (cuando te lea opciones)", "Cambia la zapatera a tres · Quita el último", "Urgente · Nota: para el sábado", "Foto", "Listo → ¿Lo envío? → Sí"],
       intro: () => (to ? `Pedido a ${toName.toLowerCase()}. Dime los productos y cuántos.` : "¿A quién le pides? Di, por ejemplo: a la bodega principal."),
-      search: async (q) => {
-        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: to || null, p_in_stock: false, p_limit: 6 });
+      search: async (q, limit) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: to || null, p_in_stock: false, p_limit: limit ?? 6 });
         return ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null; wh_qty: number; active?: boolean }>).map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: Number(h.wh_qty ?? 0) }));
       },
       lines: lines.map((l) => ({ id: l.product_id, name: l.name, sku: l.sku, qty: l.qty })),

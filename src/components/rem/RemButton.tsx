@@ -11,9 +11,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { bargeInSupported, beep, listen, listenWhile, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
+import { beep, capture, fullDuplex, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
-import { isQuickAnswer, normalize } from "@/lib/voice/spanish";
+import { normalize } from "@/lib/voice/spanish";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 type Turn = { who: "you" | "rem"; text: string };
@@ -113,27 +113,30 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     setOpen(false);
   }
 
-  /**
-   * Dice la respuesta. Mientras habla escucha (en computador): si oye una respuesta corta («sí, esa», «no»,
-   * «la dos»), se calla y la devuelve para usarla sin esperar a que termine.
-   */
-  async function say(id: number, r: RemReply): Promise<string[] | null> {
-    if (session.current !== id) return null;
+  /** Dice algo sin esperar respuesta. */
+  async function say(id: number, r: RemReply) {
+    if (session.current !== id) return;
     add("rem", r.show ?? r.say);
     setPhase("speaking");
-    let early: string[] | null = null;
-    const stopBarge = !r.end && bargeInSupported()
-      ? listenWhile((alts) => {
-          const hit = alts.find((x) => isQuickAnswer(x));
-          if (!hit || session.current !== id) return false;
-          early = [hit, ...alts.filter((x) => x !== hit)];
-          stopSpeaking();
-          return true;
-        })
-      : null;
     await speak(r.say);
-    stopBarge?.();
-    return session.current === id ? early : null;
+  }
+
+  function heard(id: number, alts: string[]): string[] | null {
+    if (session.current !== id) return null;
+    setInterim("");
+    if (alts[0]) add("you", alts[0]);
+    return alts;
+  }
+
+  function failed(id: number, err: unknown): null {
+    if (session.current !== id) return null;
+    const msg = err instanceof VoiceError && err.code === "permission"
+      ? "Dale permiso al micrófono: toca el candado junto a la dirección → Micrófono → Permitir."
+      : err instanceof Error ? err.message : "No se pudo escuchar.";
+    setError(msg);
+    setPhase("idle");
+    setInterim("");
+    return null;
   }
 
   /** Escucha una frase. null si se canceló la conversación. */
@@ -143,19 +146,37 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     setInterim("");
     beep("listen");
     try {
-      const alts = await listen({ onInterim: (t) => { if (session.current === id) setInterim(t); } });
-      if (session.current !== id) return null;
-      setInterim("");
-      if (alts[0]) add("you", alts[0]);
-      return alts;
+      return heard(id, await listen({ onInterim: (t) => { if (session.current === id) setInterim(t); } }));
     } catch (err) {
-      if (session.current !== id) return null;
-      const msg = err instanceof VoiceError && err.code === "permission"
-        ? "Dale permiso al micrófono: toca el candado junto a la dirección → Micrófono → Permitir."
-        : err instanceof Error ? err.message : "No se pudo escuchar.";
-      setError(msg);
-      setPhase("idle");
-      return null;
+      return failed(id, err);
+    }
+  }
+
+  /**
+   * Dice la respuesta y escucha la contestación. En computador escucha desde que empieza a hablar:
+   * si la persona habla encima, REM se calla al instante y oye la frase completa (con pausas).
+   * En celular escucha al terminar (tocar 🔊 lo calla antes). null si se canceló la conversación.
+   */
+  async function turn(id: number, r: RemReply): Promise<string[] | null> {
+    if (!fullDuplex()) { await say(id, r); return hearOnce(id); }
+    if (session.current !== id) return null;
+    add("rem", r.show ?? r.say);
+    setPhase("speaking");
+    setInterim("");
+    const cap = capture({
+      echo: r.say,
+      onUserStart: () => { if (session.current !== id) return; stopSpeaking(); setPhase("listening"); },
+      onInterim: (t) => { if (session.current === id) setInterim(t); },
+    });
+    await speak(r.say);
+    if (session.current !== id) { cap.cancel(); return null; }
+    if (!cap.started()) beep("listen");
+    setPhase("listening");
+    cap.listening();
+    try {
+      return heard(id, await cap.result);
+    } catch (err) {
+      return failed(id, err);
     }
   }
 
@@ -208,8 +229,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
       else {
         let tries = 0;
         for (;;) {
-          await say(id, { say: tries ? "Puedo ayudarte con traslados, conteos, pedidos internos, compras y ventas. ¿Cuál?" : "Hola, soy REM. ¿Qué hacemos?" });
-          said = (await hearOnce(id)) ?? undefined;
+          said = (await turn(id, { say: tries ? "Puedo ayudarte con traslados, conteos, pedidos internos, compras y ventas. ¿Cuál?" : "Hola, soy REM. ¿Qué hacemos?" })) ?? undefined;
           if (!said) return;
           const t = normalize(said[0] ?? "");
           if (!t || STOP.test(t)) {
@@ -227,12 +247,8 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
 
     let misses = 0;
     for (;;) {
-      const early = await say(id, reply);
-      if (session.current !== id) return;
-      if (reply.end) return stop();
-      // Si lo interrumpió con «sí, esa», esa es la respuesta.
-      if (early?.[0]) add("you", early[0]);
-      const alts = early ?? await hearOnce(id);
+      if (reply.end) { await say(id, reply); if (session.current === id) stop(); return; }
+      const alts = await turn(id, reply);
       if (!alts) return;
       if (!alts.length) {
         if (++misses >= 2) { await say(id, { say: "Te espero. Toca REM cuando quieras seguir." }); return stop(); }
@@ -273,8 +289,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     pending.current = null;
     const id = ++session.current;
     setError(null);
-    await say(id, { say: "Prueba: di «Oye REM» como lo dirías." });
-    const alts = await hearOnce(id);
+    const alts = await turn(id, { say: "Prueba: di «Oye REM» como lo dirías." });
     if (!alts) return;
     const hit = alts.find((a) => wakeRest(a) !== null);
     await say(id, hit
@@ -292,7 +307,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   }
 
   const color = phase === "listening" ? "#ef4444" : phase === "speaking" ? "#8b5cf6" : phase === "thinking" ? "#f59e0b" : "var(--t-accent, #8b5cf6)";
-  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? (bargeInSupported() ? "Hablando… (puedes contestarle ya)" : "Hablando… (toca 🔊 para contestar)") : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
+  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? (fullDuplex() ? "Hablando… puedes interrumpirlo" : "Hablando… toca 🔊 para contestar ya") : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
 
   return (
     <>
@@ -321,6 +336,21 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
             </div>
             <button type="button" onClick={close} className="rounded-full px-2 py-1 text-sm" aria-label="Cerrar REM">✕</button>
           </div>
+          {/* «Oye REM» a la vista: encendido / apagado y lo último que oyó esperando. */}
+          <div className="flex items-center gap-2 border-b px-4 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", background: wakeOn ? "color-mix(in oklab, #10b981 8%, transparent)" : undefined }}>
+            <button type="button" role="switch" aria-checked={wakeOn} onClick={() => toggleWake(!wakeOn)}
+              className="relative h-5 w-9 shrink-0 rounded-full transition" style={{ background: wakeOn ? "#10b981" : "color-mix(in oklab, var(--t-text) 25%, transparent)" }}
+              title={wakeOn ? "Apagar «Oye REM»" : "Encender «Oye REM»: llamarlo sin tocar"}>
+              <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all" style={{ left: wakeOn ? "1.125rem" : "0.125rem" }} />
+            </button>
+            <span className="min-w-0 flex-1 truncate" style={{ color: "var(--t-muted)" }} title={lastHeard || undefined}>
+              <b style={{ color: "var(--t-text)" }}>«Oye REM»</b>{" "}
+              {!wakeOn ? "apagado · enciéndelo para llamarme sin tocar"
+                : wakeBlocked ? "· toca la pantalla una vez para que pueda escuchar"
+                : phase !== "idle" ? "· vuelve a escuchar al terminar"
+                : lastHeard ? `· oí: «${lastHeard}»` : "· escuchando… di «Oye REM»"}
+            </span>
+          </div>
           <div ref={logRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm">
             {turns.map((t, i) => (
               <div key={i} className={t.who === "you" ? "flex justify-end" : "flex"}>
@@ -341,19 +371,15 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
               {(examples.length ? examples : ["Quiero hacer un traslado", "Quiero hacer un conteo", "Quiero hacer un pedido interno", "Registrar una compra", "Vender"]).map((e) => <li key={e}>{e}</li>)}
               <li>«Foto»: busca el producto con la cámara</li>
             </ul>
-            <p className="mt-1">Nada se guarda ni se envía sin que digas «sí». Habla cuando suene el pitido.</p>
-            <label className="mt-2 flex items-start gap-2 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
-              <input type="checkbox" className="mt-0.5" checked={wakeOn} onChange={(e) => toggleWake(e.target.checked)} />
-              <span>
-                <b>Llamarlo diciendo «Oye REM»</b> en este equipo.
-                <span className="block" style={{ color: "var(--t-muted)" }}>Escucha solo con RemHub abierto y a la vista. Gasta más batería; mejor en computador o tablet fija.</span>
-              </span>
-            </label>
+            <p className="mt-1">
+              Nada se guarda ni se envía sin que digas «sí». {fullDuplex() ? "Puedes hablarle encima: se calla y te escucha." : "Toca 🔊 para que se calle y te escuche."}
+              {" "}Si no encuentra algo exacto, te pregunta; si le corriges («no, es la VTS 30»), aprende en este equipo.
+            </p>
+            <p className="mt-1">«Oye REM» escucha solo con RemHub abierto y a la vista. Gasta más batería; mejor en computador o tablet fija.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => void testWake()} disabled={phase !== "idle"} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
                 🧪 Probar «Oye REM»
               </button>
-              {wakeOn && lastHeard ? <span className="min-w-0 flex-1 truncate" title={lastHeard}>Lo último que oí: «{lastHeard}»</span> : null}
             </div>
           </details>
         </div>,

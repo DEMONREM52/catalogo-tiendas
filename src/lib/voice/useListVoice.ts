@@ -3,14 +3,18 @@
 /**
  * REM para pantallas que son «una lista de productos con cantidad»: conteos, pedidos internos, compras y POS.
  * Cada pantalla da un adaptador (cómo buscar, cómo poner la cantidad, qué hacer al decir «listo»);
- * aquí está la conversación: buscar lo dicho, leer opciones, preguntar cuántas, corregir, resumir y confirmar.
+ * aquí está la conversación:
+ *   · encontrar lo dicho aunque el reconocimiento lo escriba mal (src/lib/voice/fuzzy.ts): si está seguro lo
+ *     agrega; si duda pregunta «¿Estás intentando decir…?»; si hay varios parecidos lee opciones;
+ *   · corregir lo último («no», «esa no, la VTS 30», «de la referencia…») y aprender de la corrección;
+ *   · cantidades, quitar, resumir, foto y terminar.
  * Nunca guarda ni envía sin un «sí» dicho.
  */
 
 import { useEffect, useRef } from "react";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "./rem";
-import { compactCode, normalize, parseTransferCommand, plural, spokenReference, type TransferCommand } from "./spanish";
-import { guessMode, guessSpoken } from "./fuzzy";
+import { compactCode, normalize, parseCorrection, parseTransferCommand, plural, spokenReference, type TransferCommand } from "./spanish";
+import { forget, learn, resolveSpoken, type Ranked } from "./fuzzy";
 
 export type VoiceHit = { id: string; name: string; sku: string | null; barcode?: string | null; /** Existencias (null = no se sabe o no se dice). */ avail: number | null };
 export type VoiceLine = { id: string; name: string; sku: string | null; qty: number };
@@ -20,8 +24,8 @@ export type ListVoiceAdapter = {
   examples: string[];
   /** Primera frase (qué se está haciendo). */
   intro: () => string;
-  /** Busca con una frase (se llama con lo dicho y con la referencia armada). */
-  search: (q: string) => Promise<VoiceHit[]>;
+  /** Busca con una frase. `limit`: cuántos traer (REM pide más cuando prueba variantes). */
+  search: (q: string, limit?: number) => Promise<VoiceHit[]>;
   lines: VoiceLine[];
   /** Pone la cantidad total de un producto (lo agrega si no estaba). `extra` viene de `preparse`. */
   put: (hit: VoiceHit, qty: number, extra?: Record<string, number>) => void;
@@ -45,16 +49,25 @@ export type ListVoiceAdapter = {
   doneSay?: () => string;
 };
 
+/** Cómo se llegó a un producto: para aprender si se confirma o se corrige. */
+type Ask = { query: string; qty: number | null; add: boolean; extra?: Record<string, number>; learnAlso?: string };
+
 type Pending =
-  | { type: "choice"; hits: VoiceHit[]; qty: number | null; add: boolean; extra?: Record<string, number> }
+  | ({ type: "choice"; hits: VoiceHit[] } & Ask)
   | { type: "qty"; hit: VoiceHit; add: boolean; extra?: Record<string, number> }
-  /** No se encontró exacto: «¿Estás intentando decir…?» por cada parecido, en orden. */
-  | { type: "guess"; hits: VoiceHit[]; index: number; qty: number | null; add: boolean; extra?: Record<string, number> }
   | { type: "overdraw"; hit: VoiceHit; qty: number; extra?: Record<string, number> }
+  /** «¿Estás intentando decir…?» por cada parecido, en orden. */
+  | ({ type: "guess"; ranked: Ranked<VoiceHit>[]; index: number } & Ask)
   | { type: "submit" }
   | null;
 
+/** Lo último que REM agregó por voz (para «no», «esa no, la…»). */
+type LastAdd = { turn: number; hit: VoiceHit; prevQty: number; ask: Ask; others: Ranked<VoiceHit>[]; learned: boolean };
+type AddFrom = Omit<LastAdd, "turn" | "hit" | "prevQty">;
+
 const short = (name: string) => name.toLowerCase().split(/\s+/).slice(0, 6).join(" ");
+const spokenName = (h: { name: string; sku: string | null }) =>
+  `${h.name.toLowerCase()}${h.sku && !normalize(h.name).includes(normalize(h.sku)) ? `, código ${h.sku}` : ""}`;
 
 /** Busca lo dicho tal cual y como referencia; si un código coincide exacto, ese es. */
 export async function searchSpokenWith(search: (q: string) => Promise<VoiceHit[]>, spoken: string): Promise<VoiceHit[]> {
@@ -95,7 +108,10 @@ export function findSpokenLine<T extends { name: string; sku: string | null }>(l
  * un producto con la foto, para que REM pregunte cuántas (solo si REM pidió la foto).
  */
 export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null>, enabled: boolean) {
-  const st = useRef({ pending: null as Pending, awaiting: null as Parameters<typeof parseTransferCommand>[1], last: "", lastAdded: [] as string[], photo: false });
+  const st = useRef({
+    pending: null as Pending, awaiting: null as Parameters<typeof parseTransferCommand>[1], last: "", lastAdded: [] as string[],
+    photo: false, turn: 0, lastAdd: null as LastAdd | null,
+  });
   const pickedRef = useRef<(hit: VoiceHit) => boolean>(() => false);
 
   useEffect(() => {
@@ -105,8 +121,12 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
     const reply = (say: string, extra: Partial<RemReply> = {}): RemReply => { s.last = say; return { say, ...extra }; };
     const qtyOf = (id: string) => A().lines.find((l) => l.id === id)?.qty ?? 0;
     const clear = () => { s.pending = null; s.awaiting = null; };
+    const remember = (ask: Ask, hit: VoiceHit) => {
+      learn(ask.query, hit);
+      if (ask.learnAlso) learn(ask.learnAlso, hit);
+    };
 
-    function apply(hit: VoiceHit, qty: number, add: boolean, extra?: Record<string, number>, force = false): RemReply {
+    function apply(hit: VoiceHit, qty: number, add: boolean, extra?: Record<string, number>, force = false, from?: AddFrom): RemReply {
       const a = A();
       const had = qtyOf(hit.id);
       const want = add ? had + qty : qty;
@@ -119,35 +139,39 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
       a.put(hit, want, extra);
       clear();
       s.lastAdded = [...s.lastAdded.filter((x) => x !== hit.id), hit.id];
+      s.lastAdd = from ? { ...from, turn: s.turn, hit, prevQty: had } : null;
       return reply(`${want} de ${short(hit.name)}.${add && had ? ` Ahora van ${want}.` : ""} ¿Siguiente?`);
     }
 
-    function chosen(hit: VoiceHit, qty: number | null, add: boolean, extra?: Record<string, number>): RemReply {
+    function chosen(hit: VoiceHit, qty: number | null, add: boolean, extra?: Record<string, number>, from?: AddFrom): RemReply {
       if (qty === null) {
         s.pending = { type: "qty", hit, add, extra };
         s.awaiting = "qty";
+        s.lastAdd = null;
         const stock = A().revealStock && hit.avail !== null ? `, ${A().stockWord ?? "hay"} ${hit.avail}` : "";
         return reply(`${short(hit.name)}${stock}. ¿Cuántas?`);
       }
-      return apply(hit, qty, add, extra);
+      return apply(hit, qty, add, extra, false, from);
     }
 
     function askGuess(p: Extract<Pending, { type: "guess" }>, lead = ""): RemReply {
       s.pending = p;
       s.awaiting = "confirm";
-      const h = p.hits[p.index];
-      const sku = h.sku && !normalize(h.name).includes(normalize(h.sku)) ? `, código ${h.sku}` : "";
-      return reply(`${lead}¿Estás intentando decir ${h.name.toLowerCase()}${sku}?`, { show: `${lead}¿Estás intentando decir «${h.name}»${h.sku ? ` (${h.sku})` : ""}? Di sí o no.` });
+      const h = p.ranked[p.index].hit;
+      const stock = A().revealStock && h.avail !== null ? ` (${A().stockWord ?? "hay"} ${h.avail})` : "";
+      return reply(`${lead}¿Estás intentando decir ${spokenName(h)}?`, {
+        show: `${lead}¿Estás intentando decir «${h.name}»${h.sku ? ` · ${h.sku}` : ""}${stock}? Di sí o no.`,
+      });
     }
 
-    function askChoice(hits: VoiceHit[], qty: number | null, add: boolean, extra?: Record<string, number>, lead = ""): RemReply {
+    function askChoice(hits: VoiceHit[], ask: Ask, lead = ""): RemReply {
       const top = hits.slice(0, 3);
-      s.pending = { type: "choice", hits: top, qty, add, extra };
+      s.pending = { type: "choice", hits: top, ...ask };
       s.awaiting = "choice";
       const nums = ["uno", "dos", "tres"];
       const reveal = A().revealStock;
       return reply(`${lead}Encontré ${top.length}: ${top.map((h, i) => `${nums[i]}, ${short(h.name)}${h.sku ? ` ${h.sku}` : ""}`).join("; ")}. ¿Cuál? O di ninguno.`,
-        { show: `Encontré ${top.length}:\n${top.map((h, i) => `${i + 1}. ${h.name}${h.sku ? ` · ${h.sku}` : ""}${reveal && h.avail !== null ? ` (${A().stockWord ?? "hay"} ${h.avail})` : ""}`).join("\n")}` });
+        { show: `${lead}Encontré ${top.length}:\n${top.map((h, i) => `${i + 1}. ${h.name}${h.sku ? ` · ${h.sku}` : ""}${reveal && h.avail !== null ? ` (${A().stockWord ?? "hay"} ${h.avail})` : ""}`).join("\n")}` });
     }
 
     function summary(): RemReply {
@@ -167,14 +191,52 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
       return reply(a.doneSay?.() ?? `${summary().say} Revisa en pantalla.`, { end: true });
     }
 
+    /** Deshace lo último que REM agregó (vuelve a la cantidad de antes) y olvida si venía de lo aprendido. */
+    function revert(last: LastAdd) {
+      const a = A();
+      if (last.prevQty > 0) a.put(last.hit, last.prevQty);
+      else a.remove(last.hit.id);
+      s.lastAdded = s.lastAdded.filter((x) => x !== last.hit.id);
+      s.lastAdd = null;
+      if (last.learned) forget(last.ask.query);
+    }
+
+    /** De lo dicho al producto: seguro → se agrega; duda → pregunta; varios → opciones. */
+    async function resolveAndAdd(ask: Ask, alts: string[], lead = ""): Promise<RemReply> {
+      const a = A();
+      const res = await resolveSpoken<VoiceHit>((q, limit) => a.search(q, limit), [ask.query, ...alts]);
+      if (res.kind === "sure") {
+        if (ask.learnAlso) learn(ask.learnAlso, res.hit);
+        const learned = res.ranked[0]?.hit.id === res.hit.id && res.ranked[0].score === 1;
+        const r = chosen(res.hit, ask.qty, ask.add, ask.extra, { ask, others: res.ranked.filter((x) => x.hit.id !== res.hit.id), learned });
+        return lead ? { ...r, say: `${lead}${r.say}`, show: `${lead}${r.show ?? r.say}` } : r;
+      }
+      if (res.kind === "ask") return askGuess({ type: "guess", ranked: res.ranked, index: 0, ...ask }, lead);
+      if (res.kind === "choose") return askChoice(res.ranked.map((r) => r.hit), ask, `${lead}No lo encontré exacto. `);
+      return reply(`${lead}No encontré «${ask.query}». Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
+    }
+
     async function hear(alts: string[]): Promise<RemReply> {
       const a = A();
+      s.turn++;
       const raw = alts[0] ?? "";
       const own = await a.custom?.(normalize(raw).replace(/^(?:oye |hey )?rem\b\s*/, ""));
       if (own) { s.last = own.say; return own; }
       const pre = a.preparse ? a.preparse(raw) : { text: raw };
-      const cmd: TransferCommand = parseTransferCommand(pre.text, s.awaiting);
       const p = s.pending;
+      const justAdded = s.lastAdd && s.lastAdd.turn === s.turn - 1 ? s.lastAdd : null;
+
+      // Corrección de lo que REM acaba de agregar: «esa no, la VTS 30», «de la referencia vts 30», «me refiero a…».
+      if (!p && justAdded) {
+        const fix = parseCorrection(pre.text);
+        if (fix) {
+          revert(justAdded);
+          const ask: Ask = { ...justAdded.ask, query: fix.query, qty: fix.qty ?? justAdded.ask.qty, learnAlso: justAdded.ask.query };
+          return resolveAndAdd(ask, [], `Quité ${short(justAdded.hit.name)}. `);
+        }
+      }
+
+      const cmd: TransferCommand = parseTransferCommand(pre.text, s.awaiting);
       switch (cmd.kind) {
         case "stop": clear(); return reply("Listo. Lo que llevas queda en pantalla.", { end: true });
         case "help": return reply(`Puedes decir, por ejemplo: ${a.examples.slice(0, 4).join("; ")}.`);
@@ -191,12 +253,17 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           if (cmd.index === 0) { clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
           const hit = p.hits[cmd.index - 1];
           if (!hit) return reply(`Solo hay ${p.hits.length} opciones. ¿Cuál?`);
-          return chosen(hit, p.qty, p.add, p.extra);
+          remember(p, hit);
+          return chosen(hit, p.qty, p.add, p.extra, { ask: p, others: [], learned: false });
         }
         case "number": {
           if (p?.type === "qty") return apply(p.hit, cmd.value, p.add, p.extra ?? pre.extra);
           // «¿Estás intentando decir…?» → «cinco»: ese, con esa cantidad.
-          if (p?.type === "guess") return chosen(p.hits[p.index], cmd.value, p.add, p.extra);
+          if (p?.type === "guess") {
+            const hit = p.ranked[p.index].hit;
+            remember(p, hit);
+            return chosen(hit, cmd.value, p.add, p.extra, { ask: p, others: [], learned: false });
+          }
           if (p?.type === "choice") return hear([`la ${cmd.value}`]);
           if (p?.type === "overdraw") return apply(p.hit, Math.min(cmd.value, p.qty), false, p.extra);
           const lastId = s.lastAdded.at(-1);
@@ -206,8 +273,12 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         }
         case "yes": {
           if (p?.type === "overdraw") return apply(p.hit, p.qty, false, p.extra, true);
-          if (p?.type === "guess") return chosen(p.hits[p.index], p.qty, p.add, p.extra);
-          if (p?.type === "choice" && p.hits.length === 1) return chosen(p.hits[0], p.qty, p.add, p.extra);
+          if (p?.type === "guess") {
+            const hit = p.ranked[p.index].hit;
+            remember(p, hit);
+            return chosen(hit, p.qty, p.add, p.extra, { ask: p, others: p.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
+          }
+          if (p?.type === "choice" && p.hits.length === 1) { remember(p, p.hits[0]); return chosen(p.hits[0], p.qty, p.add, p.extra); }
           if (p?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (p?.type === "submit" && a.submit) {
             clear();
@@ -220,12 +291,19 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         case "no": {
           if (p?.type === "submit") { clear(); return reply("Bueno, todavía no. Sigue o corrige lo que necesites."); }
           if (p?.type === "guess") {
-            if (p.index + 1 < p.hits.length) return askGuess({ ...p, index: p.index + 1 }, "¿Entonces ");
+            if (p.index + 1 < p.ranked.length) return askGuess({ ...p, index: p.index + 1 }, "¿Entonces ");
             clear();
             return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
           }
           if (p?.type === "choice") { clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
           if (p) { clear(); return reply("Bueno, no lo agrego. ¿Siguiente?"); }
+          // «No» justo después de que REM agregó algo: lo quita y pregunta por el siguiente parecido.
+          if (justAdded) {
+            revert(justAdded);
+            const next = justAdded.others.filter((r) => r.score >= 0.45);
+            if (next.length) return askGuess({ type: "guess", ranked: next, index: 0, ...justAdded.ask }, `Quité ${short(justAdded.hit.name)}. `);
+            return reply(`Quité ${short(justAdded.hit.name)}. Dímelo de otra forma, o di foto.`);
+          }
           return reply("Bueno. ¿Qué hacemos?");
         }
         case "undo": {
@@ -233,6 +311,7 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           const line = a.lines.find((l) => l.id === id);
           if (!line) return reply("No hay nada que quitar.");
           a.remove(line.id);
+          s.lastAdd = null;
           return reply(`Quité ${short(line.name)}.`);
         }
         case "remove": {
@@ -245,36 +324,26 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         case "set_qty": {
           const line = cmd.query ? findSpokenLine(a.lines, cmd.query) : a.lines.find((l) => l.id === s.lastAdded.at(-1)) ?? a.lines.at(-1);
           // «La zapatera son seis» y no está: se busca y se pone.
-          if (!line && cmd.query) return addSpoken({ kind: "add", qty: cmd.qty, query: cmd.query, to: null, exact: true }, alts, pre.extra);
+          if (!line && cmd.query) return resolveAndAdd({ query: cmd.query, qty: cmd.qty, add: false, extra: pre.extra }, []);
           if (!line) return reply("Todavía no hay productos.");
           return apply({ id: line.id, name: line.name, sku: line.sku, avail: null }, cmd.qty, false, pre.extra);
         }
         case "done": return finish();
-        case "add": return addSpoken(cmd, alts, pre.extra);
-        case "notes": case "carrier": case "checker": case "route": case "destination":
-          return reply("Eso no lo uso aquí. Dime un producto con su cantidad, o di listo.");
+        case "add": {
+          if (p?.type === "qty" || p?.type === "guess" || p?.type === "choice") clear();
+          const query = cmd.to ? `${cmd.query} para ${cmd.to}` : cmd.query;
+          const others = alts.slice(1).map((alt) => parseTransferCommand(a.preparse ? a.preparse(alt).text : alt, null))
+            .filter((c): c is Extract<TransferCommand, { kind: "add" }> => c.kind === "add").map((c) => c.query);
+          return resolveAndAdd({ query, qty: cmd.qty, add: !cmd.exact, extra: pre.extra }, others);
+        }
+        // En una lista no hay ruta ni responsables: «de la AB-1240», «para el sábado»… se toma como producto.
+        case "route": case "destination": case "notes": case "carrier": case "checker": {
+          const text = normalize(pre.text).replace(/^(?:de|del|desde|para|hacia) (?:la |el |los |las )?/, "");
+          const c = parseTransferCommand(text, null);
+          if (c.kind === "add") return resolveAndAdd({ query: c.query, qty: c.qty, add: true, extra: pre.extra }, []);
+          return reply("Dime un producto con su cantidad, o di listo.");
+        }
       }
-    }
-
-    async function addSpoken(cmd: Extract<TransferCommand, { kind: "add" }>, alts: string[], extra?: Record<string, number>): Promise<RemReply> {
-      const a = A();
-      const query = cmd.to ? `${cmd.query} para ${cmd.to}` : cmd.query;
-      let hits = await searchSpokenWith(a.search, query);
-      for (const alt of alts.slice(1)) {
-        if (hits.length) break;
-        const c = parseTransferCommand(a.preparse ? a.preparse(alt).text : alt, null);
-        if (c.kind === "add") hits = await searchSpokenWith(a.search, c.query);
-      }
-      if (!hits.length) {
-        // No salió exacto: variantes que suenan igual («bts» → «VTS»), en singular y por partes.
-        const guesses = await guessSpoken(a.search, query);
-        const mode = guessMode(guesses);
-        if (mode === "ask") return askGuess({ type: "guess", hits: guesses.filter((g) => g.score >= 0.5).map((g) => g.hit).slice(0, 3), index: 0, qty: cmd.qty, add: !cmd.exact, extra });
-        if (mode === "choose") return askChoice(guesses.map((g) => g.hit), cmd.qty, !cmd.exact, extra, "No lo encontré exacto. ");
-        return reply(`No encontré «${query}». Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
-      }
-      if (hits.length === 1) return chosen(hits[0], cmd.qty, !cmd.exact, extra);
-      return askChoice(hits, cmd.qty, !cmd.exact, extra);
     }
 
     pickedRef.current = (hit) => {
@@ -293,10 +362,16 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
       start: async (first) => {
         clear();
         s.photo = false;
+        s.lastAdd = null;
         const intro = reply(A().intro());
         if (!first?.length) return intro;
         const r = await hear(first);
-        return /^(?:Eso no lo uso|No encontré)/.test(r.say) ? intro : r;
+        // «Quiero hacer un pedido interno», «vender»: lo que abrió la pantalla no es un producto (salvo que lo traiga:
+        // «quiero vender tres secadores»). Si no se encontró seguro, se empieza normal.
+        const opener = /traslad|conteo|contar|pedido|pedir|mercancia|compra|factura|vend|venta|\bpos\b|caja/.test(normalize(first[0] ?? ""));
+        const unsure = s.pending?.type === "guess" || s.pending?.type === "choice";
+        if (/^(?:No encontré|Dime un producto)/.test(r.say) || (opener && unsure)) { clear(); return intro; }
+        return r;
       },
       hear,
     });

@@ -952,6 +952,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Interrúmpelo: «sí, esa»" },
     ],
   },
+  {
+    id: 91, date: "2026-11-13", title: "🎙️ REM más inteligente: pregunta cuando duda, aprende y te deja hablar encima",
+    summary: "REM ya no agrega un producto que no se parece a lo que dijiste: si duda, pregunta. Si te equivocas o se equivoca, dile «no» o «esa no, la VTS 30» y lo corrige; lo que le confirmas o corriges lo aprende. En el computador puedes hablarle encima: se calla y te escucha la frase completa, aunque hagas pausas. «Oye REM» ahora está arriba en el panel, con interruptor.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🤔", text: "«Cinco cámaras vtf 30» → ¿Estás intentando decir…?" },
+      { icon: "✋", text: "«No, es la VTS 30»: quita y corrige" },
+      { icon: "🧠", text: "La próxima vez la encuentra sola" },
+      { icon: "👂", text: "Interruptor «Oye REM» arriba en el panel" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

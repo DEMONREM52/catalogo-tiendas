@@ -304,7 +304,9 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
     if (m) return { kind: "route", from: m[1], to: m[2] ?? null };
   }
   if (awaiting === "to" && !/^(?:de|desde)\b/.test(t)) return { kind: "route", from: null, to: t.replace(/^(?:para|hacia|hasta|a) /, "").replace(/^(?:la|el) /, "") };
-  if (route && (route[1] || route[2]) && /^(?:quiero|vamos|voy|hacer|crear|armar|un|traslado|trasladar|distribucion|enviar|mandar|sale|desde|de )/.test(t) && !/^de \d/.test(t)) {
+  // «de la referencia vts 30» o «de la AB-1240» es un producto, no de dónde sale.
+  const productish = /^(?:de|del) (?:la |el |las |los )?(?:referencias?|ref|codigos?|cod)\b/.test(t) || /^de \d/.test(t);
+  if (route && (route[1] || route[2]) && /^(?:quiero|vamos|voy|hacer|crear|armar|un|traslado|trasladar|distribucion|enviar|mandar|sale|desde|de )/.test(t) && !productish) {
     return { kind: "route", from: route[1]?.trim() || null, to: route[2]?.trim() || null };
   }
   if (/^(?:quiero |vamos a |voy a )?(?:hacer |crear |armar )?(?:un |otro )?(?:traslado|trasladar|distribucion)$/.test(t)) return { kind: "route", from: null, to: null };
@@ -346,10 +348,27 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   }
   query = query.replace(/^(?:la |el |los |las |un |una |unos |unas )/, "")
     // «cámaras triple de la referencia vts 30» → «cámaras triple vts 30»: «referencia» no está en el producto.
-    .replace(/(?:^|\s)(?:de |del )?(?:la |el )?(?:referencia|ref|codigo|cod)(?: numero)?(?=\s|$)/g, " ")
+    .replace(/(?:^|\s)(?:de |del )?(?:la |el |las |los )?(?:referencias?|ref|codigos?|cod)(?: numero)?(?=\s|$)/g, " ")
     .replace(/\s+/g, " ").trim();
   if (!query) return qty !== null ? { kind: "number", value: qty } : { kind: "repeat" };
   return { kind: "add", qty, query, to };
+}
+
+/**
+ * Corrección de lo último que se agregó: «no, es la VTS 30», «esa no, la zapatera negra», «me refiero a la AB-1240»,
+ * «de la referencia vts 30» (completa lo anterior). Devuelve qué buscar (y la cantidad si la dijo). null si no es corrección.
+ */
+export function parseCorrection(raw: string): { query: string; qty: number | null } | null {
+  const t = clean(raw);
+  if (!t || DONE.test(t) || isYes(t) || NO.test(t) || STOP.test(t)) return null;
+  const m = t.match(/^(?:no |nono )?(?:(?:esa|ese|eso) no |no (?:es )?(?:esa|ese|eso) )?(?:es|era|seria|me refiero a|me referia a|quise decir|quiero decir|dije|te dije|lo que dije es|lo que pedi es|pedi|te pedi|hablo de|hablaba de)\s+(?:la |el |los |las |un |una )?(.+)$/)
+    ?? t.match(/^(?:no|esa no|ese no|no esa|no ese|nono)\s+(?:la |el |los |las |un |una )(.+)$/)
+    ?? t.match(/^(?:de|del) (?:la |el |las |los )?((?:referencias?|ref|codigos?|cod)\s+.+)$/);
+  if (!m) return null;
+  const cmd = parseTransferCommand(m[1], null);
+  if (cmd.kind === "add") return { query: cmd.query, qty: cmd.qty };
+  if (cmd.kind === "route" || cmd.kind === "destination") return { query: m[1], qty: null };
+  return null;
 }
 
 /** Cifras dichas en voz alta («3» → «tres» no hace falta: la voz del celular lee cifras). Plural sencillo. */

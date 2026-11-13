@@ -525,8 +525,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       title: "Compra",
       examples: ["Diez de la A B guion doce cuarenta a doce mil", "Cinco secadores", "El costo es doce mil quinientos", "La dos (cuando te lea opciones)", "Cambia la zapatera a cuatro · Quita el último", "Foto", "Listo (registras en pantalla)"],
       intro: () => (form.lines.length ? `La factura lleva ${form.lines.length} productos. Dime más o di listo.` : "Dime los productos de la factura, cuántos y, si quieres, a cómo: diez de tal referencia a doce mil."),
-      search: async (q) => {
-        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: defaultWh || null, p_in_stock: false, p_limit: 6 });
+      search: async (q, limit) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: defaultWh || null, p_in_stock: false, p_limit: limit ?? 6 });
         const rows = (data ?? []) as ProductHit[];
         rows.forEach((h) => voiceHits.current.set(h.id, h));
         return rows.map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: null }));

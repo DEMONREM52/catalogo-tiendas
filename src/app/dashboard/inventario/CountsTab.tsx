@@ -174,8 +174,8 @@ function CountEditor({ ctx, id, onBack }: { ctx: ErpCtx; id: string; onBack: () 
       title: "Conteo",
       examples: ["Zapatera negra hay doce", "Tres de la A B guion doce cuarenta", "La dos (cuando te lea opciones)", "Cambia la zapatera a cinco · Quita el último", "¿Cuántos llevo?", "Foto", "Listo → ¿Guardo? → Sí"],
       intro: () => `Conteo de ${d.count.zone.toLowerCase()}. Dime cada producto y cuántos hay. Por ejemplo: zapatera negra hay doce.`,
-      search: async (q) => {
-        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: d.count.warehouse_id, p_in_stock: false, p_limit: 6 });
+      search: async (q, limit) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: d.count.warehouse_id, p_in_stock: false, p_limit: limit ?? 6 });
         return ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null }>).map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: null }));
       },
       lines: lines.map((l) => ({ id: l.pid, name: l.name, sku: l.sku, qty: l.counted })),

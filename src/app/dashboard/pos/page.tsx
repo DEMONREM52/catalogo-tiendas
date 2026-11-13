@@ -1885,12 +1885,12 @@ export default function PosPage() {
       title: "Venta",
       examples: ["Tres de la A B guion doce cuarenta", "Dos secadores", "La dos (cuando te lea opciones)", "Cambia la zapatera a cuatro · Quita el último", "¿Cuántos llevo?", "Foto", "Listo (cobras en pantalla)"],
       intro: () => (cart.length ? `Llevas ${cart.length} productos en el carrito. Dime más o di listo.` : "Dime los productos de la venta y cuántos."),
-      search: async (q) => {
+      search: async (q, limit) => {
         const term = q.trim().toLowerCase();
         const base = (pointStock ? activeProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 })) : activeProducts).filter((p) => (p.stock ?? 0) > 0);
         const exact = base.filter((p) => isExactCode(p, term));
         const rest = smartFilter(base.filter((p) => !exact.includes(p)), term, (p) => `${p.name} ${p.sku ?? ""} ${p.barcode ?? ""}`);
-        return [...exact, ...rest].slice(0, 6).map((p) => ({ id: p.id, name: p.name, sku: p.sku ?? null, barcode: p.barcode ?? null, avail: p.stock ?? null }));
+        return [...exact, ...rest].slice(0, limit ?? 6).map((p) => ({ id: p.id, name: p.name, sku: p.sku ?? null, barcode: p.barcode ?? null, avail: p.stock ?? null }));
       },
       lines: cart.map((i) => ({ id: i.productId, name: i.name, sku: productById.get(i.productId)?.sku ?? null, qty: i.qty })),
       put: (hit, qty) => {

@@ -21,12 +21,22 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 **En todas las pantallas:**
 - **Agregar:** «tres de la a be guion doce cuarenta» o «cinco secadores».
 - **Si hay varios parecidos:** REM lee hasta 3 opciones; se contesta «la dos» o «ninguno».
-- **Si no lo encuentra exacto** (el reconocedor escribió «bts 30» por «VTS30», o «cámaras» en plural): busca variantes que suenan igual (b/v, s/z/c, y/i, k/c/q, g/j, m/n), en singular y por partes, y ordena por parecido (`src/lib/voice/fuzzy.ts`, pruebas en `tests/voice/fuzzy.test.ts`).
-  - Uno claramente más parecido: «¿Estás intentando decir cámara de seguridad triple solar VTS30?». «Sí» lo agrega con la cantidad dicha; «no» pregunta por el siguiente parecido (hasta 3); un número lo agrega con esa cantidad.
-  - Varios igual de parecidos: «No lo encontré exacto. Encontré 3: …».
+- **Cómo encuentra el producto** (`resolveSpoken` en `src/lib/voice/fuzzy.ts`, pruebas en `tests/voice/fuzzy.test.ts`):
+  1. Busca lo dicho tal cual, como referencia y con variantes que suenan igual (b/v/p, s/z/c/f, t/d, y/i/e, k/c/q/g, g/j, m/n, o/u), en singular y por partes. También busca el número de la referencia con el nombre («cámara 30»), que encuentra «VTS30» aunque las letras salgan mal.
+  2. Ordena **todo** lo encontrado por parecido con lo dicho. Nunca se queda con lo primero que devuelva el buscador (antes «cámaras vts 30» agregó «cámara omni 3 cámaras»).
+  3. Decide:
+     - **Seguro** (se parece casi del todo, le saca ventaja al segundo y la referencia dicha está tal cual o suena igual): lo agrega.
+     - **Duda**: «¿Estás intentando decir cámara de seguridad triple solar VTS30?». «Sí» lo agrega con la cantidad dicha; «no» pregunta por el siguiente (hasta 3); un número lo agrega con esa cantidad.
+     - **Varios igual de parecidos**: «No lo encontré exacto. Encontré 3: …».
+- **Corregir lo último:** justo después de que REM agrega algo:
+  - «no» lo quita y pregunta por el siguiente parecido;
+  - «esa no, la VTS 30», «no, es la…», «me refiero a…», «de la referencia vts 30» lo quitan y buscan lo nuevo con la misma cantidad.
+- **Aprende:** lo que se le confirma («sí»), se elige («la dos») o se corrige queda guardado en ese equipo (`remhub:rem-learned`, máximo 500 frases). La próxima vez, la misma frase (como suena) va directo a ese producto. Si después se le dice «no», lo olvida.
 - **Muletillas:** «necesito», «dame», «mándame», «necesito que me mandes», «de la referencia»… se ignoran.
 - **«Sí» de muchas formas:** «sí esa», «esa esa», «ese mismo», «claro que sí», «ajá», «de una». «No esa no», «ese no» son no.
-- **Interrumpir:** en computador REM escucha mientras habla. Si oye una respuesta corta (sí, no, «la dos», un número, cancelar), se calla y la usa. Lo largo se ignora, para que no se responda a sí mismo por el parlante. En celular, abrir el micrófono corta la voz: ahí se toca el botón 🔊 del panel para que se calle y escuche.
+- **Hablarle encima (computador):** REM escucha desde que empieza a hablar (`capture` en `speech.ts`). Apenas la persona habla, se calla y oye la frase completa. Lo que REM mismo dice, si el micrófono lo oye por el parlante, se reconoce y se ignora.
+- **Pausas (computador):** la frase termina tras 1,3 segundos de silencio, o 2 si estaba a mitad de palabra. Así se puede decir «cinco cámaras… de la referencia… vts 30».
+- **Celular:** abrir el micrófono corta la voz, así que escucha al terminar de hablar. Tocar 🔊 lo calla y escucha.
 - **Si no se dijo la cantidad:** REM pregunta «¿Cuántas?».
 - **Corregir:** «cambia la zapatera a cuatro», «mejor dos», «quita el último» o «quita la zapatera».
 - **Repasar:** «¿cuántos llevo?», «repite» o «ayuda».
@@ -55,7 +65,7 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 
 ## «Oye REM»
 
-Se enciende en el panel de REM, en «¿Qué le puedo decir?» → «Llamarlo diciendo Oye REM». Queda guardado solo en ese equipo.
+Se enciende con el interruptor de arriba del panel de REM. Queda guardado solo en ese equipo. Ahí mismo muestra qué oyó mientras espera.
 
 - **Cuándo escucha:** solo con RemHub abierto y la pestaña a la vista. Se apaga sola si se cambia de pestaña o se bloquea la pantalla.
 - **Qué lo llama:** «oye», «hey», «hola» u «ok» seguido de «REM», o la frase que empieza por «REM» («REM, quiero hacer un traslado»).
@@ -64,7 +74,8 @@ Se enciende en el panel de REM, en «¿Qué le puedo decir?» → «Llamarlo dic
   - Se puede decir todo de una vez: «Oye REM, quiero hacer un traslado».
 - **Probar:** en «¿Qué le puedo decir?» → «🧪 Probar «Oye REM»». Dice si así se despierta y muestra lo que oyó. Con la opción encendida, el panel muestra «Lo último que oí» mientras espera.
 - **Si el navegador no deja escuchar sin tocar la pantalla** (pasa al abrir la página), espera el primer toque y vuelve a escuchar.
-- **Pronunciación:** REM dice «Rrem» (`spokenText`); en mayúsculas la voz lo leía «rien».
+- **Pronunciación:** REM dice «Rem» (`spokenText`). «REM» en mayúsculas la voz lo leía «rien», y «Rrem», «rariem».
+- **Reacciona rápido:** usa lo que va oyendo y no espera a que el reconocedor cierre la frase, que con ruido puede tardar mucho. Al oír «oye REM» espera 1,2 segundos por si sigue la orden.
 - **Batería:** Chrome reinicia la escucha cada tanto. En Android puede sonar un pitido del sistema al reiniciar y gasta más batería. Se recomienda en computador o tablet fija.
 
 ## Cómo está hecho

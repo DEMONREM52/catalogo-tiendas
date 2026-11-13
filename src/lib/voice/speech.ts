@@ -2,9 +2,14 @@
  * REM: escuchar y hablar con lo que trae el navegador (gratis, sin servidor de RemHub).
  *   · Escuchar: SpeechRecognition (Chrome/Edge en Android y computador, Safari 14.5+). Firefox no lo trae.
  *   · Hablar: speechSynthesis con una voz en español del equipo.
+ *
+ * En computador la conversación es «a dos voces» (`capture`): REM escucha mientras habla, se calla apenas
+ * la persona empieza a hablar y espera a que termine la frase completa (aguanta pausas). Lo que REM
+ * mismo dice, si el micrófono lo oye por el parlante, se reconoce y se ignora.
+ * En celular, abrir el micrófono corta la voz: se escucha después de hablar (y tocar 🔊 lo calla).
  */
 
-import { normalize } from "./spanish";
+import { isQuickAnswer, normalize } from "./spanish";
 
 type RecognitionAlt = { transcript: string; confidence: number };
 type RecognitionResult = { isFinal: boolean; length: number; [i: number]: RecognitionAlt };
@@ -29,32 +34,223 @@ export function voiceSupported(): boolean {
   return Boolean(ctor()) && typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+/** ¿Puede escuchar mientras habla (interrumpir con la voz)? En celulares, abrir el micrófono corta la voz. */
+export function fullDuplex(): boolean {
+  return typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export class VoiceError extends Error {
   code: "permission" | "network" | "mic" | "other";
   constructor(code: VoiceError["code"], message: string) { super(message); this.code = code; }
 }
 
-let current: Recognition | null = null;
+function errorOf(code: string): VoiceError | null {
+  if (code === "not-allowed" || code === "service-not-allowed") return new VoiceError("permission", "No hay permiso para usar el micrófono.");
+  if (code === "network") return new VoiceError("network", "Sin internet: el reconocimiento de voz lo necesita.");
+  if (code === "audio-capture") return new VoiceError("mic", "No se encontró el micrófono.");
+  return null;
+}
+
+/** Lo que esté escuchando ahora (una sola cosa a la vez). */
+let active: { cancel: () => void } | null = null;
+
+export function stopListening() {
+  const a = active;
+  active = null;
+  a?.cancel();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Computador: escuchar «a dos voces»
+
+export type Capture = {
+  /** Lo que dijo la persona (lecturas posibles, la primera es la más probable); [] si no dijo nada. */
+  result: Promise<string[]>;
+  /** REM terminó de hablar: desde ya todo lo que se oiga es de la persona (y empieza a contar el silencio). */
+  listening(): void;
+  /** ¿La persona ya empezó a hablar? */
+  started(): boolean;
+  cancel(): void;
+};
+
+/**
+ * Escucha una frase completa. Con `echo` (lo que REM está diciendo) empieza mientras REM habla:
+ * apenas la persona habla, llama `onUserStart` (para callar a REM). La frase termina tras un silencio.
+ */
+export function capture(opts: { echo?: string; onUserStart?: () => void; onInterim?: (text: string) => void; noSpeechMs?: number } = {}): Capture {
+  const Ctor = ctor();
+  stopListening();
+  stopWake();
+  const echoWords = new Set(normalize(spokenText(opts.echo ?? "")).split(" ").filter((w) => w.length > 1));
+  let speaking = Boolean(opts.echo);
+  let startedDuringSpeech = false;
+  let listenCalled = false;
+  let started = false;
+  let finished = false;
+  let kept: string[][] = []; // frases ya cerradas de sesiones anteriores (Chrome corta cada tanto)
+  let finals: string[][] = [];
+  let interim = "";
+  let rec: Recognition | null = null;
+  let silence = 0;
+  let noSpeech = 0;
+  let hardStop = 0;
+  let resolveFn: (v: string[]) => void = () => {};
+  let rejectFn: (e: VoiceError) => void = () => {};
+  const result = new Promise<string[]>((res, rej) => { resolveFn = res; rejectFn = rej; });
+
+  // Lo que REM dijo y el micrófono alcanzó a oír al principio: se quita.
+  const stripEcho = (text: string) => {
+    if (!startedDuringSpeech) return text;
+    const words = text.split(" ");
+    let i = 0;
+    while (i < words.length - 1 && echoWords.has(normalize(words[i]))) i++;
+    return words.slice(i).join(" ");
+  };
+  const segs = () => [...kept, ...finals];
+  const textNow = () => stripEcho([...segs().map((s) => s[0]), interim].filter(Boolean).join(" ").trim());
+  const isEcho = (text: string) => {
+    const w = normalize(text).split(" ").filter((x) => x.length > 1);
+    return !w.length || w.filter((x) => echoWords.has(x)).length / w.length >= 0.6;
+  };
+  const clearTimers = () => { window.clearTimeout(silence); window.clearTimeout(noSpeech); window.clearTimeout(hardStop); };
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    clearTimers();
+    try { rec?.abort(); } catch { /* ya paró */ }
+    if (active === handle) active = null;
+    const best = textNow();
+    if (!best) return resolveFn([]);
+    const alts = [best];
+    const all = segs();
+    const last = all.at(-1);
+    if (last && last.length > 1 && !interim) {
+      const head = all.slice(0, -1).map((s) => s[0]).join(" ");
+      last.slice(1).forEach((a) => alts.push(stripEcho(`${head} ${a}`.trim())));
+    }
+    resolveFn([...new Set(alts)]);
+  }
+  function fail(e: VoiceError) {
+    if (finished) return;
+    finished = true;
+    clearTimers();
+    try { rec?.abort(); } catch { /* ya paró */ }
+    if (active === handle) active = null;
+    rejectFn(e);
+  }
+
+  function begin() {
+    if (finished || !Ctor) return;
+    const r = new Ctor();
+    rec = r;
+    r.lang = "es-CO";
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 3;
+    let base = 0; // resultados de esta sesión que eran eco (se ignoran)
+    finals = [];
+    r.onresult = (e) => {
+      if (finished) return;
+      const fin: string[][] = [];
+      let inter = "";
+      let lastFinalIndex = base;
+      for (let i = base; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) {
+          const alts: string[] = [];
+          for (let k = 0; k < res.length; k++) if (res[k]?.transcript?.trim()) alts.push(res[k].transcript.trim());
+          if (alts.length) fin.push(alts);
+          lastFinalIndex = i + 1;
+        } else inter += `${res[0]?.transcript ?? ""} `;
+      }
+      inter = inter.trim();
+      if (!started) {
+        const text = [...fin.map((f) => f[0]), inter].join(" ").trim();
+        if (!text) return;
+        if (speaking) {
+          // REM oyéndose a sí mismo por el parlante: se ignora (y lo ya cerrado no vuelve a contar).
+          if (!isQuickAnswer(text) && isEcho(text)) { base = lastFinalIndex; return; }
+          // Una palabra suelta mientras habla puede ser ruido; un «sí» o «la dos» sí cuenta.
+          if (text.split(" ").length < 2 && !isQuickAnswer(text)) return;
+          startedDuringSpeech = true;
+        }
+        started = true;
+        window.clearTimeout(noSpeech);
+        opts.onUserStart?.();
+      }
+      finals = fin;
+      interim = inter;
+      const now = textNow();
+      if (now) opts.onInterim?.(now);
+      if (!speaking || startedDuringSpeech) {
+        window.clearTimeout(silence);
+        // Respuesta corta ya cerrada: rápido. Frase: aguanta pausas para seguir hablando.
+        const ms = !interim && isQuickAnswer(now) ? 700 : interim ? 2000 : 1300;
+        silence = window.setTimeout(finish, ms);
+      }
+    };
+    r.onerror = (e) => {
+      const err = errorOf(e.error);
+      if (err) fail(err);
+    };
+    // Chrome corta la escucha cada tanto: se guarda lo oído y se sigue.
+    r.onend = () => {
+      kept = [...kept, ...finals];
+      finals = [];
+      if (!finished) window.setTimeout(begin, 120);
+    };
+    try { r.start(); } catch { window.setTimeout(begin, 300); }
+  }
+
+  const handle = { cancel: () => { if (finished) return; finished = true; clearTimers(); try { rec?.abort(); } catch { /* ya paró */ } resolveFn([]); } };
+  active = handle;
+  if (!Ctor) { finished = true; rejectFn(new VoiceError("other", "Este navegador no puede escuchar. Usa Chrome.")); }
+  else begin();
+
+  return {
+    result,
+    started: () => started,
+    cancel: handle.cancel,
+    listening() {
+      if (finished || listenCalled) return;
+      listenCalled = true;
+      speaking = false;
+      if (!started) noSpeech = window.setTimeout(finish, opts.noSpeechMs ?? 9000);
+      else if (!interim && finals.length) { window.clearTimeout(silence); silence = window.setTimeout(finish, 1300); }
+      hardStop = window.setTimeout(finish, 30_000);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Celular: una frase (el reconocimiento del celular cierra solo al hacer pausa)
 
 /**
  * Escucha una frase. Devuelve las posibles lecturas (la primera es la más probable); [] si no se dijo nada.
- * `onInterim` muestra lo que va entendiendo mientras se habla.
+ * `onInterim` muestra lo que va entendiendo mientras se habla. En computador usa `capture` (aguanta pausas).
  */
 export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: number } = {}): Promise<string[]> {
   const Ctor = ctor();
   if (!Ctor) return Promise.reject(new VoiceError("other", "Este navegador no puede escuchar. Usa Chrome."));
+  if (fullDuplex()) {
+    const c = capture({ onInterim: opts.onInterim, noSpeechMs: opts.timeoutMs ?? 10_000 });
+    c.listening();
+    return c.result;
+  }
   stopListening();
   stopWake();
   return new Promise((resolve, reject) => {
     const rec = new Ctor();
-    current = rec;
     rec.lang = "es-CO";
     rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 3;
     let alts: string[] = [];
     let settled = false;
-    const done = (fn: () => void) => { if (settled) return; settled = true; window.clearTimeout(timer); if (current === rec) current = null; fn(); };
+    const done = (fn: () => void) => { if (settled) return; settled = true; window.clearTimeout(timer); if (active === handle) active = null; fn(); };
+    const handle = { cancel: () => { try { rec.abort(); } catch { /* ya paró */ } done(() => resolve([])); } };
+    active = handle;
     const timer = window.setTimeout(() => { try { rec.stop(); } catch { /* ya paró */ } }, opts.timeoutMs ?? 12_000);
     rec.onresult = (e) => {
       let interim = "";
@@ -71,61 +267,16 @@ export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: n
     };
     rec.onerror = (e) => {
       if (e.error === "no-speech" || e.error === "aborted") return done(() => resolve([]));
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") return done(() => reject(new VoiceError("permission", "No hay permiso para usar el micrófono.")));
-      if (e.error === "network") return done(() => reject(new VoiceError("network", "Sin internet: el reconocimiento de voz lo necesita.")));
-      if (e.error === "audio-capture") return done(() => reject(new VoiceError("mic", "No se encontró el micrófono.")));
-      done(() => reject(new VoiceError("other", `No se pudo escuchar (${e.error}).`)));
+      const err = errorOf(e.error);
+      done(() => reject(err ?? new VoiceError("other", `No se pudo escuchar (${e.error}).`)));
     };
     rec.onend = () => done(() => resolve(alts));
     try { rec.start(); } catch (err) { done(() => reject(new VoiceError("other", err instanceof Error ? err.message : "No se pudo escuchar."))); }
   });
 }
 
-/**
- * Escucha mientras REM habla, para poder interrumpirlo («sí, esa»). `accept` decide si lo oído es una
- * respuesta (true: deja de escuchar). Devuelve cómo pararla. No interfiere con `listen` (se para antes).
- */
-export function listenWhile(accept: (alts: string[]) => boolean): () => void {
-  const Ctor = ctor();
-  if (!Ctor) return () => {};
-  let stopped = false;
-  let rec: Recognition | null = null;
-  const begin = () => {
-    if (stopped) return;
-    const r = new Ctor();
-    rec = r;
-    r.lang = "es-CO";
-    r.continuous = true;
-    r.interimResults = false;
-    r.maxAlternatives = 3;
-    r.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        if (!res.isFinal) continue;
-        const alts: string[] = [];
-        for (let k = 0; k < res.length; k++) if (res[k]?.transcript?.trim()) alts.push(res[k].transcript.trim());
-        if (alts.length && accept(alts)) { stop(); return; }
-      }
-    };
-    r.onerror = () => {};
-    r.onend = () => { if (!stopped) window.setTimeout(begin, 200); };
-    try { r.start(); } catch { /* otro reconocimiento activo */ }
-  };
-  const stop = () => { stopped = true; try { rec?.abort(); } catch { /* ya paró */ } };
-  begin();
-  return stop;
-}
-
-/** ¿Se puede escuchar mientras habla? En celulares, abrir el micrófono corta la voz: ahí se interrumpe tocando. */
-export function bargeInSupported(): boolean {
-  return typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-export function stopListening() {
-  const rec = current;
-  current = null;
-  try { rec?.abort(); } catch { /* ya paró */ }
-}
+// ---------------------------------------------------------------------------------------------
+// Hablar
 
 let voice: SpeechSynthesisVoice | null | undefined;
 
@@ -149,20 +300,28 @@ async function spanishVoice(): Promise<SpeechSynthesisVoice | null> {
   return voice;
 }
 
+/**
+ * Cómo se dice en voz alta. «REM» en mayúsculas la voz lo lee como sigla («rien») y «Rrem» como «rariem»:
+ * «Rem» se lee como palabra en español (la r inicial ya suena fuerte).
+ */
+export function spokenText(text: string): string {
+  return text.replace(/\bREM\b/g, "Rem");
+}
+
 /** Dice el texto en voz alta y espera a que termine (o a que se calle con `stopSpeaking`). */
 export async function speak(text: string): Promise<void> {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
   const v = await spanishVoice();
-  text = spokenText(text);
+  const said = spokenText(text);
   await new Promise<void>((resolve) => {
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(said);
     u.lang = v?.lang ?? "es-CO";
     if (v) u.voice = v;
     u.rate = 1.05;
     // Chrome a veces no avisa que terminó: tiempo máximo según el largo.
-    const t = window.setTimeout(resolve, 2500 + text.length * 85);
+    const t = window.setTimeout(resolve, 2500 + said.length * 85);
     u.onend = () => { window.clearTimeout(t); resolve(); };
     u.onerror = () => { window.clearTimeout(t); resolve(); };
     synth.speak(u);
@@ -195,7 +354,7 @@ export function beep(kind: "listen" | "done" = "listen") {
 // ---------------------------------------------------------------------------------------------
 // «Oye REM»: escucha de fondo solo con la pantalla encendida y la pestaña a la vista.
 
-let wake: { rec: Recognition; stopped: boolean } | null = null;
+let wake: { rec: Recognition | null; stopped: boolean } | null = null;
 
 // Cómo suele escribir el reconocedor «Oye REM»: «oye ren», «olle rem», «oyeren», «hey Ram», «R.E.M.».
 const CALL = "(?:oye|oie|olle|oyes|oiga|hoye|hey|ey|hei|ei|hola|ola|ok|okey|okay|alo|epa)";
@@ -217,49 +376,62 @@ export function wakeRest(text: string): string | null {
   return null;
 }
 
-/** Cómo se dice «REM» en voz alta: en mayúsculas la voz lo lee como sigla («rien»). */
-export function spokenText(text: string): string {
-  return text.replace(/\bREM\b/g, "Rrem");
-}
-
 /**
  * Empieza a esperar «Oye REM». Llama `onWake` con lo que se dijo después (puede venir vacío).
- * Devuelve cómo pararla. `onError` si no hay permiso de micrófono.
+ * Reacciona con lo que va oyendo (no espera a que la frase se cierre, que con ruido puede tardar mucho):
+ * al oír «oye REM» espera un momento a que termine la orden («…quiero hacer un traslado») y despierta.
+ * `onHeard` muestra lo que oye (para revisar cómo lo escribe el reconocedor). Devuelve cómo pararla.
  */
 export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceError) => void, onHeard?: (text: string) => void): () => void {
   const Ctor = ctor();
   if (!Ctor) return () => {};
   stopWake();
-  const me = { rec: new Ctor(), stopped: false };
+  const me: { rec: Recognition | null; stopped: boolean } = { rec: null, stopped: false };
   wake = me;
+  let fired = false;
+  let pendingRest: string | null = null;
+  let timer = 0;
+  const fire = (rest: string) => {
+    if (fired || me.stopped) return;
+    fired = true;
+    window.clearTimeout(timer);
+    stopWake();
+    onWake(rest);
+  };
   const begin = () => {
     if (me.stopped) return;
     const rec = new Ctor();
     me.rec = rec;
     rec.lang = "es-CO";
     rec.continuous = true;
-    rec.interimResults = false;
-    rec.maxAlternatives = 2;
+    rec.interimResults = true;
+    rec.maxAlternatives = 3;
     rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (!r.isFinal) continue;
-        onHeard?.(r[0]?.transcript?.trim() ?? "");
-        for (let k = 0; k < r.length; k++) {
-          const rest = wakeRest(r[k]?.transcript ?? "");
-          if (rest !== null) { stopWake(); onWake(rest); return; }
-        }
-      }
+      const res = e.results[e.results.length - 1];
+      if (!res) return;
+      const text = res[0]?.transcript?.trim() ?? "";
+      if (text) onHeard?.(text);
+      let rest: string | null = null;
+      for (let k = 0; k < res.length && rest === null; k++) rest = wakeRest(res[k]?.transcript ?? "");
+      if (rest === null) return;
+      if (res.isFinal) return fire(rest);
+      // Oyó «oye REM»: espera un momento por si sigue la orden.
+      pendingRest = rest;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => fire(pendingRest ?? ""), 1200);
     };
     rec.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") { me.stopped = true; onError?.(new VoiceError("permission", "No hay permiso para usar el micrófono.")); }
     };
     // Chrome corta la escucha cada tanto: se vuelve a empezar mientras siga encendida.
-    rec.onend = () => { if (!me.stopped) window.setTimeout(begin, 400); };
+    rec.onend = () => {
+      if (pendingRest !== null && !fired) return fire(pendingRest);
+      if (!me.stopped) window.setTimeout(begin, 300);
+    };
     try { rec.start(); } catch { window.setTimeout(begin, 1500); }
   };
   begin();
-  return () => { if (wake === me) stopWake(); else me.stopped = true; };
+  return () => { window.clearTimeout(timer); if (wake === me) stopWake(); else me.stopped = true; };
 }
 
 export function stopWake() {
@@ -267,5 +439,5 @@ export function stopWake() {
   wake = null;
   if (!w) return;
   w.stopped = true;
-  try { w.rec.abort(); } catch { /* ya paró */ }
+  try { w.rec?.abort(); } catch { /* ya paró */ }
 }

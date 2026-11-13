@@ -10,8 +10,8 @@
 import { useEffect, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "@/lib/voice/rem";
-import { compactCode, matchPlace, matchPlaces, normalize, parseTransferCommand, plural, spokenReference, type TransferCommand } from "@/lib/voice/spanish";
-import { guessMode, guessSpoken } from "@/lib/voice/fuzzy";
+import { compactCode, matchPlace, matchPlaces, normalize, parseCorrection, parseTransferCommand, plural, spokenReference, type TransferCommand } from "@/lib/voice/spanish";
+import { forget, learn, resolveSpoken, type Ranked } from "@/lib/voice/fuzzy";
 import type { ProductHit, Warehouse } from "./shared";
 
 export type TransferVoiceLine = { product_id: string; name: string; sku: string | null; available: number };
@@ -40,16 +40,23 @@ export type TransferVoiceApi = {
   send: () => Promise<boolean>;
 };
 
+/** Cómo se llegó a un producto: para aprender si se confirma o se corrige. */
+type Ask = { query: string; qty: number | null; dest: string; learnAlso?: string };
+
 type Pending =
-  | { type: "choice"; hits: ProductHit[]; qty: number | null; dest: string; add: boolean }
+  | ({ type: "choice"; hits: ProductHit[]; add: boolean } & Ask)
   | { type: "qty"; hit: ProductHit; dest: string }
   /** No se encontró exacto: «¿Estás intentando decir…?» por cada parecido, en orden. */
-  | { type: "guess"; hits: ProductHit[]; index: number; qty: number | null; dest: string }
+  | ({ type: "guess"; ranked: Ranked<ProductHit>[]; index: number } & Ask)
   | { type: "overdraw"; hit: ProductHit; dest: string; qty: number; add: boolean }
   | { type: "send" }
   | null;
 
 type Awaiting = Parameters<typeof parseTransferCommand>[1];
+
+/** Lo último que REM agregó por voz (para «no», «esa no, la…»). */
+type LastAdd = { turn: number; hit: ProductHit; dest: string; prevQty: number; ask: Ask; others: Ranked<ProductHit>[]; learned: boolean };
+type AddFrom = Omit<LastAdd, "turn" | "hit" | "dest" | "prevQty">;
 
 const EXAMPLES = [
   "De bodega principal a Zamora",
@@ -67,28 +74,9 @@ const EXAMPLES = [
 const short = (name: string) => name.toLowerCase().split(/\s+/).slice(0, 6).join(" ");
 
 /** Busca en el origen (solo con existencias). */
-async function searchIn(storeId: string, from: string, q: string): Promise<ProductHit[]> {
-  const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: from, p_in_stock: true, p_limit: 6 });
+async function searchIn(storeId: string, from: string, q: string, limit = 6): Promise<ProductHit[]> {
+  const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: from, p_in_stock: true, p_limit: limit });
   return (data ?? []) as ProductHit[];
-}
-
-/** Busca el producto dicho en el origen (solo con existencias). Prueba como se dijo y como referencia. */
-async function searchSpoken(storeId: string, from: string, spoken: string): Promise<ProductHit[]> {
-  const ref = spokenReference(spoken);
-  const candidates = [...new Set([spoken, ref, ref.replace(/[-./]/g, "")].map((x) => x.trim()).filter((x) => x.length >= 2))];
-  const results = await Promise.all(candidates.map((q) => searchIn(storeId, from, q)));
-  const all = new Map<string, ProductHit>();
-  results.flat().forEach((h) => { if (!all.has(h.id)) all.set(h.id, h); });
-  // Código exacto (sin importar guiones ni espacios): ese es.
-  const code = compactCode(ref);
-  if (code.length >= 3) {
-    const exact = [...all.values()].filter((h) => compactCode(h.sku) === code || compactCode(h.barcode) === code);
-    if (exact.length === 1) return exact;
-  }
-  // Primero lo que dio la frase tal cual; si no dio nada, lo de la referencia.
-  const first = results.find((r) => r.length) ?? [];
-  const rest = [...all.values()].filter((h) => !first.some((f) => f.id === h.id));
-  return [...first, ...rest];
 }
 
 /** El producto de la lista que más se parece a lo dicho. */
@@ -110,7 +98,7 @@ function findLine(lines: TransferVoiceLine[], spoken: string): TransferVoiceLine
 }
 
 export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null>, enabled: boolean) {
-  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false, photo: false });
+  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false, photo: false, turn: 0, lastAdd: null as LastAdd | null });
   const pickedRef = useRef<(hit: ProductHit) => void>(() => {});
 
   useEffect(() => {
@@ -158,7 +146,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
     }
 
     /** Pone la cantidad (sumando si `add`). Si no alcanza, pregunta si pone lo que hay. */
-    function apply(hit: ProductHit, dest: string, qty: number, add: boolean, force = false): RemReply {
+    function apply(hit: ProductHit, dest: string, qty: number, add: boolean, force = false, from?: AddFrom): RemReply {
       const a = api();
       const line = a.lines.find((l) => l.product_id === hit.id);
       const avail = line ? a.availOf(line) : hit.wh_qty;
@@ -177,14 +165,15 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
       st.pending = null;
       st.awaiting = null;
       st.lastAdded = [...st.lastAdded.filter((id) => id !== hit.id), hit.id];
+      st.lastAdd = from ? { ...from, turn: st.turn, hit, dest, prevQty: mine } : null;
       const where = a.targets.length > 1 ? ` para ${nameOf(dest).toLowerCase()}` : "";
       const sum = add && mine ? ` Ahora van ${want}.` : "";
       return reply(`${want} de ${short(hit.name)}${where}.${sum} ¿Siguiente?`);
     }
 
-    function askChoice(hits: ProductHit[], qty: number | null, dest: string, add: boolean): RemReply {
+    function askChoice(hits: ProductHit[], ask: Ask, add: boolean): RemReply {
       const top = hits.slice(0, 3);
-      st.pending = { type: "choice", hits: top, qty, dest, add };
+      st.pending = { type: "choice", hits: top, add, ...ask };
       st.awaiting = "choice";
       const nums = ["uno", "dos", "tres"];
       const list = top.map((h, i) => `${nums[i]}, ${short(h.name)}${h.sku ? ` ${h.sku}` : ""}`).join("; ");
@@ -194,18 +183,50 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
     function askGuess(p: Extract<Pending, { type: "guess" }>, lead = ""): RemReply {
       st.pending = p;
       st.awaiting = "confirm";
-      const h = p.hits[p.index];
+      const h = p.ranked[p.index].hit;
       const sku = h.sku && !normalize(h.name).includes(normalize(h.sku)) ? `, código ${h.sku}` : "";
       return reply(`${lead}¿Estás intentando decir ${h.name.toLowerCase()}${sku}?`, { show: `${lead}¿Estás intentando decir «${h.name}»${h.sku ? ` (${h.sku})` : ""}? Hay ${h.wh_qty}. Di sí o no.` });
     }
 
-    function chosen(hit: ProductHit, qty: number | null, dest: string, add: boolean): RemReply {
+    function chosen(hit: ProductHit, qty: number | null, dest: string, add: boolean, from?: AddFrom): RemReply {
       if (qty === null) {
+        st.lastAdd = null;
         st.pending = { type: "qty", hit, dest };
         st.awaiting = "qty";
         return reply(`${short(hit.name)}, hay ${hit.wh_qty}. ¿Cuántas?`);
       }
-      return apply(hit, dest, qty, add);
+      return apply(hit, dest, qty, add, false, from);
+    }
+
+    const remember = (ask: Ask, hit: ProductHit) => { learn(ask.query, hit); if (ask.learnAlso) learn(ask.learnAlso, hit); };
+
+    /** Deshace lo último que REM agregó (vuelve a la cantidad de antes) y olvida si venía de lo aprendido. */
+    function revert(last: LastAdd) {
+      const a = api();
+      const others = Object.entries(a.matrix[last.hit.id] ?? {}).filter(([d]) => d !== last.dest).reduce((x, [, v]) => x + v, 0);
+      if (last.prevQty > 0 || others > 0) a.put(last.hit, last.dest, last.prevQty);
+      else a.remove(last.hit.id);
+      st.lastAdded = st.lastAdded.filter((x) => x !== last.hit.id);
+      st.lastAdd = null;
+      if (last.learned) forget(last.ask.query);
+    }
+
+    /** De lo dicho al producto (en el origen, con existencias): seguro → se pone; duda → pregunta; varios → opciones. */
+    async function resolveAndAdd(ask: Ask, alts: string[], lead = ""): Promise<RemReply> {
+      const a = api();
+      const res = await resolveSpoken<ProductHit>((q, limit) => searchIn(a.storeId, a.from, q, limit ?? 6), [ask.query, ...alts]);
+      if (res.kind === "sure") {
+        if (ask.learnAlso) learn(ask.learnAlso, res.hit);
+        const learned = res.ranked[0]?.hit.id === res.hit.id && res.ranked[0].score === 1;
+        const r = chosen(res.hit, ask.qty, ask.dest, true, { ask, others: res.ranked.filter((x) => x.hit.id !== res.hit.id), learned });
+        return lead ? { ...r, say: `${lead}${r.say}`, show: `${lead}${r.show ?? r.say}` } : r;
+      }
+      if (res.kind === "ask") return askGuess({ type: "guess", ranked: res.ranked, index: 0, ...ask }, lead);
+      if (res.kind === "choose") {
+        const r = askChoice(res.ranked.map((x) => x.hit), ask, true);
+        return { ...r, say: `${lead}No lo encontré exacto. ${r.say}`, show: `${lead}No lo encontré exacto. ${r.show ?? r.say}` };
+      }
+      return reply(`${lead}No encontré «${ask.query}» con existencias en ${nameOf(api().from).toLowerCase()}. Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
     }
 
     async function addSpoken(said: Extract<TransferCommand, { kind: "add" }>, alts: string[]): Promise<RemReply> {
@@ -216,23 +237,9 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
       // «soporte para celular»: si lo de después de «para» no es un destino, es parte del nombre.
       if (!dest && cmd.to) { cmd = { ...cmd, query: `${cmd.query} para ${cmd.to}`, to: null }; dest = destFor(null); }
       if (!dest) return nextPrompt();
-      let hits = await searchSpoken(a.storeId, a.from, cmd.query);
-      // Si no salió nada, se prueba con las otras lecturas que dio el reconocimiento.
-      for (const alt of alts.slice(1)) {
-        if (hits.length) break;
-        const c = parseTransferCommand(alt, null);
-        if (c.kind === "add") hits = await searchSpoken(a.storeId, a.from, c.query);
-      }
-      if (!hits.length) {
-        // No salió exacto: variantes que suenan igual («bts» → «VTS»), en singular y por partes.
-        const guesses = await guessSpoken((q) => searchIn(a.storeId, a.from, q), cmd.query);
-        const mode = guessMode(guesses);
-        if (mode === "ask") return askGuess({ type: "guess", hits: guesses.filter((g) => g.score >= 0.5).map((g) => g.hit).slice(0, 3), index: 0, qty: cmd.qty, dest });
-        if (mode === "choose") { const r = askChoice(guesses.map((g) => g.hit), cmd.qty, dest, true); return { ...r, say: `No lo encontré exacto. ${r.say}`, show: `No lo encontré exacto. ${r.show ?? r.say}` }; }
-        return reply(`No encontré «${cmd.query}» con existencias en ${nameOf(a.from).toLowerCase()}. Dilo de otra forma, o dicta la referencia letra por letra.`);
-      }
-      if (hits.length === 1) return chosen(hits[0], cmd.qty, dest, true);
-      return askChoice(hits, cmd.qty, dest, true);
+      const others = alts.slice(1).map((alt) => parseTransferCommand(alt, null))
+        .filter((c): c is Extract<TransferCommand, { kind: "add" }> => c.kind === "add").map((c) => c.query);
+      return resolveAndAdd({ query: cmd.query, qty: cmd.qty, dest }, others);
     }
 
     /** «Listo»: pide lo que falte y luego confirma. `now` trae lo que se acaba de decir (el estado aún no llegó). */
@@ -252,8 +259,18 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
     async function hear(alts: string[]): Promise<RemReply> {
       const a = api();
-      const cmd = parseTransferCommand(alts[0] ?? "", st.awaiting);
+      st.turn++;
       const pending = st.pending;
+      const justAdded = st.lastAdd && st.lastAdd.turn === st.turn - 1 ? st.lastAdd : null;
+      // Corrección de lo que REM acaba de poner: «esa no, la VTS 30», «de la referencia vts 30», «me refiero a…».
+      if (!pending && justAdded) {
+        const fix = parseCorrection(alts[0] ?? "");
+        if (fix) {
+          revert(justAdded);
+          return resolveAndAdd({ ...justAdded.ask, query: fix.query, qty: fix.qty ?? justAdded.ask.qty, learnAlso: justAdded.ask.query }, [], `Quité ${short(justAdded.hit.name)}. `);
+        }
+      }
+      const cmd = parseTransferCommand(alts[0] ?? "", st.awaiting);
 
       switch (cmd.kind) {
         case "stop":
@@ -303,12 +320,17 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
           if (cmd.index === 0) { st.pending = null; st.awaiting = null; return reply("Bueno. Dime el producto de otra forma."); }
           const hit = pending.hits[cmd.index - 1];
           if (!hit) return reply(`Solo hay ${pending.hits.length} opciones. ¿Cuál?`);
-          return chosen(hit, pending.qty, pending.dest, pending.add);
+          remember(pending, hit);
+          return chosen(hit, pending.qty, pending.dest, pending.add, { ask: pending, others: [], learned: false });
         }
 
         case "number": {
           if (pending?.type === "qty") return apply(pending.hit, pending.dest, cmd.value, true);
-          if (pending?.type === "guess") return chosen(pending.hits[pending.index], cmd.value, pending.dest, true);
+          if (pending?.type === "guess") {
+            const hit = pending.ranked[pending.index].hit;
+            remember(pending, hit);
+            return chosen(hit, cmd.value, pending.dest, true, { ask: pending, others: [], learned: false });
+          }
           if (pending?.type === "choice") return hear([`la ${cmd.value}`]);
           if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, Math.min(cmd.value, pending.qty), false);
           return reply("¿Cuántas de qué? Di por ejemplo: tres de la zapatera.");
@@ -316,8 +338,12 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
         case "yes": {
           if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, pending.qty, false, true);
-          if (pending?.type === "guess") return chosen(pending.hits[pending.index], pending.qty, pending.dest, true);
-          if (pending?.type === "choice" && pending.hits.length === 1) return chosen(pending.hits[0], pending.qty, pending.dest, pending.add);
+          if (pending?.type === "guess") {
+            const hit = pending.ranked[pending.index].hit;
+            remember(pending, hit);
+            return chosen(hit, pending.qty, pending.dest, true, { ask: pending, others: pending.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
+          }
+          if (pending?.type === "choice" && pending.hits.length === 1) { remember(pending, pending.hits[0]); return chosen(pending.hits[0], pending.qty, pending.dest, pending.add); }
           if (pending?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (pending?.type === "send") {
             st.pending = null; st.awaiting = null; st.finishing = false;
@@ -333,11 +359,18 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         case "no": {
           if (pending?.type === "send") { st.pending = null; st.awaiting = null; st.finishing = false; return reply("Bueno, no lo envío. Sigue agregando o corrige lo que necesites."); }
           if (pending?.type === "guess") {
-            if (pending.index + 1 < pending.hits.length) return askGuess({ ...pending, index: pending.index + 1 }, "¿Entonces ");
+            if (pending.index + 1 < pending.ranked.length) return askGuess({ ...pending, index: pending.index + 1 }, "¿Entonces ");
             st.pending = null; st.awaiting = null;
             return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
           }
           if (pending) { st.pending = null; st.awaiting = null; return reply("Bueno, no lo agrego. ¿Siguiente?"); }
+          // «No» justo después de que REM puso algo: lo quita y pregunta por el siguiente parecido.
+          if (justAdded) {
+            revert(justAdded);
+            const next = justAdded.others.filter((r) => r.score >= 0.45);
+            if (next.length) return askGuess({ type: "guess", ranked: next, index: 0, ...justAdded.ask }, `Quité ${short(justAdded.hit.name)}. `);
+            return reply(`Quité ${short(justAdded.hit.name)}. Dímelo de otra forma, o di foto.`);
+          }
           return reply("Bueno. ¿Qué hacemos?");
         }
 
@@ -388,7 +421,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         }
 
         case "add":
-          if (pending?.type === "choice" || pending?.type === "qty") st.pending = null;
+          if (pending?.type === "choice" || pending?.type === "qty" || pending?.type === "guess") st.pending = null;
           return addSpoken(cmd, alts);
       }
     }
@@ -406,7 +439,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
       title: "Traslado",
       examples: EXAMPLES,
       start: async (first) => {
-        st.pending = null; st.awaiting = null; st.finishing = false; st.lastAdded = [];
+        st.pending = null; st.awaiting = null; st.finishing = false; st.lastAdded = []; st.lastAdd = null;
         if (first?.length) return hear(first);
         const a = api();
         if (a.lines.length) return reply(`Seguimos con el traslado de ${nameOf(a.from).toLowerCase()}: llevas ${plural(a.lines.length, "producto", "productos")}. Dime más o di listo.`);
