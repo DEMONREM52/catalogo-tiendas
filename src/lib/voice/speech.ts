@@ -115,6 +115,7 @@ export async function speak(text: string): Promise<void> {
   const synth = window.speechSynthesis;
   synth.cancel();
   const v = await spanishVoice();
+  text = spokenText(text);
   await new Promise<void>((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = v?.lang ?? "es-CO";
@@ -156,18 +157,36 @@ export function beep(kind: "listen" | "done" = "listen") {
 
 let wake: { rec: Recognition; stopped: boolean } | null = null;
 
+// Cómo suele escribir el reconocedor «Oye REM»: «oye ren», «olle rem», «oyeren», «hey Ram», «R.E.M.».
+const CALL = "(?:oye|oie|olle|oyes|oiga|hoye|hey|ey|hei|ei|hola|ola|ok|okey|okay|alo|epa)";
+const NAME = "(?:rem|ren|ram|rim|rhem|reem|remm|renn|frem|brem|r e m|erre e eme)";
+const WAKE = [
+  new RegExp(`(?:^|\\s)${CALL}\\s+${NAME}(?:\\s+(.*))?$`),
+  new RegExp(`(?:^|\\s)(?:oye|olle|hey|hola)(?:rem|ren|ram)(?:\\s+(.*))?$`),
+  // «REM, quiero hacer un traslado»: el nombre solo, al empezar la frase.
+  /^(?:rem|r e m)(?:\s+(.*))?$/,
+];
+
 /** Frase con «Oye REM» → lo que se dijo después ("" si nada). null si no llamó a REM. */
 export function wakeRest(text: string): string | null {
   const t = normalize(text);
-  const m = t.match(/(?:^|\s)(?:oye|oie|hey|ey|hola|ok|okay)\s+(?:rem|ren|ram|rhem|re m)\b\s*(.*)$/);
-  return m ? m[1].trim() : null;
+  for (const re of WAKE) {
+    const m = t.match(re);
+    if (m) return (m[1] ?? "").trim();
+  }
+  return null;
+}
+
+/** Cómo se dice «REM» en voz alta: en mayúsculas la voz lo lee como sigla («rien»). */
+export function spokenText(text: string): string {
+  return text.replace(/\bREM\b/g, "Rrem");
 }
 
 /**
  * Empieza a esperar «Oye REM». Llama `onWake` con lo que se dijo después (puede venir vacío).
  * Devuelve cómo pararla. `onError` si no hay permiso de micrófono.
  */
-export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceError) => void): () => void {
+export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceError) => void, onHeard?: (text: string) => void): () => void {
   const Ctor = ctor();
   if (!Ctor) return () => {};
   stopWake();
@@ -185,6 +204,7 @@ export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceErr
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
         if (!r.isFinal) continue;
+        onHeard?.(r[0]?.transcript?.trim() ?? "");
         for (let k = 0; k < r.length; k++) {
           const rest = wakeRest(r[k]?.transcript ?? "");
           if (rest !== null) { stopWake(); onWake(rest); return; }

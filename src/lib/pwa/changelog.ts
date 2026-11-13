@@ -932,6 +932,16 @@ export const RELEASES: Release[] = [
       { icon: "🎯", text: "Cambia «Meta 10» junto al contador" },
     ],
   },
+  {
+    id: 89, date: "2026-11-13", title: "🎙️ «Oye REM» entiende más formas y REM dice bien su nombre",
+    summary: "REM se despierta aunque el celular escriba «oye ren», «olle rem» o «REM, quiero…». Ahora dice «Rrem» y no «rien». En ¿Qué le puedo decir? hay un botón para probar el llamado y ver qué oyó.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🧪", text: "REM → ¿Qué le puedo decir? → Probar «Oye REM»" },
+      { icon: "👂", text: "Enciende «Llamarlo diciendo Oye REM»" },
+      { icon: "🗣️", text: "«Oye REM, quiero hacer un traslado»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

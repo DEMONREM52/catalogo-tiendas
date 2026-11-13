@@ -52,9 +52,13 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 Se enciende en el panel de REM, en «¿Qué le puedo decir?» → «Llamarlo diciendo Oye REM». Queda guardado solo en ese equipo.
 
 - **Cuándo escucha:** solo con RemHub abierto y la pestaña a la vista. Se apaga sola si se cambia de pestaña o se bloquea la pantalla.
-- **Qué lo llama:** «oye», «hey», «hola» u «ok» seguido de «REM».
-  - «REM» suelto no lo llama, para que «remisión» o «remera» no lo despierten.
+- **Qué lo llama:** «oye», «hey», «hola» u «ok» seguido de «REM», o la frase que empieza por «REM» («REM, quiero hacer un traslado»).
+  - Acepta cómo lo suele escribir el reconocedor: «oye ren», «olle rem», «oyeren», «hey Ram», «R.E.M.» (`wakeRest` en `speech.ts`, con pruebas).
+  - «remisión», «remera» o «memoria RAM» no lo despiertan.
   - Se puede decir todo de una vez: «Oye REM, quiero hacer un traslado».
+- **Probar:** en «¿Qué le puedo decir?» → «🧪 Probar «Oye REM»». Dice si así se despierta y muestra lo que oyó. Con la opción encendida, el panel muestra «Lo último que oí» mientras espera.
+- **Si el navegador no deja escuchar sin tocar la pantalla** (pasa al abrir la página), espera el primer toque y vuelve a escuchar.
+- **Pronunciación:** REM dice «Rrem» (`spokenText`); en mayúsculas la voz lo leía «rien».
 - **Batería:** Chrome reinicia la escucha cada tanto. En Android puede sonar un pitido del sistema al reiniciar y gasta más batería. Se recomienda en computador o tablet fija.
 
 ## Cómo está hecho

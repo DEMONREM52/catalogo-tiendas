@@ -105,6 +105,18 @@ test("conteo, foto y valores", async () => {
   assert.equal(wakeRest("hola rem"), "");
   assert.equal(wakeRest("el reembolso de la remisión"), null);
   assert.equal(wakeRest("tráeme la remera"), null);
+  // Como lo escribe el reconocedor.
+  assert.equal(wakeRest("Oye, Ren. Quiero hacer un traslado."), "quiero hacer un traslado");
+  assert.equal(wakeRest("olle rem"), "");
+  assert.equal(wakeRest("oyeren"), "");
+  assert.equal(wakeRest("Hey Ram vender"), "vender");
+  assert.equal(wakeRest("R.E.M. quiero hacer un conteo"), "quiero hacer un conteo");
+  assert.equal(wakeRest("Rem, quiero hacer un pedido"), "quiero hacer un pedido");
+  assert.equal(wakeRest("la memoria ram del computador"), null);
+  assert.equal(wakeRest("hoy en la tienda"), null);
+  const { spokenText } = await import("@/lib/voice/speech");
+  assert.equal(spokenText("Hola, soy REM. Toca REM."), "Hola, soy Rrem. Toca Rrem.");
+  assert.equal(spokenText("remisión REMERA"), "remisión REMERA");
 });
 
 test("REM atiende la última pantalla abierta y vuelve a la de abajo", async () => {

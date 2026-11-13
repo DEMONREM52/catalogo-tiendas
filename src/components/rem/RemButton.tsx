@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError } from "@/lib/voice/speech";
+import { beep, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
 
@@ -46,6 +46,10 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   const [examples, setExamples] = useState<string[]>([]);
   const [wakeOn, setWakeOn] = useState(false);
   const [visible, setVisible] = useState(true);
+  // «Oye REM»: lo último que oyó esperando (para saber cómo lo escribe el reconocedor) y si el navegador
+  // no dejó usar el micrófono sin tocar la pantalla (se reintenta al primer toque).
+  const [lastHeard, setLastHeard] = useState("");
+  const [wakeBlocked, setWakeBlocked] = useState(false);
   const session = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(initial?: RemReply, first?: string[]) => Promise<void>>(async () => {});
@@ -80,12 +84,18 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   }, []);
   // «Oye REM»: solo en reposo, con la opción encendida y la pestaña a la vista.
   useEffect(() => {
-    if (!supported || !wakeOn || !visible || phase !== "idle") return;
+    if (!supported || !wakeOn || !visible || phase !== "idle" || wakeBlocked) return;
     return startWake((rest) => {
       setOpen(true);
       void runRef.current(undefined, rest ? [rest] : undefined);
-    }, (e) => { setError(e.message); setWakeOn(false); try { localStorage.removeItem(WAKE_KEY); } catch { /* sin almacenamiento */ } });
-  }, [supported, wakeOn, visible, phase]);
+    }, () => setWakeBlocked(true), (heard) => { if (heard) setLastHeard(heard); });
+  }, [supported, wakeOn, visible, phase, wakeBlocked]);
+  useEffect(() => {
+    if (!wakeBlocked) return;
+    const retry = () => setWakeBlocked(false);
+    window.addEventListener("pointerdown", retry, { once: true });
+    return () => window.removeEventListener("pointerdown", retry);
+  }, [wakeBlocked]);
 
   const add = (who: Turn["who"], text: string) => setTurns((t) => [...t.slice(-14), { who, text }]);
 
@@ -240,13 +250,31 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     else stop();
   }
 
+  /** Prueba del llamado: escucha una vez y dice si así se despierta. */
+  async function testWake() {
+    pending.current = null;
+    const id = ++session.current;
+    setError(null);
+    await say(id, { say: "Prueba: di «Oye REM» como lo dirías." });
+    const alts = await hearOnce(id);
+    if (!alts) return;
+    const hit = alts.find((a) => wakeRest(a) !== null);
+    await say(id, hit
+      ? { say: "¡Así sí me llamas!", show: `✓ Te oí «${hit}». Así sí me llamas.` }
+      : alts.length
+        ? { say: "Así no me despierto. Prueba otra vez, más despacio.", show: `✗ Te oí «${alts[0]}». Así no me despierto: prueba «Oye REM» más despacio, o mándale esta frase a soporte.` }
+        : { say: "No te oí." });
+    if (session.current === id) stop();
+  }
+
   function toggleWake(on: boolean) {
     setWakeOn(on);
+    setWakeBlocked(false);
     try { if (on) localStorage.setItem(WAKE_KEY, "1"); else localStorage.removeItem(WAKE_KEY); } catch { /* sin almacenamiento */ }
   }
 
   const color = phase === "listening" ? "#ef4444" : phase === "speaking" ? "#8b5cf6" : phase === "thinking" ? "#f59e0b" : "var(--t-accent, #8b5cf6)";
-  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? "Hablando…" : phase === "thinking" ? "Buscando…" : wakeOn ? "Esperando «Oye REM»" : "En pausa";
+  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? "Hablando…" : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
 
   return (
     <>
@@ -302,6 +330,12 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
                 <span className="block" style={{ color: "var(--t-muted)" }}>Escucha solo con RemHub abierto y a la vista. Gasta más batería; mejor en computador o tablet fija.</span>
               </span>
             </label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => void testWake()} disabled={phase !== "idle"} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                🧪 Probar «Oye REM»
+              </button>
+              {wakeOn && lastHeard ? <span className="min-w-0 flex-1 truncate" title={lastHeard}>Lo último que oí: «{lastHeard}»</span> : null}
+            </div>
           </details>
         </div>,
         document.body,
