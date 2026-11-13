@@ -4,6 +4,8 @@
  *   · Hablar: speechSynthesis con una voz en español del equipo.
  */
 
+import { normalize } from "./spanish";
+
 type RecognitionAlt = { transcript: string; confidence: number };
 type RecognitionResult = { isFinal: boolean; length: number; [i: number]: RecognitionAlt };
 type RecognitionEvent = { resultIndex: number; results: { length: number; [i: number]: RecognitionResult } };
@@ -28,7 +30,8 @@ export function voiceSupported(): boolean {
 }
 
 export class VoiceError extends Error {
-  constructor(public code: "permission" | "network" | "mic" | "other", message: string) { super(message); }
+  code: "permission" | "network" | "mic" | "other";
+  constructor(code: VoiceError["code"], message: string) { super(message); this.code = code; }
 }
 
 let current: Recognition | null = null;
@@ -41,6 +44,7 @@ export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: n
   const Ctor = ctor();
   if (!Ctor) return Promise.reject(new VoiceError("other", "Este navegador no puede escuchar. Usa Chrome."));
   stopListening();
+  stopWake();
   return new Promise((resolve, reject) => {
     const rec = new Ctor();
     current = rec;
@@ -145,4 +149,63 @@ export function beep(kind: "listen" | "done" = "listen") {
     o.stop(ctx.currentTime + 0.18);
     o.onended = () => void ctx.close();
   } catch { /* sin sonido */ }
+}
+
+// ---------------------------------------------------------------------------------------------
+// «Oye REM»: escucha de fondo solo con la pantalla encendida y la pestaña a la vista.
+
+let wake: { rec: Recognition; stopped: boolean } | null = null;
+
+/** Frase con «Oye REM» → lo que se dijo después ("" si nada). null si no llamó a REM. */
+export function wakeRest(text: string): string | null {
+  const t = normalize(text);
+  const m = t.match(/(?:^|\s)(?:oye|oie|hey|ey|hola|ok|okay)\s+(?:rem|ren|ram|rhem|re m)\b\s*(.*)$/);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Empieza a esperar «Oye REM». Llama `onWake` con lo que se dijo después (puede venir vacío).
+ * Devuelve cómo pararla. `onError` si no hay permiso de micrófono.
+ */
+export function startWake(onWake: (rest: string) => void, onError?: (e: VoiceError) => void): () => void {
+  const Ctor = ctor();
+  if (!Ctor) return () => {};
+  stopWake();
+  const me = { rec: new Ctor(), stopped: false };
+  wake = me;
+  const begin = () => {
+    if (me.stopped) return;
+    const rec = new Ctor();
+    me.rec = rec;
+    rec.lang = "es-CO";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.maxAlternatives = 2;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (!r.isFinal) continue;
+        for (let k = 0; k < r.length; k++) {
+          const rest = wakeRest(r[k]?.transcript ?? "");
+          if (rest !== null) { stopWake(); onWake(rest); return; }
+        }
+      }
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { me.stopped = true; onError?.(new VoiceError("permission", "No hay permiso para usar el micrófono.")); }
+    };
+    // Chrome corta la escucha cada tanto: se vuelve a empezar mientras siga encendida.
+    rec.onend = () => { if (!me.stopped) window.setTimeout(begin, 400); };
+    try { rec.start(); } catch { window.setTimeout(begin, 1500); }
+  };
+  begin();
+  return () => { if (wake === me) stopWake(); else me.stopped = true; };
+}
+
+export function stopWake() {
+  const w = wake;
+  wake = null;
+  if (!w) return;
+  w.stopped = true;
+  try { w.rec.abort(); } catch { /* ya paró */ }
 }

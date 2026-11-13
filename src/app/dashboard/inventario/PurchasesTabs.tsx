@@ -21,6 +21,9 @@ import { QuickProductModal } from "./QuickProductModal";
 import { lineFromHit } from "./LineEditor";
 import { usePurchasePricing } from "./purchase-pricing";
 import { XmlImportButton } from "./XmlImport";
+import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
+import { normalize, parseAmount } from "@/lib/voice/spanish";
+import type { ProductHit } from "./shared";
 
 /** Comprobante imprimible (tipo factura) de un ingreso de mercancía. */
 const purchaseReceiptUrl = (id: string, choose = false) => `/comprobante/ingreso/${id}${choose ? "?elegir=1" : ""}`;
@@ -512,6 +515,58 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     void toast("Compra anulada");
     void load();
   }
+
+  // REM (voz): «diez de la AB-1240 a doce mil», «el costo es 12.500», «la dos», «listo». Registrar es en pantalla.
+  const voiceAdapter = useRef<ListVoiceAdapter | null>(null);
+  const voiceHits = useRef(new Map<string, ProductHit>());
+  useEffect(() => {
+    const setCost = (id: string, cost: number) => setForm((cur) => ({ ...cur, lines: cur.lines.map((l) => (l.product_id === id ? { ...l, unit_cost: cost } : l)) }));
+    voiceAdapter.current = {
+      title: "Compra",
+      examples: ["Diez de la A B guion doce cuarenta a doce mil", "Cinco secadores", "El costo es doce mil quinientos", "La dos (cuando te lea opciones)", "Cambia la zapatera a cuatro · Quita el último", "Foto", "Listo (registras en pantalla)"],
+      intro: () => (form.lines.length ? `La factura lleva ${form.lines.length} productos. Dime más o di listo.` : "Dime los productos de la factura, cuántos y, si quieres, a cómo: diez de tal referencia a doce mil."),
+      search: async (q) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: defaultWh || null, p_in_stock: false, p_limit: 6 });
+        const rows = (data ?? []) as ProductHit[];
+        rows.forEach((h) => voiceHits.current.set(h.id, h));
+        return rows.map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: null }));
+      },
+      lines: form.lines.map((l) => ({ id: l.product_id, name: l.name, sku: l.sku, qty: l.qty })),
+      put: (hit, qty, extra) => {
+        const cost = extra?.cost;
+        setForm((cur) => {
+          if (cur.lines.some((l) => l.product_id === hit.id)) {
+            return { ...cur, lines: cur.lines.map((l) => (l.product_id === hit.id ? { ...l, qty: Math.max(1, qty), ...(cost ? { unit_cost: cost } : {}) } : l)) };
+          }
+          const full = voiceHits.current.get(hit.id);
+          if (!full) return cur;
+          return { ...cur, lines: [...cur.lines, { ...lineFromHit(full, "purchase", defaultWh), qty: Math.max(1, qty), ...(cost ? { unit_cost: cost } : {}) }] };
+        });
+      },
+      remove: (id) => setForm((cur) => ({ ...cur, lines: cur.lines.filter((l) => l.product_id !== id) })),
+      // «… a doce mil», «… a 12.500 pesos», «… costo 8.000»: el costo unitario. Con «a» sola, solo si es de mil o más.
+      preparse: (text) => {
+        const t = normalize(text);
+        const m = t.match(/^(.+?)\s+(a|en|por|costo|cuesta|vale|valor|precio)\s+(.+?)(?:\s+(?:cada una|cada uno|la unidad|c u))?$/);
+        if (!m) return { text };
+        const amount = parseAmount(m[3]);
+        const keyword = m[2] !== "a" && m[2] !== "en" && m[2] !== "por";
+        if (amount === null || !(keyword || /pesos|mil/.test(m[3]) || amount >= 1000)) return { text };
+        return { text: m[1], extra: { cost: amount } };
+      },
+      custom: (t) => {
+        const m = t.match(/^(?:el )?(?:costo|precio de compra|valor)(?: es| de| unitario es| unitario)?\s+(.+)$/);
+        if (!m) return null;
+        const amount = parseAmount(m[1]);
+        const last = form.lines.at(-1);
+        if (amount === null || !last) return null;
+        setCost(last.product_id, amount);
+        return { say: `Costo de ${last.name.toLowerCase()}: ${amount.toLocaleString("es-CO")} pesos.` };
+      },
+      doneSay: () => `Listo: ${form.lines.length} productos y ${form.lines.reduce((a, l) => a + l.qty, 0)} unidades. Revisa proveedor, factura y costos en pantalla, y toca Registrar.`,
+    };
+  });
+  useListVoice(voiceAdapter, canBuy);
 
   const hasWork = formHasWork(form) || staged.length > 0;
   const draftLabel = !hasWork && !editing

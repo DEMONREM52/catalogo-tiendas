@@ -12,6 +12,7 @@ import { errorText as fiscalErrorText, fiscalApi, newIdempotencyKey } from "@/li
 import type { PointReadiness } from "@/lib/fiscal/types";
 import { getStoreDataSchemaErrorMessage } from "@/lib/store-schema-errors";
 import { PhotoSearchButton } from "../PhotoSearchControls";
+import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
 import { QtyPicker } from "./QtyPicker";
 import { useErpFinderSource } from "../useErpFinder";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
@@ -1877,6 +1878,34 @@ export default function PosPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // REM (voz): «tres de la AB-1240», «la dos», «quita el último», «listo». Solo arma el carrito: cobrar es en pantalla.
+  const voiceAdapter = useRef<ListVoiceAdapter | null>(null);
+  useEffect(() => {
+    voiceAdapter.current = {
+      title: "Venta",
+      examples: ["Tres de la A B guion doce cuarenta", "Dos secadores", "La dos (cuando te lea opciones)", "Cambia la zapatera a cuatro · Quita el último", "¿Cuántos llevo?", "Foto", "Listo (cobras en pantalla)"],
+      intro: () => (cart.length ? `Llevas ${cart.length} productos en el carrito. Dime más o di listo.` : "Dime los productos de la venta y cuántos."),
+      search: async (q) => {
+        const term = q.trim().toLowerCase();
+        const base = (pointStock ? activeProducts.map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 })) : activeProducts).filter((p) => (p.stock ?? 0) > 0);
+        const exact = base.filter((p) => isExactCode(p, term));
+        const rest = smartFilter(base.filter((p) => !exact.includes(p)), term, (p) => `${p.name} ${p.sku ?? ""} ${p.barcode ?? ""}`);
+        return [...exact, ...rest].slice(0, 6).map((p) => ({ id: p.id, name: p.name, sku: p.sku ?? null, barcode: p.barcode ?? null, avail: p.stock ?? null }));
+      },
+      lines: cart.map((i) => ({ id: i.productId, name: i.name, sku: productById.get(i.productId)?.sku ?? null, qty: i.qty })),
+      put: (hit, qty) => {
+        if (cart.some((i) => i.productId === hit.id)) return setQty(hit.id, qty);
+        const product = productById.get(hit.id);
+        if (product) addProduct({ ...product, stock: hit.avail ?? product.stock }, true, Math.max(1, qty));
+      },
+      remove: removeItem,
+      limitToStock: true,
+      revealStock: true,
+      doneSay: () => `Listo: ${cart.length} productos y ${cart.reduce((a, i) => a + i.qty, 0)} unidades en el carrito. Revisa precios y cobra en pantalla.`,
+    };
+  });
+  const voice = useListVoice(voiceAdapter, Boolean(storeId));
+
   return (
     <main className="space-y-3 pb-20 lg:pb-0">
       <OfflineDrafts storeId={store?.id} activeId={draftId} onLoad={loadDraft} onPrint={printDraft} />
@@ -1998,6 +2027,7 @@ export default function PosPage() {
                   setSearch("");
                 }}
               />
+              <span data-rem-photo className="contents">
               <PhotoSearchButton
                 source={finderSource}
                 pickLabel="Agregar"
@@ -2014,6 +2044,12 @@ export default function PosPage() {
                 }}
                 onPick={(hit) => {
                   const product = allProducts.find((p) => p.id === hit.id);
+                  const stockNow = product ? (pointStock ? pointStock.get(product.id) ?? 0 : product.stock) : 0;
+                  // Foto pedida por REM: se agrega 1 y REM pregunta cuántas (sin abrir la ventana de cantidad).
+                  if (product && product.active && stockNow !== 0 && voice.picked({ id: product.id, name: product.name, sku: product.sku ?? null, avail: stockNow ?? null })) {
+                    addProduct({ ...product, stock: stockNow }, true, 1);
+                    return;
+                  }
                   const stock = product ? (pointStock ? pointStock.get(product.id) ?? 0 : product.stock) : 0;
                   if (!product || !product.active || stock === 0) {
                     void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
@@ -2022,6 +2058,7 @@ export default function PosPage() {
                   pickProduct({ ...product, stock });
                 }}
               />
+              </span>
             </div>
 
             {loading || (pointId && !pointStock) ? (

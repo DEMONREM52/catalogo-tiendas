@@ -1,12 +1,13 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
 import { Camera, Loader2, Minus, Plus, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ScanCounter } from "@/components/ScanCounter";
 import { ProductPicker } from "./LineEditor";
+import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
 import { Btn, Empty, Panel, money, toast, type ErpCtx, type Warehouse } from "./shared";
 
 type CountRow = {
@@ -164,6 +165,31 @@ function CountEditor({ ctx, id, onBack }: { ctx: ErpCtx; id: string; onBack: () 
     return true;
   }
 
+  // REM (voz): «zapatera hay doce», «tres de la AB-1240», «listo» → «¿Guardo el conteo?».
+  // Conteo a ciegas: REM nunca dice cuánto dice el sistema.
+  const voiceAdapter = useRef<ListVoiceAdapter | null>(null);
+  useEffect(() => {
+    if (!d) return;
+    voiceAdapter.current = {
+      title: "Conteo",
+      examples: ["Zapatera negra hay doce", "Tres de la A B guion doce cuarenta", "La dos (cuando te lea opciones)", "Cambia la zapatera a cinco · Quita el último", "¿Cuántos llevo?", "Foto", "Listo → ¿Guardo? → Sí"],
+      intro: () => `Conteo de ${d.count.zone.toLowerCase()}. Dime cada producto y cuántos hay. Por ejemplo: zapatera negra hay doce.`,
+      search: async (q) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: d.count.warehouse_id, p_in_stock: false, p_limit: 6 });
+        return ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null }>).map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: null }));
+      },
+      lines: lines.map((l) => ({ id: l.pid, name: l.name, sku: l.sku, qty: l.counted })),
+      put: (hit, qty) => setQty(hit.id, hit.name, hit.sku, qty),
+      remove,
+      revealStock: false,
+      confirm: () => `Llevas ${lines.length} productos contados. ¿Guardo el conteo?`,
+      submit: async () => (await save())
+        ? { ok: true, say: "Guardado. Cuando termines la zona, toca Enviar para aprobar." }
+        : { ok: false, say: "No se pudo guardar. Revisa el aviso en pantalla." },
+    };
+  });
+  const voice = useListVoice(voiceAdapter, Boolean(d && editable));
+
   async function submit() {
     if (dirty && !(await save())) return;
     const ask = await Swal.fire({ ...swal, icon: "question", title: "¿Enviar para aprobar?", text: "Ya no se podrá cambiar. Quien aprueba verá las diferencias.", showCancelButton: true, confirmButtonText: "Sí, enviar", cancelButtonText: "Seguir contando" });
@@ -225,7 +251,7 @@ function CountEditor({ ctx, id, onBack }: { ctx: ErpCtx; id: string; onBack: () 
             <div className="min-w-[240px] flex-1">
               <ProductPicker storeId={ctx.storeId} warehouseId={d.count.warehouse_id} addedQty={Object.fromEntries(lines.map((l) => [l.pid, l.counted]))}
                 placeholder="🔎 O busca el producto y escribe cuántos hay…"
-                onPick={(p) => setQty(p.id, p.name, p.sku, (draft.get(p.id)?.counted ?? 0) + 1)} />
+                onPick={(p) => { setQty(p.id, p.name, p.sku, (draft.get(p.id)?.counted ?? 0) + 1); voice.picked({ id: p.id, name: p.name, sku: p.sku, avail: null }); }} />
             </div>
           </div>
           <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>💡 Cuenta lo que hay físicamente en esta zona. Aquí no se muestra lo que dice el sistema, para que el conteo sea limpio.</p>

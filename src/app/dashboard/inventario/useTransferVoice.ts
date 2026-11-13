@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { registerRemHandler, type RemReply } from "@/lib/voice/rem";
+import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "@/lib/voice/rem";
 import { compactCode, matchPlace, matchPlaces, normalize, parseTransferCommand, plural, spokenReference, type TransferCommand } from "@/lib/voice/spanish";
 import type { ProductHit, Warehouse } from "./shared";
 
@@ -57,6 +57,7 @@ const EXAMPLES = [
   "¿Cuántos llevo?",
   "Lo lleva Pedro · Revisó Juan",
   "Listo → ¿Lo envío? → Sí",
+  "Foto: busca el producto con la cámara",
   "Para / Cancelar: termina (queda el borrador)",
 ];
 
@@ -104,7 +105,8 @@ function findLine(lines: TransferVoiceLine[], spoken: string): TransferVoiceLine
 }
 
 export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null>, enabled: boolean) {
-  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false });
+  const state = useRef({ awaiting: null as Awaiting, pending: null as Pending, lastAdded: [] as string[], dest: null as string | null, last: "", finishing: false, photo: false });
+  const pickedRef = useRef<(hit: ProductHit) => void>(() => {});
 
   useEffect(() => {
     if (!enabled) return;
@@ -349,13 +351,29 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         case "done":
           return finish();
 
+        case "photo": {
+          if (!a.from || !a.targets.length) return nextPrompt("Primero dime de dónde sale y para dónde va.");
+          if (!clickRemPhoto()) return reply("No encontré la búsqueda por foto en pantalla.");
+          st.photo = true; st.pending = null; st.awaiting = null;
+          return reply("Toma la foto del producto y tócalo. Luego te pregunto cuántas.", { end: true });
+        }
+
         case "add":
           if (pending?.type === "choice" || pending?.type === "qty") st.pending = null;
           return addSpoken(cmd, alts);
       }
     }
 
-    return registerRemHandler({
+    // Producto elegido con la foto que pidió REM: pregunta cuántas y sigue la conversación.
+    pickedRef.current = (hit) => {
+      if (!st.photo) return;
+      st.photo = false;
+      const dest = destFor(null);
+      if (!dest) return;
+      resumeRem(chosen(hit, null, dest, false));
+    };
+
+    const off = registerRemHandler({
       title: "Traslado",
       examples: EXAMPLES,
       start: async (first) => {
@@ -367,5 +385,8 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
       },
       hear,
     });
+    return () => { off(); pickedRef.current = () => {}; };
   }, [enabled, apiRef]);
+
+  return { picked: (hit: ProductHit) => pickedRef.current(hit) };
 }

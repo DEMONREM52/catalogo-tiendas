@@ -187,7 +187,9 @@ export type TransferCommand =
   | { kind: "destination"; to: string }
   | { kind: "choice"; index: number }
   | { kind: "number"; value: number }
-  | { kind: "add"; qty: number | null; query: string; to: string | null };
+  | { kind: "photo" }
+  /** `exact`: se dijo cuánto hay («zapatera hay doce»): la cantidad es esa, no se suma. */
+  | { kind: "add"; qty: number | null; query: string; to: string | null; exact?: boolean };
 
 const ORDINALS: Record<string, number> = {
   primero: 1, primera: 1, primer: 1, segundo: 2, segunda: 2, tercero: 3, tercera: 3, tercer: 3, cuarto: 4, cuarta: 4, quinto: 5, quinta: 5,
@@ -205,6 +207,12 @@ function clean(text: string): string {
     .replace(/\s+por favor$/, "")
     .replace(/^(?:por favor|porfa|bueno|entonces|ahora|y|ok|vale) /, "")
     .trim();
+}
+
+/** Valor dicho en pesos: «doce mil», «12.500», «$12.500», «doce mil quinientos pesos». null si no es un número. */
+export function parseAmount(text: string): number | null {
+  const t = normalize(text.replace(/\$/g, " ")).replace(/\s+(?:de )?(?:pesos|peso|barras|lucas)$/, "").replace(/^(?:a|en|por|de)\s+/, "");
+  return loneNumber(t);
 }
 
 /** Lee un número (cifras, palabras u ordinal) que sea toda la frase o casi: «la dos», «el número 3», «tres». */
@@ -246,6 +254,10 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   if (notes) return { kind: "notes", text: notes[1] };
 
   if (DONE.test(t)) return { kind: "done" };
+  if (/^(?:foto|una foto|con foto|camara|la camara|abre la camara|toma una foto|tomar foto|busca con foto|buscar con foto|buscalo con foto|por foto)$/.test(t)) return { kind: "photo" };
+  // Conteo: «zapatera hay doce», «de la AB-1240 hay 3», «AB-1240 conté cinco».
+  const there = t.match(/^(?:de )?(?:la |el |los |las )?(.+?)\s+(?:hay|tengo|conte|contamos|quedan|quedaron|habia|habian)\s+(.+)$/);
+  if (there) { const n = loneNumber(there[2]); if (n !== null) return { kind: "add", qty: n, query: there[1], to: null, exact: true }; }
 
   if (awaiting === "choice") {
     if (/^(?:ninguno|ninguna|ningun|ni uno|otro|otra|no es ninguno)$/.test(t)) return { kind: "choice", index: 0 };

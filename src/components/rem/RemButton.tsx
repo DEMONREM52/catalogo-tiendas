@@ -1,26 +1,40 @@
 "use client";
 
 /**
- * 🎙️ REM: asistente de voz del panel. Se toca, se habla y contesta con voz.
- * Por ahora sabe armar traslados (useTransferVoice). Sin IA: entiende frases (src/lib/voice/spanish.ts).
- * No escucha a escondidas: solo mientras el panel de REM está abierto.
+ * 🎙️ REM: asistente de voz del panel. Se toca (o se dice «Oye REM»), se habla y contesta con voz.
+ * Sabe: traslados, conteos, pedidos internos, compras y POS (cada pantalla se registra en src/lib/voice/rem.ts).
+ * Sin IA: entiende frases (src/lib/voice/spanish.ts). Solo escucha con el panel abierto, o esperando
+ * «Oye REM» si se encendió esa opción en este equipo (y con la pestaña a la vista).
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, listen, speak, stopListening, stopSpeaking, voiceSupported, VoiceError } from "@/lib/voice/speech";
-import { onRemHandlerChange, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
+import { beep, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError } from "@/lib/voice/speech";
+import { onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 type Turn = { who: "you" | "rem"; text: string };
 
-const STOP = /^(?:(?:oye )?rem )?(?:para|parar|detente|cancela|cancelar|chao|adios|salir|gracias)$/;
-const TRANSFER = /traslad|distribu|(?:mandar|enviar|despachar) mercancia/;
+const STOP = /^(?:(?:oye )?rem )?(?:para|parar|detente|cancela|cancelar|chao|adios|salir|gracias|nada)$/;
+const WAKE_KEY = "remhub:rem-wake";
 
-export function RemButton({ canTransfer }: { canTransfer: boolean }) {
+/** A dónde lleva REM según lo que se dice (si la pantalla no está abierta). */
+const INTENTS: Array<{ re: RegExp; href: string; perms: string[]; name: string; title: string; wait?: string }> = [
+  { re: /traslad|distribu|(?:mandar|enviar|despachar) (?:la )?mercancia/, href: "/dashboard/inventario?tab=transfers", perms: ["transfers"], name: "Traslados", title: "Traslado" },
+  { re: /conteo|contar|inventario fisico/, href: "/dashboard/inventario?tab=conteos", perms: ["inventory_counts", "inventory_adjust"], name: "Conteos", title: "Conteo", wait: "Abre o empieza un conteo y vuelve a tocar REM." },
+  { re: /pedido interno|pedir mercancia|hacer un pedido|nuevo pedido|pedirle a|pedir a la bodega|pedido a/, href: "/dashboard/pedidos?tab=internos&nuevo=1", perms: ["stock_requests"], name: "Pedidos internos", title: "Pedido interno", wait: "Toca «Nuevo pedido» y vuelve a tocar REM." },
+  { re: /compra|factura de(?:l)? proveedor|ingres(?:o|ar) (?:de )?mercancia|llego mercancia|registrar factura/, href: "/dashboard/inventario?tab=purchases", perms: ["purchases"], name: "Compras", title: "Compra" },
+  { re: /vend|venta|\bpos\b|caja|cobrar|facturar/, href: "/dashboard/pos", perms: ["pos"], name: "POS", title: "Venta" },
+];
+
+function readWake(): boolean {
+  try { return localStorage.getItem(WAKE_KEY) === "1"; } catch { return false; }
+}
+
+export function RemButton({ can }: { can: (permission: string) => boolean }) {
   const supported = useSyncExternalStore(() => () => {}, voiceSupported, () => false);
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -30,15 +44,31 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState<string | null>(null);
   const [examples, setExamples] = useState<string[]>([]);
+  const [wakeOn, setWakeOn] = useState(false);
+  const [visible, setVisible] = useState(true);
   const session = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const runRef = useRef<(initial?: RemReply, first?: string[]) => Promise<void>>(async () => {});
 
+  useEffect(() => { const t = window.setTimeout(() => setWakeOn(readWake()), 0); return () => window.clearTimeout(t); }, []);
   useEffect(() => onRemHandlerChange(() => { const h = remHandler(); setTitle(h?.title ?? null); setExamples(h?.examples ?? []); }), []);
   useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [turns, interim]);
-  // Si se cierra la pestaña o se sale del panel, REM se calla.
   useEffect(() => () => { session.current++; stopListening(); stopSpeaking(); }, []);
-
-  if (!supported) return null;
+  // Después de elegir con la foto, la pantalla pide seguir: «Zapatera negra. ¿Cuántas?».
+  useEffect(() => onRemResume((r) => { setOpen(true); void runRef.current(r); }), []);
+  useEffect(() => {
+    const on = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  }, []);
+  // «Oye REM»: solo en reposo, con la opción encendida y la pestaña a la vista.
+  useEffect(() => {
+    if (!supported || !wakeOn || !visible || phase !== "idle") return;
+    return startWake((rest) => {
+      setOpen(true);
+      void runRef.current(undefined, rest ? [rest] : undefined);
+    }, (e) => { setError(e.message); setWakeOn(false); try { localStorage.removeItem(WAKE_KEY); } catch { /* sin almacenamiento */ } });
+  }, [supported, wakeOn, visible, phase]);
 
   const add = (who: Turn["who"], text: string) => setTurns((t) => [...t.slice(-14), { who, text }]);
 
@@ -85,47 +115,66 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
     }
   }
 
-  function openTransfers() {
-    const href = "/dashboard/inventario?tab=transfers";
-    if (window.location.pathname === "/dashboard/inventario") {
-      window.history.pushState(null, "", href);
+  function go(href: string) {
+    const target = new URL(href, window.location.origin);
+    if (target.pathname === window.location.pathname) {
+      window.history.pushState(null, "", target.pathname + target.search);
       announceUrlChange();
       window.dispatchEvent(new Event("remhub-tab-change"));
     } else router.push(href);
   }
 
-  async function run() {
+  /** Lleva a la pantalla que se pidió y espera a que esté lista para hablar. */
+  async function route(id: number, alts: string[]): Promise<{ h: RemHandler } | { say: string } | null> {
+    const t = normalize(alts[0] ?? "");
+    const intent = INTENTS.find((i) => i.re.test(t));
+    if (!intent) return null;
+    if (!intent.perms.some((p) => can(p))) return { say: `No tienes permiso para ${intent.name}. Pídeselo al administrador.` };
+    const current = remHandler();
+    if (current?.title === intent.title) return { h: current };
+    go(intent.href);
+    setPhase("thinking");
+    const h = await waitForRemHandler(intent.wait ? 5000 : 8000);
+    if (session.current !== id) return { say: "" };
+    if (!h) return { say: intent.wait ?? `No pude abrir ${intent.name}. Ábrelo y vuelve a tocar REM.` };
+    return { h };
+  }
+
+  async function run(initial?: RemReply, first?: string[]) {
     const id = ++session.current;
     setError(null);
-    setTurns([]);
-    let h: RemHandler | null = remHandler();
+    if (!initial) setTurns([]);
     let reply: RemReply;
 
-    if (h) reply = await h.start();
+    if (initial) reply = initial;
     else {
-      // Sin pantalla que atienda: preguntar qué se quiere hacer.
-      let tries = 0;
-      for (;;) {
-        await say(id, { say: tries ? "Por ahora sé hacer traslados. Di: quiero hacer un traslado." : "Hola, soy REM. ¿Qué hacemos?" });
-        const alts = await hearOnce(id);
-        if (!alts) return;
-        const t = normalize(alts[0] ?? "");
-        if (!t || STOP.test(t)) {
-          if (!t && tries < 1) { tries++; continue; }
-          await say(id, { say: "Listo. Toca REM cuando me necesites." });
-          return stop();
+      let h: RemHandler | null = null;
+      let said = first;
+      // Si lo dicho pide otra pantalla («quiero hacer un traslado» estando en el POS), se va allá.
+      if (said?.length) {
+        const r = await route(id, said);
+        if (r && "say" in r) { if (r.say) await say(id, { say: r.say }); return stop(); }
+        if (r) h = r.h;
+      }
+      h = h ?? remHandler();
+      if (h) reply = await h.start(said);
+      else {
+        let tries = 0;
+        for (;;) {
+          await say(id, { say: tries ? "Puedo ayudarte con traslados, conteos, pedidos internos, compras y ventas. ¿Cuál?" : "Hola, soy REM. ¿Qué hacemos?" });
+          said = (await hearOnce(id)) ?? undefined;
+          if (!said) return;
+          const t = normalize(said[0] ?? "");
+          if (!t || STOP.test(t)) {
+            if (!t && tries < 1) { tries++; continue; }
+            await say(id, { say: "Listo. Toca REM cuando me necesites." });
+            return stop();
+          }
+          const r = await route(id, said);
+          if (r && "say" in r) { if (r.say) await say(id, { say: r.say }); return stop(); }
+          if (r) { reply = await r.h.start(said); break; }
+          if (++tries >= 3) { await say(id, { say: "Toca REM cuando quieras intentarlo de nuevo." }); return stop(); }
         }
-        if (TRANSFER.test(t)) {
-          if (!canTransfer) { await say(id, { say: "No tienes permiso para hacer traslados. Pídeselo al administrador." }); return stop(); }
-          openTransfers();
-          setPhase("thinking");
-          h = await waitForRemHandler();
-          if (session.current !== id) return;
-          if (!h) { await say(id, { say: "No pude abrir Traslados. Ábrelo y vuelve a tocar REM." }); return stop(); }
-          reply = await h.start(alts);
-          break;
-        }
-        if (++tries >= 3) { await say(id, { say: "Toca REM cuando quieras intentarlo de nuevo." }); return stop(); }
       }
     }
 
@@ -142,6 +191,13 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
         continue;
       }
       misses = 0;
+      // «Quiero hacer un conteo» en medio de un traslado: cambia de pantalla.
+      const moved = INTENTS.some((i) => i.re.test(normalize(alts[0])) && /^(?:(?:oye )?rem )?(?:quiero|vamos a|voy a|abre|abrir|ir a|llevame a)\b/.test(normalize(alts[0])));
+      if (moved) {
+        const r = await route(id, alts);
+        if (r && "say" in r) { reply = { say: r.say || "Dime." }; continue; }
+        if (r) { reply = await r.h.start(alts); continue; }
+      }
       const now = remHandler();
       if (!now) { await say(id, { say: "Saliste de la pantalla. Hasta luego." }); return stop(); }
       setPhase("thinking");
@@ -152,6 +208,9 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
       }
     }
   }
+  useEffect(() => { runRef.current = run; });
+
+  if (!supported) return null;
 
   function toggle() {
     if (!open) { setOpen(true); void run(); return; }
@@ -159,16 +218,22 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
     else stop();
   }
 
+  function toggleWake(on: boolean) {
+    setWakeOn(on);
+    try { if (on) localStorage.setItem(WAKE_KEY, "1"); else localStorage.removeItem(WAKE_KEY); } catch { /* sin almacenamiento */ }
+  }
+
   const color = phase === "listening" ? "#ef4444" : phase === "speaking" ? "#8b5cf6" : phase === "thinking" ? "#f59e0b" : "var(--t-accent, #8b5cf6)";
-  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? "Hablando…" : phase === "thinking" ? "Buscando…" : "En pausa";
+  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? "Hablando…" : phase === "thinking" ? "Buscando…" : wakeOn ? "Esperando «Oye REM»" : "En pausa";
 
   return (
     <>
-      <button type="button" onClick={toggle} title="REM: dile lo que necesitas (por ahora, traslados)" aria-label="Hablar con REM"
-        className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition hover:-translate-y-0.5"
+      <button type="button" onClick={toggle} title={wakeOn ? "REM: di «Oye REM» o toca aquí" : "REM: toca y dile lo que necesitas"} aria-label="Hablar con REM"
+        className="relative inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition hover:-translate-y-0.5"
         style={{ borderColor: open ? color : "var(--t-card-border)", background: open ? `color-mix(in oklab, ${color} 14%, var(--t-card-bg))` : "var(--t-card-bg)", color: "var(--t-text)" }}>
         <span aria-hidden className={phase === "listening" ? "animate-pulse" : undefined}>🎙️</span>
         <span>REM</span>
+        {wakeOn && phase === "idle" ? <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500" title="Esperando «Oye REM»" /> : null}
       </button>
       {open && typeof document !== "undefined" ? createPortal(
         <div role="dialog" aria-label="REM, asistente de voz"
@@ -204,9 +269,17 @@ export function RemButton({ canTransfer }: { canTransfer: boolean }) {
           <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
             <summary className="cursor-pointer font-semibold">¿Qué le puedo decir?</summary>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              {(examples.length ? examples : ["Quiero hacer un traslado", "Quiero hacer un traslado de bodega principal a Zamora"]).map((e) => <li key={e}>{e}</li>)}
+              {(examples.length ? examples : ["Quiero hacer un traslado", "Quiero hacer un conteo", "Quiero hacer un pedido interno", "Registrar una compra", "Vender"]).map((e) => <li key={e}>{e}</li>)}
+              <li>«Foto»: busca el producto con la cámara</li>
             </ul>
-            <p className="mt-1">Nada se envía sin que digas «sí». Habla cuando suene el pitido.</p>
+            <p className="mt-1">Nada se guarda ni se envía sin que digas «sí». Habla cuando suene el pitido.</p>
+            <label className="mt-2 flex items-start gap-2 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+              <input type="checkbox" className="mt-0.5" checked={wakeOn} onChange={(e) => toggleWake(e.target.checked)} />
+              <span>
+                <b>Llamarlo diciendo «Oye REM»</b> en este equipo.
+                <span className="block" style={{ color: "var(--t-muted)" }}>Escucha solo con RemHub abierto y a la vista. Gasta más batería; mejor en computador o tablet fija.</span>
+              </span>
+            </label>
           </details>
         </div>,
         document.body,

@@ -900,6 +900,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "«Listo» → REM resume → «Sí» y se envía" },
     ],
   },
+  {
+    id: 86, date: "2026-11-13", title: "🎙️ REM ahora también en conteos, pedidos internos, compras y POS",
+    summary: "Dile a REM «quiero hacer un conteo», «un pedido interno», «registrar una compra» o «vender» y dicta los productos. En conteos: «zapatera hay doce». En compras: «diez de la AB-1240 a doce mil». Di «foto» para buscar con la cámara. Opcional: llamarlo diciendo «Oye REM».",
+    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/dashboard/pos"],
+    demo: [
+      { icon: "🎙️", text: "Toca REM: «quiero hacer un conteo»" },
+      { icon: "📋", text: "«Zapatera negra hay doce»" },
+      { icon: "📷", text: "«Foto» → toma la foto → «cuatro»" },
+      { icon: "👂", text: "En ¿Qué le puedo decir?, enciende «Oye REM»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

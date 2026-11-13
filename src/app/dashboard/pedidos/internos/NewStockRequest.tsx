@@ -14,6 +14,8 @@ import { DateField } from "@/components/forms/Fields";
 import { draftAge, readStockDraft, saveStockDraft, type StockRequestDraft } from "@/lib/stock-request-draft";
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 import { productHitFromPhoto } from "../../inventario/LineEditor";
+import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
+import { matchPlace } from "@/lib/voice/spanish";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
 // levels (opcional): existencias por punto; las líneas que traen esto (p. ej. desde la lista general) se conservan al cambiar de punto.
@@ -200,6 +202,48 @@ export function NewStockRequest({
     onCreated(String(data));
   }
 
+  // REM (voz): «pídele a la bodega», «cinco de la AB-1240», «urgente», «nota …», «listo» → «¿Lo envío?».
+  const voiceAdapter = useRef<ListVoiceAdapter | null>(null);
+  useEffect(() => {
+    const pick = (spoken: string) => matchPlace(spoken, points.filter((p) => p.id !== from));
+    const changeTo = (id: string) => { setTo(id); relocate(from, id); };
+    voiceAdapter.current = {
+      title: "Pedido interno",
+      examples: ["Pídele a la bodega principal", "Cinco de la A B guion doce cuarenta", "La dos (cuando te lea opciones)", "Cambia la zapatera a tres · Quita el último", "Urgente · Nota: para el sábado", "Foto", "Listo → ¿Lo envío? → Sí"],
+      intro: () => (to ? `Pedido a ${toName.toLowerCase()}. Dime los productos y cuántos.` : "¿A quién le pides? Di, por ejemplo: a la bodega principal."),
+      search: async (q) => {
+        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: to || null, p_in_stock: false, p_limit: 6 });
+        return ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null; wh_qty: number; active?: boolean }>).map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: Number(h.wh_qty ?? 0) }));
+      },
+      lines: lines.map((l) => ({ id: l.product_id, name: l.name, sku: l.sku, qty: l.qty })),
+      put: (hit, qty) => setLines((cur) => (cur.some((l) => l.product_id === hit.id)
+        ? cur.map((l) => (l.product_id === hit.id ? { ...l, qty: Math.max(1, qty) } : l))
+        : [...cur, { product_id: hit.id, name: hit.name, sku: hit.sku, qty: Math.max(1, qty), there: hit.avail ?? 0, here: null }])),
+      remove: (id) => setLines((cur) => cur.filter((l) => l.product_id !== id)),
+      revealStock: true,
+      stockWord: "allá hay",
+      custom: (t) => {
+        // «Pídele a la bodega», «quiero hacer un pedido interno a Zamora»; sin destino aún, también «la bodega» sola.
+        const asked = t.match(/(?:pidele|pedirle|pedir|pide|pedido(?: interno)?)\s+(?:a|para)\s+(?:la |el )?(.+)$/);
+        const spoken = asked?.[1] ?? (!to ? t.replace(/^(?:a |para )?(?:la |el )?/, "") : null);
+        if (spoken) {
+          const p = pick(spoken);
+          if (p) { changeTo(p.id); return { say: `Listo, el pedido es para ${p.name.toLowerCase()}. Dime los productos.` }; }
+          if (asked) return { say: `No encontré «${spoken}». ¿A quién le pides?` };
+        }
+        if (/^(?:es )?urgente$|^(?:marcalo|ponlo) (?:como )?urgente$/.test(t)) { setUrgent(true); return { say: "Marcado como urgente." }; }
+        if (/^(?:no es urgente|quita(?:le)? lo urgente|normal)$/.test(t)) { setUrgent(false); return { say: "Ya no es urgente." }; }
+        const n = t.match(/^(?:nota|notas|anota|observacion)[: ]+(.+)$/);
+        if (n) { setNote(n[1]); return { say: "Anoté la nota." }; }
+        return null;
+      },
+      missing: () => (!to ? "¿A quién le pides?" : null),
+      confirm: () => `Son ${lines.length} productos y ${lines.reduce((a, l) => a + l.qty, 0)} unidades para ${toName.toLowerCase()}${urgent ? ", urgente" : ""}. ¿Lo envío?`,
+      submit: async () => { await submit(); return sent.current ? { ok: true, say: "Pedido enviado. Se abrió el chat del pedido." } : { ok: false, say: "No se envió. Revisa el aviso en pantalla." }; },
+    };
+  });
+  const voice = useListVoice(voiceAdapter, open && Boolean(from));
+
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
@@ -299,10 +343,10 @@ export function NewStockRequest({
                       }
                     }}
                   />
-                  <span className="absolute right-1.5 top-1.5">
+                  <span className="absolute right-1.5 top-1.5" data-rem-photo>
                     <ProductPhotoButton storeId={storeId} activeOnly compact className="h-9 border-0" pickLabel="Pedir" onPick={async (h) => {
                       const row = await productHitFromPhoto(storeId, h, to || null);
-                      if (row) add({ product_id: row.id, name: row.name, sku: row.sku, qty: 1, there: row.wh_qty, here: null });
+                      if (row) { add({ product_id: row.id, name: row.name, sku: row.sku, qty: 1, there: row.wh_qty, here: null }); voice.picked({ id: row.id, name: row.name, sku: row.sku, avail: row.wh_qty }); }
                     }} />
                   </span>
                   {focus ? (

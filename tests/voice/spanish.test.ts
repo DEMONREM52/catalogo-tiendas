@@ -88,3 +88,33 @@ test("corregir y responsables", () => {
   assert.deepEqual(p("pedro", "carrier"), { kind: "carrier", name: "PEDRO" });
   assert.deepEqual(p("nota llevar con cuidado"), { kind: "notes", text: "llevar con cuidado" });
 });
+
+test("conteo, foto y valores", async () => {
+  const { parseAmount } = await import("@/lib/voice/spanish");
+  const { wakeRest } = await import("@/lib/voice/speech");
+  assert.deepEqual(p("zapatera negra hay doce"), { kind: "add", qty: 12, query: "zapatera negra", to: null, exact: true });
+  assert.deepEqual(p("de la AB-1240 hay 3"), { kind: "add", qty: 3, query: "ab-1240", to: null, exact: true });
+  assert.deepEqual(p("foto"), { kind: "photo" });
+  assert.deepEqual(p("busca con foto"), { kind: "photo" });
+  assert.equal(parseAmount("doce mil"), 12000);
+  assert.equal(parseAmount("12.500 pesos"), 12500);
+  assert.equal(parseAmount("$8.000"), 8000);
+  assert.equal(parseAmount("doce mil quinientos"), 12500);
+  assert.equal(parseAmount("zapatera"), null);
+  assert.equal(wakeRest("Oye REM quiero hacer un traslado"), "quiero hacer un traslado");
+  assert.equal(wakeRest("hola rem"), "");
+  assert.equal(wakeRest("el reembolso de la remisión"), null);
+  assert.equal(wakeRest("tráeme la remera"), null);
+});
+
+test("REM atiende la última pantalla abierta y vuelve a la de abajo", async () => {
+  const { registerRemHandler, remHandler } = await import("@/lib/voice/rem");
+  const mk = (title: string) => ({ title, examples: [], start: () => ({ say: title }), hear: () => ({ say: title }) });
+  const offPos = registerRemHandler(mk("Venta"));
+  const offReq = registerRemHandler(mk("Pedido interno"));
+  assert.equal(remHandler()?.title, "Pedido interno");
+  offReq();
+  assert.equal(remHandler()?.title, "Venta");
+  offPos();
+  assert.equal(remHandler(), null);
+});

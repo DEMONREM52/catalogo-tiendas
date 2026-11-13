@@ -37,19 +37,22 @@ function InventoryPhotoButton({ storeId, warehouseId, inStockOnly, excludeIds, o
   onPick: (product: ProductHit) => void;
   onMessage: (text: string | null) => void;
 }) {
+  // data-rem-photo: REM la abre cuando se dice «foto».
   return (
-    <ProductPhotoButton
-      storeId={storeId}
-      activeOnly
-      pickLabel="Agregar"
-      onPick={async (hit) => {
-        onMessage(null);
-        if (excludeIds?.includes(hit.id)) { onMessage(`«${hit.name}» ya está en la lista.`); return; }
-        const row = await productHitFromPhoto(storeId, hit, warehouseId, inStockOnly);
-        if (row) onPick(row);
-        else onMessage(inStockOnly ? `«${hit.name}» no tiene existencias en esta bodega.` : `«${hit.name}» no está disponible aquí (puede estar inactivo).`);
-      }}
-    />
+    <span data-rem-photo className="contents">
+      <ProductPhotoButton
+        storeId={storeId}
+        activeOnly
+        pickLabel="Agregar"
+        onPick={async (hit) => {
+          onMessage(null);
+          if (excludeIds?.includes(hit.id)) { onMessage(`«${hit.name}» ya está en la lista.`); return; }
+          const row = await productHitFromPhoto(storeId, hit, warehouseId, inStockOnly);
+          if (row) onPick(row);
+          else onMessage(inStockOnly ? `«${hit.name}» no tiene existencias en esta bodega.` : `«${hit.name}» no está disponible aquí (puede estar inactivo).`);
+        }}
+      />
+    </span>
   );
 }
 

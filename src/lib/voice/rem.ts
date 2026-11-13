@@ -23,14 +23,21 @@ export type RemHandler = {
   examples: string[];
 };
 
+// Pila: la última pantalla abierta atiende (un pedido interno abierto encima del POS);
+// al cerrarse, vuelve a atender la de abajo.
+const stack: RemHandler[] = [];
 let handler: RemHandler | null = null;
 const listeners = new Set<() => void>();
 
 export function registerRemHandler(h: RemHandler): () => void {
+  stack.push(h);
   handler = h;
   listeners.forEach((l) => l());
   return () => {
-    if (handler === h) { handler = null; listeners.forEach((l) => l()); }
+    const i = stack.lastIndexOf(h);
+    if (i >= 0) stack.splice(i, 1);
+    const next = stack.at(-1) ?? null;
+    if (next !== handler) { handler = next; listeners.forEach((l) => l()); }
   };
 }
 
@@ -52,3 +59,30 @@ export function waitForRemHandler(ms = 8000): Promise<RemHandler | null> {
   });
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Retomar la conversación (p. ej. después de elegir el producto con la foto)
+
+const resumeListeners = new Set<(r: RemReply) => void>();
+
+/** REM vuelve a hablar con esta frase y sigue escuchando (abre el panel si estaba cerrado). */
+export function resumeRem(reply: RemReply) {
+  resumeListeners.forEach((l) => l(reply));
+}
+
+export function onRemResume(fn: (r: RemReply) => void): () => void {
+  resumeListeners.add(fn);
+  return () => { resumeListeners.delete(fn); };
+}
+
+/**
+ * Abre la búsqueda por foto de la pantalla: el botón 📷 marcado con `data-rem-photo`
+ * (el primero visible). false si la pantalla no tiene.
+ */
+export function clickRemPhoto(): boolean {
+  const all = [...document.querySelectorAll<HTMLElement>("[data-rem-photo] button, button[data-rem-photo]")];
+  const btn = all.find((b) => b.offsetParent !== null && !(b as HTMLButtonElement).disabled) ?? null;
+  if (!btn) return false;
+  btn.click();
+  return true;
+}

@@ -401,6 +401,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const overdrawn = lines.some((l) => used(l.product_id) > availOf(l));
 
   function addProduct(hit: ProductHit) {
+    voiceRef.current?.picked(hit);
     // Si ya está, no se duplica: se ilumina y el cursor va a su cantidad para cambiarla.
     if (lines.some((l) => l.product_id === hit.id)) void toast(`«${hit.name}» ya está en el traslado`, "success", "Te llevamos a su cantidad para que la cambies.");
     setLines((prev) => (prev.some((l) => l.product_id === hit.id) ? [...prev] : [...prev, { product_id: hit.id, name: hit.name, sku: hit.sku, available: hit.wh_qty }]));
@@ -637,6 +638,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   }
 
   const destinations = active.filter((w) => w.id !== from);
+  const voiceRef = useRef<{ picked: (hit: ProductHit) => void } | null>(null);
 
   // REM: armar el traslado hablando (botón 🎙️ REM del encabezado). Lee siempre lo último de la pantalla.
   const voiceApi = useRef<TransferVoiceApi | null>(null);
@@ -660,7 +662,8 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       send: async () => { await send({ confirmed: true }); return sentRef.current; },
     };
   });
-  useTransferVoice(voiceApi, canTransfer && !editingId);
+  const voice = useTransferVoice(voiceApi, canTransfer && !editingId);
+  useEffect(() => { voiceRef.current = voice; });
 
   return (
     <div className="space-y-5">
