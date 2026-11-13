@@ -9,7 +9,10 @@
  *   · Mientras habla se le puede interrumpir hablando (computador).
  *   · Sabe: traslados, conteos, pedidos internos, compras y POS (cada pantalla se registra en src/lib/voice/rem.ts),
  *     y abrir cualquier página que la persona pueda abrir («abre los gastos»: src/lib/voice/navigate.ts).
- *   · Aprende de los errores en este equipo: productos (src/lib/voice/fuzzy.ts) y frases (navigate.ts).
+ *   · Explica módulos, dice cómo se hacen las cosas, consulta ventas y entiende «crea uno nuevo» según la página
+ *     (src/lib/rem: catálogo, comprensión, acciones y respuestas; ver docs/REM_ARQUITECTURA.md).
+ *   · Aprende de los errores, por persona y tienda: productos (src/lib/voice/fuzzy.ts) y frases (navigate.ts),
+ *     guardados con src/lib/rem/memory.ts. Lo aprendido nunca da permisos.
  * Sin IA de pago: todo corre en el navegador.
  */
 
@@ -20,7 +23,14 @@ import { announceUrlChange } from "@/lib/url-intent";
 import { beep, capture, duplexCapable, duplexPref, fullDuplex, isAppleMobile, isEchoOf, isInstalledApp, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, unlockAudio, voiceSupported, VoiceError, wakeRest, withoutName } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
-import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
+import { forgetLearnedProducts, forgetPhraseKey, learnedCount, learnedPhrase, learnedProductsCount, learnPhrase, listPhrases, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
+import { VOICE_SCREENS, type VoiceScreen } from "@/lib/rem/catalog";
+import { emptyBrain, think, type BrainState, type Thought } from "@/lib/rem/brain";
+import { capabilitiesAnswer } from "@/lib/rem/respond";
+import { forgetEverything, readMisses, recordMiss, resolveMiss, setRemScope } from "@/lib/rem/memory";
+import type { ActionEnv } from "@/lib/rem/actions";
+import type { RemContext } from "@/lib/rem/understand";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { RemOrb, type OrbPlace } from "./RemOrb";
 import { searchRequest } from "@/lib/voice/products-voice";
 import { applyPronunciations, PRONUNCIATIONS, pronunciationChoice, setPronunciationChoice } from "@/lib/voice/pronunciation";
@@ -33,17 +43,9 @@ const HELP = /^(?:(?:oye )?rem )?(?:que (?:puedes|sabes) hacer|ayuda|ayudame|que
 const ON_KEY = "remhub:rem-on";
 const WAKE_KEY = "remhub:rem-wake";
 
-/** A dónde lleva REM según lo que se dice (si la pantalla no está abierta). */
-const INTENTS: Array<{ re: RegExp; href: string; perms: string[]; name: string; title: string; wait?: string }> = [
-  { re: /traslad|distribu|(?:mandar|enviar|despachar) (?:la )?mercancia/, href: "/dashboard/inventario?tab=transfers", perms: ["transfers"], name: "Traslados", title: "Traslado" },
-  { re: /conteo|contar|inventario fisico/, href: "/dashboard/inventario?tab=conteos", perms: ["inventory_counts", "inventory_adjust"], name: "Conteos", title: "Conteo", wait: "Abre o empieza un conteo y sigo solo." },
-  { re: /pedido interno|pedir mercancia|hacer un pedido|nuevo pedido|pedirle a|pedir a la bodega|pedido a/, href: "/dashboard/pedidos?tab=internos&nuevo=1", perms: ["stock_requests"], name: "Pedidos internos", title: "Pedido interno", wait: "Toca «Nuevo pedido» y sigo solo." },
-  { re: /compra|factura de(?:l)? proveedor|ingres(?:o|ar) (?:de )?mercancia|llego mercancia|registrar factura/, href: "/dashboard/inventario?tab=purchases", perms: ["purchases"], name: "Compras", title: "Compra" },
-  { re: /vend|venta|\bpos\b|caja|cobrar|facturar/, href: "/dashboard/pos", perms: ["pos"], name: "POS", title: "Venta" },
-  // «Búscame en los productos la cámara sc30a»: lo decide searchRequest (src/lib/voice/products-voice.ts), no esta expresión.
-  { re: /(?!)/, href: "/dashboard/products", perms: ["products"], name: "Productos", title: "Productos" },
-];
-type Intent = (typeof INTENTS)[number];
+/** A dónde lleva REM según lo que se dice (si la pantalla no está abierta): el catálogo (src/lib/rem/catalog.ts). */
+const INTENTS = VOICE_SCREENS;
+type Intent = VoiceScreen;
 
 const MOVE = /^(?:(?:oye )?rem )?(?:quiero|vamos a|voy a|abre|abrir|ir a|llevame a)\b/;
 
@@ -54,7 +56,7 @@ function writeFlag(key: string, on: boolean) {
   try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* sin almacenamiento */ }
 }
 
-export function RemButton({ can, links = [] }: { can: (permission: string) => boolean; links?: NavLink[] }) {
+export function RemButton({ can, links = [], userId = null, storeId = null }: { can: (permission: string) => boolean; links?: NavLink[]; userId?: string | null; storeId?: string | null }) {
   const supported = useSyncExternalStore(() => () => {}, voiceSupported, () => false);
   const router = useRouter();
   const [on, setOn] = useState(false);
@@ -83,6 +85,11 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   const captionTimer = useRef(0);
   // La pantalla pedida tardó en abrir (o falta tocar «Nuevo pedido»): cuando aparezca, REM sigue solo.
   const pending = useRef<{ title: string; said: string[]; until: number } | null>(null);
+  // De qué se venía hablando, qué ofreció («¿Te la abro?») y entre qué preguntó (src/lib/rem/brain.ts).
+  const brain = useRef<BrainState>(emptyBrain());
+  // Para «Lo que REM sabe de ti»: se vuelve a leer al cambiar algo.
+  const [memTick, setMemTick] = useState(0);
+  const [wipeAsk, setWipeAsk] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -90,12 +97,17 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       // «Rem» para llamarlo: encendido en computador; en celular gasta batería y suena al reiniciar, se enciende a mano.
       setWakeOn(readFlag(WAKE_KEY, duplexCapable()));
       setDuplexOn(duplexPref());
-      setTurns(readLog());
-      setLearned(learnedCount());
       setNameSay(pronunciationChoice("rem"));
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
+  // Lo guardado es de cada persona en cada tienda: al entrar (o cambiar de usuario) se lee lo suyo.
+  useEffect(() => {
+    setRemScope(userId, storeId);
+    brain.current = emptyBrain();
+    const t = window.setTimeout(() => { setTurns(readLog()); setLearned(learnedCount()); setMemTick((n) => n + 1); }, 0);
+    return () => window.clearTimeout(t);
+  }, [userId, storeId]);
   useEffect(() => onRemHandlerChange(() => {
     const h = remHandler();
     setTitle(h?.title ?? null);
@@ -273,7 +285,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
     const t = normalize(text);
     // «Búscame la cámara sc30a» va a Productos aunque el nombre del producto diga «compra» o «venta».
     if (searchRequest(t) !== null) return INTENTS.find((i) => i.title === "Productos") ?? null;
-    const byWords = INTENTS.find((i) => i.re.test(t));
+    const byWords = INTENTS.find((i) => i.match.test(t));
     if (byWords) return byWords;
     const learnedHref = learnedPhrase(t)?.href;
     return learnedHref ? INTENTS.find((i) => i.href === learnedHref) ?? null : null;
@@ -304,6 +316,28 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
     return hit ? { href: hit.link.href, label: hit.link.label } : null;
   }
 
+  /** Dónde está y qué puede abrir quien habla (se lee en cada frase: si le cambian los permisos, cuenta al instante). */
+  function remCtx(): RemContext {
+    return { path: window.location.pathname + window.location.search, now: new Date(), topic: brain.current.topic, links };
+  }
+  function remEnv(): ActionEnv | null {
+    if (!storeId) return null;
+    return {
+      storeId,
+      can,
+      rpc: async (fn, args) => {
+        const { data, error } = await supabaseBrowser().rpc(fn, args);
+        return { data, error: error ? { message: error.message } : null };
+      },
+    };
+  }
+  /** Explicar, cómo se hace, ventas, «crea uno nuevo», «qué sabes hacer». null si no es de eso. */
+  async function answer(id: number, text: string, inScreen: boolean): Promise<Thought | null> {
+    const r = await think(text, remCtx(), remEnv(), brain.current, { inScreen });
+    if (session.current !== id) return null;
+    return r;
+  }
+
   const idleHint = () => (wakeOn ? "Aquí estoy: di «Rem» cuando me necesites." : "Aquí estoy: toca REM cuando me necesites.");
 
   async function run(initial?: RemReply, first?: string[]) {
@@ -317,16 +351,32 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       let said = first;
       const byWake = first !== undefined;
       let helpNext = false;
-      let talkNext: string | null = null;
+      let talkNext: RemReply | null = null;
       // Lo que no entendió en esta conversación: si enseguida, dicho de otra forma, sí, aprende la frase.
       let missed: string | null = null;
-      const learnMissed = (href: string, label: string) => { if (missed) { learnPhrase(missed, href, label); setLearned(learnedCount()); missed = null; } };
+      const learnMissed = (href: string, label: string) => { if (missed) { learnPhrase(missed, href, label); resolveMiss(missed); setLearned(learnedCount()); missed = null; } };
+      const miss = (text: string) => { missed = text; recordMiss(text, window.location.pathname); };
       const opener = async (alts: string[]): Promise<"done" | "handler" | "miss" | "talk"> => {
         const t = normalize(alts[0] ?? "");
         const talk = smallTalk(t);
-        if (talk) { talkNext = talk; return "talk"; }
+        if (talk) { talkNext = { say: talk }; return "talk"; }
         if (POWER_OFF.test(t)) { await say(id, { say: "Me apago. Toca REM arriba cuando me necesites." }); setPower(false); return "done"; }
         if (HELP.test(t)) { missed = null; helpNext = true; return "miss"; }
+        // Preguntas y consultas: «¿para qué sirve la nómina?», «¿cuánto vendimos hoy?», «crea uno nuevo».
+        // Con una pantalla con voz abierta, responde sin ofrecer abrir otra cosa (el «sí» siguiente es de la pantalla).
+        const smart = await answer(id, alts[0] ?? "", Boolean(remHandler()));
+        if (session.current !== id) return "done";
+        if (smart) {
+          if (smart.go) {
+            go(smart.go.href);
+            await say(id, smart.reply);
+            if (session.current === id) stop();
+            return "done";
+          }
+          if (missed) { resolveMiss(missed); missed = null; }
+          talkNext = smart.reply;
+          return "talk";
+        }
         // La pantalla abierta reclama la frase («Ren, muéstrame solo los agotados» estando en Productos): se queda aquí.
         if (remHandler()?.claims?.(alts[0] ?? "")) return "miss";
         const intent = intentOf(alts[0] ?? "");
@@ -349,27 +399,28 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       if (said?.length) {
         const r = await opener(said);
         if (r === "done") return;
-        if (r === "miss" && !remHandler()) missed = said[0];
+        if (r === "miss" && !remHandler()) miss(said[0]);
       }
       const h = found.h ?? remHandler();
-      if (h) reply = await h.start(said?.length ? said : undefined);
+      // Si respondió una pregunta («¿cuánto vendimos hoy?») con la pantalla abierta, dice eso y sigue con la pantalla.
+      if (h) reply = talkNext ?? await h.start(said?.length ? said : undefined);
       else {
         let tries = 0;
         for (;;) {
-          const ask = talkNext ?? (helpNext
-            ? "Puedo abrir cualquier sección, por ejemplo: abre los gastos. Y trabajar contigo traslados, conteos, pedidos internos, compras y ventas. ¿Qué hacemos?"
+          const ask: RemReply = talkNext ?? (helpNext
+            ? capabilitiesAnswer(can).reply
             : tries === 0 && !missed
-            ? (byWake ? "¿Sí? Dime." : "Hola, soy REM. ¿En qué te ayudo?")
+            ? { say: byWake ? "¿Sí? Dime." : "Hola, soy REM. ¿En qué te ayudo?" }
             : missed
-              ? "No te entendí bien. Dímelo de otra forma: por ejemplo, abre los gastos, quiero hacer un traslado o vender."
-              : "Puedo abrir cualquier sección, y trabajar contigo traslados, conteos, pedidos internos, compras y ventas. ¿Qué hacemos?");
+              ? { say: "No te entendí bien. Dímelo de otra forma: por ejemplo, abre los gastos, ¿cuánto vendimos hoy? o quiero hacer un traslado." }
+              : capabilitiesAnswer(can).reply);
           helpNext = false;
           talkNext = null;
-          said = (await turn(id, { say: ask })) ?? undefined;
+          said = (await turn(id, ask)) ?? undefined;
           if (!said) return;
           const t = normalize(said[0] ?? "");
           if (!t || STOP.test(t)) {
-            if (!t && tries < 1) { tries++; talkNext = "¿Sigues ahí? Dime qué necesitas."; continue; }
+            if (!t && tries < 1) { tries++; talkNext = { say: "¿Sigues ahí? Dime qué necesitas." }; continue; }
             await say(id, { say: idleHint() });
             return stop();
           }
@@ -377,7 +428,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
           if (r === "done") return;
           if (r === "handler" && found.h) { reply = await found.h.start(said); break; }
           if (r === "talk") { missed = null; continue; }
-          missed = HELP.test(t) ? null : said[0];
+          if (HELP.test(t)) missed = null; else miss(said[0]);
           if (++tries >= 4) { await say(id, { say: idleHint() }); return stop(); }
         }
       }
@@ -398,6 +449,12 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       if (POWER_OFF.test(t)) { await say(id, { say: "Me apago. Lo que llevas queda en pantalla." }); setPower(false); return; }
       // La pantalla reclama sus frases («muéstrame solo los agotados» en Productos): no es ir a otra página.
       const mine = remHandler()?.claims?.(alts[0]) ?? false;
+      // Una pregunta en medio de algo («¿cuánto vendimos hoy?», «¿para qué sirve la caja?»): responde y sigue ahí.
+      if (!mine) {
+        const smart = await answer(id, alts[0], true);
+        if (session.current !== id) return;
+        if (smart) { reply = smart.reply; continue; }
+      }
       // «Quiero hacer un conteo» en medio de un traslado: cambia de pantalla.
       if (!mine && MOVE.test(t)) {
         const intent = intentOf(alts[0]);
@@ -470,6 +527,25 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   function clearLog() {
     setTurns([]);
     writeLog([]);
+  }
+
+  /** Lo que REM guardó de esta persona, para verlo, corregirlo o borrarlo. */
+  const memory = panel ? { phrases: listPhrases(), products: learnedProductsCount(), misses: readMisses(), tick: memTick } : null;
+  const memChanged = () => { setMemTick((n) => n + 1); setLearned(learnedCount()); };
+  function teach(text: string, href: string) {
+    const l = links.find((x) => x.href === href);
+    if (!l) return;
+    learnPhrase(text, l.href, l.label);
+    resolveMiss(text);
+    memChanged();
+  }
+  function wipeMemory() {
+    if (!wipeAsk) { setWipeAsk(true); window.setTimeout(() => setWipeAsk(false), 5000); return; }
+    setWipeAsk(false);
+    forgetEverything();
+    brain.current = emptyBrain();
+    setTurns([]);
+    memChanged();
   }
 
   const status = phase === "listening" ? "Te escucho…"
@@ -577,7 +653,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
               <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "rgba(196,181,253,.18)", color: "var(--t-muted)" }}>
                 <summary className="cursor-pointer font-semibold">¿Qué le puedo decir?</summary>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  {(examples.length ? examples : ["Quiero hacer un traslado", "Quiero hacer un conteo", "Quiero hacer un pedido interno", "Registrar una compra", "Vender"]).map((e) => <li key={e}>{e}</li>)}
+                  {(examples.length ? examples : ["¿Cuánto vendimos hoy? ¿Y ayer?", "¿Para qué sirve la rentabilidad?", "¿Cómo registro un producto?", "Quiero hacer un traslado", "Vender"]).map((e) => <li key={e}>{e}</li>)}
                   <li>«Abre los gastos», «llévame a la nómina», «muéstrame la caja»</li>
                   <li>«Foto»: busca el producto con la cámara</li>
                   <li>«Apágate»: deja de escuchar</li>
@@ -634,6 +710,54 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
                   </button>
                 </div>
               </details>
+              {memory ? (
+                <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "rgba(196,181,253,.18)", color: "var(--t-muted)" }}>
+                  <summary className="cursor-pointer font-semibold">Lo que REM sabe de ti{memory.phrases.length + memory.products ? ` (${memory.phrases.length + memory.products})` : ""}</summary>
+                  <p className="mt-1">Solo en este equipo, solo tuyo y solo en esta tienda. No da permisos: lo que no puedes abrir, no lo abre.</p>
+                  {memory.misses.length ? (
+                    <div className="mt-2">
+                      <b style={{ color: "var(--t-text)" }}>Lo que no te entendí</b>
+                      <span className="block">Elige a dónde querías ir y la próxima vez lo entiende.</span>
+                      <ul className="mt-1 space-y-1">
+                        {memory.misses.slice(0, 6).map((m) => (
+                          <li key={m.text} className="flex items-center gap-1.5">
+                            <span className="min-w-0 flex-1 truncate" title={m.text}>«{m.text}»{m.times > 1 ? ` ×${m.times}` : ""}</span>
+                            <select aria-label={`A dónde lleva «${m.text}»`} defaultValue="" onChange={(e) => { if (e.target.value) teach(m.text, e.target.value); }}
+                              className="max-w-[9rem] rounded-lg border bg-transparent px-1 py-0.5" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
+                              <option value="">Enseñar…</option>
+                              {links.filter((l) => !l.action).map((l) => <option key={l.href + l.label} value={l.href}>{l.label}</option>)}
+                            </select>
+                            <button type="button" aria-label={`Descartar «${m.text}»`} onClick={() => { resolveMiss(m.text); memChanged(); }} className="rounded px-1 hover:bg-white/10">✕</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {memory.phrases.length ? (
+                    <div className="mt-2">
+                      <b style={{ color: "var(--t-text)" }}>Frases aprendidas</b>
+                      <ul className="mt-1 space-y-1">
+                        {memory.phrases.slice(0, 12).map((p) => (
+                          <li key={p.key} className="flex items-center gap-1.5">
+                            <span className="min-w-0 flex-1 truncate" title={`«${p.key}» → ${p.label}`}>«{p.key}» → {p.label}</span>
+                            <button type="button" aria-label={`Olvidar «${p.key}»`} onClick={() => { forgetPhraseKey(p.key); memChanged(); }} className="rounded px-1 hover:bg-white/10">✕</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {memory.products ? (
+                    <p className="mt-2 flex items-center gap-2">
+                      <span className="flex-1">{memory.products} {memory.products === 1 ? "producto aprendido" : "productos aprendidos"} (cómo los nombras).</span>
+                      <button type="button" onClick={() => { forgetLearnedProducts(); memChanged(); }} className="rounded-lg border px-2 py-0.5 font-bold" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>Olvidar</button>
+                    </p>
+                  ) : null}
+                  {!memory.phrases.length && !memory.products && !memory.misses.length ? <p className="mt-1">Todavía no ha aprendido nada.</p> : null}
+                  <button type="button" onClick={wipeMemory} className="mt-2 rounded-lg border px-2 py-1 font-bold" style={{ borderColor: wipeAsk ? "#ef4444" : "rgba(196,181,253,.25)", color: wipeAsk ? "#f87171" : "var(--t-text)" }}>
+                    {wipeAsk ? "¿Seguro? Toca otra vez para borrar todo" : "🗑️ Borrar todo lo que sabe de mí"}
+                  </button>
+                </details>
+              ) : null}
             </div>
           ) : null}
         </>,

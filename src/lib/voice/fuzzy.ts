@@ -10,6 +10,7 @@
  */
 
 import { compactCode, normalize, parseNumberAt, spokenReference } from "./spanish";
+import { readJson, writeJson } from "@/lib/rem/memory";
 
 const STOP = new Set([
   "de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas", "y", "o", "a", "en", "con", "sin", "por", "para", "que",
@@ -221,7 +222,6 @@ function rankAll<T extends Named>(said: string[], hits: T[], min = 0.34): Ranked
 // ---------------------------------------------------------------------------------------------
 // Lo que REM aprendió: cuando se le confirma («sí, esa») o se le corrige, la próxima vez acierta solo.
 
-const LEARN_KEY = "remhub:rem-learned";
 type Learned = { id: string; name: string; sku: string | null };
 
 /** Llave de una frase: palabras y referencias como suenan («cámaras de la bts 30» = «camara bts treinta»). */
@@ -231,7 +231,8 @@ export function learnKey(query: string): string {
 }
 
 function readLearned(): Record<string, Learned & { at: number }> {
-  try { return JSON.parse(localStorage.getItem(LEARN_KEY) ?? "{}") as Record<string, Learned & { at: number }>; } catch { return {}; }
+  const v = readJson<Record<string, Learned & { at: number }>>("learned", {});
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
 export function learnedFor(query: string): Learned | null {
@@ -243,13 +244,11 @@ export function learnedFor(query: string): Learned | null {
 export function learn(query: string, hit: Learned) {
   const k = learnKey(query);
   if (!k) return;
-  try {
-    const all = readLearned();
-    all[k] = { id: hit.id, name: hit.name, sku: hit.sku, at: Date.now() };
-    const keys = Object.keys(all);
-    if (keys.length > 500) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 500).forEach((x) => delete all[x]);
-    localStorage.setItem(LEARN_KEY, JSON.stringify(all));
-  } catch { /* sin almacenamiento */ }
+  const all = readLearned();
+  all[k] = { id: hit.id, name: hit.name, sku: hit.sku, at: Date.now() };
+  const keys = Object.keys(all);
+  if (keys.length > 500) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 500).forEach((x) => delete all[x]);
+  writeJson("learned", all);
 }
 
 /**
@@ -280,10 +279,8 @@ export function missToLearn(miss: Miss, query: string, turn: number): string | u
 /** Olvida lo aprendido para esa frase (se dijo «no» a lo que REM puso por lo aprendido). */
 export function forget(query: string) {
   const k = learnKey(query);
-  try {
-    const all = readLearned();
-    if (all[k]) { delete all[k]; localStorage.setItem(LEARN_KEY, JSON.stringify(all)); }
-  } catch { /* sin almacenamiento */ }
+  const all = readLearned();
+  if (all[k]) { delete all[k]; writeJson("learned", all); }
 }
 
 // ---------------------------------------------------------------------------------------------

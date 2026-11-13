@@ -17,6 +17,21 @@ REM es **una esfera de cristal morada** que flota sobre todo el panel, también 
 
 **Todo es gratis.** No usa IA de pago ni pasa por un servidor de RemHub.
 
+## Preguntarle cosas
+
+Cómo está hecho y qué falta: [REM_ARQUITECTURA.md](REM_ARQUITECTURA.md). Todo lo que sabe, con sus permisos: [REM_CAPACIDADES.md](REM_CAPACIDADES.md).
+
+- **Para qué sirve algo:** «¿para qué sirve la rentabilidad?», «¿qué es el kardex?», «¿para qué sirve esto?» (la página en la que estás). Explica y pregunta «¿Te la abro?»; con «sí» la abre. Si tu usuario no tiene acceso, te lo dice y no la ofrece.
+- **Cómo se hace:** «¿cómo registro un producto?», «¿cómo registro un gasto?», «¿cómo ingreso una factura de compra?», «¿cómo hago un traslado?». Dice los pasos que están verificados en la pantalla. Si no los tiene, explica el módulo y ofrece abrirlo, sin inventar.
+- **Ventas:**
+  - «¿Cuánto vendimos hoy?» y después «¿y ayer?», «¿y las mías?», «¿y lo más vendido?».
+  - Un día: «ventas del lunes», «el 5 de noviembre».
+  - Un punto: «las ventas de ayer en la sede Zamora».
+  - Usa los datos de la base, con tus puntos y tus permisos. Otros días y por punto requieren el permiso de informes de ventas.
+- **Crear según dónde estás:** en Productos, «ayúdame a crear uno nuevo» abre el formulario. En Nómina pregunta: «¿nueva nómina o nuevo empleado?».
+- **¿Te refieres a…?** Si algo puede ser dos cosas, pregunta antes («¿Te refieres a Lista general o a Rentabilidad?») y entiende «la segunda».
+- **En medio de un traslado o una venta** también responde estas preguntas, y sigue donde ibas.
+
 ## Buscar y manejar productos
 
 «Ren, búscame en los productos la cámara SC30A».
@@ -42,7 +57,18 @@ REM es **una esfera de cristal morada** que flota sobre todo el panel, también 
 - Sin verbo («nómina») solo abre si se parece mucho.
 - En medio de un traslado o una venta exige un parecido todavía mayor, para no salirse de la pantalla por una frase.
 
-## Aprende solo (en este equipo)
+## Aprende solo (por persona)
+
+Lo que aprende es **tuyo**: por usuario y por tienda, en este equipo. Otra persona en el mismo computador no ve tu conversación ni lo que aprendió contigo. En la conversación, **«Lo que REM sabe de ti»** te deja:
+
+- enseñarle a dónde llevaba una frase que no entendió;
+- borrar una frase aprendida;
+- olvidar los productos aprendidos;
+- borrar todo.
+
+Lo aprendido nunca da permisos.
+
+### Cómo aprende
 
 - **Productos:**
   - Si no encontró «termólico» y enseguida «termo licuadora HM 03» sí, la frase que falló queda aprendida como ese producto.

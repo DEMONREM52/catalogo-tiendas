@@ -1103,6 +1103,16 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "«¿Qué quieres que haga por ti?»" },
     ],
   },
+  {
+    id: 106, date: "2026-11-13", title: "🧠 REM explica, responde y te dice cuánto vendiste",
+    summary: "Pregúntale «¿para qué sirve la rentabilidad?» o «¿cómo registro un producto?» y te explica, con la opción de abrirlo. «¿Cuánto vendimos hoy?», «¿y ayer?», «¿cuánto he vendido yo?» o «lo más vendido» te lo dice con los datos de tus puntos. En Productos, «crea uno nuevo» abre el formulario. Y lo que aprende ahora es solo tuyo: en la conversación, «Lo que REM sabe de ti» te deja verlo, enseñarle lo que no entendió o borrarlo.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "❓", text: "«¿Para qué sirve la nómina?»" },
+      { icon: "💰", text: "«¿Cuánto vendimos hoy? ¿Y ayer?»" },
+      { icon: "✨", text: "«Crea uno nuevo» según la página" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

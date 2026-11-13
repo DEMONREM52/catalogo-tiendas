@@ -4,11 +4,12 @@
  * nada que la persona no pueda abrir a mano.
  *
  * Y aprende frases: si algo no lo entendió y enseguida, dicho de otra forma, sí, la frase que falló
- * queda guardada (en este equipo) y la próxima vez lleva directo.
+ * queda guardada (en este equipo, para esta persona en esta tienda: src/lib/rem/memory.ts) y la próxima vez lleva directo.
  */
 
 import { parseQuery, scoreItem } from "@/lib/fuzzy-search";
 import { normalize } from "./spanish";
+import { readJson, removeMemory, writeJson } from "@/lib/rem/memory";
 
 export type NavLink = { href: string; label: string; emoji?: string; hint?: string; keywords?: string; action?: boolean };
 
@@ -71,8 +72,7 @@ export function smallTalk(text: string, now = new Date()): string | null {
 // ---------------------------------------------------------------------------------------------
 // Frases aprendidas: «la plata de los muchachos» → Nómina (porque enseguida se dijo «nómina»).
 
-const PHRASE_KEY = "remhub:rem-phrases";
-type Phrase = { href: string; label: string; at: number; uses: number };
+export type Phrase = { href: string; label: string; at: number; uses: number };
 
 /** Llave de una frase: sin «oye REM», sin relleno, sin tildes. */
 export function phraseKey(text: string): string {
@@ -84,7 +84,19 @@ export function phraseKey(text: string): string {
 }
 
 function readPhrases(): Record<string, Phrase> {
-  try { return JSON.parse(localStorage.getItem(PHRASE_KEY) ?? "{}") as Record<string, Phrase>; } catch { return {}; }
+  const v = readJson<Record<string, Phrase>>("phrases", {});
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+/** Las frases aprendidas, la más usada primero (para verlas y borrarlas). */
+export function listPhrases(): Array<Phrase & { key: string }> {
+  const all = readPhrases();
+  return Object.entries(all).map(([key, p]) => ({ key, ...p })).sort((a, b) => b.uses - a.uses || b.at - a.at);
+}
+
+export function forgetPhraseKey(key: string) {
+  const all = readPhrases();
+  if (all[key]) { delete all[key]; writeJson("phrases", all); }
 }
 
 export function learnedPhrase(text: string): Phrase | null {
@@ -98,45 +110,41 @@ export function learnPhrase(text: string, href: string, label: string) {
   // Una palabra suelta («hola», «eh») no se aprende: podría ser ruido y llevaría a una página sin querer.
   const n = k.split(" ").length;
   if (!k || n < 2 || n > 12) return;
-  try {
-    const all = readPhrases();
-    all[k] = { href, label, at: Date.now(), uses: (all[k]?.uses ?? 0) + 1 };
-    const keys = Object.keys(all);
-    if (keys.length > 300) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 300).forEach((x) => delete all[x]);
-    localStorage.setItem(PHRASE_KEY, JSON.stringify(all));
-  } catch { /* sin almacenamiento */ }
+  const all = readPhrases();
+  all[k] = { href, label, at: Date.now(), uses: (all[k]?.uses ?? 0) + 1 };
+  const keys = Object.keys(all);
+  if (keys.length > 300) keys.sort((a, b) => all[a].at - all[b].at).slice(0, keys.length - 300).forEach((x) => delete all[x]);
+  writeJson("phrases", all);
 }
 
 export function forgetPhrase(text: string) {
-  const k = phraseKey(text);
-  try {
-    const all = readPhrases();
-    if (all[k]) { delete all[k]; localStorage.setItem(PHRASE_KEY, JSON.stringify(all)); }
-  } catch { /* sin almacenamiento */ }
+  forgetPhraseKey(phraseKey(text));
 }
 
-/** Cuántas cosas lleva aprendidas en este equipo (frases + productos). */
+/** Cuántas cosas lleva aprendidas para esta persona (frases + productos). */
 export function learnedCount(): number {
-  try {
-    const p = Object.keys(JSON.parse(localStorage.getItem(PHRASE_KEY) ?? "{}")).length;
-    const r = Object.keys(JSON.parse(localStorage.getItem("remhub:rem-learned") ?? "{}")).length;
-    return p + r;
-  } catch { return 0; }
+  return Object.keys(readPhrases()).length + learnedProductsCount();
+}
+
+export function learnedProductsCount(): number {
+  const v = readJson<Record<string, unknown>>("learned", {});
+  return v && typeof v === "object" ? Object.keys(v).length : 0;
+}
+
+export function forgetLearnedProducts() {
+  removeMemory("learned");
 }
 
 // ---------------------------------------------------------------------------------------------
-// La conversación queda guardada (en este equipo) para verla al tocar la esfera, aunque se recargue.
+// La conversación queda guardada (en este equipo, solo para esta persona) para verla al tocar la esfera, aunque se recargue.
 
-const LOG_KEY = "remhub:rem-log";
 export type LogTurn = { who: "you" | "rem"; text: string; at: number };
 
 export function readLog(): LogTurn[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(LOG_KEY) ?? "[]") as LogTurn[];
-    return Array.isArray(v) ? v.slice(-60) : [];
-  } catch { return []; }
+  const v = readJson<LogTurn[]>("log", []);
+  return Array.isArray(v) ? v.slice(-60) : [];
 }
 
 export function writeLog(turns: LogTurn[]) {
-  try { localStorage.setItem(LOG_KEY, JSON.stringify(turns.slice(-60))); } catch { /* sin almacenamiento */ }
+  writeJson("log", turns.slice(-60));
 }
