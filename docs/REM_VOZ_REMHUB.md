@@ -112,7 +112,8 @@ Se enciende con el interruptor «Rem» de la conversación. Viene encendido en c
 - **Pronunciación (solo la voz; en pantalla siempre «REM»):**
   - REM habla con la voz del navegador (Web Speech API). Ese motor no admite SSML ni fonemas, así que se cambia solo el texto que se le entrega a la voz.
   - Diccionario central: `src/lib/voice/pronunciation.ts` (`PRONUNCIATIONS`). Para otro nombre, una entrada más.
-  - Por defecto «Rém»: la tilde hace que la voz lo lea como palabra española de una sílaba (/rem/). «REM» sonaba «rien» o «Raiem», y «Rrem», «rariem».
+  - Por defecto «rem» en minúscula: se lee como palabra española de una sílaba (/rem/). Opciones de reserva: «Rem», «Rhem», «Remm».
+  - Nunca con tilde: «Rém» la voz del iPhone lo deletreaba («R, E con acento agudo, M»). «REM» en mayúsculas sonaba como sigla («rien»), y «Rrem», «rariem».
   - Reconoce «REM», «Rem» y «rem» como palabra completa; no toca «remisión», «remera», «remá» ni «Rémora» (pruebas en `tests/voice/pronunciation.test.ts`).
   - Cada teléfono trae voces distintas: en «¿Qué le puedo decir?» → «Cómo dice su nombre» se oyen las opciones y se elige una, guardada en ese equipo.
   - Voz: prefiere es-CO, luego Latinoamérica y al final España. Si las voces no han cargado, vuelve a buscar en la siguiente frase (antes se quedaba sin voz en español toda la sesión y el teléfono usaba su voz por defecto, a veces en inglés).

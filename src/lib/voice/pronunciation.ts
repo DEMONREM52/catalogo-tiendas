@@ -27,9 +27,11 @@ export const PRONUNCIATIONS: Pronunciation[] = [
     id: "rem",
     label: "REM",
     match: word("rem"),
-    // «Rém»: la tilde hace que la voz lo lea como palabra española de una sílaba (/rem/), no como sigla ni en inglés.
-    // «REM» se leía «rien» o «Raiem», y «Rrem» como «rariem».
-    options: ["Rém", "rem", "Rem", "Rrém"],
+    // Solo formas sin tilde ni mayúsculas raras: «Rém» con tilde la voz del iPhone lo deletreaba («R, E con acento agudo, M»).
+    // «rem» en minúscula se lee como palabra española de una sílaba (/rem/). «Rhem» y «Remm» suenan igual en español
+    // (la h no suena, la doble m tampoco) y sirven de reserva si alguna voz insiste en deletrear.
+    // «REM» en mayúsculas se leía como sigla («rien»), y «Rrem» como «rariem».
+    options: ["rem", "Rem", "Rhem", "Remm"],
   },
 ];
 

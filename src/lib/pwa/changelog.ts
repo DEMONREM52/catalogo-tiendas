@@ -1073,6 +1073,16 @@ export const RELEASES: Release[] = [
       { icon: "📣", text: "Publícame: solo el ícono, por color" },
     ],
   },
+  {
+    id: 103, date: "2026-11-13", title: "🗣️ REM ya no deletrea su nombre",
+    summary: "REM dice «rem» de corrido, como se lee en español, sin deletrear letras ni acentos. Si en tu teléfono suena raro, en «¿Qué le puedo decir?» → «Cómo dice su nombre» prueba las otras opciones.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Hola, soy REM» de corrido" },
+      { icon: "🔈", text: "Prueba las opciones en tu teléfono" },
+      { icon: "✅", text: "Queda la que elijas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
