@@ -1093,6 +1093,16 @@ export const RELEASES: Release[] = [
       { icon: "🔮", text: "En pantalla sigue «REM»" },
     ],
   },
+  {
+    id: 105, date: "2026-11-13", title: "🔎 REM busca productos y te sigue ayudando",
+    summary: "Di «Ren, búscame en los productos la cámara SC30A»: abre Productos, lo escribe en el buscador, te dice qué encontró y te pregunta qué quieres hacer. Después le sigues diciendo: «abre el primero», «inactívalo», «léemelos», «solo los agotados», «ordénalos por precio» o «busca otra cosa».",
+    paths: ["/dashboard", "/dashboard/products"],
+    demo: [
+      { icon: "🗣️", text: "«Ren, búscame la cámara SC30A»" },
+      { icon: "🔎", text: "La escribe en el buscador" },
+      { icon: "💬", text: "«¿Qué quieres que haga por ti?»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

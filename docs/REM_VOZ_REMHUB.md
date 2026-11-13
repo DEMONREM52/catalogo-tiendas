@@ -17,6 +17,23 @@ REM es **una esfera de cristal morada** que flota sobre todo el panel, también 
 
 **Todo es gratis.** No usa IA de pago ni pasa por un servidor de RemHub.
 
+## Buscar y manejar productos
+
+«Ren, búscame en los productos la cámara SC30A».
+
+1. Abre Productos y escribe «cámara sc30a» en el buscador.
+2. Dice qué encontró (los 3 primeros) y pregunta «¿Qué quieres que haga por ti?».
+3. Se le sigue hablando:
+   - «léemelos», «cuántos hay»
+   - «abre el primero», «ábrelo», «abre la cámara solar»
+   - «inactiva el dos», «ya no hay de la tres», «actívalo» (siempre pregunta «¿Inactivo…? Di sí o no»)
+   - «solo los agotados», «solo los inactivos», «ordénalos por precio», «los más caros primero»
+   - «ahora busca la zapatera», «limpia», «listo»
+
+- Frases: `src/lib/voice/products-voice.ts` (pruebas en `tests/voice/products-voice.test.ts`). Lo que hace: `src/app/dashboard/products/useProductsVoice.ts`.
+- «Busca el cliente…» no es de productos.
+- La pantalla «reclama» sus frases (`claims` en `rem.ts`): «muéstrame solo los agotados» no se toma como ir a otra página.
+
 ## Abrir cualquier sección
 
 «Rem, abre los gastos», «llévame a la nómina», «muéstrame la rentabilidad por punto», «ve a clientes».

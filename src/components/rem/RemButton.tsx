@@ -22,6 +22,7 @@ import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandl
 import { normalize } from "@/lib/voice/spanish";
 import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
 import { RemOrb, type OrbPlace } from "./RemOrb";
+import { searchRequest } from "@/lib/voice/products-voice";
 import { applyPronunciations, PRONUNCIATIONS, pronunciationChoice, setPronunciationChoice } from "@/lib/voice/pronunciation";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
@@ -39,6 +40,8 @@ const INTENTS: Array<{ re: RegExp; href: string; perms: string[]; name: string; 
   { re: /pedido interno|pedir mercancia|hacer un pedido|nuevo pedido|pedirle a|pedir a la bodega|pedido a/, href: "/dashboard/pedidos?tab=internos&nuevo=1", perms: ["stock_requests"], name: "Pedidos internos", title: "Pedido interno", wait: "Toca «Nuevo pedido» y sigo solo." },
   { re: /compra|factura de(?:l)? proveedor|ingres(?:o|ar) (?:de )?mercancia|llego mercancia|registrar factura/, href: "/dashboard/inventario?tab=purchases", perms: ["purchases"], name: "Compras", title: "Compra" },
   { re: /vend|venta|\bpos\b|caja|cobrar|facturar/, href: "/dashboard/pos", perms: ["pos"], name: "POS", title: "Venta" },
+  // «Búscame en los productos la cámara sc30a»: lo decide searchRequest (src/lib/voice/products-voice.ts), no esta expresión.
+  { re: /(?!)/, href: "/dashboard/products", perms: ["products"], name: "Productos", title: "Productos" },
 ];
 type Intent = (typeof INTENTS)[number];
 
@@ -268,6 +271,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   /** Qué pantalla con voz pide lo dicho (por las frases conocidas o por una frase que aprendió). */
   function intentOf(text: string): Intent | null {
     const t = normalize(text);
+    // «Búscame la cámara sc30a» va a Productos aunque el nombre del producto diga «compra» o «venta».
+    if (searchRequest(t) !== null) return INTENTS.find((i) => i.title === "Productos") ?? null;
     const byWords = INTENTS.find((i) => i.re.test(t));
     if (byWords) return byWords;
     const learnedHref = learnedPhrase(t)?.href;
@@ -322,6 +327,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
         if (talk) { talkNext = talk; return "talk"; }
         if (POWER_OFF.test(t)) { await say(id, { say: "Me apago. Toca REM arriba cuando me necesites." }); setPower(false); return "done"; }
         if (HELP.test(t)) { missed = null; helpNext = true; return "miss"; }
+        // La pantalla abierta reclama la frase («Ren, muéstrame solo los agotados» estando en Productos): se queda aquí.
+        if (remHandler()?.claims?.(alts[0] ?? "")) return "miss";
         const intent = intentOf(alts[0] ?? "");
         if (intent) {
           const r = await route(id, alts, intent);
@@ -389,15 +396,17 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       misses = 0;
       const t = normalize(alts[0]);
       if (POWER_OFF.test(t)) { await say(id, { say: "Me apago. Lo que llevas queda en pantalla." }); setPower(false); return; }
+      // La pantalla reclama sus frases («muéstrame solo los agotados» en Productos): no es ir a otra página.
+      const mine = remHandler()?.claims?.(alts[0]) ?? false;
       // «Quiero hacer un conteo» en medio de un traslado: cambia de pantalla.
-      if (MOVE.test(t)) {
+      if (!mine && MOVE.test(t)) {
         const intent = intentOf(alts[0]);
         const r = intent ? await route(id, alts, intent) : null;
         if (r && "say" in r) { reply = { say: r.say || "Dime." }; continue; }
         if (r) { reply = await r.h.start(alts); continue; }
       }
       // «Abre los gastos» en medio de algo: va allá (lo que llevaba queda en su pantalla).
-      if (navRequest(alts[0])) {
+      if (!mine && navRequest(alts[0])) {
         const nav = navigateTo(alts[0], true);
         if (nav) { go(nav.href); await say(id, { say: `Listo: ${nav.label}.` }); if (session.current === id) stop(); return; }
       }

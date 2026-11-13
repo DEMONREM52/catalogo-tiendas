@@ -23,6 +23,7 @@ import { useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
 import { ScrollButtons } from "@/components/ui/ScrollButtons";
 import { ProductsModeSwitch } from "./ModeSwitch";
+import { useProductsVoice, type ProductsVoiceApi } from "./useProductsVoice";
 import { PublishButton, toState } from "@/components/products/PublishButton";
 import type { PublishState } from "@/lib/products/radar";
 
@@ -555,8 +556,9 @@ export default function ProductsListPage() {
     await runProSearchPage(searchOffset, true);
   }
 
-  async function toggleProductStatus(product: Product) {
-    if (!storeId) return;
+  /** true si quedó cambiado (REM lo usa para confirmar). */
+  async function toggleProductStatus(product: Product): Promise<boolean> {
+    if (!storeId) return false;
     setUpdatingProductStatusId(product.id);
     try {
       const nextActive = !product.active;
@@ -590,6 +592,7 @@ export default function ProductsListPage() {
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
+      return true;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "No se pudo actualizar el estado del producto.";
       await Swal.fire({
@@ -599,6 +602,7 @@ export default function ProductsListPage() {
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
+      return false;
     } finally {
       setUpdatingProductStatusId(null);
     }
@@ -822,6 +826,33 @@ export default function ProductsListPage() {
     Boolean(createdFrom),
     Boolean(createdTo),
   ].filter(Boolean).length;
+
+  // REM: buscar y manejar productos hablando («Ren, búscame en los productos la cámara sc30a»). Lee siempre lo último
+  // de la pantalla. Sin dependencias a propósito: se actualiza en cada render (solo guarda funciones y lo que se ve).
+  const voiceApi = useRef<ProductsVoiceApi | null>(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    voiceApi.current = {
+      view: () => ({
+        q,
+        searched: dq.trim(),
+        busy: loading || searching || qPending,
+        items: filtered.map((p) => ({ id: p.id, name: p.name, sku: p.sku ?? null, active: p.active, stock: p.stock })),
+      }),
+      setQuery: (v) => setQ(v),
+      flush: flushQ,
+      clear: clearFilters,
+      setStatus: setStatusFilter,
+      setStock: (v) => setStockFilter(v),
+      setSort: setSortBy,
+      toggle: async (id) => {
+        const p = products.find((x) => x.id === id);
+        return p ? toggleProductStatus(p) : false;
+      },
+      open: (id) => router.push(`/dashboard/products/${id}`),
+    };
+  });
+  useProductsVoice(voiceApi, Boolean(storeId));
 
   function clearFilters() {
     setQ("");

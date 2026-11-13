@@ -21,6 +21,11 @@ export type RemHandler = {
   hear(alternatives: string[]): Promise<RemReply> | RemReply;
   /** Frases de ejemplo para la ayuda del panel. */
   examples: string[];
+  /**
+   * ¿Esta frase es de la pantalla? («muéstrame solo los agotados» en Productos). Si dice que sí, REM no la toma
+   * como «ir a otra página» y se la pasa a la pantalla.
+   */
+  claims?: (text: string) => boolean;
 };
 
 // Pila: la última pantalla abierta atiende (un pedido interno abierto encima del POS);
