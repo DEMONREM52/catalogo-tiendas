@@ -1075,7 +1075,7 @@ export const RELEASES: Release[] = [
   },
   {
     id: 103, date: "2026-11-13", title: "🗣️ REM ya no deletrea su nombre",
-    summary: "REM dice «rem» de corrido, como se lee en español, sin deletrear letras ni acentos. Si en tu teléfono suena raro, en «¿Qué le puedo decir?» → «Cómo dice su nombre» prueba las otras opciones.",
+    summary: "REM se presenta diciendo «ren», de corrido y sin deletrear; en pantalla sigue apareciendo «REM». Si en tu teléfono prefieres otra forma, en «¿Qué le puedo decir?» → «Cómo dice su nombre» la eliges.",
     paths: ["/dashboard"],
     demo: [
       { icon: "🗣️", text: "«Hola, soy REM» de corrido" },

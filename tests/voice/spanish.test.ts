@@ -115,7 +115,7 @@ test("conteo, foto y valores", async () => {
   assert.equal(wakeRest("la memoria ram del computador"), null);
   assert.equal(wakeRest("hoy en la tienda"), null);
   const { spokenText } = await import("@/lib/voice/speech");
-  assert.equal(spokenText("Hola, soy REM. Toca REM."), "Hola, soy rem. Toca rem.");
+  assert.equal(spokenText("Hola, soy REM. Toca REM."), "Hola, soy ren. Toca ren.");
   assert.equal(spokenText("remisión REMERA"), "remisión REMERA");
 });
 

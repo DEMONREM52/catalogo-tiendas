@@ -6,10 +6,10 @@ import { spokenText } from "@/lib/voice/speech";
 const rem = PRONUNCIATIONS.find((p) => p.id === "rem")!;
 
 test("«REM» se dice /rem/ en español (solo en la voz)", () => {
-  assert.equal(spokenText("Hola, soy REM. ¿En qué te ayudo?"), "Hola, soy rem. ¿En qué te ayudo?");
-  assert.equal(spokenText("Rem, abre los gastos"), "rem, abre los gastos");
-  assert.equal(spokenText("oye rem"), "oye rem");
-  assert.equal(spokenText("Toca REM arriba. REM sigue."), "Toca rem arriba. rem sigue.");
+  assert.equal(spokenText("Hola, soy REM. ¿En qué te ayudo?"), "Hola, soy ren. ¿En qué te ayudo?");
+  assert.equal(spokenText("Rem, abre los gastos"), "ren, abre los gastos");
+  assert.equal(spokenText("oye ren"), "oye ren");
+  assert.equal(spokenText("Toca REM arriba. REM sigue."), "Toca ren arriba. ren sigue.");
 });
 
 test("no toca otras palabras con esas letras", () => {
@@ -19,6 +19,6 @@ test("no toca otras palabras con esas letras", () => {
 
 test("se puede probar cada forma sin guardarla", () => {
   for (const o of rem.options) assert.equal(applyPronunciations("Hola, soy REM.", () => o), `Hola, soy ${o}.`);
-  assert.equal(rem.options[0], "rem");
+  assert.equal(rem.options[0], "ren");
   assert.ok(rem.options.every((o) => !/[áéíóú]/i.test(o)), "ninguna con tilde: la voz del iPhone la deletrea");
 });
