@@ -31,7 +31,7 @@ const toast = (title: string, icon: "success" | "info" | "error" = "success") =>
   void Swal.fire({ toast: true, position: "top", icon, title, timer: 2600, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
 
 export function PublishButton({
-  storeId, productId, productName, state: given, compact, onChanged,
+  storeId, productId, productName, state: given, compact, iconOnly, onChanged,
 }: {
   storeId: string | null;
   productId: string;
@@ -39,6 +39,8 @@ export function PublishButton({
   /** Si ya se tiene el estado (Radar), no se vuelve a pedir. */
   state?: PublishState;
   compact?: boolean;
+  /** Solo el megáfono (lista de Productos): el color dice si ya está publicado; el texto queda en la ayuda. */
+  iconOnly?: boolean;
   onChanged?: (s: PublishState) => void;
 }) {
   const [own, setOwn] = useState<PublishState | null>(null);
@@ -79,8 +81,9 @@ export function PublishButton({
   return (
     <>
       <motion.button type="button" onClick={() => setOpen(true)} whileTap={{ scale: 0.94 }} whileHover={{ y: -1 }} disabled={ready === null}
-        title={`${status.text} · ${everyLabel(state.every)}`}
-        className={`relative inline-flex items-center gap-1.5 overflow-visible rounded-xl border font-bold transition disabled:opacity-60 ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-xs"}`}
+        title={`${label} · ${status.text} · ${everyLabel(state.every)}`}
+        aria-label={iconOnly ? `${label}${productName ? `: ${productName}` : ""}` : undefined}
+        className={`relative inline-flex items-center gap-1.5 overflow-visible rounded-xl border font-bold transition disabled:opacity-60 ${iconOnly ? "product-row-action justify-center" : compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-2 text-xs"}`}
         style={{
           borderColor: `color-mix(in oklab, ${tone} 55%, transparent)`,
           background: hot ? `linear-gradient(135deg, color-mix(in oklab, ${tone} 22%, transparent), color-mix(in oklab, ${tone} 8%, transparent))` : `color-mix(in oklab, ${tone} 10%, transparent)`,
@@ -92,9 +95,9 @@ export function PublishButton({
         <motion.span className="grid place-items-center" style={{ color: tone }}
           animate={hot ? { rotate: [0, -16, 12, -10, 6, 0], scale: [1, 1.15, 1] } : { rotate: 0 }}
           transition={hot ? { duration: 1.1, repeat: Infinity, repeatDelay: 1.4 } : undefined}>
-          {ready === null ? <Loader2 size={compact ? 13 : 15} className="animate-spin" /> : <Megaphone size={compact ? 13 : 15} />}
+          {ready === null ? <Loader2 size={iconOnly ? 17 : compact ? 13 : 15} className="animate-spin" /> : <Megaphone size={iconOnly ? 17 : compact ? 13 : 15} />}
         </motion.span>
-        <span className="whitespace-nowrap">{label}</span>
+        {iconOnly ? null : <span className="whitespace-nowrap">{label}</span>}
         {hot && !compact ? <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: tone }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: tone }} /></span> : null}
       </motion.button>
       {open && typeof document !== "undefined"

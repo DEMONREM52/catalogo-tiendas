@@ -109,7 +109,13 @@ Se enciende con el interruptor «Rem» de la conversación. Viene encendido en c
   - Se puede decir todo de una vez: «Oye REM, quiero hacer un traslado».
 - **Probar:** en «¿Qué le puedo decir?» → «🧪 Probar el llamado». Dice si así se despierta y muestra lo que oyó. Con la opción encendida, el panel muestra «Lo último que oí» mientras espera.
 - **Si el navegador no deja escuchar sin tocar la pantalla** (pasa al abrir la página), espera el primer toque y vuelve a escuchar.
-- **Pronunciación:** REM dice «Rem» (`spokenText`). «REM» en mayúsculas la voz lo leía «rien», y «Rrem», «rariem».
+- **Pronunciación (solo la voz; en pantalla siempre «REM»):**
+  - REM habla con la voz del navegador (Web Speech API). Ese motor no admite SSML ni fonemas, así que se cambia solo el texto que se le entrega a la voz.
+  - Diccionario central: `src/lib/voice/pronunciation.ts` (`PRONUNCIATIONS`). Para otro nombre, una entrada más.
+  - Por defecto «Rém»: la tilde hace que la voz lo lea como palabra española de una sílaba (/rem/). «REM» sonaba «rien» o «Raiem», y «Rrem», «rariem».
+  - Reconoce «REM», «Rem» y «rem» como palabra completa; no toca «remisión», «remera», «remá» ni «Rémora» (pruebas en `tests/voice/pronunciation.test.ts`).
+  - Cada teléfono trae voces distintas: en «¿Qué le puedo decir?» → «Cómo dice su nombre» se oyen las opciones y se elige una, guardada en ese equipo.
+  - Voz: prefiere es-CO, luego Latinoamérica y al final España. Si las voces no han cargado, vuelve a buscar en la siguiente frase (antes se quedaba sin voz en español toda la sesión y el teléfono usaba su voz por defecto, a veces en inglés).
 - **Reacciona rápido:** usa lo que va oyendo y no espera a que el reconocedor cierre la frase, que con ruido puede tardar mucho. Al oír «oye REM» espera 1,2 segundos por si sigue la orden.
 - **Batería:** Chrome reinicia la escucha cada tanto. En Android puede sonar un pitido del sistema al reiniciar y gasta más batería. Se recomienda en computador o tablet fija.
 

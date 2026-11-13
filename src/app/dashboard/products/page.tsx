@@ -1201,12 +1201,12 @@ export default function ProductsListPage() {
                       ) : null}
                       {/* «¡Publícame!»: verde si ya se publicó, naranja/rojo si toca, morado si nunca. */}
                       {pubMode === "off" ? null : pubMode === "single" ? (
-                        <PublishButton compact storeId={storeId} productId={p.id} productName={p.name} />
+                        <PublishButton compact iconOnly storeId={storeId} productId={p.id} productName={p.name} />
                       ) : pubStates[p.id] ? (
-                        <PublishButton compact storeId={storeId} productId={p.id} productName={p.name} state={pubStates[p.id]}
+                        <PublishButton compact iconOnly storeId={storeId} productId={p.id} productName={p.name} state={pubStates[p.id]}
                           onChanged={(st) => setPubStates((cur) => ({ ...cur, [p.id]: st }))} />
                       ) : (
-                        <span aria-hidden className="inline-block h-[30px] w-[104px] animate-pulse rounded-xl" style={{ background: "var(--t-card-bg-soft, rgba(127,127,127,.15))" }} />
+                        <span aria-hidden className="product-row-action inline-block animate-pulse rounded-xl" style={{ background: "var(--t-card-bg-soft, rgba(127,127,127,.15))" }} />
                       )}
                     </div>
                   </div>

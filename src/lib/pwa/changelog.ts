@@ -1063,6 +1063,16 @@ export const RELEASES: Release[] = [
       { icon: "🟣", text: "Publícame (nunca publicado)" },
     ],
   },
+  {
+    id: 102, date: "2026-11-13", title: "🗣️ REM dice su nombre en español",
+    summary: "REM ahora dice «rem» como en español, no «Raiem»: además usa siempre una voz en español (prefiere Colombia) aunque el teléfono tarde en cargarlas. Si en tu teléfono aún no suena bien, en «¿Qué le puedo decir?» → «Cómo dice su nombre» oyes las opciones y eliges. En la lista de Productos, «¡Publícame!» queda solo como ícono: el color dice si ya está publicado.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Hola, soy REM» con /rem/" },
+      { icon: "🔈", text: "Elige cómo suena en tu teléfono" },
+      { icon: "📣", text: "Publícame: solo el ícono, por color" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -10,6 +10,7 @@
  */
 
 import { isQuickAnswer, normalize } from "./spanish";
+import { applyPronunciations } from "./pronunciation";
 
 type RecognitionAlt = { transcript: string; confidence: number };
 type RecognitionResult = { isFinal: boolean; length: number; [i: number]: RecognitionAlt };
@@ -425,32 +426,48 @@ export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: n
 
 let voice: SpeechSynthesisVoice | null | undefined;
 
+let voicesWatched = false;
+
+/** «es_CO», «es-co», «ES-CO» → «es-co». */
+const langOf = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().replace("_", "-");
+
+/**
+ * La voz en español del equipo, prefiriendo Colombia (es-CO), luego Latinoamérica y al final España.
+ * Si las voces aún no han cargado, NO se queda sin voz: vuelve a buscar la próxima vez (antes se quedaba sin voz
+ * en español toda la sesión y el teléfono hablaba con su voz por defecto, a veces en inglés: «Raiem»).
+ */
 async function spanishVoice(): Promise<SpeechSynthesisVoice | null> {
-  if (voice !== undefined) return voice;
+  if (voice) return voice;
   const synth = window.speechSynthesis;
+  if (!voicesWatched) {
+    voicesWatched = true;
+    // Si el equipo instala o carga voces después, se vuelve a elegir.
+    synth.addEventListener?.("voiceschanged", () => { voice = undefined; });
+  }
   let list = synth.getVoices();
   if (!list.length) {
     // Chrome carga las voces después.
     await new Promise<void>((r) => { const t = window.setTimeout(r, 1200); synth.addEventListener("voiceschanged", () => { window.clearTimeout(t); r(); }, { once: true }); });
     list = synth.getVoices();
   }
-  const es = list.filter((v) => v.lang.toLowerCase().startsWith("es"));
+  const es = list.filter((v) => langOf(v).startsWith("es"));
   const order = ["es-co", "es-419", "es-mx", "es-us", "es-es"];
   es.sort((a, b) => {
-    const ia = order.indexOf(a.lang.toLowerCase()); const ib = order.indexOf(b.lang.toLowerCase());
+    const ia = order.indexOf(langOf(a)); const ib = order.indexOf(langOf(b));
     const ra = (ia < 0 ? 9 : ia) - (a.localService ? 0.5 : 0); const rb = (ib < 0 ? 9 : ib) - (b.localService ? 0.5 : 0);
     return ra - rb;
   });
-  voice = es[0] ?? null;
-  return voice;
+  // Sin voces todavía: no se guarda «ninguna», para volver a intentar en la próxima frase.
+  voice = es[0] ?? (list.length ? null : undefined);
+  return voice ?? null;
 }
 
 /**
- * Cómo se dice en voz alta. «REM» en mayúsculas la voz lo lee como sigla («rien») y «Rrem» como «rariem»:
- * «Rem» se lee como palabra en español (la r inicial ya suena fuerte).
+ * Cómo se dice en voz alta (solo la voz; en pantalla queda igual). Los nombres propios («REM» → /rem/) salen del
+ * diccionario central de pronunciaciones (src/lib/voice/pronunciation.ts).
  */
 export function spokenText(text: string): string {
-  return text.replace(/\bREM\b/g, "Rem");
+  return applyPronunciations(text);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -505,7 +522,7 @@ export function unlockAudio() {
 }
 
 /** Dice el texto en voz alta y espera a que termine (o a que se calle con `stopSpeaking`). */
-export async function speak(text: string): Promise<void> {
+export async function speak(text: string, opts: { spoken?: string } = {}): Promise<void> {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
   const synth = window.speechSynthesis;
   // Safari pierde la frase si se cancela y se habla en el mismo instante: solo se cancela si algo suena.
@@ -516,7 +533,7 @@ export async function speak(text: string): Promise<void> {
   synth.resume();
   // La voz ya cargada se usa sin esperar (en iPhone, esperar hace perder el permiso del toque).
   const v = voice !== undefined ? voice : await spanishVoice();
-  const said = spokenText(text);
+  const said = opts.spoken ?? spokenText(text);
   await new Promise<void>((resolve) => {
     const u = new SpeechSynthesisUtterance(said);
     u.lang = v?.lang ?? "es-CO";

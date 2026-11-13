@@ -22,6 +22,7 @@ import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandl
 import { normalize } from "@/lib/voice/spanish";
 import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
 import { RemOrb, type OrbPlace } from "./RemOrb";
+import { applyPronunciations, PRONUNCIATIONS, pronunciationChoice, setPronunciationChoice } from "@/lib/voice/pronunciation";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 
@@ -69,6 +70,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   const [place, setPlace] = useState<OrbPlace | null>(null);
   const [caption, setCaption] = useState<string | null>(null);
   const [learned, setLearned] = useState(0);
+  // Cómo dice «REM» en este equipo (cada teléfono trae voces distintas): se oyen las opciones y se elige.
+  const [nameSay, setNameSay] = useState("");
   const session = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(initial?: RemReply, first?: string[]) => Promise<void>>(async () => {});
@@ -86,6 +89,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       setDuplexOn(duplexPref());
       setTurns(readLog());
       setLearned(learnedCount());
+      setNameSay(pronunciationChoice("rem"));
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
@@ -588,6 +592,25 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
                     </span>
                   </label>
                 ) : null}
+                <div className="mt-2 rounded-xl border p-2" style={{ borderColor: "rgba(196,181,253,.2)", color: "var(--t-text)" }}>
+                  <b>Cómo dice su nombre</b>
+                  <span className="block" style={{ color: "var(--t-muted)" }}>Toca cada opción, escucha y deja la que suene «rem» en español. Solo cambia la voz; el nombre escrito sigue igual.</span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(PRONUNCIATIONS.find((p) => p.id === "rem")?.options ?? []).map((o, i) => (
+                      <button key={o} type="button" disabled={phase !== "idle"}
+                        onClick={() => {
+                          unlockAudio();
+                          setPronunciationChoice("rem", o);
+                          setNameSay(o);
+                          void speak("Hola, soy REM. ¿En qué te ayudo?", { spoken: applyPronunciations("Hola, soy REM. ¿En qué te ayudo?", () => o) });
+                        }}
+                        className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50"
+                        style={nameSay === o ? { borderColor: "#a78bfa", background: "rgba(139,92,246,.25)" } : { borderColor: "rgba(196,181,253,.25)" }}>
+                        {nameSay === o ? "✓ " : "🔈 "}Opción {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => void testWake()} disabled={phase !== "idle"} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
                     🧪 Probar el llamado
