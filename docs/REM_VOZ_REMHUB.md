@@ -100,6 +100,7 @@ REM es **una esfera de cristal morada** que flota sobre todo el panel, también 
 
 Se enciende con el interruptor «Rem» de la conversación. Viene encendido en computador y apagado en celular, donde gasta batería y suena al reiniciar. Queda guardado solo en ese equipo. Ahí mismo muestra qué oyó mientras espera.
 
+- **«Ren» lo llama** (así se pronuncia): «Ren, quiero ir a productos», al empezar o en medio de la frase. «rendir» o «Renault» no lo despiertan. En medio de una conversación, el nombre se quita y se entiende el resto (`withoutName` en `speech.ts`).
 - **El nombre en medio de la frase también lo llama:** «bueno, Rem, abre los gastos». Solo valen las formas que no son otra palabra: «rem», «reem», «rhem».
 
 - **Cuándo escucha:** solo con RemHub abierto y la pestaña a la vista. Se apaga sola si se cambia de pestaña o se bloquea la pantalla.

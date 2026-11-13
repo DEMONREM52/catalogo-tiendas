@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, capture, duplexCapable, duplexPref, fullDuplex, isAppleMobile, isEchoOf, isInstalledApp, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, unlockAudio, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
+import { beep, capture, duplexCapable, duplexPref, fullDuplex, isAppleMobile, isEchoOf, isInstalledApp, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, unlockAudio, voiceSupported, VoiceError, wakeRest, withoutName } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
 import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
@@ -184,7 +184,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
     if (session.current !== id) return null;
     setInterim("");
     if (alts[0]) { add("you", alts[0]); flash(`«${alts[0]}»`, 2500); }
-    return alts;
+    // «Ren, quiero ir a productos» en medio de la conversación: el nombre sobra, se entiende el resto.
+    return alts.map((a) => withoutName(a));
   }
 
   function failed(id: number, err: unknown): null {

@@ -85,3 +85,20 @@ test("entre parecidos gana el nombre completo y una página antes que una acció
   assert.equal(navTarget("nuevo traslado", links)?.link.label, "Nuevo traslado");
   assert.equal(navTarget("abre los gastos", links)?.link.label, "Gastos");
 });
+
+// REM se dice «ren»: así lo llaman. «Ren, quiero ir a productos» debe despertarlo y llevar a Productos.
+test("«ren» lo llama y se entiende el resto", async () => {
+  const { withoutName } = await import("@/lib/voice/speech");
+  const { SEARCH_INDEX } = await import("@/lib/search-index");
+  assert.equal(wakeRest("ren quiero ir a productos"), "quiero ir a productos");
+  assert.equal(wakeRest("Ren, abre los gastos"), "abre los gastos");
+  assert.equal(wakeRest("bueno ren abre la nómina"), "abre la nomina");
+  assert.equal(wakeRest("ren"), "");
+  assert.equal(wakeRest("rendir el informe"), null, "«rendir» no es el nombre");
+  assert.equal(wakeRest("el renault de juan"), null);
+  assert.equal(withoutName("Ren, quiero ir a productos"), "quiero ir a productos");
+  assert.equal(withoutName("tres de la zapatera"), "tres de la zapatera");
+  assert.equal(withoutName("ren"), "ren", "solo el nombre: queda igual");
+  const links = [...SEARCH_INDEX, { href: "/dashboard/products", label: "Productos", perms: [] }];
+  assert.equal(navTarget(withoutName("ren quiero ir a productos"), links, true)?.link.label, "Productos");
+});

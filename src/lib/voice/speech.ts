@@ -583,11 +583,21 @@ const NAME = "(?:rem|ren|ram|rim|rhem|reem|remm|renn|frem|brem|r e m|erre e eme)
 const WAKE = [
   new RegExp(`(?:^|\\s)${CALL}\\s+${NAME}(?:\\s+(.*))?$`),
   new RegExp(`(?:^|\\s)(?:oye|olle|hey|hola)(?:rem|ren|ram)(?:\\s+(.*))?$`),
-  // «REM, quiero hacer un traslado»: el nombre solo, al empezar la frase.
-  /^(?:rem|r e m)(?:\s+(.*))?$/,
+  // «REM, quiero hacer un traslado» / «Ren, quiero ir a productos»: el nombre solo, al empezar la frase.
+  // (REM se dice «ren»: así lo llama la gente.)
+  /^(?:rem|ren|r e m)(?:\s+(.*))?$/,
   // «Bueno, REM, abre los gastos»: el nombre en medio de la frase (solo las formas que no son otra palabra).
-  /(?:^|\s)(?:rem|reem|rhem|remm)(?:\s+(.*))?$/,
+  /(?:^|\s)(?:rem|ren|reem|rhem|remm)(?:\s+(.*))?$/,
 ];
+
+/**
+ * Quita el nombre si se dijo en medio de la conversación: «ren, quiero ir a productos» → «quiero ir a productos».
+ * Si solo se dijo el nombre, o no se dijo, deja la frase como estaba.
+ */
+export function withoutName(text: string): string {
+  const rest = wakeRest(text);
+  return rest ? rest : text;
+}
 
 /** Frase con «Oye REM» → lo que se dijo después ("" si nada). null si no llamó a REM. */
 export function wakeRest(text: string): string | null {

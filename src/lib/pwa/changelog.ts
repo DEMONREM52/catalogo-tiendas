@@ -1083,6 +1083,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Queda la que elijas" },
     ],
   },
+  {
+    id: 104, date: "2026-11-13", title: "🗣️ Llama a REM diciendo «ren»",
+    summary: "Como REM se pronuncia «ren», ahora también lo llamas así: «Ren, quiero ir a productos» o «Ren, abre los gastos». En pantalla sigue apareciendo «REM». Y si lo dices en medio de una conversación, entiende el resto de la frase.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Ren, quiero ir a productos»" },
+      { icon: "📦", text: "Abre Productos" },
+      { icon: "🔮", text: "En pantalla sigue «REM»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
