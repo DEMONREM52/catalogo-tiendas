@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `2d3f5b07` · 105 capacidades · 32 módulos.
+Versión del catálogo: `39357628` · 109 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -12,7 +12,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 |---|---|---|---|
 | Inicio e informes | `/dashboard` | Es la primera pantalla: tus pendientes, las ventas de hoy de tus puntos comparadas con ayer, lo más vendido de la semana, las metas del mes y el cierre del día. | — |
 | POS / Vender | `/dashboard/pos` | Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. | hacer una venta (por voz) |
-| Caja | `/dashboard/caja` | Sirve para abrir y cerrar la caja de cada punto, contar el efectivo y ver si hay diferencias. | — |
+| Caja | `/dashboard/caja` | Sirve para abrir y cerrar la caja de cada punto, contar el efectivo y ver si hay diferencias. | abrir la caja (3 pasos); cerrar la caja (3 pasos) |
 | Apartados y cotizaciones | `/dashboard/apartados` | Para separar productos a un cliente que va abonando, y para hacer cotizaciones. | — |
 | Promociones y combos | `/dashboard/promociones` | Para crear descuentos, ofertas y combos de productos. | — |
 | Garantías y devoluciones | `/dashboard/garantias` | Para registrar garantías, cambios y devoluciones de lo vendido. | — |
@@ -21,11 +21,11 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Productos | `/dashboard/products` | Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame. | crear un producto (5 pasos); subir productos desde Excel (sin pasos) |
 | Radar de productos | `/dashboard/products/radar` | Revisa los productos y te dice qué les falta: sin foto, sin precio, quietos o sin ventas. También arma el plan del día para publicar en redes con recordatorio, y desde ahí puedes inactivar los que ya no hay. | — |
 | Lista general de productos | `/dashboard/lista-productos` | Es para consultar productos y precios sin poder cambiarlos. | — |
-| Categorías | `/dashboard/categories` | Agrupa los productos para ordenar el catálogo y los informes. | — |
+| Categorías | `/dashboard/categories` | Agrupa los productos para ordenar el catálogo y los informes. | crear una categoría (3 pasos) |
 | Inventario | `/dashboard/inventario` | Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. | ingresar una factura de compra (3 pasos); hacer un traslado (por voz); hacer un conteo (por voz) |
 | Pedidos | `/dashboard/pedidos` | Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. | hacer un pedido interno (por voz) |
 | Centro de operaciones | `/dashboard/operaciones` | Reúne los documentos y movimientos de la tienda en un solo lugar: ventas, pedidos, traslados y lo de inventario. | — |
-| Terceros y cartera | `/dashboard/clientes` | Aquí están los clientes y los proveedores, la cartera con lo que te deben, los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. | — |
+| Terceros y cartera | `/dashboard/clientes` | Aquí están los clientes y los proveedores, la cartera con lo que te deben, los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. | crear un cliente (4 pasos) |
 | Catálogos y campañas | `/dashboard/social` | Para los catálogos en línea que compartes con los clientes, el catálogo en PDF y las campañas para redes. | — |
 | Landing pages | `/dashboard/landing` | Páginas de un producto para pauta y anuncios, con inventario aparte por punto y sus ventas y ganancia aparte. | — |
 | Mensajes | `/dashboard/mensajes` | Chat y llamadas con el equipo de la tienda. | — |
@@ -36,7 +36,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Para el contador | `/dashboard/contador` | Arma los asientos contables con el PUC para exportarlos al programa del contador. | — |
 | Mi tienda | `/dashboard/store` | Los datos de la tienda: logo, nombre, redes, enlaces y WhatsApp. | — |
 | Mi plan | `/dashboard/plan` | Tu plan de RemHub y sus pagos. Solo lo ven el dueño y el administrador. | — |
-| Usuarios y permisos | `/dashboard/store/users` | Para crear los usuarios del equipo y decidir qué puede hacer cada uno. | — |
+| Usuarios y permisos | `/dashboard/store/users` | Para crear los usuarios del equipo y decidir qué puede hacer cada uno. | crear un usuario (4 pasos) |
 | Puntos | `/dashboard/puntos` | Para configurar los puntos de venta y las bodegas de la tienda. | — |
 | Funciones opcionales | `/dashboard/vender-mas` | Funciones que se encienden o se apagan, como carritos abandonados, «Avísame cuando llegue», cupones, envío gratis y recompra. Vienen apagadas. | — |
 | Importar y exportar | `/dashboard/datos` | Para descargar en Excel los datos de la tienda y para subir datos desde Excel. | — |
@@ -59,6 +59,9 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Acción | Riesgo | Confirmación | Permisos (basta uno) |
 |---|---|---|---|
 | `sales.summary` Consultar las ventas | bajo | — | POS / Facturar (`pos`), Informes de ventas (`reports`), Pedidos de catálogo (`orders`), Informes de ventas (`reports`), Revisar cajas (`cash_manage`), Ver rentabilidad (`profit_view`) |
+| `stock.product` Consultar las existencias de un producto | bajo | — | Editar productos (`products`), Ver lista general de productos (`products_view`), Inventario y kardex (`inventory`), POS / Facturar (`pos`), Compras (`purchases`) |
+| `expenses.summary` Consultar los gastos | bajo | — | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`) |
+| `debts.summary` Consultar la cartera | bajo | — | Cartera (`receivables`), Créditos y cupos (`credit`) |
 
 ## Matriz de permisos: páginas y formularios
 
@@ -164,6 +167,7 @@ Sale del buscador Ctrl+K (`src/lib/search-index.ts`) y del menú (`src/lib/modul
 | Datos de facturación | página | `/dashboard/store/billing` | Datos de facturación (`billing`) | sí |
 | Rentabilidad | página | `/dashboard/rentabilidad` | Ver rentabilidad (`profit_view`), Reglas de precio por punto (`profit_rules`), Aprobar reglas de precio (`profit_approve`), Beneficiarios y repartos (`profit_beneficiaries`), Preparar liquidaciones (`profit_settle`), Aprobar liquidaciones (`profit_settle_approve`), Pagar liquidaciones (`profit_pay`), Autorizar precios 🔓 (`price_approve`) |  |
 | Gastos y nómina | página | `/dashboard/gastos` | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`), Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) |  |
+| Gasto llenado por voz | formulario | `/dashboard/gastos?tab=expenses&nuevo=gasto` | Gastos (`expenses`), Pagar gastos (`expenses_pay`) |  |
 
 ## Rutas que REM no abre directo
 

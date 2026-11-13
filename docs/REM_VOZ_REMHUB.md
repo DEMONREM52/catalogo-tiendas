@@ -28,6 +28,11 @@ Cómo está hecho y qué falta: [REM_ARQUITECTURA.md](REM_ARQUITECTURA.md). Todo
   - Un día: «ventas del lunes», «el 5 de noviembre».
   - Un punto: «las ventas de ayer en la sede Zamora».
   - Usa los datos de la base, con tus puntos y tus permisos. Otros días y por punto requieren el permiso de informes de ventas.
+- **Existencias:** «¿cuántas hay de la cámara SC30A?», «¿cuántas zapateras quedan?», «stock de la VTS30». Dice el total y por punto. Si hay varios parecidos, pregunta cuál y entiende «la dos».
+- **Gastos:** «¿cuánto hemos gastado este mes?», «¿y el mes pasado?», «gastos pendientes», «gastos vencidos», «gastos de la semana pasada».
+- **Cartera:** «¿cuánto nos deben?», «¿cómo va la cartera?», «¿cuánto debe Juan Pérez?».
+- **Llenar un gasto:** «registra un gasto de 50 mil en arriendo». Abre «Nuevo gasto» con el valor, el detalle y, si la reconoce, la categoría. Tú lo revisas y lo guardas.
+- **Ventas de un mes o una semana:** todavía no las suma; te ofrece abrir el informe por fechas de Rentabilidad.
 - **Crear según dónde estás:** en Productos, «ayúdame a crear uno nuevo» abre el formulario. En Nómina pregunta: «¿nueva nómina o nuevo empleado?».
 - **¿Te refieres a…?** Si algo puede ser dos cosas, pregunta antes («¿Te refieres a Lista general o a Rentabilidad?») y entiende «la segunda».
 - **En medio de un traslado o una venta** también responde estas preguntas, y sigue donde ibas.
@@ -67,6 +72,12 @@ Lo que aprende es **tuyo**: por usuario y por tienda, en este equipo. Otra perso
 - borrar todo.
 
 Lo aprendido nunca da permisos.
+
+**Para toda la tienda** (migración 20261322):
+
+- Lo que REM no entiende se le muestra al dueño o al administrador **sin el nombre** de quien lo dijo.
+- En la conversación, «👑 Enseñarle a REM para toda la tienda», el dueño o el administrador elige a dónde lleva cada frase. Desde ahí REM la entiende con todos.
+- Se borra solo a los 90 días.
 
 ### Cómo aprende
 

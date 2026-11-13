@@ -45,11 +45,16 @@ test("cómo se hace algo: pasos verificados de la pantalla", () => {
   assert.equal(c && c.kind === "howto" ? c.howto?.id : null, "inventory.purchase");
   const t = intent("cómo se hace un traslado");
   assert.equal(t && t.kind === "howto" ? t.howto?.id : null, "inventory.transfer");
-  // Sin pasos escritos: sabe en qué módulo es, pero no inventa pasos.
   const cl = intent("cómo creo un cliente");
-  assert.equal(cl?.kind, "howto");
-  assert.equal(cl && cl.kind === "howto" ? cl.howto : "x", null);
-  assert.equal(moduleName("cómo creo un cliente"), "Terceros y cartera");
+  assert.equal(cl && cl.kind === "howto" ? cl.howto?.id : null, "clients.create");
+  assert.equal(moduleName("cómo registro un proveedor"), "Terceros y cartera", "un proveedor se crea como tercero, no es una compra");
+  for (const [t, id] of [["cómo abro la caja", "cash.open"], ["cómo hago el cierre de caja", "cash.close"], ["cómo creo una categoría", "categories.create"], ["cómo creo un usuario", "users.create"], ["cómo agrego un empleado al sistema", "users.create"]] as const) {
+    const h = intent(t);
+    assert.equal(h && h.kind === "howto" ? h.howto?.id : null, id, t);
+  }
+  // Sin pasos escritos: sabe en qué módulo es, pero no inventa pasos.
+  const pr = intent("cómo funciona una promoción");
+  assert.ok(pr && (pr.kind === "explain" || (pr.kind === "howto" && !pr.howto?.steps.length)));
 });
 
 test("ventas: varias formas de preguntar, una sola intención", () => {

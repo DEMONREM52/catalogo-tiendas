@@ -994,7 +994,7 @@ export default function DashboardShell({
                 🔍 <span className="hidden md:inline">Buscar</span><kbd className="hidden rounded border px-1 text-[10px] md:inline" style={{ borderColor: "var(--t-card-border)" }}>Ctrl K</kbd>
               </button>
             ) : null}
-            {role === "store" && store?.id ? <RemButton can={canOpen} links={paletteLinks} userId={myUserId} storeId={store.id} /> : null}
+            {role === "store" && store?.id ? <RemButton can={canOpen} links={paletteLinks} userId={myUserId} storeId={store.id} canByRole={canOpenByRole} canTeach={storeIsOwner || isStoreAdmin} /> : null}
             {role === "store" && store?.id ? <CommandPalette storeId={store.id} links={paletteLinks} can={canOpen} /> : null}
             {role === "store" && store?.id ? <HelpButton storeName={store.name} userName={displayName || email} /> : null}
             {role === "store" && store?.id ? <GuidedTourHost /> : null}

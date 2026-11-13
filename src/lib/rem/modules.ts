@@ -60,6 +60,15 @@ export const MODULES: ModuleInfo[] = [
     id: "cash", name: "Caja", path: "/dashboard/caja",
     aliases: "caja arqueo cierre de caja efectivo turno abrir caja cerrar caja", keys: "caja|arqueo",
     about: "Sirve para abrir y cerrar la caja de cada punto, contar el efectivo y ver si hay diferencias.",
+    howto: [{
+      id: "cash.open", goal: "abrir la caja", keywords: "abrir caja abro la caja base inicial empezar turno",
+      steps: ["Abre Caja y, en tu punto, toca «Abrir caja».", "Cuenta el efectivo con el que empiezas y escríbelo como base inicial. La nota es opcional.", "Toca «Abrir caja»."],
+      href: "/dashboard/caja", verified: true,
+    }, {
+      id: "cash.close", goal: "cerrar la caja", keywords: "cerrar caja cierro la caja cierre arqueo cuadrar",
+      steps: ["Abre Caja y, en tu punto, toca «Cerrar caja». Te dice cuánto debe haber.", "Cuenta billetes y monedas, o escribe el total contado.", "El sistema calcula la diferencia. Toca «Cerrar caja»."],
+      href: "/dashboard/caja", verified: true,
+    }],
   },
   {
     id: "layaways", name: "Apartados y cotizaciones", path: "/dashboard/apartados",
@@ -120,13 +129,18 @@ export const MODULES: ModuleInfo[] = [
     id: "categories", name: "Categorías", path: "/dashboard/categories",
     aliases: "categorias grupos familias",
     about: "Agrupa los productos para ordenar el catálogo y los informes.",
+    howto: [{
+      id: "categories.create", goal: "crear una categoría", keywords: "categoria grupo familia",
+      steps: ["Abre Categorías y toca «+ Nueva». Aparece una que se llama «Nueva categoría».", "Cámbiale el nombre y, si quieres, súbele una imagen.", "Toca «Guardar»."],
+      href: "/dashboard/categories", verified: true,
+    }],
   },
   {
     id: "inventory", name: "Inventario", path: "/dashboard/inventario",
     aliases: "inventario stock existencias bodega bodegas traslados ajustes kardex conteos compras facturas de compra proveedores cuentas por pagar", keys: "inventario|stock|existencias|traslados|kardex|compras|cuentas por pagar",
     about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra.",
     howto: [{
-      id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura proveedor ingreso mercancia ingresar",
+      id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura de compra ingreso mercancia ingresar xml",
       steps: [
         "Abre Inventario y luego Facturas de compra.",
         "Registra la factura del proveedor con los productos, las cantidades y los costos. También se puede cargar el XML.",
@@ -160,6 +174,16 @@ export const MODULES: ModuleInfo[] = [
     id: "clients", name: "Terceros y cartera", path: "/dashboard/clientes",
     aliases: "clientes terceros proveedores cartera creditos fiado deudas cobrar avisos de cobro fidelidad", keys: "cliente|clientes|tercero|terceros|cartera|fiado|creditos",
     about: "Aquí están los clientes y los proveedores, la cartera con lo que te deben, los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad.",
+    howto: [{
+      id: "clients.create", goal: "crear un cliente", keywords: "cliente tercero proveedor persona empresa",
+      steps: [
+        "Abre Terceros y cartera y toca «Nuevo tercero».",
+        "Si es una persona: nombre completo, tipo y número de documento. Si es una empresa: razón social y NIT; el dígito de verificación se calcula solo.",
+        "Celular, correo, dirección y cupo de crédito son opcionales.",
+        "Toca «Crear tercero». Si el documento ya existe, te avisa.",
+      ],
+      href: "/dashboard/clientes", verified: true,
+    }],
   },
   {
     id: "social", name: "Catálogos y campañas", path: "/dashboard/social",
@@ -225,6 +249,16 @@ export const MODULES: ModuleInfo[] = [
     id: "users", name: "Usuarios y permisos", path: "/dashboard/store/users",
     aliases: "usuarios permisos roles accesos equipo", keys: "usuarios|permisos|roles",
     about: "Para crear los usuarios del equipo y decidir qué puede hacer cada uno.",
+    howto: [{
+      id: "users.create", goal: "crear un usuario", keywords: "usuario empleado acceso persona del equipo vendedor sistema entrar ingresar al sistema",
+      steps: [
+        "Abre Usuarios y toca «Nuevo usuario».",
+        "Pon el nombre visible, el usuario con el que va a entrar y una contraseña inicial de al menos 4 caracteres. Compártela por un canal privado.",
+        "Elige en qué punto trabaja y dale permisos: una plantilla o uno por uno. Necesita al menos uno.",
+        "Toca «Crear usuario».",
+      ],
+      href: "/dashboard/store/users", verified: true,
+    }],
   },
   {
     id: "points", name: "Puntos", path: "/dashboard/puntos",

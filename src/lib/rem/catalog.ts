@@ -83,6 +83,22 @@ export const QUERIES: Capability[] = [
     synonyms: "cuanto vendimos ventas de hoy como van las ventas lo que hemos vendido mis ventas lo mas vendido ayer",
     risk: "low", confirm: "none", runner: "sales.summary", status: "ready",
     examples: ["¿Cuánto vendimos hoy?", "¿Y ayer?", "¿Cuánto he vendido yo?", "¿Qué es lo más vendido?", "Ventas del lunes"] },
+  { id: "query:stock", kind: "query", label: "Existencias de un producto", module: "inventory", href: "/dashboard/inventario?tab=stock", perms: ["products", "products_view", "inventory", "pos", "purchases"],
+    synonyms: "cuantas hay quedan stock existencias unidades hay de",
+    risk: "low", confirm: "none", runner: "stock.product", status: "ready",
+    examples: ["¿Cuántas hay de la cámara SC30A?", "¿Cuántas zapateras quedan?", "Stock de la VTS30"] },
+  { id: "query:expenses", kind: "query", label: "Gastos de un periodo", module: "expenses", href: "/dashboard/gastos?tab=expenses", perms: ["expenses", "expenses_pay", "budgets"],
+    synonyms: "cuanto hemos gastado gastos del mes pendientes por pagar vencidos semana",
+    risk: "low", confirm: "none", runner: "expenses.summary", status: "ready",
+    examples: ["¿Cuánto hemos gastado este mes?", "¿Y el mes pasado?", "Gastos pendientes", "Gastos vencidos"] },
+  { id: "query:debts", kind: "query", label: "Cartera de clientes", module: "clients", href: "/dashboard/clientes?tab=cartera", perms: ["receivables", "credit"],
+    synonyms: "cuanto nos deben cartera por cobrar cuanto debe deuda de fiado",
+    risk: "low", confirm: "none", runner: "debts.summary", status: "ready",
+    examples: ["¿Cuánto nos deben?", "¿Cuánto debe Juan Pérez?", "¿Cómo va la cartera?"] },
+  { id: "form:gasto-por-voz", kind: "form", label: "Gasto llenado por voz", module: "expenses", href: "/dashboard/gastos?tab=expenses&nuevo=gasto", perms: ["expenses", "expenses_pay"],
+    synonyms: "registra un gasto de anota un gasto apunta un gasto",
+    risk: "medium", confirm: "none", runner: "form", status: "ready",
+    examples: ["Registra un gasto de 50 mil en arriendo", "Anota un gasto de almuerzo por 20.000"] },
 ];
 
 const pathOf = (href: string) => href.split("?")[0];
@@ -132,6 +148,11 @@ export function createOptions(path: string): Capability[] {
     if (inTab.length) return inTab;
   }
   return all;
+}
+
+/** Permisos de un módulo (basta uno): los de todo lo del catálogo que vive en él. */
+export function modulePerms(moduleId: string): string[] {
+  return [...new Set(CAPABILITIES.filter((c) => c.module === moduleId).flatMap((c) => c.perms))];
 }
 
 /** Versión del catálogo: cambia cuando cambia cualquier capacidad (la documentación generada la lleva). */

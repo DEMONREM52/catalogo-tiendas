@@ -40,8 +40,22 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
   const [range, setRange] = useState<[string, string]>(() => { const d = new Date(); return [iso(new Date(d.getFullYear(), d.getMonth() - 2, 1)), iso(new Date(d.getFullYear(), d.getMonth() + 1, 0))]; });
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Expense | "new" | null>(null);
+  // REM: «registra un gasto de 50 mil en arriendo» llega con ?valor=50000&detalle=arriendo. Solo llena: guarda la persona.
+  const [draft, setDraft] = useState<Draft | null>(null);
   // Desde el buscador: «Nuevo gasto».
-  useUrlAction("gasto", () => { if (cat.can.expenses) setEditing("new"); });
+  useUrlAction("gasto", () => {
+    if (!cat.can.expenses) return;
+    const url = new URL(window.location.href);
+    const value = Number(url.searchParams.get("valor"));
+    const detail = (url.searchParams.get("detalle") ?? "").trim().slice(0, 120);
+    if (url.searchParams.has("valor") || url.searchParams.has("detalle")) {
+      url.searchParams.delete("valor");
+      url.searchParams.delete("detalle");
+      window.history.replaceState(null, "", url.toString());
+    }
+    setDraft(value > 0 || detail ? { amount: value > 0 ? Math.round(value) : null, description: detail } : null);
+    setEditing("new");
+  });
   const visible = cat.my_points ? points.filter((p) => cat.my_points!.includes(p.id)) : points;
 
   const load = useCallback(async () => {
@@ -72,7 +86,7 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por descripción, proveedor, factura o número…" className="w-full rounded-full border py-2 pr-3 text-sm outline-none" style={{ ...inputStyle, paddingLeft: "2.1rem" }} />
         </div>
-        {cat.can.expenses ? <button type="button" onClick={() => setEditing("new")} className={primaryBtn} style={primaryBg}><Plus size={16} /> Nuevo gasto</button> : null}
+        {cat.can.expenses ? <button type="button" onClick={() => { setDraft(null); setEditing("new"); }} className={primaryBtn} style={primaryBg}><Plus size={16} /> Nuevo gasto</button> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-full border px-3 py-1.5" style={inputStyle} aria-label="Estado">
@@ -123,7 +137,7 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
         </ul>
       )}
       <AnimatePresence>
-        {editing ? <ExpenseForm key="form" storeId={storeId} points={visible} cat={cat} initial={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(id) => { setEditing(null); void load(); onChanged(); if (editing === "new") onOpen(id); }} /> : null}
+        {editing ? <ExpenseForm key="form" storeId={storeId} points={visible} cat={cat} initial={editing === "new" ? null : editing} draft={editing === "new" ? draft : null} onClose={() => { setEditing(null); setDraft(null); }} onSaved={(id) => { setEditing(null); void load(); onChanged(); if (editing === "new") onOpen(id); }} /> : null}
       </AnimatePresence>
       <AnimatePresence>
         {openId ? <ExpenseDetail key={openId} id={openId} cat={cat} onClose={() => onOpen(null)} onEdit={(e) => { onOpen(null); setEditing(e); }} onChanged={() => { void load(); onChanged(); }} /> : null}
@@ -132,10 +146,15 @@ export function Expenses({ storeId, points, cat, openId, onOpen, onChanged }: { 
   );
 }
 
-function ExpenseForm({ storeId, points, cat, initial, onClose, onSaved }: { storeId: string; points: Point[]; cat: Catalog; initial: Expense | null; onClose: () => void; onSaved: (id: string) => void }) {
+type Draft = { amount: number | null; description: string };
+const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+function ExpenseForm({ storeId, points, cat, initial, draft = null, onClose, onSaved }: { storeId: string; points: Point[]; cat: Catalog; initial: Expense | null; draft?: Draft | null; onClose: () => void; onSaved: (id: string) => void }) {
   const active = cat.categories.filter((c) => c.active || c.id === initial?.category_id);
+  // Dictado por REM: la categoría cuyo nombre aparece en lo dicho («arriendo» → Arriendo). Si no, se elige a mano.
+  const guessed = draft?.description ? active.find((c) => c.active && fold(c.name).length >= 3 && fold(draft.description).includes(fold(c.name)))?.id ?? "" : "";
   const start = {
-    category: initial?.category_id ?? "", amount: initial ? n(initial.amount) : null as number | null, description: initial?.description ?? "", payee: initial?.payee_name ?? "",
+    category: initial?.category_id ?? guessed, amount: initial ? n(initial.amount) : draft?.amount ?? null as number | null, description: initial?.description ?? draft?.description ?? "", payee: initial?.payee_name ?? "",
     reference: initial?.reference ?? "", incurred: initial?.incurred_on ?? iso(new Date()), due: initial?.due_on ?? "", notes: initial?.notes ?? "",
     point: initial ? initial.point_id ?? "" : cat.can.madre ? "" : points[0]?.id ?? "", payNow: false, method: "cash",
   };

@@ -13,7 +13,7 @@
 
 import type { RemReply } from "@/lib/voice/rem";
 import type { Confirm, Risk } from "./catalog";
-import type { SalesQuery, Topic } from "./understand";
+import type { DebtQuery, ExpenseQuery, SalesQuery, StockQuery, Topic } from "./understand";
 import { normalize } from "@/lib/voice/spanish";
 
 export type RpcResult = { data: unknown; error: { message: string } | null };
@@ -26,7 +26,15 @@ export type ActionEnv = {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<RpcResult>;
 };
 
-export type ActionResult = { ok: boolean; reply: RemReply; topic?: Topic };
+export type ActionResult = {
+  ok: boolean;
+  reply: RemReply;
+  topic?: Topic;
+  /** Ofrece abrir algo después («¿Te lo abro?»): se abre solo si la persona dice «sí» y lo puede abrir. */
+  offer?: { href: string; label: string };
+  /** Preguntó «¿cuál?»: cada opción vuelve a correr la acción con esos datos. */
+  choices?: Array<{ name: string; action: string; params: unknown }>;
+};
 
 export type RemAction<P> = {
   id: string;
@@ -127,6 +135,13 @@ registerAction<SalesQuery>({
     const canHome = HOME_PERMS.some((p) => env.can(p));
     const canClose = CLOSE_PERMS.some((p) => env.can(p));
 
+    if (q.range) {
+      // erp_home_today y erp_daily_close son de un día. Por rango existe el informe de Rentabilidad (con costo y ganancia).
+      return { ok: false, topic, offer: { href: "/dashboard/rentabilidad?tab=points", label: "Informe por fechas y horas" }, reply: {
+        say: `Las ventas ${q.range.label} todavía no te las sé sumar por voz. Están en Rentabilidad, en el informe por fechas. ¿Te lo abro?`,
+      } };
+    }
+
     if (q.scope === "mine" && q.period.ago > 0) {
       return { ok: false, topic, reply: { say: `Tus ventas solo te las puedo decir de hoy. Si quieres, pregúntame por las de toda la tienda ${when}.` } };
     }
@@ -192,6 +207,136 @@ registerAction<SalesQuery>({
     return { ok: true, topic, reply: {
       say: `${cap(when)} fueron ${sales(v.count)}, por ${pesos(v.total)}.${pts.length > 1 ? ` La que más vendió: ${pts[0].name}, con ${pesos(pts[0].total)}.` : ""}`,
       show: `Ventas de ${when}: ${sales(v.count)} · ${money(v.total)}${pts.length > 1 ? `\n${pts.map((p) => `📍 ${p.name}: ${money(p.total)} (${p.count})`).join("\n")}` : ""}`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Existencias de un producto
+
+type ProductRow = { id: string; name: string; sku: string | null; active: boolean | null };
+type StockRow = { warehouse_id: string; name: string; kind: string; qty: number };
+const STOCK_PERMS = ["products", "products_view", "inventory", "pos", "purchases"];
+const units = (n: number) => `${n} ${Math.abs(n) === 1 ? "unidad" : "unidades"}`;
+
+function sameProduct(said: string, p: ProductRow): boolean {
+  const s = normalize(said).replace(/\s+/g, "");
+  return normalize(p.name).replace(/\s+/g, "") === s || (!!p.sku && normalize(p.sku).replace(/[\s-]+/g, "") === s.replace(/-/g, ""));
+}
+
+registerAction<StockQuery & { id?: string; name?: string }>({
+  id: "stock.product",
+  label: "Consultar las existencias de un producto",
+  risk: "low",
+  confirm: "none",
+  perms: STOCK_PERMS,
+  validate: (q) => (q.id || q.product.trim().length >= 2 ? null : "¿De qué producto?"),
+  async run(q, env) {
+    const topic: Topic = { kind: "stock", q: { product: q.product } };
+    let product: ProductRow | null = q.id ? { id: q.id, name: q.name ?? q.product, sku: null, active: true } : null;
+    if (!product) {
+      const { data, error } = await env.rpc("search_products_safe", { p_store_id: env.storeId, p_query: q.product, p_limit: 6, p_offset: 0, p_status: "all", p_category_id: null });
+      if (error) return { ok: false, topic, reply: { say: "No pude buscar el producto: la conexión falló." } };
+      const rows = ((data ?? []) as ProductRow[]).filter((r) => r && r.id);
+      if (!rows.length) return { ok: false, topic, reply: { say: `No encontré «${q.product}» en los productos. Dímelo de otra forma o con el código.` } };
+      const exact = rows.filter((r) => sameProduct(q.product, r));
+      if (exact.length === 1 || rows.length === 1) product = exact[0] ?? rows[0];
+      else {
+        const few = rows.slice(0, 3);
+        return { ok: false, topic, reply: { say: `Encontré varios. ¿Cuál? ${few.map((r, i) => `${["uno", "dos", "tres"][i]}, ${r.name.toLowerCase()}`).join("; ")}.` },
+          choices: few.map((r) => ({ name: r.name, action: "stock.product", params: { product: q.product, id: r.id, name: r.name } })) };
+      }
+    }
+    const { data, error } = await env.rpc("erp_product_stock_by_point", { p_product: product.id });
+    if (error) return { ok: false, topic, reply: { say: /permiso/i.test(error.message) ? "Tu usuario no tiene permiso para ver las existencias." : "No pude consultar las existencias: la conexión falló." } };
+    const rows = ((data ?? []) as StockRow[]);
+    const total = rows.reduce((a, r) => a + (Number(r.qty) || 0), 0);
+    const where = rows.filter((r) => Number(r.qty) !== 0).sort((a, b) => b.qty - a.qty);
+    const name = product.name;
+    const off = product.active === false ? " Está inactivo." : "";
+    if (!where.length) return { ok: true, topic, reply: { say: `${name}: no hay unidades en ningún punto.${off}` } };
+    return { ok: true, topic, reply: {
+      say: `De ${name.toLowerCase()} hay ${units(total)}${where.length > 1 ? `: ${where.slice(0, 4).map((r) => `${r.name}, ${r.qty}`).join("; ")}` : `, en ${where[0].name}`}.${off}`,
+      show: `${name}: ${units(total)}\n${where.map((r) => `📍 ${r.name}: ${r.qty}`).join("\n")}${off ? `\n${off.trim()}` : ""}`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Gastos
+
+const EXPENSE_PERMS = ["expenses", "expenses_pay", "budgets"];
+
+registerAction<ExpenseQuery>({
+  id: "expenses.summary",
+  label: "Consultar los gastos",
+  risk: "low",
+  confirm: "none",
+  perms: EXPENSE_PERMS,
+  validate: (q) => (q.range.from > q.range.to ? "Ese rango de fechas no sirve." : null),
+  async run(q, env) {
+    const topic: Topic = { kind: "expenses", q };
+    const { data, error } = await env.rpc("erp_expenses_list", {
+      p_store: env.storeId, p_point: null, p_from: q.range.from, p_to: q.range.to,
+      p_status: q.status === "all" ? null : q.status, p_category: null, p_query: null, p_limit: 1, p_offset: 0,
+    });
+    if (error) return { ok: false, topic, reply: { say: /permiso|Gastos/i.test(error.message) ? "Tu usuario no tiene permiso para ver los gastos." : "No pude consultar los gastos: la conexión falló." } };
+    const v = data as { total: number; sum: number } | null;
+    if (!v) return { ok: false, topic, reply: { say: "No pude consultar los gastos." } };
+    const what = q.status === "open" ? "gastos pendientes de pagar" : q.status === "overdue" ? "gastos vencidos" : "gastos";
+    const n = Number(v.total) || 0;
+    if (!n) return { ok: true, topic, reply: { say: `${cap(q.range.label)} no hay ${what}.` } };
+    return { ok: true, topic, offer: { href: "/dashboard/gastos?tab=expenses", label: "Gastos" }, reply: {
+      say: `${cap(q.range.label)} van ${n} ${n === 1 ? what.replace("gastos", "gasto") : what}, por ${pesos(Number(v.sum))}. ¿Te los muestro?`,
+      show: `${cap(what)} ${q.range.label}: ${n} · ${money(Number(v.sum))}\n¿Te los muestro?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Cartera (lo que deben los clientes)
+
+const DEBT_PERMS = ["receivables", "credit"];
+type Receivables = {
+  kpis: { open: number; open_count: number; overdue: number; overdue_count: number; customers: number };
+  items: Array<{ customer_id: string; customer: string; balance: number; late: number }>;
+};
+
+registerAction<DebtQuery>({
+  id: "debts.summary",
+  label: "Consultar la cartera",
+  risk: "low",
+  confirm: "none",
+  perms: DEBT_PERMS,
+  validate: () => null,
+  async run(q, env) {
+    const topic: Topic = { kind: "debts", q };
+    const { data, error } = await env.rpc("erp_receivables_overview", { p_store: env.storeId });
+    if (error) return { ok: false, topic, reply: { say: /permiso/i.test(error.message) ? "Tu usuario no tiene permiso para ver la cartera." : "No pude consultar la cartera: la conexión falló." } };
+    const v = data as Receivables | null;
+    if (!v?.kpis) return { ok: false, topic, reply: { say: "No pude consultar la cartera." } };
+    const offer = { href: "/dashboard/clientes?tab=cartera", label: "Cartera" };
+    if (q.customer) {
+      const words = normalize(q.customer).split(" ").filter((w) => w.length > 1);
+      const mine = (v.items ?? []).filter((i) => { const n = normalize(i.customer); return words.every((w) => n.includes(w)); });
+      const people = [...new Set(mine.map((i) => i.customer_id))];
+      if (!mine.length) return { ok: true, topic, reply: { say: `No encontré deudas abiertas de «${q.customer}».` } };
+      if (people.length > 1) {
+        const names = [...new Set(mine.map((i) => i.customer))].slice(0, 3);
+        return { ok: false, topic, reply: { say: `Hay varios clientes que se llaman así: ${names.join(", ")}. Dime el nombre completo.` } };
+      }
+      const sum = mine.reduce((a, i) => a + Number(i.balance || 0), 0);
+      const late = Math.max(...mine.map((i) => Number(i.late) || 0));
+      return { ok: true, topic, offer, reply: {
+        say: `${mine[0].customer} debe ${pesos(sum)}${mine.length > 1 ? ` en ${mine.length} documentos` : ""}.${late > 0 ? ` Lo más viejo tiene ${late} ${late === 1 ? "día" : "días"} de vencido.` : " Nada vencido."} ¿Te abro la cartera?`,
+        show: `${mine[0].customer}: ${money(sum)} (${mine.length} doc.)${late > 0 ? ` · ${late} días de vencido` : ""}\n¿Te abro la cartera?`,
+      } };
+    }
+    const k = v.kpis;
+    if (!k.open_count) return { ok: true, topic, reply: { say: "Nadie te debe: no hay cartera abierta." } };
+    return { ok: true, topic, offer, reply: {
+      say: `Te deben ${pesos(k.open)} entre ${k.customers} ${k.customers === 1 ? "cliente" : "clientes"}.${k.overdue_count ? ` De eso, ${pesos(k.overdue)} está vencido.` : " Nada está vencido."} ¿Te abro la cartera?`,
+      show: `Cartera: ${money(k.open)} · ${k.customers} clientes${k.overdue_count ? `\nVencido: ${money(k.overdue)} (${k.overdue_count} doc.)` : ""}\n¿Te abro la cartera?`,
     } };
   },
 });

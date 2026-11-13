@@ -23,11 +23,12 @@ import { announceUrlChange } from "@/lib/url-intent";
 import { beep, capture, duplexCapable, duplexPref, fullDuplex, isAppleMobile, isEchoOf, isInstalledApp, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, unlockAudio, voiceSupported, VoiceError, wakeRest, withoutName } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
-import { forgetLearnedProducts, forgetPhraseKey, learnedCount, learnedPhrase, learnedProductsCount, learnPhrase, listPhrases, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
-import { VOICE_SCREENS, type VoiceScreen } from "@/lib/rem/catalog";
+import { forgetLearnedProducts, forgetPhraseKey, phraseKey, learnedCount, learnedPhrase, learnedProductsCount, learnPhrase, listPhrases, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
+import { modulePerms, VOICE_SCREENS, type VoiceScreen } from "@/lib/rem/catalog";
+import { dismissTeamMiss, forgetStore, loadStorePhrases, reportMiss, reviewMisses, teachStore, type TeamMiss } from "@/lib/rem/team";
 import { emptyBrain, think, type BrainState, type Thought } from "@/lib/rem/brain";
 import { capabilitiesAnswer } from "@/lib/rem/respond";
-import { forgetEverything, readMisses, recordMiss, resolveMiss, setRemScope } from "@/lib/rem/memory";
+import { forgetEverything, listStorePhrases, readMisses, recordMiss, resolveMiss, setRemScope } from "@/lib/rem/memory";
 import type { ActionEnv } from "@/lib/rem/actions";
 import type { RemContext } from "@/lib/rem/understand";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -56,7 +57,16 @@ function writeFlag(key: string, on: boolean) {
   try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* sin almacenamiento */ }
 }
 
-export function RemButton({ can, links = [], userId = null, storeId = null }: { can: (permission: string) => boolean; links?: NavLink[]; userId?: string | null; storeId?: string | null }) {
+export function RemButton({ can, links = [], userId = null, storeId = null, canByRole, canTeach = false }: {
+  can: (permission: string) => boolean;
+  links?: NavLink[];
+  userId?: string | null;
+  storeId?: string | null;
+  /** Permisos sin contar el plan: si con esto sí y con `can` no, lo frena el plan. */
+  canByRole?: (permission: string) => boolean;
+  /** Dueño o administrador: le enseña a REM para toda la tienda (la base lo vuelve a revisar). */
+  canTeach?: boolean;
+}) {
   const supported = useSyncExternalStore(() => () => {}, voiceSupported, () => false);
   const router = useRouter();
   const [on, setOn] = useState(false);
@@ -90,6 +100,9 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
   // Para «Lo que REM sabe de ti»: se vuelve a leer al cambiar algo.
   const [memTick, setMemTick] = useState(0);
   const [wipeAsk, setWipeAsk] = useState(false);
+  // Dueño o administrador: lo que REM no le entendió al equipo (sin nombres) y las frases de la tienda.
+  const [team, setTeam] = useState<{ rows: TeamMiss[]; error: string | null } | null>(null);
+  const [teamBusy, setTeamBusy] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -105,7 +118,10 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
   useEffect(() => {
     setRemScope(userId, storeId);
     brain.current = emptyBrain();
+    setTeam(null);
     const t = window.setTimeout(() => { setTurns(readLog()); setLearned(learnedCount()); setMemTick((n) => n + 1); }, 0);
+    // Lo que la tienda le enseñó (si la migración 20261322 está corrida).
+    if (storeId && userId) void loadStorePhrases(storeId).then(() => setMemTick((n) => n + 1));
     return () => window.clearTimeout(t);
   }, [userId, storeId]);
   useEffect(() => onRemHandlerChange(() => {
@@ -318,7 +334,11 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
 
   /** Dónde está y qué puede abrir quien habla (se lee en cada frase: si le cambian los permisos, cuenta al instante). */
   function remCtx(): RemContext {
-    return { path: window.location.pathname + window.location.search, now: new Date(), topic: brain.current.topic, links };
+    return {
+      path: window.location.pathname + window.location.search, now: new Date(), topic: brain.current.topic, links,
+      // Si el rol lo deja pero no aparece, es el plan de la tienda.
+      blockedBy: (m) => (canByRole && modulePerms(m.id).some((p) => canByRole(p)) ? "plan" : "permission"),
+    };
   }
   function remEnv(): ActionEnv | null {
     if (!storeId) return null;
@@ -355,7 +375,12 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
       // Lo que no entendió en esta conversación: si enseguida, dicho de otra forma, sí, aprende la frase.
       let missed: string | null = null;
       const learnMissed = (href: string, label: string) => { if (missed) { learnPhrase(missed, href, label); resolveMiss(missed); setLearned(learnedCount()); missed = null; } };
-      const miss = (text: string) => { missed = text; recordMiss(text, window.location.pathname); };
+      const miss = (text: string) => {
+        missed = text;
+        recordMiss(text, window.location.pathname);
+        // Para que el dueño o un administrador le enseñe (sin el nombre de quien lo dijo).
+        if (storeId) reportMiss(storeId, phraseKey(text), window.location.pathname);
+      };
       const opener = async (alts: string[]): Promise<"done" | "handler" | "miss" | "talk"> => {
         const t = normalize(alts[0] ?? "");
         const talk = smallTalk(t);
@@ -539,6 +564,35 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
     resolveMiss(text);
     memChanged();
   }
+  async function openTeam() {
+    if (!storeId) return;
+    setTeamBusy(true);
+    const r = await reviewMisses(storeId);
+    setTeamBusy(false);
+    setTeam(r.ok ? { rows: r.data, error: null } : { rows: [], error: r.error });
+  }
+  async function teachTeam(phrase: string, href: string) {
+    const l = links.find((x) => x.href === href);
+    if (!storeId || !l) return;
+    setTeamBusy(true);
+    const r = await teachStore(storeId, phrase, l.href, l.label);
+    setTeamBusy(false);
+    if (!r.ok) { setTeam((t) => ({ rows: t?.rows ?? [], error: r.error })); return; }
+    setTeam((t) => ({ rows: (t?.rows ?? []).filter((x) => x.phrase !== phrase), error: null }));
+    memChanged();
+  }
+  async function dismissTeam(phrase: string) {
+    if (!storeId) return;
+    const r = await dismissTeamMiss(storeId, phrase);
+    if (r.ok) setTeam((t) => ({ rows: (t?.rows ?? []).filter((x) => x.phrase !== phrase), error: null }));
+  }
+  async function forgetTeam(phrase: string) {
+    if (!storeId) return;
+    const r = await forgetStore(storeId, phrase);
+    if (r.ok) memChanged();
+    else setTeam((t) => ({ rows: t?.rows ?? [], error: r.error }));
+  }
+
   function wipeMemory() {
     if (!wipeAsk) { setWipeAsk(true); window.setTimeout(() => setWipeAsk(false), 5000); return; }
     setWipeAsk(false);
@@ -714,6 +768,7 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
                 <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "rgba(196,181,253,.18)", color: "var(--t-muted)" }}>
                   <summary className="cursor-pointer font-semibold">Lo que REM sabe de ti{memory.phrases.length + memory.products ? ` (${memory.phrases.length + memory.products})` : ""}</summary>
                   <p className="mt-1">Solo en este equipo, solo tuyo y solo en esta tienda. No da permisos: lo que no puedes abrir, no lo abre.</p>
+                  <p className="mt-1">Lo que no te entiende se le muestra al dueño o al administrador <b>sin tu nombre</b>, para que le enseñe a REM. Se borra solo a los 90 días.</p>
                   {memory.misses.length ? (
                     <div className="mt-2">
                       <b style={{ color: "var(--t-text)" }}>Lo que no te entendí</b>
@@ -753,9 +808,51 @@ export function RemButton({ can, links = [], userId = null, storeId = null }: { 
                     </p>
                   ) : null}
                   {!memory.phrases.length && !memory.products && !memory.misses.length ? <p className="mt-1">Todavía no ha aprendido nada.</p> : null}
+                  {listStorePhrases().length ? (
+                    <p className="mt-2">La tienda le enseñó {listStorePhrases().length} {listStorePhrases().length === 1 ? "frase" : "frases"}; también te sirven a ti.</p>
+                  ) : null}
                   <button type="button" onClick={wipeMemory} className="mt-2 rounded-lg border px-2 py-1 font-bold" style={{ borderColor: wipeAsk ? "#ef4444" : "rgba(196,181,253,.25)", color: wipeAsk ? "#f87171" : "var(--t-text)" }}>
                     {wipeAsk ? "¿Seguro? Toca otra vez para borrar todo" : "🗑️ Borrar todo lo que sabe de mí"}
                   </button>
+                </details>
+              ) : null}
+              {memory && canTeach && storeId ? (
+                <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "rgba(196,181,253,.18)", color: "var(--t-muted)" }}
+                  onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && !team) void openTeam(); }}>
+                  <summary className="cursor-pointer font-semibold">👑 Enseñarle a REM para toda la tienda</summary>
+                  <p className="mt-1">Lo que REM no le entendió al equipo, sin decir quién. Elige a dónde lleva y REM lo entiende con todos. No da permisos: cada quien solo abre lo que puede.</p>
+                  {teamBusy && !team ? <p className="mt-1">Cargando…</p> : null}
+                  {team?.error ? <p className="mt-1" style={{ color: "#f87171" }}>{team.error}</p> : null}
+                  {team && !team.error && !team.rows.length ? <p className="mt-1">El equipo no tiene frases sin entender. 🎉</p> : null}
+                  {team?.rows.length ? (
+                    <ul className="mt-1 space-y-1">
+                      {team.rows.slice(0, 15).map((m) => (
+                        <li key={m.phrase} className="flex items-center gap-1.5">
+                          <span className="min-w-0 flex-1 truncate" title={`«${m.phrase}» · ${m.times} ${m.times === 1 ? "vez" : "veces"}, ${m.people} ${m.people === 1 ? "persona" : "personas"}`}>«{m.phrase}» <span className="opacity-70">×{m.times}</span></span>
+                          <select aria-label={`A dónde lleva «${m.phrase}» para toda la tienda`} defaultValue="" disabled={teamBusy} onChange={(e) => { if (e.target.value) void teachTeam(m.phrase, e.target.value); }}
+                            className="max-w-[9rem] rounded-lg border bg-transparent px-1 py-0.5" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
+                            <option value="">Enseñar…</option>
+                            {links.filter((l) => !l.action).map((l) => <option key={l.href + l.label} value={l.href}>{l.label}</option>)}
+                          </select>
+                          <button type="button" aria-label={`Descartar «${m.phrase}»`} onClick={() => void dismissTeam(m.phrase)} className="rounded px-1 hover:bg-white/10">✕</button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {listStorePhrases().length ? (
+                    <div className="mt-2">
+                      <b style={{ color: "var(--t-text)" }}>Frases de la tienda</b>
+                      <ul className="mt-1 space-y-1">
+                        {listStorePhrases().slice(0, 20).map((p) => (
+                          <li key={p.key} className="flex items-center gap-1.5">
+                            <span className="min-w-0 flex-1 truncate" title={`«${p.key}» → ${p.label}`}>«{p.key}» → {p.label}</span>
+                            <button type="button" aria-label={`Olvidar «${p.key}» para toda la tienda`} onClick={() => void forgetTeam(p.key)} className="rounded px-1 hover:bg-white/10">✕</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <button type="button" onClick={() => void openTeam()} disabled={teamBusy} className="mt-2 rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>↻ Actualizar</button>
                 </details>
               ) : null}
             </div>

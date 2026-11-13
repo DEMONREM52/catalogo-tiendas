@@ -1113,6 +1113,16 @@ export const RELEASES: Release[] = [
       { icon: "✨", text: "«Crea uno nuevo» según la página" },
     ],
   },
+  {
+    id: 107, date: "2026-11-13", title: "📦 REM te dice existencias, gastos y cartera",
+    summary: "Pregúntale «¿cuántas hay de la cámara SC30A?», «¿cuánto hemos gastado este mes?» o «¿cuánto nos debe Juan?». Dile «registra un gasto de 50 mil en arriendo» y te abre el gasto lleno para que lo revises y guardes. Si REM no te entiende, el dueño o el administrador le puede enseñar la frase para toda la tienda, sin ver quién la dijo.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "📦", text: "«¿Cuántas hay de la cámara?»" },
+      { icon: "💸", text: "«Registra un gasto de 50 mil»" },
+      { icon: "👑", text: "Enseñarle a REM para todos" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

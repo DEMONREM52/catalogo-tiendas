@@ -33,6 +33,7 @@ export function setRemScope(userId: string | null | undefined, storeId: string |
   const next = userId && storeId ? `${userId}:${storeId}` : "";
   if (next === scope) return;
   scope = next;
+  storePhrases = new Map();
   if (scope) adoptLegacy();
   listeners.forEach((l) => l());
 }
@@ -113,4 +114,23 @@ export function resolveMiss(text: string) {
 /** Borra todo lo que REM guardó de esta persona en esta tienda (en este equipo). */
 export function forgetEverything() {
   for (const n of ["phrases", "learned", "log", "misses"] as const) removeMemory(n);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Frases que el dueño o el administrador le enseñó a REM para toda la tienda (src/lib/rem/team.ts).
+// Viven en memoria (se traen de la base al entrar); se cambian de tienda con el usuario.
+
+export type StorePhrase = { key: string; href: string; label: string };
+let storePhrases = new Map<string, StorePhrase>();
+
+export function setStorePhrases(rows: StorePhrase[]) {
+  storePhrases = new Map(rows.filter((r) => r && r.key && r.href?.startsWith("/dashboard")).map((r) => [r.key, r]));
+}
+
+export function storePhrase(key: string): StorePhrase | null {
+  return storePhrases.get(key) ?? null;
+}
+
+export function listStorePhrases(): StorePhrase[] {
+  return [...storePhrases.values()].sort((a, b) => a.key.localeCompare(b.key));
 }

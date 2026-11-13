@@ -9,7 +9,7 @@
 
 import { parseQuery, scoreItem } from "@/lib/fuzzy-search";
 import { normalize } from "./spanish";
-import { readJson, removeMemory, writeJson } from "@/lib/rem/memory";
+import { readJson, removeMemory, storePhrase, writeJson } from "@/lib/rem/memory";
 
 export type NavLink = { href: string; label: string; emoji?: string; hint?: string; keywords?: string; action?: boolean };
 
@@ -99,9 +99,14 @@ export function forgetPhraseKey(key: string) {
   if (all[key]) { delete all[key]; writeJson("phrases", all); }
 }
 
+/** Lo aprendido para esa frase: primero lo de la persona; si no, lo que la tienda le enseñó (con visto bueno del dueño). */
 export function learnedPhrase(text: string): Phrase | null {
   const k = phraseKey(text);
-  return k ? readPhrases()[k] ?? null : null;
+  if (!k) return null;
+  const own = readPhrases()[k];
+  if (own) return own;
+  const shop = storePhrase(k);
+  return shop ? { href: shop.href, label: shop.label, at: 0, uses: 0 } : null;
 }
 
 /** Guarda que «esta frase» lleva a «esta página» (máximo 300 frases en este equipo). */

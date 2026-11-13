@@ -38,15 +38,18 @@ REM es el asistente de voz de RemHub. Este documento explica cómo está hecho, 
   - Hay una lista oficial: `PERMISSION_LIST` en `src/lib/permissions.ts`.
   - El menú (`src/lib/module-tabs.ts`) y el buscador (`src/lib/search-index.ts`) declaran qué permisos abren cada cosa.
   - `DashboardShell` filtra esa lista con `canOpen` y se la pasa a REM.
-- **Base de datos:** las consultas que REM usa son funciones `security definer`. Revisan `auth.uid()`, que la persona sea de la tienda (`erp__is_store_member`), el permiso (`erp_can`) y sus puntos (`erp_my_points`):
+- **Base de datos:** las consultas que REM usa son funciones `security definer` que ya usaban las pantallas. Revisan `auth.uid()`, que la persona sea de la tienda, el permiso (`erp_can`) y, donde aplica, sus puntos (`erp_my_points`):
   - `erp_home_today(p_store)`: ventas de hoy y de ayer, las propias y lo más vendido en 7 días. Basta uno de los permisos `pos`, `reports` u `orders`.
   - `erp_daily_close(p_store, p_day)`: el cierre de un día, por punto y por vendedor. Basta uno de los permisos `reports`, `cash_manage` o `profit_view`.
+  - `search_products_safe` + `erp_product_stock_by_point(p_product)`: existencias de un producto por punto. Basta uno de los permisos `products`, `products_view`, `inventory`, `pos` o `purchases`. Muestra todos los puntos, igual que la pantalla.
+  - `erp_expenses_list(...)`: gastos de un rango, solo de los puntos de la persona. Basta uno de los permisos `expenses`, `expenses_pay` o `budgets`.
+  - `erp_receivables_overview(p_store)`: la cartera. Es la misma que usa la pantalla de Cartera. **Su definición no está en el repositorio**: se creó antes y sus permisos no se pudieron leer. REM solo la llama si la persona tiene `receivables` o `credit`, como la pestaña.
+- **Planes:** `canOpen` en `DashboardShell` ya descuenta lo que el plan bloquea (`saas_plan_blocked_permissions`), y la lista que recibe REM sale de ahí. Cuando algo no está disponible, REM distingue si es por el plan o por el permiso: compara con `canOpenByRole`, que no cuenta el plan.
 
 ### Lo que NO se verificó (pendiente)
 
-- **Restricciones por plan (SaaS).** El catálogo no sabe qué módulos limita cada plan. Si el plan oculta un módulo del menú, REM tampoco lo abre, porque usa la misma lista. Pero **explicar** sí lo explica.
 - **Las políticas RLS de cada tabla.** REM no las toca: toda escritura pasa por las funciones de cada pantalla, que ya existían.
-- **Los pasos manuales de cada módulo.** Solo están escritos los que se leyeron en el código: crear producto, registrar gasto e ingresar factura de compra. En el resto, REM explica para qué sirve el módulo y ofrece abrirlo. No inventa pasos.
+- **Los pasos manuales de cada módulo.** Solo están escritos los que se leyeron en el código: crear producto, registrar gasto, ingresar factura de compra, crear cliente o tercero, abrir y cerrar caja, crear categoría y crear usuario. En el resto, REM explica para qué sirve el módulo y ofrece abrirlo. No inventa pasos.
 - **Prueba con micrófono y parlante reales** (computador, iPhone y Android).
 
 ---
@@ -80,8 +83,10 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 | `src/lib/rem/catalog.ts` | Catálogo de capacidades. Se **arma** con el buscador y el menú, así que no hay una lista duplicada. Incluye `VOICE_SCREENS` (pantallas con voz, antes dentro de `RemButton`) y `QUERIES` (consultas). |
 | `src/lib/rem/modules.ts` | Qué es cada módulo y cómo se hacen sus tareas. Los pasos solo se escriben si están verificados. |
 | `src/lib/rem/understand.ts` | Comprensión: normaliza el texto (tildes, «rem/ren», «por favor»), detecta la intención, saca los datos (fecha, punto, «las mías», «lo más vendido»), sigue el tema de la conversación, maneja la ambigüedad y da un nivel de confianza. |
-| `src/lib/rem/period.ts` | Fechas dichas: hoy, ayer, antier, el lunes, hace 3 días, 5 de noviembre, 5/11. Siempre con la fecha de Colombia. |
-| `src/lib/rem/actions.ts` | Registro cerrado de acciones con riesgo, confirmación y permisos. Hoy: `sales.summary`. |
+| `src/lib/rem/period.ts` | Fechas dichas: hoy, ayer, antier, el lunes, hace 3 días, 5 de noviembre, 5/11. Rangos: este mes, el mes pasado, esta semana, la semana pasada, en octubre, este año. Siempre con la fecha de Colombia. |
+| `src/lib/rem/money.ts` | Valores dentro de una frase: «50 mil», «cincuenta mil», «$20.000», «1 millón 200 mil». |
+| `src/lib/rem/actions.ts` | Registro cerrado de acciones con riesgo, confirmación y permisos: `sales.summary`, `stock.product`, `expenses.summary`, `debts.summary`. |
+| `src/lib/rem/team.ts` | Lo que REM no entendió en la tienda (sin nombres) y las frases que el dueño o el administrador enseñan para todos (migración 20261322). |
 | `src/lib/rem/respond.ts` | Respuestas: explicar, cómo se hace, crear aquí, qué sé hacer, «¿te refieres a…?». |
 | `src/lib/rem/brain.ts` | Une todo y guarda el estado corto de la conversación: el tema, lo que ofreció y las opciones que dio. |
 | `src/lib/rem/memory.ts` | Memoria por usuario y tienda. También las frases que no entendió. |
@@ -95,15 +100,19 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 2. «Apágate».
 3. «Ayuda» o «¿qué sabes hacer?»: responde según los permisos de la persona.
 4. **Cerebro:** responde a lo que REM acaba de ofrecer («sí, ábrela»), o elige entre las opciones que dio. Si no, intenta entender:
+   - «registra un gasto de 50 mil en arriendo» (abre el formulario lleno);
+   - existencias, cartera, gastos y ventas;
    - explicar o «cómo se hace»;
-   - ventas;
    - «crea uno nuevo».
 5. La pantalla abierta reclama la frase (`claims`). Por ejemplo, «solo los agotados» en Productos.
 6. Pantalla con voz por nombre: «quiero hacer un traslado».
 7. Abrir una página: «abre los gastos».
 8. No entendió: guarda la frase en «Lo que no te entendí».
 
-**En medio de un trabajo** (un traslado, una venta), REM responde preguntas como «¿cuánto vendimos hoy?» y sigue en esa pantalla. En ese modo no ofrece abrir otra cosa ni crear nada, para que un «sí» siguiente no se confunda.
+**En medio de un trabajo** (un traslado, una venta), REM responde preguntas como «¿cuánto vendimos hoy?» y sigue en esa pantalla. En ese modo:
+
+- No ofrece abrir otra cosa, ni crear ni llenar formularios, para que un «sí» siguiente no se confunda.
+- Solo toma la pregunta completa («¿cuántas hay de la cámara?»). «Hay tres» o «hay termos» siguen siendo de la pantalla.
 
 ### Proveedores de comprensión (para una IA en el futuro)
 
@@ -132,7 +141,7 @@ Un modelo externo cuesta dinero y necesita un servidor. Para conectarlo hace fal
 3. **La memoria no da permisos.** Una frase aprendida solo lleva a una página si esa página está hoy en la lista de la persona. La conversación guardada tampoco autoriza nada. Hay una prueba para esto: si le quitan el permiso entre una pregunta y la siguiente, REM ya no consulta.
 4. **Riesgo y confirmación** (en `actions.ts` y en las pantallas):
    - **Bajo:** abrir, buscar, explicar y consultar. Se hace sin preguntar.
-   - **Medio:** abrir un formulario vacío. La persona lo llena y lo guarda.
+   - **Medio:** abrir un formulario vacío, o lleno con lo dicho («un gasto de 50 mil en arriendo»). La persona lo revisa y lo guarda.
    - **Alto:** guardar, mover inventario, activar o inactivar. Solo con «sí», sabiendo exactamente qué registro se afecta. Si no sabe cuál, pregunta.
    - **Crítico:** borrar, permisos, otras tiendas. **No se hace por voz.**
    - La confirmación no reemplaza el permiso.
@@ -164,17 +173,22 @@ Todo se guarda en `localStorage`, con llaves `remhub:rem-<cosa>:<usuario>:<tiend
   - La conversación vieja **se borra**, porque podía ser de otra persona.
 - **Siguen por equipo**, porque son ajustes del aparato: encendido, «Rem» para llamar, interrumpir hablando, la pronunciación y dónde queda la esfera.
 
-### Lo que una persona le enseña es solo suyo
+### Lo que una persona le enseña es solo suyo; lo de la tienda lo aprueba el dueño
 
 Lo que alguien le enseña a REM no cambia lo que REM hace con los demás. Así nadie con malas intenciones puede alterar el comportamiento de todos.
 
-Un panel para que el dueño revise lo que REM no entendió de **todo** el equipo necesita tres cosas:
+**Para toda la tienda** (migración `20261322_rem_aprende_en_tienda.sql`):
 
-- una tabla nueva en la base, con RLS por tienda;
-- una migración;
-- una decisión de privacidad, porque se guardarían frases de los empleados.
-
-Está **pendiente** y necesita la aprobación del dueño.
+- **Lo que REM no entendió** se anota en `rem_misses`: la frase, la página (sin parámetros) y quién la dijo. Quién la dijo sirve solo para contar personas; **nunca se muestra**.
+  - Las frases de una palabra no se guardan.
+  - Se borra sola a los 90 días, y hay máximo 500 por tienda.
+- **El dueño o un administrador de la tienda** (no basta el permiso de usuarios) ve esa lista en la conversación, en «👑 Enseñarle a REM para toda la tienda»: la frase, cuántas veces y cuántas personas. Ahí elige a dónde lleva cada frase o la descarta.
+- **Lo enseñado** queda en `rem_store_phrases`, máximo 300 por tienda.
+  - REM lo trae al entrar y lo usa después de lo aprendido por cada persona.
+  - La base solo acepta páginas del panel (`/dashboard…`, sin enlaces de afuera), y REM solo abre la página si la persona la puede abrir.
+- Las dos tablas tienen RLS y ninguna política: solo se usan con las funciones `rem_*`, que revisan la tienda y el cargo.
+- La persona ve el aviso en «Lo que REM sabe de ti»: lo que no entiende se le muestra al administrador sin su nombre.
+- Si la migración no está corrida, todo sigue como antes, solo en el equipo.
 
 ---
 
@@ -203,7 +217,7 @@ Está **pendiente** y necesita la aprobación del dueño.
 
 ## 6. Pruebas
 
-Se corren con `npm test`. En esta entrega quedaron 279 pruebas en verde, de las cuales 44 son de REM.
+Se corren con `npm test` (294 en verde, 59 de REM) y `npm run test:sql`.
 
 | Archivo | Qué prueba |
 |---|---|
@@ -212,7 +226,9 @@ Se corren con `npm test`. En esta entrega quedaron 279 pruebas en verde, de las 
 | `tests/rem/actions.test.ts` | Datos de la base, sin permiso no llama a la base, un vendedor no ve otros días, la base niega, la red falla (sin números inventados), fechas inválidas, riesgo alto con y sin «sí», crítico nunca, la confirmación no reemplaza el permiso y acciones desconocidas. |
 | `tests/rem/brain.test.ts` | Ofrecer → «sí» abre y «no» no abre, sin acceso no ofrece, permisos quitados en plena conversación, ambigüedad → «la segunda», pantalla con voz y «¿qué sabes hacer?» según permisos. |
 | `tests/rem/memory.test.ts` | Separación por usuario y por tienda, lo viejo por equipo (frases pasan, conversación se borra), frases no entendidas y borrar todo. |
+| `tests/rem/queries.test.ts` | Existencias (exacto, varios parecidos → «la dos», inactivo, agotado, sin conexión), gastos por rango y estado, cartera total y por cliente, valores y rangos dichos, gasto llenado por voz, ofrecer solo lo que se puede abrir, ventas por rango sin inventar, plan contra permiso, cantidades sueltas en medio de un traslado y frases de la tienda. |
 | `tests/rem/catalog-sync.test.ts` | La sincronización de la sección 5. |
+| `tests/sql/rem_aprende_tienda.test.mjs` | Migración 20261322 (31 pruebas): quién anota, quién ve y quién enseña, sin nombres, aislamiento entre tiendas, enlaces peligrosos, limpieza a los 90 días, sin acceso directo a las tablas y que se pueda correr dos veces. |
 | `tests/voice/*.test.ts` | Lo que ya existía: voz, navegación, pronunciación y Productos por voz. Sigue pasando. |
 
 **No probado:** micrófono y parlante reales, iPhone, Android, y las consultas contra la base de producción. Las pruebas usan respuestas simuladas con la forma real de `erp_home_today` y `erp_daily_close`.
@@ -226,18 +242,19 @@ Se corren con `npm test`. En esta entrega quedaron 279 pruebas en verde, de las 
 | Auditoría de REM, rutas, permisos y consultas | ✅ |
 | Catálogo de capacidades armado desde el código | ✅ |
 | Explicar módulos | ✅ los 32 |
-| «Cómo se hace» | ✅ 3 con pasos verificados + 4 por voz · ⏳ el resto: explica y abre |
+| «Cómo se hace» | ✅ 8 con pasos verificados + 4 por voz · ⏳ el resto: explica y abre |
 | Consultas: ventas hoy, ayer, otro día, por punto, las propias y lo más vendido | ✅ |
+| Consultas: existencias de un producto, gastos por rango (pendientes y vencidos), cartera total y por cliente | ✅ |
+| Ventas de un rango («este mes») | ⏳ lo dice y abre el informe de Rentabilidad; sumar por voz necesita una función nueva en la base |
+| Llenar formularios por voz | ✅ gasto («registra un gasto de 50 mil en arriendo») · ⏳ otros formularios |
 | Conversación con contexto, ambigüedad y confianza | ✅ |
 | Contexto de la página («crea uno nuevo», «¿para qué sirve esto?») | ✅ |
 | Registro de acciones con riesgo y confirmación | ✅ (las de riesgo alto siguen en sus pantallas, que ya confirman) |
 | Memoria por persona y tienda: ver, enseñar y borrar | ✅ |
 | Sincronización con pruebas + documentación generada | ✅ |
 | Interfaz para otros motores de comprensión | ✅ interfaz · ⏸️ motor externo aplazado por decisión del dueño |
-| Panel del dueño con lo que REM no entendió en todo el equipo | ⏳ necesita migración y aprobación |
-| Más consultas: existencias de un producto, cartera de un cliente, gastos del mes | ⏳ hay funciones en la base para hacerlo; falta agregarlas al registro |
-| Llenar formularios por voz fuera de las 6 pantallas con voz | ⏳ |
-| Restricciones por plan dentro del catálogo | ⏳ sin verificar |
+| Panel del dueño con lo que REM no entendió en todo el equipo, y frases para toda la tienda | ✅ migración 20261322 (falta correrla en Supabase) |
+| Restricciones por plan | ✅ REM usa la lista ya filtrada por plan y dice «tu plan no lo incluye» |
 | Prueba en equipos reales | ⏳ |
 
 ---
