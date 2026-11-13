@@ -5,7 +5,7 @@ import { isPermissionOrMissing, searchProductsDirect } from "@/lib/products/safe
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { storeHref } from "@/lib/share/store-path";
-import { Eye, Megaphone, Pencil, Power, Trash2 } from "lucide-react";
+import { Eye, Pencil, Power, Trash2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
@@ -23,6 +23,8 @@ import { useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
 import { ScrollButtons } from "@/components/ui/ScrollButtons";
 import { ProductsModeSwitch } from "./ModeSwitch";
+import { PublishButton, toState } from "@/components/products/PublishButton";
+import type { PublishState } from "@/lib/products/radar";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -206,6 +208,11 @@ export default function ProductsListPage() {
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
   const [catalogRetail, setCatalogRetail] = useState(false);
   const [socialStatuses, setSocialStatuses] = useState<Record<string, string[]>>({});
+  // «¡Publícame!» en cada producto: el estado de toda la página en una consulta (20261321).
+  // "single": falta esa migración y cada botón pregunta el suyo; "off": sin permiso de Productos.
+  const [pubStates, setPubStates] = useState<Record<string, PublishState>>({});
+  const [pubMode, setPubMode] = useState<"batch" | "single" | "off">("batch");
+  const pubAsked = useRef(new Set<string>());
   const [socialFilter, setSocialFilter] = useState<SocialFilter>("all");
   // Celular: los filtros van plegados (en computador siempre se ven).
   const [showFilters, setShowFilters] = useState(false);
@@ -665,6 +672,32 @@ export default function ProductsListPage() {
     firstLimit.current = PAGE_SIZE;
     requestAnimationFrame(() => window.scrollTo({ top: p.y }));
   }, [products, loading, searching, isSearchMode, hasMore, hasMoreSearch]);
+
+  // Estado de «¡Publícame!» de los productos que van llegando a la lista (solo los que faltan).
+  useEffect(() => {
+    if (!storeId || pubMode !== "batch") return;
+    const ids = products.map((p) => p.id).filter((id) => !pubAsked.current.has(id));
+    if (!ids.length) return;
+    ids.forEach((id) => pubAsked.current.add(id));
+    let alive = true;
+    void (async () => {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await supabaseBrowser().rpc("product_publish_states", { p_store: storeId, p_products: ids.slice(i, i + 200) });
+        if (!alive) return;
+        if (error) {
+          if (/Could not find the function|schema cache|does not exist/i.test(error.message)) setPubMode("single");
+          else ids.forEach((id) => pubAsked.current.delete(id));
+          return;
+        }
+        const d = data as { ok?: boolean; states?: Record<string, unknown> } | null;
+        if (!d?.ok) { setPubMode("off"); return; }
+        const next: Record<string, PublishState> = {};
+        for (const [id, st] of Object.entries(d.states ?? {})) next[id] = toState(st);
+        setPubStates((cur) => ({ ...cur, ...next }));
+      }
+    })();
+    return () => { alive = false; };
+  }, [products, storeId, pubMode]);
 
   useEffect(() => {
     if (!storeId || !products.length) {
@@ -1166,14 +1199,15 @@ export default function ProductsListPage() {
                           />
                         </>
                       ) : null}
-                      <Link
-                        href={`/dashboard/social?product=${encodeURIComponent(p.id)}`}
-                        className={`${clsBtnPrimary()} product-row-action`}
-                        aria-label={`Preparar campaña para ${p.name}`}
-                        title="Preparar campaña o publicación"
-                      >
-                        <Megaphone size={17} />
-                      </Link>
+                      {/* «¡Publícame!»: verde si ya se publicó, naranja/rojo si toca, morado si nunca. */}
+                      {pubMode === "off" ? null : pubMode === "single" ? (
+                        <PublishButton compact storeId={storeId} productId={p.id} productName={p.name} />
+                      ) : pubStates[p.id] ? (
+                        <PublishButton compact storeId={storeId} productId={p.id} productName={p.name} state={pubStates[p.id]}
+                          onChanged={(st) => setPubStates((cur) => ({ ...cur, [p.id]: st }))} />
+                      ) : (
+                        <span aria-hidden className="inline-block h-[30px] w-[104px] animate-pulse rounded-xl" style={{ background: "var(--t-card-bg-soft, rgba(127,127,127,.15))" }} />
+                      )}
                     </div>
                   </div>
                 </div>

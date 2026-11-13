@@ -19,8 +19,9 @@ import {
 type LogRow = { id: string; at: string; by: string | null; channels: string[]; note: string | null; mine: boolean; before_7?: number; after_7?: number; after_complete?: boolean };
 const EMPTY: PublishState = { every_days: null, every: 30, last: null, by: null, times: 0, next_due: null };
 
+/** Estado de la base (pub__state) → el del botón. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toState(s: any): PublishState {
+export function toState(s: any): PublishState {
   if (!s) return EMPTY;
   return { every_days: s.every_days ?? null, every: Number(s.every ?? 30), last: s.last_published_at ?? s.last ?? null, by: s.last_by ?? s.by ?? null, times: Number(s.times ?? 0), next_due: s.next_due ?? null };
 }

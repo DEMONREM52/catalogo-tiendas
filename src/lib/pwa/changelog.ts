@@ -1053,6 +1053,16 @@ export const RELEASES: Release[] = [
       { icon: "↩️", text: "«Deshacer» si te equivocas" },
     ],
   },
+  {
+    id: 101, date: "2026-11-13", title: "📣 «¡Publícame!» en la lista de Productos",
+    summary: "Cada producto de la lista trae «¡Publícame!» en vez del botón de campaña, y se ve de un vistazo si ya está publicado: verde «Publicado hoy» o «hace X días», naranja o rojo «¡Publícame!» cuando ya toca, y morado si nunca se ha publicado. Tócalo para marcarlo publicado o cambiar cada cuánto te lo recuerda.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "🟢", text: "Publicado hoy" },
+      { icon: "🟠", text: "¡Publícame! (ya toca)" },
+      { icon: "🟣", text: "Publícame (nunca publicado)" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
