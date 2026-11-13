@@ -1023,6 +1023,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "«Sí» y queda vacía" },
     ],
   },
+  {
+    id: 98, date: "2026-11-13", title: "🎙️ REM suena en iPhone y entiende más",
+    summary: "En iPhone REM ya puede hablar: el sonido se activa al tocarlo. Entiende «abre la rentabilidad de Zamora» aunque digas nombres de puntos o «ahora mismo», te dice la hora y el día, y no repite el saludo. En «¿Qué le puedo decir?» está «🔊 Probar sonido».",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "📱", text: "Toca REM: ya suena en iPhone" },
+      { icon: "📈", text: "«Abre la rentabilidad de Zamora»" },
+      { icon: "🕒", text: "«¿Qué hora es?»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

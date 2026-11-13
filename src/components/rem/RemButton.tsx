@@ -17,10 +17,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, capture, duplexCapable, duplexPref, fullDuplex, isEchoOf, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
+import { beep, capture, duplexCapable, duplexPref, fullDuplex, isAppleMobile, isEchoOf, isInstalledApp, listen, setDuplexPref, speak, startMicMeter, startWake, stopListening, stopSpeaking, unlockAudio, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
-import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
+import { learnedCount, learnedPhrase, learnPhrase, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
 import { RemOrb, type OrbPlace } from "./RemOrb";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
@@ -146,6 +146,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   }
 
   const add = (who: LogTurn["who"], text: string) => setTurns((t) => {
+    const last = t.at(-1);
+    if (last && last.who === who && last.text === text && Date.now() - last.at < 8000) return t;
     const next = [...t, { who, text, at: Date.now() }].slice(-60);
     writeLog(next);
     return next;
@@ -184,7 +186,9 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
   function failed(id: number, err: unknown): null {
     if (session.current !== id) return null;
     const msg = err instanceof VoiceError && err.code === "permission"
-      ? "Dale permiso al micrófono: toca el candado junto a la dirección → Micrófono → Permitir."
+      ? (isAppleMobile()
+        ? `En iPhone: Ajustes → General → Teclado → activa «Dictado»; y Ajustes → Safari → Micrófono → Permitir.${isInstalledApp() ? " Si aun así no escucha, abre RemHub en Safari (no desde el ícono): en algunos iPhone el dictado no funciona en apps instaladas." : ""}`
+        : "Dale permiso al micrófono: toca el candado junto a la dirección → Micrófono → Permitir.")
       : err instanceof Error ? err.message : "No se pudo escuchar.";
     setError(msg);
     flash(msg, 8000);
@@ -303,11 +307,14 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       let said = first;
       const byWake = first !== undefined;
       let helpNext = false;
+      let talkNext: string | null = null;
       // Lo que no entendió en esta conversación: si enseguida, dicho de otra forma, sí, aprende la frase.
       let missed: string | null = null;
       const learnMissed = (href: string, label: string) => { if (missed) { learnPhrase(missed, href, label); setLearned(learnedCount()); missed = null; } };
-      const opener = async (alts: string[]): Promise<"done" | "handler" | "miss"> => {
+      const opener = async (alts: string[]): Promise<"done" | "handler" | "miss" | "talk"> => {
         const t = normalize(alts[0] ?? "");
+        const talk = smallTalk(t);
+        if (talk) { talkNext = talk; return "talk"; }
         if (POWER_OFF.test(t)) { await say(id, { say: "Me apago. Toca REM arriba cuando me necesites." }); setPower(false); return "done"; }
         if (HELP.test(t)) { missed = null; helpNext = true; return "miss"; }
         const intent = intentOf(alts[0] ?? "");
@@ -337,25 +344,27 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
       else {
         let tries = 0;
         for (;;) {
-          const ask = helpNext
+          const ask = talkNext ?? (helpNext
             ? "Puedo abrir cualquier sección, por ejemplo: abre los gastos. Y trabajar contigo traslados, conteos, pedidos internos, compras y ventas. ¿Qué hacemos?"
             : tries === 0 && !missed
             ? (byWake ? "¿Sí? Dime." : "Hola, soy REM. ¿En qué te ayudo?")
             : missed
               ? "No te entendí bien. Dímelo de otra forma: por ejemplo, abre los gastos, quiero hacer un traslado o vender."
-              : "Puedo abrir cualquier sección, y trabajar contigo traslados, conteos, pedidos internos, compras y ventas. ¿Qué hacemos?";
+              : "Puedo abrir cualquier sección, y trabajar contigo traslados, conteos, pedidos internos, compras y ventas. ¿Qué hacemos?");
           helpNext = false;
+          talkNext = null;
           said = (await turn(id, { say: ask })) ?? undefined;
           if (!said) return;
           const t = normalize(said[0] ?? "");
           if (!t || STOP.test(t)) {
-            if (!t && tries < 1) { tries++; continue; }
+            if (!t && tries < 1) { tries++; talkNext = "¿Sigues ahí? Dime qué necesitas."; continue; }
             await say(id, { say: idleHint() });
             return stop();
           }
           const r = await opener(said);
           if (r === "done") return;
           if (r === "handler" && found.h) { reply = await found.h.start(said); break; }
+          if (r === "talk") { missed = null; continue; }
           missed = HELP.test(t) ? null : said[0];
           if (++tries >= 4) { await say(id, { say: idleHint() }); return stop(); }
         }
@@ -387,6 +396,8 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
         const nav = navigateTo(alts[0], true);
         if (nav) { go(nav.href); await say(id, { say: `Listo: ${nav.label}.` }); if (session.current === id) stop(); return; }
       }
+      const talk = smallTalk(t);
+      if (talk) { reply = { say: talk.replace(/ ¿(?:En qué te ayudo|Qué hacemos)\?$/, " ¿Seguimos?") }; continue; }
       const now = remHandler();
       if (!now) { await say(id, { say: `Saliste de la pantalla. ${idleHint()}` }); return stop(); }
       setPhase("thinking");
@@ -401,6 +412,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
 
   /** Botón REM (encabezado o dentro de una ventana): enciende y escucha; si ya está conversando, muestra la conversación. */
   function call() {
+    unlockAudio(); // iPhone: el sonido se desbloquea dentro del toque
     pending.current = null;
     if (!on) setPower(true);
     if (phaseRef.current === "idle") void run();
@@ -413,12 +425,14 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
 
   /** Tocar la esfera: si habla, se calla y escucha; si no, abre o cierra la conversación. */
   function tapOrb() {
+    unlockAudio();
     if (phaseRef.current === "speaking") { stopSpeaking(); return; }
     setPanel((v) => !v);
   }
 
   /** Prueba del llamado: escucha una vez y dice si así se despierta. */
   async function testWake() {
+    unlockAudio();
     pending.current = null;
     const id = ++session.current;
     setError(null);
@@ -527,7 +541,7 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
 
               <div className="flex items-center gap-2 border-t px-3 py-2.5" style={{ borderColor: "rgba(196,181,253,.18)" }}>
                 <button type="button"
-                  onClick={() => (phase === "idle" ? void run() : phase === "speaking" ? stopSpeaking() : stop())}
+                  onClick={() => { unlockAudio(); if (phase === "idle") void run(); else if (phase === "speaking") stopSpeaking(); else stop(); }}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110"
                   style={{ background: phase === "idle" ? "linear-gradient(135deg,#8b5cf6,#d946ef)" : phase === "speaking" ? "linear-gradient(135deg,#6d28d9,#8b5cf6)" : "linear-gradient(135deg,#be185d,#db2777)" }}>
                   {phase === "idle" ? "🎙️ Hablar" : phase === "speaking" ? "✋ Interrumpir" : "■ Detener"}
@@ -561,6 +575,9 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
                   Aprende solo en este equipo: si te corrige mal o no te entiende y lo dices de otra forma, la próxima vez acierta.
                   {learned ? ` Lleva ${learned} ${learned === 1 ? "cosa aprendida" : "cosas aprendidas"}.` : ""}
                 </p>
+                {isAppleMobile() ? (
+                  <p className="mt-1">iPhone: si no lo oyes, sube el volumen y revisa que no esté en silencio (interruptor del lado). Toca «🔊 Probar sonido».</p>
+                ) : null}
                 <p className="mt-1">«Rem» escucha solo con RemHub abierto y a la vista. Gasta más batería: mejor en computador o tablet fija. Arrastra la esfera a donde no estorbe.</p>
                 {duplexCapable() ? (
                   <label className="mt-2 flex items-start gap-2 rounded-xl border p-2" style={{ borderColor: "rgba(196,181,253,.2)", color: "var(--t-text)" }}>
@@ -574,6 +591,10 @@ export function RemButton({ can, links = [] }: { can: (permission: string) => bo
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => void testWake()} disabled={phase !== "idle"} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
                     🧪 Probar el llamado
+                  </button>
+                  <button type="button" disabled={phase !== "idle"} onClick={() => { unlockAudio(); void speak("Hola, soy REM. Si me oyes, el sonido funciona."); }}
+                    className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
+                    🔊 Probar sonido
                   </button>
                   <button type="button" onClick={clearLog} disabled={!turns.length} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>
                     🧹 Borrar conversación

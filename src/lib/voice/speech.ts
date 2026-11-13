@@ -453,12 +453,69 @@ export function spokenText(text: string): string {
   return text.replace(/\bREM\b/g, "Rem");
 }
 
+// ---------------------------------------------------------------------------------------------
+// iPhone / iPad: Safari solo deja sonar (voz y pitidos) si el sonido arranca dentro de un toque.
+// Al tocar REM se «desbloquea» con una frase muda; desde ahí ya puede hablar solo.
+
+/** ¿Es iPhone o iPad (también el iPad que se presenta como Mac)? */
+export function isAppleMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints ?? 0) > 1);
+}
+
+/** ¿Está abierta como app instalada (desde la pantalla de inicio)? */
+export function isInstalledApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+let audioCtx: AudioContext | null = null;
+let unlocked = false;
+
+function sharedAudio(): AudioContext | null {
+  if (audioCtx) return audioCtx;
+  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  audioCtx = Ctx ? new Ctx() : null;
+  return audioCtx;
+}
+
+/**
+ * Llamar DENTRO del toque (sin esperar nada antes): deja lista la voz y los pitidos en iPhone.
+ * En los demás equipos no estorba. También precarga la voz en español.
+ */
+export function unlockAudio() {
+  if (typeof window === "undefined") return;
+  try {
+    const synth = window.speechSynthesis;
+    if (synth) {
+      synth.resume();
+      if (!unlocked) {
+        const u = new SpeechSynthesisUtterance(" ");
+        u.volume = 0;
+        synth.speak(u);
+        unlocked = true;
+      }
+    }
+  } catch { /* sin voz */ }
+  try {
+    const ctx = sharedAudio();
+    if (ctx && ctx.state === "suspended") void ctx.resume();
+  } catch { /* sin sonido */ }
+  void spanishVoice();
+}
+
 /** Dice el texto en voz alta y espera a que termine (o a que se calle con `stopSpeaking`). */
 export async function speak(text: string): Promise<void> {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
   const synth = window.speechSynthesis;
-  synth.cancel();
-  const v = await spanishVoice();
+  // Safari pierde la frase si se cancela y se habla en el mismo instante: solo se cancela si algo suena.
+  if (synth.speaking || synth.pending) {
+    synth.cancel();
+    if (isAppleMobile()) await new Promise((r) => window.setTimeout(r, 60));
+  }
+  synth.resume();
+  // La voz ya cargada se usa sin esperar (en iPhone, esperar hace perder el permiso del toque).
+  const v = voice !== undefined ? voice : await spanishVoice();
   const said = spokenText(text);
   await new Promise<void>((resolve) => {
     const u = new SpeechSynthesisUtterance(said);
@@ -483,9 +540,9 @@ export function stopSpeaking() {
 /** Pitido corto para saber que REM ya escucha. */
 export function beep(kind: "listen" | "done" = "listen") {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    const ctx = sharedAudio();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.frequency.value = kind === "listen" ? 880 : 520;
@@ -495,7 +552,6 @@ export function beep(kind: "listen" | "done" = "listen") {
     o.connect(g).connect(ctx.destination);
     o.start();
     o.stop(ctx.currentTime + 0.18);
-    o.onended = () => void ctx.close();
   } catch { /* sin sonido */ }
 }
 

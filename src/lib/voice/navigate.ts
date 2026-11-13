@@ -31,8 +31,13 @@ export function navTarget<T extends NavLink>(text: string, links: T[], strict = 
   const asked = navRequest(text);
   const parsed = parseQuery(asked ?? normalize(text));
   // «El gestor de campañas», «el módulo de nómina»: esas palabras no dicen a dónde, solo «una página».
-  const q = { ...parsed, words: parsed.words.filter((w) => !NAV_FILLER.has(w)) };
+  let q = { ...parsed, words: parsed.words.filter((w) => !NAV_FILLER.has(w)) };
   if (!q.words.length) return null;
+  // «La rentabilidad de Zamora ahora mismo»: las palabras que no son de ninguna página (un punto, «ahora mismo»)
+  // no deben tumbar la búsqueda. Se quedan solo las que algo reconoce bien.
+  const known = q.words.filter((w) => links.some((l) => scoreItem(l, { words: [w], create: false, raw: w }) >= 8));
+  if (!known.length) return null;
+  if (known.length < q.words.length) q = { ...q, words: known, raw: known.join(" ") };
   let best: { link: T; score: number } | null = null;
   for (const l of links) {
     const score = scoreItem(l, q);
@@ -40,6 +45,21 @@ export function navTarget<T extends NavLink>(text: string, links: T[], strict = 
   }
   if (!best) return null;
   return best.score >= (asked ? (strict ? 9 : 6) : 10) ? best : null;
+}
+
+/** Charla básica: la hora, el día, saludos, quién es. null si no es charla. */
+export function smallTalk(text: string, now = new Date()): string | null {
+  const t = text.replace(/^(?:(?:oye |hey )?rem )/, "");
+  if (/\b(?:que hora (?:es|son)|hora es|me dices la hora|dime la hora)\b/.test(t)) {
+    return `Son las ${now.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s?a\.?\s?m\.?/i, " de la mañana").replace(/\s?p\.?\s?m\.?/i, now.getHours() >= 19 ? " de la noche" : " de la tarde")}.`;
+  }
+  if (/\b(?:que (?:dia|fecha) es|que dia es hoy|a cuanto estamos|que fecha es hoy)\b/.test(t)) {
+    return `Hoy es ${now.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
+  }
+  if (/^(?:hola|buenas|buenos dias|buenas tardes|buenas noches|hey|que mas|que hubo|quiubo)$/.test(t)) return "¡Hola! ¿En qué te ayudo?";
+  if (/^(?:como estas|como te va|como vas|todo bien)$/.test(t)) return "Muy bien, lista para ayudarte. ¿Qué hacemos?";
+  if (/^(?:quien eres|que eres|como te llamas|quien sos)$/.test(t)) return "Soy REM, la asistente de voz de RemHub. Abro secciones y te ayudo con traslados, conteos, pedidos, compras y ventas. ¿Qué hacemos?";
+  return null;
 }
 
 // ---------------------------------------------------------------------------------------------

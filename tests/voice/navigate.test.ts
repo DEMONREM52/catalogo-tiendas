@@ -62,3 +62,15 @@ test("«quiero ir a campañas», «¿puedes abrir el gestor de campañas?»", ()
   assert.equal(navRequest("quiero hacer un traslado"), null);
   assert.equal(navTarget("quiero ver el precio de la zapatera", links, true), null);
 });
+
+test("charla básica y secciones con nombres de punto", async () => {
+  const { smallTalk } = await import("@/lib/voice/navigate");
+  const { SEARCH_INDEX } = await import("@/lib/search-index");
+  const at = new Date(2026, 10, 13, 15, 45);
+  assert.equal(smallTalk("que hora es", at), "Son las 3:45 de la tarde.");
+  assert.match(smallTalk("rem que dia es hoy", at) ?? "", /^Hoy es viernes, 13 de noviembre de 2026\.$/);
+  assert.equal(smallTalk("hola"), "¡Hola! ¿En qué te ayudo?");
+  assert.equal(smallTalk("tres de la zapatera"), null);
+  assert.equal(navTarget("puedes abrir la rentabilidad de Zamora", SEARCH_INDEX)?.link.label, "Rentabilidad por punto");
+  assert.equal(navTarget("abre la rentabilidad que tiene Zamora ahora mismo", SEARCH_INDEX)?.link.label, "Rentabilidad por punto");
+});
