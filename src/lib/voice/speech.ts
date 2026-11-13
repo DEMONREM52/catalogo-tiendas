@@ -81,6 +81,46 @@ export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: n
   });
 }
 
+/**
+ * Escucha mientras REM habla, para poder interrumpirlo («sí, esa»). `accept` decide si lo oído es una
+ * respuesta (true: deja de escuchar). Devuelve cómo pararla. No interfiere con `listen` (se para antes).
+ */
+export function listenWhile(accept: (alts: string[]) => boolean): () => void {
+  const Ctor = ctor();
+  if (!Ctor) return () => {};
+  let stopped = false;
+  let rec: Recognition | null = null;
+  const begin = () => {
+    if (stopped) return;
+    const r = new Ctor();
+    rec = r;
+    r.lang = "es-CO";
+    r.continuous = true;
+    r.interimResults = false;
+    r.maxAlternatives = 3;
+    r.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (!res.isFinal) continue;
+        const alts: string[] = [];
+        for (let k = 0; k < res.length; k++) if (res[k]?.transcript?.trim()) alts.push(res[k].transcript.trim());
+        if (alts.length && accept(alts)) { stop(); return; }
+      }
+    };
+    r.onerror = () => {};
+    r.onend = () => { if (!stopped) window.setTimeout(begin, 200); };
+    try { r.start(); } catch { /* otro reconocimiento activo */ }
+  };
+  const stop = () => { stopped = true; try { rec?.abort(); } catch { /* ya paró */ } };
+  begin();
+  return stop;
+}
+
+/** ¿Se puede escuchar mientras habla? En celulares, abrir el micrófono corta la voz: ahí se interrumpe tocando. */
+export function bargeInSupported(): boolean {
+  return typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function stopListening() {
   const rec = current;
   current = null;

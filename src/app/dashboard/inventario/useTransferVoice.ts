@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "@/lib/voice/rem";
 import { compactCode, matchPlace, matchPlaces, normalize, parseTransferCommand, plural, spokenReference, type TransferCommand } from "@/lib/voice/spanish";
+import { guessMode, guessSpoken } from "@/lib/voice/fuzzy";
 import type { ProductHit, Warehouse } from "./shared";
 
 export type TransferVoiceLine = { product_id: string; name: string; sku: string | null; available: number };
@@ -42,6 +43,8 @@ export type TransferVoiceApi = {
 type Pending =
   | { type: "choice"; hits: ProductHit[]; qty: number | null; dest: string; add: boolean }
   | { type: "qty"; hit: ProductHit; dest: string }
+  /** No se encontró exacto: «¿Estás intentando decir…?» por cada parecido, en orden. */
+  | { type: "guess"; hits: ProductHit[]; index: number; qty: number | null; dest: string }
   | { type: "overdraw"; hit: ProductHit; dest: string; qty: number; add: boolean }
   | { type: "send" }
   | null;
@@ -63,15 +66,17 @@ const EXAMPLES = [
 
 const short = (name: string) => name.toLowerCase().split(/\s+/).slice(0, 6).join(" ");
 
+/** Busca en el origen (solo con existencias). */
+async function searchIn(storeId: string, from: string, q: string): Promise<ProductHit[]> {
+  const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: from, p_in_stock: true, p_limit: 6 });
+  return (data ?? []) as ProductHit[];
+}
+
 /** Busca el producto dicho en el origen (solo con existencias). Prueba como se dijo y como referencia. */
 async function searchSpoken(storeId: string, from: string, spoken: string): Promise<ProductHit[]> {
   const ref = spokenReference(spoken);
   const candidates = [...new Set([spoken, ref, ref.replace(/[-./]/g, "")].map((x) => x.trim()).filter((x) => x.length >= 2))];
-  const sb = supabaseBrowser();
-  const results = await Promise.all(candidates.map(async (q) => {
-    const { data } = await sb.rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: from, p_in_stock: true, p_limit: 6 });
-    return (data ?? []) as ProductHit[];
-  }));
+  const results = await Promise.all(candidates.map((q) => searchIn(storeId, from, q)));
   const all = new Map<string, ProductHit>();
   results.flat().forEach((h) => { if (!all.has(h.id)) all.set(h.id, h); });
   // Código exacto (sin importar guiones ni espacios): ese es.
@@ -186,6 +191,14 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
       return reply(`Encontré ${top.length}: ${list}. ¿Cuál? O di ninguno.`, { show: `Encontré ${top.length}:\n${top.map((h, i) => `${i + 1}. ${h.name}${h.sku ? ` · ${h.sku}` : ""} (hay ${h.wh_qty})`).join("\n")}` });
     }
 
+    function askGuess(p: Extract<Pending, { type: "guess" }>, lead = ""): RemReply {
+      st.pending = p;
+      st.awaiting = "confirm";
+      const h = p.hits[p.index];
+      const sku = h.sku && !normalize(h.name).includes(normalize(h.sku)) ? `, código ${h.sku}` : "";
+      return reply(`${lead}¿Estás intentando decir ${h.name.toLowerCase()}${sku}?`, { show: `${lead}¿Estás intentando decir «${h.name}»${h.sku ? ` (${h.sku})` : ""}? Hay ${h.wh_qty}. Di sí o no.` });
+    }
+
     function chosen(hit: ProductHit, qty: number | null, dest: string, add: boolean): RemReply {
       if (qty === null) {
         st.pending = { type: "qty", hit, dest };
@@ -210,7 +223,14 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         const c = parseTransferCommand(alt, null);
         if (c.kind === "add") hits = await searchSpoken(a.storeId, a.from, c.query);
       }
-      if (!hits.length) return reply(`No encontré «${cmd.query}» con existencias en ${nameOf(a.from).toLowerCase()}. Dilo de otra forma, o dicta la referencia letra por letra.`);
+      if (!hits.length) {
+        // No salió exacto: variantes que suenan igual («bts» → «VTS»), en singular y por partes.
+        const guesses = await guessSpoken((q) => searchIn(a.storeId, a.from, q), cmd.query);
+        const mode = guessMode(guesses);
+        if (mode === "ask") return askGuess({ type: "guess", hits: guesses.filter((g) => g.score >= 0.5).map((g) => g.hit).slice(0, 3), index: 0, qty: cmd.qty, dest });
+        if (mode === "choose") { const r = askChoice(guesses.map((g) => g.hit), cmd.qty, dest, true); return { ...r, say: `No lo encontré exacto. ${r.say}`, show: `No lo encontré exacto. ${r.show ?? r.say}` }; }
+        return reply(`No encontré «${cmd.query}» con existencias en ${nameOf(a.from).toLowerCase()}. Dilo de otra forma, o dicta la referencia letra por letra.`);
+      }
       if (hits.length === 1) return chosen(hits[0], cmd.qty, dest, true);
       return askChoice(hits, cmd.qty, dest, true);
     }
@@ -288,6 +308,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
         case "number": {
           if (pending?.type === "qty") return apply(pending.hit, pending.dest, cmd.value, true);
+          if (pending?.type === "guess") return chosen(pending.hits[pending.index], cmd.value, pending.dest, true);
           if (pending?.type === "choice") return hear([`la ${cmd.value}`]);
           if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, Math.min(cmd.value, pending.qty), false);
           return reply("¿Cuántas de qué? Di por ejemplo: tres de la zapatera.");
@@ -295,6 +316,9 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
         case "yes": {
           if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, pending.qty, false, true);
+          if (pending?.type === "guess") return chosen(pending.hits[pending.index], pending.qty, pending.dest, true);
+          if (pending?.type === "choice" && pending.hits.length === 1) return chosen(pending.hits[0], pending.qty, pending.dest, pending.add);
+          if (pending?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (pending?.type === "send") {
             st.pending = null; st.awaiting = null; st.finishing = false;
             const ok = await a.send();
@@ -308,6 +332,11 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
 
         case "no": {
           if (pending?.type === "send") { st.pending = null; st.awaiting = null; st.finishing = false; return reply("Bueno, no lo envío. Sigue agregando o corrige lo que necesites."); }
+          if (pending?.type === "guess") {
+            if (pending.index + 1 < pending.hits.length) return askGuess({ ...pending, index: pending.index + 1 }, "¿Entonces ");
+            st.pending = null; st.awaiting = null;
+            return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
+          }
           if (pending) { st.pending = null; st.awaiting = null; return reply("Bueno, no lo agrego. ¿Siguiente?"); }
           return reply("Bueno. ¿Qué hacemos?");
         }

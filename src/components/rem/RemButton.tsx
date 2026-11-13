@@ -11,9 +11,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
+import { bargeInSupported, beep, listen, listenWhile, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
-import { normalize } from "@/lib/voice/spanish";
+import { isQuickAnswer, normalize } from "@/lib/voice/spanish";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 type Turn = { who: "you" | "rem"; text: string };
@@ -113,11 +113,27 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     setOpen(false);
   }
 
-  async function say(id: number, r: RemReply) {
-    if (session.current !== id) return;
+  /**
+   * Dice la respuesta. Mientras habla escucha (en computador): si oye una respuesta corta («sí, esa», «no»,
+   * «la dos»), se calla y la devuelve para usarla sin esperar a que termine.
+   */
+  async function say(id: number, r: RemReply): Promise<string[] | null> {
+    if (session.current !== id) return null;
     add("rem", r.show ?? r.say);
     setPhase("speaking");
+    let early: string[] | null = null;
+    const stopBarge = !r.end && bargeInSupported()
+      ? listenWhile((alts) => {
+          const hit = alts.find((x) => isQuickAnswer(x));
+          if (!hit || session.current !== id) return false;
+          early = [hit, ...alts.filter((x) => x !== hit)];
+          stopSpeaking();
+          return true;
+        })
+      : null;
     await speak(r.say);
+    stopBarge?.();
+    return session.current === id ? early : null;
   }
 
   /** Escucha una frase. null si se canceló la conversación. */
@@ -211,10 +227,12 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
 
     let misses = 0;
     for (;;) {
-      await say(id, reply);
+      const early = await say(id, reply);
       if (session.current !== id) return;
       if (reply.end) return stop();
-      const alts = await hearOnce(id);
+      // Si lo interrumpió con «sí, esa», esa es la respuesta.
+      if (early?.[0]) add("you", early[0]);
+      const alts = early ?? await hearOnce(id);
       if (!alts) return;
       if (!alts.length) {
         if (++misses >= 2) { await say(id, { say: "Te espero. Toca REM cuando quieras seguir." }); return stop(); }
@@ -274,7 +292,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   }
 
   const color = phase === "listening" ? "#ef4444" : phase === "speaking" ? "#8b5cf6" : phase === "thinking" ? "#f59e0b" : "var(--t-accent, #8b5cf6)";
-  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? "Hablando…" : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
+  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? (bargeInSupported() ? "Hablando… (puedes contestarle ya)" : "Hablando… (toca 🔊 para contestar)") : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
 
   return (
     <>
@@ -290,7 +308,8 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
           className="fixed bottom-3 right-3 z-[185] flex max-h-[70vh] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border shadow-2xl sm:bottom-5 sm:right-5"
           style={{ borderColor: `color-mix(in oklab, ${color} 45%, var(--t-card-border))`, background: "var(--t-bg-base, var(--t-card-bg))", color: "var(--t-text)" }}>
           <div className="flex items-center gap-3 border-b px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
-            <button type="button" onClick={() => (phase === "idle" ? void run() : stop())} aria-label={phase === "idle" ? "Hablar" : "Pausar"}
+            <button type="button" onClick={() => (phase === "idle" ? void run() : phase === "speaking" ? stopSpeaking() : stop())}
+              aria-label={phase === "idle" ? "Hablar" : phase === "speaking" ? "Callar y escuchar" : "Pausar"} title={phase === "speaking" ? "Toca para que se calle y te escuche" : undefined}
               className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full text-xl text-white"
               style={{ background: color, boxShadow: phase === "listening" ? `0 0 0 6px color-mix(in oklab, ${color} 25%, transparent)` : undefined, transition: "box-shadow .3s, background .3s" }}>
               {phase === "listening" ? <span className="absolute inset-0 animate-ping rounded-full" style={{ background: color, opacity: 0.35 }} /> : null}

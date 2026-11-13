@@ -197,7 +197,34 @@ const ORDINALS: Record<string, number> = {
 
 const STOP = /^(?:para|parar|pare|detente|deten|cancela|cancelar|cancelalo|cancela todo|chao|adios|salir|sal|callate|silencio|ya no|olvidalo|hasta luego|gracias rem|gracias)$/;
 const YES = /^(?:si|si senor|claro|dale|de una|correcto|eso|exacto|afirmativo|ok|okay|okey|hagale|hazlo|confirmo|confirmado|envialo|si envialo|si dale|si por favor|si claro|listo si|bueno|vale)$/;
-const NO = /^(?:no|nop|nel|negativo|todavia no|aun no|no gracias|no todavia|espera|esperate|todavia)$/;
+const NO = /^(?:no|nop|nel|negativo|todavia no|aun no|no gracias|no todavia|espera|esperate|todavia|no no|no es|no es ese|no es esa|no es eso|no ese no|no esa no|ese no|esa no|no ese|no esa|para nada|tampoco|no senor)$/;
+
+// «Sí» dicho de muchas formas: «sí esa», «esa esa», «claro que sí», «ese mismo», «ajá».
+const YES_START = new Set(["si", "sip", "sii", "sisas", "simon", "claro", "dale", "correcto", "correcta", "eso", "esa", "ese", "exacto", "exacta",
+  "exactamente", "afirmativo", "ok", "okay", "okey", "hagale", "hazlo", "confirmo", "confirmado", "envialo", "vale", "aja", "ajam", "obvio",
+  "perfecto", "asi", "de"]);
+const YES_WORDS = new Set([...YES_START, "que", "es", "esta", "este", "misma", "mismo", "la", "el", "senor", "por", "favor", "porfa", "una",
+  "ella", "ahi", "listo", "bueno", "seria", "era", "con", "gracias"]);
+
+/** ¿Es un «sí»? (frase corta, sin «no»). */
+export function isYes(text: string): boolean {
+  const t = clean(text);
+  if (YES.test(t)) return true;
+  const w = t.split(" ").filter(Boolean);
+  if (!w.length || w.length > 5 || !YES_START.has(w[0]) || w.includes("no")) return false;
+  if (w[0] === "de" && w[1] !== "una") return false;
+  return w.every((x) => YES_WORDS.has(x));
+}
+
+/**
+ * Respuesta corta que puede interrumpir a REM mientras habla: sí, no, «la dos», un número.
+ * Lo que REM mismo dice (si el micrófono lo oye) casi nunca cabe aquí.
+ */
+export function isQuickAnswer(text: string): boolean {
+  const t = clean(text);
+  if (!t || t.split(" ").length > 5) return false;
+  return isYes(t) || NO.test(t) || STOP.test(t) || /^(?:ninguno|ninguna|ningun|otro|otra)$/.test(t) || loneNumber(t) !== null;
+}
 const DONE = /^(?:listo|lista|ya|ya esta|termine|terminamos|termina|terminar|eso es todo|es todo|nada mas|eso seria todo|enviar|envia|envialo ya|guardar|guarda|guardalo|finalizar|finaliza|ya termine|listo rem|listo ya)$/;
 
 /** Quita el «REM» del principio y muletillas que no cambian la orden. */
@@ -223,7 +250,7 @@ function loneNumber(text: string): number | null {
   return n && n.used === words.length ? n.value : null;
 }
 
-const ADD_VERB = /^(?:agrega|agregale|agregar|anade|anadir|anadele|pon|ponle|pone|mete|metele|suma|sumale|incluye|y|tambien|mas|otro|otra)\s+/;
+const ADD_VERB = /^(?:agrega|agregale|agregar|anade|anadir|anadele|pon|ponle|pone|mete|metele|suma|sumale|incluye|y|tambien|mas|otro|otra|necesito|necesitamos|necesitaria|quiero|quisiera|queremos|dame|deme|me das|me da|regalame|mandame|enviame|pideme|pide|pidele|pedir|traeme|ocupo|ocupamos|me hacen falta|hacen falta|hace falta|faltan|falta|vendeme|vende|vender|cobra|cobrame|registra|compramos|compre|me llegaron|llegaron|voy a necesitar|vamos a necesitar|que me mandes|que me envies|que me traigas|que me pidas|por favor)\s+/;
 const UNIT_WORDS = /^(?:unidades|unidad|piezas|pieza|pares|par|cajas|caja|de|del)\s+/;
 
 /**
@@ -234,7 +261,7 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   const t = clean(raw);
   if (!t) return { kind: "repeat" };
   if (STOP.test(t)) return { kind: "stop" };
-  if (YES.test(t)) return { kind: "yes" };
+  if (isYes(t)) return { kind: "yes" };
   if (NO.test(t)) return { kind: "no" };
   if (/^(?:ayuda|que puedo decir|que digo|como funciona|como se usa|que sabes hacer)$/.test(t)) return { kind: "help" };
   if (/^(?:repite|repitelo|otra vez|que dijiste|como|perdon|no te entendi|no entendi)$/.test(t)) return { kind: "repeat" };
@@ -299,7 +326,9 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   if (remove) return { kind: "remove", query: remove[1] };
 
   // Agregar: «tres de AB-1240», «agrega cinco secadores para zamora», «zapatera negra».
-  let rest = t.replace(ADD_VERB, "");
+  // «necesito que me mandes cinco…»: varias muletillas seguidas.
+  let rest = t;
+  for (let k = 0; k < 3 && ADD_VERB.test(rest); k++) rest = rest.replace(ADD_VERB, "");
   let to: string | null = null;
   const toMatch = rest.match(/^(.+?)\s+(?:para|hacia) (?:la |el )?(.+)$/);
   if (toMatch) { rest = toMatch[1]; to = toMatch[2]; }
@@ -315,7 +344,10 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
     const looksRef = /^\d+$/.test(words[0]) && /^\d/.test(after) && !UNIT_WORDS.test(after + " ");
     if (!looksRef) { qty = lead.value; query = after.replace(UNIT_WORDS, "").replace(UNIT_WORDS, ""); }
   }
-  query = query.replace(/^(?:la |el |los |las |un |una |unos |unas )/, "").trim();
+  query = query.replace(/^(?:la |el |los |las |un |una |unos |unas )/, "")
+    // «cámaras triple de la referencia vts 30» → «cámaras triple vts 30»: «referencia» no está en el producto.
+    .replace(/(?:^|\s)(?:de |del )?(?:la |el )?(?:referencia|ref|codigo|cod)(?: numero)?(?=\s|$)/g, " ")
+    .replace(/\s+/g, " ").trim();
   if (!query) return qty !== null ? { kind: "number", value: qty } : { kind: "repeat" };
   return { kind: "add", qty, query, to };
 }

@@ -21,6 +21,12 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 **En todas las pantallas:**
 - **Agregar:** «tres de la a be guion doce cuarenta» o «cinco secadores».
 - **Si hay varios parecidos:** REM lee hasta 3 opciones; se contesta «la dos» o «ninguno».
+- **Si no lo encuentra exacto** (el reconocedor escribió «bts 30» por «VTS30», o «cámaras» en plural): busca variantes que suenan igual (b/v, s/z/c, y/i, k/c/q, g/j, m/n), en singular y por partes, y ordena por parecido (`src/lib/voice/fuzzy.ts`, pruebas en `tests/voice/fuzzy.test.ts`).
+  - Uno claramente más parecido: «¿Estás intentando decir cámara de seguridad triple solar VTS30?». «Sí» lo agrega con la cantidad dicha; «no» pregunta por el siguiente parecido (hasta 3); un número lo agrega con esa cantidad.
+  - Varios igual de parecidos: «No lo encontré exacto. Encontré 3: …».
+- **Muletillas:** «necesito», «dame», «mándame», «necesito que me mandes», «de la referencia»… se ignoran.
+- **«Sí» de muchas formas:** «sí esa», «esa esa», «ese mismo», «claro que sí», «ajá», «de una». «No esa no», «ese no» son no.
+- **Interrumpir:** en computador REM escucha mientras habla. Si oye una respuesta corta (sí, no, «la dos», un número, cancelar), se calla y la usa. Lo largo se ignora, para que no se responda a sí mismo por el parlante. En celular, abrir el micrófono corta la voz: ahí se toca el botón 🔊 del panel para que se calle y escuche.
 - **Si no se dijo la cantidad:** REM pregunta «¿Cuántas?».
 - **Corregir:** «cambia la zapatera a cuatro», «mejor dos», «quita el último» o «quita la zapatera».
 - **Repasar:** «¿cuántos llevo?», «repite» o «ayuda».

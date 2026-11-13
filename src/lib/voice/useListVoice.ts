@@ -10,6 +10,7 @@
 import { useEffect, useRef } from "react";
 import { clickRemPhoto, registerRemHandler, resumeRem, type RemReply } from "./rem";
 import { compactCode, normalize, parseTransferCommand, plural, spokenReference, type TransferCommand } from "./spanish";
+import { guessMode, guessSpoken } from "./fuzzy";
 
 export type VoiceHit = { id: string; name: string; sku: string | null; barcode?: string | null; /** Existencias (null = no se sabe o no se dice). */ avail: number | null };
 export type VoiceLine = { id: string; name: string; sku: string | null; qty: number };
@@ -47,6 +48,8 @@ export type ListVoiceAdapter = {
 type Pending =
   | { type: "choice"; hits: VoiceHit[]; qty: number | null; add: boolean; extra?: Record<string, number> }
   | { type: "qty"; hit: VoiceHit; add: boolean; extra?: Record<string, number> }
+  /** No se encontró exacto: «¿Estás intentando decir…?» por cada parecido, en orden. */
+  | { type: "guess"; hits: VoiceHit[]; index: number; qty: number | null; add: boolean; extra?: Record<string, number> }
   | { type: "overdraw"; hit: VoiceHit; qty: number; extra?: Record<string, number> }
   | { type: "submit" }
   | null;
@@ -129,13 +132,21 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
       return apply(hit, qty, add, extra);
     }
 
-    function askChoice(hits: VoiceHit[], qty: number | null, add: boolean, extra?: Record<string, number>): RemReply {
+    function askGuess(p: Extract<Pending, { type: "guess" }>, lead = ""): RemReply {
+      s.pending = p;
+      s.awaiting = "confirm";
+      const h = p.hits[p.index];
+      const sku = h.sku && !normalize(h.name).includes(normalize(h.sku)) ? `, código ${h.sku}` : "";
+      return reply(`${lead}¿Estás intentando decir ${h.name.toLowerCase()}${sku}?`, { show: `${lead}¿Estás intentando decir «${h.name}»${h.sku ? ` (${h.sku})` : ""}? Di sí o no.` });
+    }
+
+    function askChoice(hits: VoiceHit[], qty: number | null, add: boolean, extra?: Record<string, number>, lead = ""): RemReply {
       const top = hits.slice(0, 3);
       s.pending = { type: "choice", hits: top, qty, add, extra };
       s.awaiting = "choice";
       const nums = ["uno", "dos", "tres"];
       const reveal = A().revealStock;
-      return reply(`Encontré ${top.length}: ${top.map((h, i) => `${nums[i]}, ${short(h.name)}${h.sku ? ` ${h.sku}` : ""}`).join("; ")}. ¿Cuál? O di ninguno.`,
+      return reply(`${lead}Encontré ${top.length}: ${top.map((h, i) => `${nums[i]}, ${short(h.name)}${h.sku ? ` ${h.sku}` : ""}`).join("; ")}. ¿Cuál? O di ninguno.`,
         { show: `Encontré ${top.length}:\n${top.map((h, i) => `${i + 1}. ${h.name}${h.sku ? ` · ${h.sku}` : ""}${reveal && h.avail !== null ? ` (${A().stockWord ?? "hay"} ${h.avail})` : ""}`).join("\n")}` });
     }
 
@@ -184,6 +195,8 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         }
         case "number": {
           if (p?.type === "qty") return apply(p.hit, cmd.value, p.add, p.extra ?? pre.extra);
+          // «¿Estás intentando decir…?» → «cinco»: ese, con esa cantidad.
+          if (p?.type === "guess") return chosen(p.hits[p.index], cmd.value, p.add, p.extra);
           if (p?.type === "choice") return hear([`la ${cmd.value}`]);
           if (p?.type === "overdraw") return apply(p.hit, Math.min(cmd.value, p.qty), false, p.extra);
           const lastId = s.lastAdded.at(-1);
@@ -193,6 +206,9 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         }
         case "yes": {
           if (p?.type === "overdraw") return apply(p.hit, p.qty, false, p.extra, true);
+          if (p?.type === "guess") return chosen(p.hits[p.index], p.qty, p.add, p.extra);
+          if (p?.type === "choice" && p.hits.length === 1) return chosen(p.hits[0], p.qty, p.add, p.extra);
+          if (p?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (p?.type === "submit" && a.submit) {
             clear();
             const r = await a.submit();
@@ -203,6 +219,12 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         }
         case "no": {
           if (p?.type === "submit") { clear(); return reply("Bueno, todavía no. Sigue o corrige lo que necesites."); }
+          if (p?.type === "guess") {
+            if (p.index + 1 < p.hits.length) return askGuess({ ...p, index: p.index + 1 }, "¿Entonces ");
+            clear();
+            return reply("Bueno. Dímelo de otra forma, dicta la referencia letra por letra, o di foto.");
+          }
+          if (p?.type === "choice") { clear(); return reply("Bueno. Dime el producto de otra forma, o di foto."); }
           if (p) { clear(); return reply("Bueno, no lo agrego. ¿Siguiente?"); }
           return reply("Bueno. ¿Qué hacemos?");
         }
@@ -243,7 +265,14 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
         const c = parseTransferCommand(a.preparse ? a.preparse(alt).text : alt, null);
         if (c.kind === "add") hits = await searchSpokenWith(a.search, c.query);
       }
-      if (!hits.length) return reply(`No encontré «${query}». Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
+      if (!hits.length) {
+        // No salió exacto: variantes que suenan igual («bts» → «VTS»), en singular y por partes.
+        const guesses = await guessSpoken(a.search, query);
+        const mode = guessMode(guesses);
+        if (mode === "ask") return askGuess({ type: "guess", hits: guesses.filter((g) => g.score >= 0.5).map((g) => g.hit).slice(0, 3), index: 0, qty: cmd.qty, add: !cmd.exact, extra });
+        if (mode === "choose") return askChoice(guesses.map((g) => g.hit), cmd.qty, !cmd.exact, extra, "No lo encontré exacto. ");
+        return reply(`No encontré «${query}». Dilo de otra forma, dicta la referencia letra por letra, o di foto.`);
+      }
       if (hits.length === 1) return chosen(hits[0], cmd.qty, !cmd.exact, extra);
       return askChoice(hits, cmd.qty, !cmd.exact, extra);
     }

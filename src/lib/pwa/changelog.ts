@@ -942,6 +942,16 @@ export const RELEASES: Release[] = [
       { icon: "🗣️", text: "«Oye REM, quiero hacer un traslado»" },
     ],
   },
+  {
+    id: 90, date: "2026-11-13", title: "🎙️ REM entiende aunque se equivoque y se le puede interrumpir",
+    summary: "Si REM no encuentra el producto exacto («cámaras de la bts 30»), busca lo que suena parecido y pregunta: «¿Estás intentando decir cámara de seguridad triple solar VTS30?». Contéstale «sí», «esa» o «no» sin esperar a que termine. Entiende «necesito», «dame», «mándame»… al pedir.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Necesito cinco cámaras de la bts 30»" },
+      { icon: "🤔", text: "REM: «¿Estás intentando decir…?»" },
+      { icon: "✅", text: "Interrúmpelo: «sí, esa»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
