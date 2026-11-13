@@ -93,6 +93,20 @@ test("tus frases reales", async () => {
   assert.equal((await resolveSpoken(search, ["licuadora"])).kind, "none");
 });
 
+test("sí con cantidad", () => {
+  assert.deepEqual(p("sí necesito tres", "confirm"), { kind: "yes", qty: 3 });
+  assert.deepEqual(p("sí, tres"), { kind: "yes", qty: 3 });
+  assert.deepEqual(p("esa, cinco"), { kind: "yes", qty: 5 });
+  assert.deepEqual(p("claro, ponle cuatro"), { kind: "yes", qty: 4 });
+  assert.deepEqual(p("necesito tres", "confirm"), { kind: "number", value: 3 });
+  assert.deepEqual(p("dame dos", "qty"), { kind: "number", value: 2 });
+});
+
+test("un número suelto no inventa productos", async () => {
+  assert.equal((await resolveSpoken(search, ["tres"])).kind, "none");
+  assert.equal((await resolveSpoken(search, ["30"])).kind, "none");
+});
+
 test("sí dicho de muchas formas", () => {
   for (const s of ["sí", "sí esa", "esa esa", "esa", "ese mismo", "claro que sí", "sí señor", "ajá", "correcto", "de una", "sí, esa es"]) assert.ok(isYes(s), s);
   for (const s of ["no", "esa no", "no es esa", "eso es todo", "listo", "la dos", "esa zapatera"]) assert.ok(!isYes(s), s);

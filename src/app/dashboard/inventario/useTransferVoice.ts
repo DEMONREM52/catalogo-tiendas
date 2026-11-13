@@ -337,13 +337,15 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         }
 
         case "yes": {
-          if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, pending.qty, false, true);
+          if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, Math.min(cmd.qty ?? pending.qty, pending.qty), false, true);
+          if (pending?.type === "qty" && cmd.qty) return apply(pending.hit, pending.dest, cmd.qty, true);
+          // «Sí» o «sí, necesito tres»: ese, con la cantidad dicha ahora o la de antes.
           if (pending?.type === "guess") {
             const hit = pending.ranked[pending.index].hit;
             remember(pending, hit);
-            return chosen(hit, pending.qty, pending.dest, true, { ask: pending, others: pending.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
+            return chosen(hit, cmd.qty ?? pending.qty, pending.dest, true, { ask: pending, others: pending.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
           }
-          if (pending?.type === "choice" && pending.hits.length === 1) { remember(pending, pending.hits[0]); return chosen(pending.hits[0], pending.qty, pending.dest, pending.add); }
+          if (pending?.type === "choice" && pending.hits.length === 1) { remember(pending, pending.hits[0]); return chosen(pending.hits[0], cmd.qty ?? pending.qty, pending.dest, pending.add); }
           if (pending?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (pending?.type === "send") {
             st.pending = null; st.awaiting = null; st.finishing = false;

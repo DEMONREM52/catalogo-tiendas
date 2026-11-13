@@ -389,8 +389,8 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
                   <b>Interrumpirlo hablando</b>
                   <span className="block" style={{ color: "var(--t-muted)" }}>
                     {echoDetected() && duplexOn
-                      ? "Se estaba oyendo a sí mismo por el parlante, así que ahora escucha al terminar de hablar. Con audífonos funciona; vuelve a marcar para probar otra vez."
-                      : "Escucha mientras habla y se calla cuando le hablas. Si se oye a sí mismo por el parlante, se apaga solo; con audífonos funciona mejor."}
+                      ? "Se oye por el parlante: sigue dejándose interrumpir, pero filtra su propia voz con más cuidado. Háblale claro (o con audífonos va mejor)."
+                      : "Escucha mientras habla y se calla apenas le hablas. Ignora su propia voz si el micrófono la oye por el parlante; con audífonos va mejor."}
                   </span>
                 </span>
               </label>

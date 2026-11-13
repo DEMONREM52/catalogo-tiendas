@@ -272,13 +272,15 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           return reply("¿Cuántas de qué? Di por ejemplo: tres de la zapatera.");
         }
         case "yes": {
-          if (p?.type === "overdraw") return apply(p.hit, p.qty, false, p.extra, true);
+          if (p?.type === "overdraw") return apply(p.hit, Math.min(cmd.qty ?? p.qty, p.qty), false, p.extra, true);
+          if (p?.type === "qty" && cmd.qty) return apply(p.hit, cmd.qty, p.add, p.extra ?? pre.extra);
+          // «Sí» o «sí, necesito tres»: ese, con la cantidad dicha ahora o la de antes.
           if (p?.type === "guess") {
             const hit = p.ranked[p.index].hit;
             remember(p, hit);
-            return chosen(hit, p.qty, p.add, p.extra, { ask: p, others: p.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
+            return chosen(hit, cmd.qty ?? p.qty, p.add, p.extra, { ask: p, others: p.ranked.filter((r) => r.hit.id !== hit.id), learned: false });
           }
-          if (p?.type === "choice" && p.hits.length === 1) { remember(p, p.hits[0]); return chosen(p.hits[0], p.qty, p.add, p.extra); }
+          if (p?.type === "choice" && p.hits.length === 1) { remember(p, p.hits[0]); return chosen(p.hits[0], cmd.qty ?? p.qty, p.add, p.extra); }
           if (p?.type === "choice") return reply("¿Cuál? Di el número: la uno, la dos…");
           if (p?.type === "submit" && a.submit) {
             clear();

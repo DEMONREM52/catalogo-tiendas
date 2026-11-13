@@ -295,6 +295,9 @@ export async function resolveSpoken<T extends Named & { id: string }>(
 ): Promise<Resolution<T>> {
   const said = [...new Set(queries.map((q) => q.trim()).filter(Boolean))].slice(0, 3);
   if (!said.length) return { kind: "none" };
+  // Solo un número corto («tres», «30») no es un producto: no se inventan opciones.
+  const first = spokenParts(said[0]);
+  if (!first.words.length && first.codes.every((c) => /^\d{1,2}$/.test(c))) return { kind: "none" };
   const learned = said.map((q) => learnedFor(q)).find(Boolean) ?? null;
   const qs = new Map<string, number>();
   const add = (q: string, limit: number) => { const t = q.trim(); if (t.length >= 2 && !qs.has(t)) qs.set(t, limit); };

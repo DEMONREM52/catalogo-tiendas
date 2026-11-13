@@ -35,7 +35,7 @@ export function voiceSupported(): boolean {
 }
 
 const DUPLEX_KEY = "remhub:rem-duplex";
-/** Se oyó a sí mismo por el parlante en esta sesión: ya no escucha mientras habla (hasta recargar o reactivarlo). */
+/** Se oyó a sí mismo por el parlante en esta sesión: filtra su propia voz con más rigor. */
 let echoBlocked = false;
 
 /** ¿Este equipo puede escuchar mientras habla? En celulares, abrir el micrófono corta la voz. */
@@ -58,9 +58,9 @@ export function echoDetected(): boolean {
   return echoBlocked;
 }
 
-/** ¿Escucha mientras habla (interrumpir con la voz)? */
+/** ¿Escucha mientras habla (interrumpir con la voz)? Aunque se oiga por el parlante sigue: solo se vuelve más exigente. */
 export function fullDuplex(): boolean {
-  return duplexCapable() && duplexPref() && !echoBlocked;
+  return duplexCapable() && duplexPref();
 }
 
 export class VoiceError extends Error {
@@ -192,7 +192,8 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
           // Mientras habla (o justo después) el parlante se mezcla y sale cualquier cosa («nos comemos»): solo vale una
           // respuesta corta clara o una frase de 3 palabras o más que casi no tenga palabras de REM.
           const n = use[0].split(" ").length;
-          if (!(isQuickAnswer(use[0]) || (n >= 3 && echoRatio(use[0], echo) < 0.4))) continue;
+          // Si ya se oyó por el parlante, más exigente todavía (pero sigue dejándose interrumpir).
+          if (!(isQuickAnswer(use[0]) || (n >= 3 && echoRatio(use[0], echo) < (echoBlocked ? 0.25 : 0.4)))) continue;
         }
         if (res.isFinal) fin.push(use);
         else inter += `${use[0]} `;

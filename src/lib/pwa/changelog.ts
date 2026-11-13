@@ -983,6 +983,16 @@ export const RELEASES: Release[] = [
       { icon: "💾", text: "Guarda: la venta se actualiza sola" },
     ],
   },
+  {
+    id: 94, date: "2026-11-13", title: "🎙️ REM: interrúmpelo siempre y «sí, necesito tres»",
+    summary: "Ahora siempre puedes interrumpir a REM mientras habla, aunque use el parlante: ignora su propia voz y se calla apenas le hablas. Y entiende «sí, necesito tres», «esa, cinco» o «necesito tres» para confirmar con cantidad.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🤔", text: "REM: ¿Estás intentando decir…?" },
+      { icon: "✋", text: "Interrúmpelo: «sí, necesito tres»" },
+      { icon: "✅", text: "Lo agrega con 3" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

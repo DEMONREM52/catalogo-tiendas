@@ -171,7 +171,8 @@ export function matchPlaces(spoken: string, places: NamedPlace[]): { found: Name
 
 export type TransferCommand =
   | { kind: "stop" }
-  | { kind: "yes" }
+  /** `qty`: «sí, necesito tres». */
+  | { kind: "yes"; qty?: number }
   | { kind: "no" }
   | { kind: "help" }
   | { kind: "repeat" }
@@ -253,6 +254,13 @@ function loneNumber(text: string): number | null {
 const ADD_VERB = /^(?:agrega|agregale|agregar|anade|anadir|anadele|pon|ponle|pone|mete|metele|suma|sumale|incluye|y|tambien|mas|otro|otra|necesito|necesitamos|necesitaria|quiero|quisiera|queremos|dame|deme|me das|me da|regalame|mandame|enviame|pideme|pide|pidele|pedir|traeme|ocupo|ocupamos|me hacen falta|hacen falta|hace falta|faltan|falta|vendeme|vende|vender|cobra|cobrame|registra|compramos|compre|me llegaron|llegaron|voy a necesitar|vamos a necesitar|que me mandes|que me envies|que me traigas|que me pidas|por favor)\s+/;
 const UNIT_WORDS = /^(?:unidades|unidad|piezas|pieza|pares|par|cajas|caja|de|del)\s+/;
 
+/** Quita muletillas del principio: «necesito que me mandes tres» → «tres». */
+function stripAddVerbs(text: string): string {
+  let rest = text.trim();
+  for (let k = 0; k < 3 && ADD_VERB.test(rest); k++) rest = rest.replace(ADD_VERB, "");
+  return rest.replace(/^(?:ponle|pon|son|serian|que sean)\s+/, "");
+}
+
 /**
  * Orden del traslado. `awaiting` dice qué preguntó REM: un número suelto es elección («la dos»),
  * cantidad o nada según lo que se esté esperando.
@@ -262,6 +270,9 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   if (!t) return { kind: "repeat" };
   if (STOP.test(t)) return { kind: "stop" };
   if (isYes(t)) return { kind: "yes" };
+  // «Sí, necesito tres», «sí tres», «esa, cinco», «claro, ponle cuatro»: sí con cantidad.
+  const yesQty = t.match(/^(?:si|sip|claro|dale|eso|esa|ese|correcto|exacto|ok|okey|vale|aja|de una)(?: (?:si|esa|ese|eso|es|misma|mismo|senor|claro|por favor|correcto))*[ ,]+(.+)$/);
+  if (yesQty) { const n = loneNumber(stripAddVerbs(yesQty[1])); if (n !== null) return { kind: "yes", qty: n }; }
   if (NO.test(t)) return { kind: "no" };
   if (/^(?:ayuda|que puedo decir|que digo|como funciona|como se usa|que sabes hacer)$/.test(t)) return { kind: "help" };
   if (/^(?:repite|repitelo|otra vez|que dijiste|como|perdon|no te entendi|no entendi)$/.test(t)) return { kind: "repeat" };
@@ -292,7 +303,8 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
     if (n !== null) return { kind: "choice", index: n };
   }
   if (awaiting === "qty" || awaiting === "confirm") {
-    const n = loneNumber(t);
+    // «necesito tres», «ponle cinco», «dame dos»: la cantidad que se pregunta.
+    const n = loneNumber(stripAddVerbs(t));
     if (n !== null) return { kind: "number", value: n };
   }
 
