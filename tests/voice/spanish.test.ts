@@ -130,3 +130,17 @@ test("REM atiende la última pantalla abierta y vuelve a la de abajo", async () 
   offPos();
   assert.equal(remHandler(), null);
 });
+
+test("vaciar la lista: «el traslado bórralo», «borra todo»", async () => {
+  const { parseTransferCommand } = await import("@/lib/voice/spanish");
+  const k = (t: string) => parseTransferCommand(t).kind;
+  assert.equal(k("el traslado el traslado bórralo"), "clear");
+  assert.equal(k("borra todo"), "clear");
+  assert.equal(k("bórralo todo"), "clear");
+  assert.equal(k("elimina el pedido"), "clear");
+  assert.equal(k("borra todo el traslado"), "clear");
+  assert.equal(k("empieza de nuevo"), "clear");
+  assert.equal(k("quita la zapatera"), "remove");
+  assert.equal(k("borra la zapatera del pedido"), "remove");
+  assert.notEqual(k("la zapatera del pedido bórrala"), "clear", "es un producto, no todo el pedido");
+});

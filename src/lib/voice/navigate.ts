@@ -12,7 +12,9 @@ import { normalize } from "./spanish";
 
 export type NavLink = { href: string; label: string; emoji?: string; hint?: string; keywords?: string; action?: boolean };
 
-const NAV_VERB = /^(?:(?:oye |hey )?rem )?(?:por favor )?(?:abre(?:me)?|abrir|abri|ir a|ve a|vete a|vamos a|llevame a|lleveme a|muestrame|muestra|ensename|quiero ver|entra a|entrar a|entremos a|pasa a|pasame a|cambia a|navega a)\s+(.+)$/;
+const NAV_VERB = /^(?:(?:oye |hey )?rem )?(?:por favor )?(?:(?:yo )?(?:quiero|quisiera|necesito|puedes|podrias|me puedes|me podrias|me quieres|vamos|hay que)\s+)?(?:abre(?:me)?|abrir|abri|ir a|ve a|vete a|vamos a|llevame a|lleveme a|muestrame|muestra|ensename|quiero ver|entra a|entrar a|entremos a|pasa a|pasame a|cambia a|navega a)\s+(.+)$/;
+
+const NAV_FILLER = new Set(["gestor", "modulo", "seccion", "pagina", "pestana", "parte", "menu", "ventana", "pantalla", "panel", "opcion"]);
 
 /** «abre los gastos» → «los gastos». null si no pide ir a algún lado. */
 export function navRequest(text: string): string | null {
@@ -27,7 +29,9 @@ export function navRequest(text: string): string | null {
  */
 export function navTarget<T extends NavLink>(text: string, links: T[], strict = false): { link: T; score: number } | null {
   const asked = navRequest(text);
-  const q = parseQuery(asked ?? normalize(text));
+  const parsed = parseQuery(asked ?? normalize(text));
+  // «El gestor de campañas», «el módulo de nómina»: esas palabras no dicen a dónde, solo «una página».
+  const q = { ...parsed, words: parsed.words.filter((w) => !NAV_FILLER.has(w)) };
   if (!q.words.length) return null;
   let best: { link: T; score: number } | null = null;
   for (const l of links) {

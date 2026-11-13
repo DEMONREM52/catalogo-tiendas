@@ -52,3 +52,13 @@ test("«Rem» en medio de la frase también lo llama", () => {
   assert.equal(wakeRest("tráeme la remera"), null);
   assert.equal(wakeRest("la memoria ram del computador"), null);
 });
+
+// Lo que pasó en un traslado: «quiero ir a campaña» lo tomó como destino del traslado.
+test("«quiero ir a campañas», «¿puedes abrir el gestor de campañas?»", () => {
+  const links = [...LINKS, { href: "/dashboard/social?tab=campaigns", label: "Campañas", keywords: "carrusel promociones redes" }];
+  assert.equal(navTarget("quiero ir a campaña", links, true)?.link.label, "Campañas");
+  assert.equal(navTarget("puedes abrir el gestor de campañas", links, true)?.link.label, "Campañas");
+  assert.equal(navTarget("necesito ir a la nómina", links, true)?.link.label, "Nómina");
+  assert.equal(navRequest("quiero hacer un traslado"), null);
+  assert.equal(navTarget("quiero ver el precio de la zapatera", links, true), null);
+});

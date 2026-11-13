@@ -1917,6 +1917,7 @@ export default function PosPage() {
         if (product) addProduct({ ...product, stock: hit.avail ?? product.stock }, true, Math.max(1, qty));
       },
       remove: removeItem,
+      clear: () => { cart.forEach((i) => forgetApproval(i.productId)); setCart([]); },
       limitToStock: true,
       revealStock: true,
       doneSay: () => `Listo: ${cart.length} productos y ${cart.reduce((a, i) => a + i.qty, 0)} unidades en el carrito. Revisa precios y cobra en pantalla.`,

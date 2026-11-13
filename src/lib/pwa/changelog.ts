@@ -1013,6 +1013,16 @@ export const RELEASES: Release[] = [
       { icon: "🖼️", text: "«Elegir yo» con cualquier producto" },
     ],
   },
+  {
+    id: 97, date: "2026-11-13", title: "🎙️ REM entiende «quiero ir a…» y «borra todo»",
+    summary: "En medio de un traslado o una venta puedes decirle «quiero ir a campañas» o «¿puedes abrir la nómina?» y te lleva. Y «borra todo» o «el traslado bórralo» vacía la lista (antes te pregunta).",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Quiero ir a campañas»" },
+      { icon: "🧹", text: "«Borra todo» → ¿Borro los 5 productos?" },
+      { icon: "✅", text: "«Sí» y queda vacía" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

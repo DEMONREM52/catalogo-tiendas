@@ -656,6 +656,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
       },
       remove: removeLine,
+      clear: () => { setLines([]); setMatrix({}); },
       setCarrier: (v) => setCarrier(v.toUpperCase()),
       setCheckedBy: (v) => setCheckedBy(v.toUpperCase()),
       setNotes,

@@ -30,6 +30,8 @@ export type ListVoiceAdapter = {
   /** Pone la cantidad total de un producto (lo agrega si no estaba). `extra` viene de `preparse`. */
   put: (hit: VoiceHit, qty: number, extra?: Record<string, number>) => void;
   remove: (id: string) => void;
+  /** Vacía la lista de una vez (si no está, se quita uno por uno). */
+  clear?: () => void;
   /** No pasar de las existencias (POS). */
   limitToStock?: boolean;
   /** Decir cuánto hay (no en conteos: se cuenta a ciegas). */
@@ -59,6 +61,7 @@ type Pending =
   /** «¿Estás intentando decir…?» por cada parecido, en orden. */
   | ({ type: "guess"; ranked: Ranked<VoiceHit>[]; index: number } & Ask)
   | { type: "submit" }
+  | { type: "clear" }
   | null;
 
 /** Lo último que REM agregó por voz (para «no», «esa no, la…»). */
@@ -276,7 +279,18 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           if (line) return apply({ id: line.id, name: line.name, sku: line.sku, avail: null }, cmd.value, false, pre.extra);
           return reply("¿Cuántas de qué? Di por ejemplo: tres de la zapatera.");
         }
+        case "clear": {
+          if (!a.lines.length) return reply("La lista ya está vacía. Dime el primer producto.");
+          s.pending = { type: "clear" }; s.awaiting = "confirm";
+          return reply(a.lines.length === 1 ? "¿Borro el producto de la lista? Di sí o no." : `¿Borro los ${a.lines.length} productos de la lista? Di sí o no.`);
+        }
         case "yes": {
+          if (p?.type === "clear") {
+            clear();
+            if (a.clear) a.clear(); else [...a.lines].forEach((l) => a.remove(l.id));
+            s.lastAdded = []; s.lastAdd = null;
+            return reply("Listo, borré todo. Dime el primer producto.");
+          }
           if (p?.type === "overdraw") return apply(p.hit, Math.min(cmd.qty ?? p.qty, p.qty), false, p.extra, true);
           if (p?.type === "qty" && cmd.qty) return apply(p.hit, cmd.qty, p.add, p.extra ?? pre.extra);
           // «Sí» o «sí, necesito tres»: ese, con la cantidad dicha ahora o la de antes.
@@ -296,6 +310,7 @@ export function useListVoice(adapterRef: React.RefObject<ListVoiceAdapter | null
           return reply("Dime el siguiente producto, o di listo.");
         }
         case "no": {
+          if (p?.type === "clear") { clear(); return reply("Bueno, no borro nada. ¿Siguiente?"); }
           if (p?.type === "submit") { clear(); return reply("Bueno, todavía no. Sigue o corrige lo que necesites."); }
           if (p?.type === "guess") {
             if (p.index + 1 < p.ranked.length) return askGuess({ ...p, index: p.index + 1 }, "¿Entonces ");

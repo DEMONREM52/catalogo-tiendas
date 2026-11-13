@@ -33,6 +33,8 @@ export type TransferVoiceApi = {
   /** Pone la cantidad de un producto para un destino (lo agrega a la lista si no estaba). */
   put: (hit: { id: string; name: string; sku: string | null; wh_qty: number }, dest: string, qty: number) => void;
   remove: (productId: string) => void;
+  /** Vacía la lista (se dijo «borra todo» y luego «sí»). */
+  clear: () => void;
   setCarrier: (v: string) => void;
   setCheckedBy: (v: string) => void;
   setNotes: (v: string) => void;
@@ -50,6 +52,7 @@ type Pending =
   | ({ type: "guess"; ranked: Ranked<ProductHit>[]; index: number } & Ask)
   | { type: "overdraw"; hit: ProductHit; dest: string; qty: number; add: boolean }
   | { type: "send" }
+  | { type: "clear" }
   | null;
 
 type Awaiting = Parameters<typeof parseTransferCommand>[1];
@@ -339,7 +342,19 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
           return reply("¿Cuántas de qué? Di por ejemplo: tres de la zapatera.");
         }
 
+        case "clear": {
+          if (!a.lines.length) return reply("La lista ya está vacía. Dime el primer producto.");
+          st.pending = { type: "clear" }; st.awaiting = "confirm";
+          return reply(a.lines.length === 1 ? "¿Borro el producto del traslado? Di sí o no." : `¿Borro los ${a.lines.length} productos del traslado? Di sí o no.`);
+        }
+
         case "yes": {
+          if (pending?.type === "clear") {
+            st.pending = null; st.awaiting = null; st.finishing = false;
+            a.clear();
+            st.lastAdded = []; st.lastAdd = null;
+            return reply("Listo, borré todo el traslado. Dime el primer producto, o di listo para terminar.");
+          }
           if (pending?.type === "overdraw") return apply(pending.hit, pending.dest, Math.min(cmd.qty ?? pending.qty, pending.qty), false, true);
           if (pending?.type === "qty" && cmd.qty) return apply(pending.hit, pending.dest, cmd.qty, true);
           // «Sí» o «sí, necesito tres»: ese, con la cantidad dicha ahora o la de antes.
@@ -362,6 +377,7 @@ export function useTransferVoice(apiRef: React.RefObject<TransferVoiceApi | null
         }
 
         case "no": {
+          if (pending?.type === "clear") { st.pending = null; st.awaiting = null; return reply("Bueno, no borro nada. ¿Siguiente?"); }
           if (pending?.type === "send") { st.pending = null; st.awaiting = null; st.finishing = false; return reply("Bueno, no lo envío. Sigue agregando o corrige lo que necesites."); }
           if (pending?.type === "guess") {
             if (pending.index + 1 < pending.ranked.length) return askGuess({ ...pending, index: pending.index + 1 }, "¿Entonces ");

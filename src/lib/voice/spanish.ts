@@ -179,6 +179,8 @@ export type TransferCommand =
   | { kind: "summary" }
   | { kind: "done" }
   | { kind: "undo" }
+  /** «Borra todo», «el traslado bórralo», «empieza de nuevo»: vaciar la lista (REM pregunta antes). */
+  | { kind: "clear" }
   | { kind: "remove"; query: string }
   | { kind: "set_qty"; query: string | null; qty: number }
   | { kind: "carrier"; name: string }
@@ -265,7 +267,19 @@ function stripAddVerbs(text: string): string {
  * Orden del traslado. `awaiting` dice qué preguntó REM: un número suelto es elección («la dos»),
  * cantidad o nada según lo que se esté esperando.
  */
-export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "confirm" | "from" | "to" | "carrier" | "checker" | null = null): TransferCommand {
+/**
+ * Vaciar la lista entera: «borra todo», «el traslado bórralo», «elimina el pedido», «empieza de nuevo».
+ * Va antes de «quita la zapatera» (que borra un producto). REM siempre pregunta antes de vaciar.
+ */
+const LIST_WORD = "(?:todo|toda|todos|traslado|pedido|conteo|lista|compra|venta|carrito)";
+const WIPE_VERB = "(?:borr|elimin|limpi|vaci|cancel|quit)\\w*";
+const ART = "(?:(?:oye )?rem\\s+)?(?:(?:el|la|ese|esa|este|esta|todo el|toda la)\\s+)?";
+const CLEAR = new RegExp(
+  `^${ART}${WIPE_VERB}(?:\\s+\\w+){0,2}\\s+${LIST_WORD}$|^${ART}${LIST_WORD}(?:\\s+\\w+){0,3}\\s+${WIPE_VERB}(?:\\s+todo)?$`
+  + "|^(?:borralo|borrala|borralo todo|borra todo|empieza de nuevo|empecemos de nuevo|desde cero|empezar de cero|empieza de cero)$",
+);
+
+export function parseTransferCommand(raw: string,awaiting: "choice" | "qty" | "confirm" | "from" | "to" | "carrier" | "checker" | null = null): TransferCommand {
   const t = clean(raw);
   if (!t) return { kind: "repeat" };
   if (STOP.test(t)) return { kind: "stop" };
@@ -278,6 +292,7 @@ export function parseTransferCommand(raw: string, awaiting: "choice" | "qty" | "
   if (/^(?:repite|repitelo|otra vez|que dijiste|como|perdon|no te entendi|no entendi)$/.test(t)) return { kind: "repeat" };
   if (/^(?:cuantos? llevo|cuantas? llevo|que llevo|que llevamos|resumen|lee la lista|leeme la lista|como vamos|cuanto llevo|como va)$/.test(t)) return { kind: "summary" };
   if (/^(?:quita|quitale|borra|borrale|elimina|saca|deshaz|deshacer|devuelve)(?: (?:el|la|lo))? ultim[oa](?: que agregue| producto)?$|^(?:deshacer|deshaz|me equivoque)$/.test(t)) return { kind: "undo" };
+  if (CLEAR.test(t)) return { kind: "clear" };
 
   if (awaiting === "carrier" || awaiting === "checker") {
     const name = t.replace(/^(?:lo |la )?(?:lleva|llevo|traslada|reviso|revisa)\s+/, "").replace(/^(?:es|fue|se llama)\s+/, "");
