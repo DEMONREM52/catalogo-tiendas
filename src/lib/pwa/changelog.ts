@@ -911,6 +911,16 @@ export const RELEASES: Release[] = [
       { icon: "👂", text: "En ¿Qué le puedo decir?, enciende «Oye REM»" },
     ],
   },
+  {
+    id: 87, date: "2026-11-13", title: "🎙️ REM sigue solo al abrir el pedido interno",
+    summary: "Al decirle «quiero pedir mercancía a la bodega», REM abre el nuevo pedido y sigue la conversación sin que lo vuelvas a tocar. Dentro de la ventana del pedido hay un botón 🎙️ REM para llamarlo.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🎙️", text: "«Quiero pedir mercancía a la bodega»" },
+      { icon: "📦", text: "Se abre el pedido y REM pregunta los productos" },
+      { icon: "🔘", text: "Botón 🎙️ REM junto a la ✕ de la ventana" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

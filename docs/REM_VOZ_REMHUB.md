@@ -43,6 +43,10 @@ Se toca **🎙️ REM** en el encabezado del panel, o se dice **«Oye REM»** si
 
 **Cambiar de pantalla en plena conversación:** basta con decir «quiero hacer un conteo», por ejemplo.
 
+**Si la pantalla tarda en abrir:** REM espera hasta 15 segundos. Si no alcanza (o falta tocar «Nuevo pedido» o abrir un conteo), sigue solo apenas la pantalla aparezca, durante los 2 minutos siguientes.
+
+**Ventanas que tapan el encabezado** (Nuevo pedido interno): traen su propio botón 🎙️ REM junto a la ✕ (`RemCallButton`, que llama `callRem()`).
+
 ## «Oye REM»
 
 Se enciende en el panel de REM, en «¿Qué le puedo decir?» → «Llamarlo diciendo Oye REM». Queda guardado solo en ese equipo.

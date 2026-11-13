@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ArrowRight, BellRing, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
+import { URL_CHANGE_EVENT } from "@/lib/url-intent";
 import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
@@ -59,7 +60,10 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("pedido");
     if (fromUrl) window.setTimeout(() => setOpenId(fromUrl), 0);
-    if (params.get("nuevo") === "1") {
+    // ?nuevo=1 abre el formulario; también si llega sin recargar (REM o el buscador Ctrl+K estando ya aquí).
+    const checkNew = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("nuevo") !== "1") return;
       const note = params.get("nota") ?? "";
       const product = params.get("producto");
       void (async () => {
@@ -75,7 +79,9 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         ["nuevo", "nota", "producto"].forEach((k) => u.searchParams.delete(k));
         window.history.replaceState(null, "", u.toString());
       })();
-    }
+    };
+    checkNew();
+    window.addEventListener(URL_CHANGE_EVENT, checkNew);
     const onOpen = (e: Event) => setOpenId(String((e as CustomEvent<string>).detail));
     window.addEventListener(OPEN_REQUEST_EVENT, onOpen);
     // Cambios en vivo: aviso de la conexión única del panel (StockRequestWatcher) + respaldo cada 30 s.
@@ -83,6 +89,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
     return () => {
+      window.removeEventListener(URL_CHANGE_EVENT, checkNew);
       window.removeEventListener(OPEN_REQUEST_EVENT, onOpen);
       window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
       window.clearInterval(timer);

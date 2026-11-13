@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
 import { beep, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError } from "@/lib/voice/speech";
-import { onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
+import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
 
 type Phase = "idle" | "listening" | "thinking" | "speaking";
@@ -24,8 +24,8 @@ const WAKE_KEY = "remhub:rem-wake";
 /** A dónde lleva REM según lo que se dice (si la pantalla no está abierta). */
 const INTENTS: Array<{ re: RegExp; href: string; perms: string[]; name: string; title: string; wait?: string }> = [
   { re: /traslad|distribu|(?:mandar|enviar|despachar) (?:la )?mercancia/, href: "/dashboard/inventario?tab=transfers", perms: ["transfers"], name: "Traslados", title: "Traslado" },
-  { re: /conteo|contar|inventario fisico/, href: "/dashboard/inventario?tab=conteos", perms: ["inventory_counts", "inventory_adjust"], name: "Conteos", title: "Conteo", wait: "Abre o empieza un conteo y vuelve a tocar REM." },
-  { re: /pedido interno|pedir mercancia|hacer un pedido|nuevo pedido|pedirle a|pedir a la bodega|pedido a/, href: "/dashboard/pedidos?tab=internos&nuevo=1", perms: ["stock_requests"], name: "Pedidos internos", title: "Pedido interno", wait: "Toca «Nuevo pedido» y vuelve a tocar REM." },
+  { re: /conteo|contar|inventario fisico/, href: "/dashboard/inventario?tab=conteos", perms: ["inventory_counts", "inventory_adjust"], name: "Conteos", title: "Conteo", wait: "Abre o empieza un conteo y sigo solo." },
+  { re: /pedido interno|pedir mercancia|hacer un pedido|nuevo pedido|pedirle a|pedir a la bodega|pedido a/, href: "/dashboard/pedidos?tab=internos&nuevo=1", perms: ["stock_requests"], name: "Pedidos internos", title: "Pedido interno", wait: "Toca «Nuevo pedido» y sigo solo." },
   { re: /compra|factura de(?:l)? proveedor|ingres(?:o|ar) (?:de )?mercancia|llego mercancia|registrar factura/, href: "/dashboard/inventario?tab=purchases", perms: ["purchases"], name: "Compras", title: "Compra" },
   { re: /vend|venta|\bpos\b|caja|cobrar|facturar/, href: "/dashboard/pos", perms: ["pos"], name: "POS", title: "Venta" },
 ];
@@ -49,9 +49,26 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   const session = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(initial?: RemReply, first?: string[]) => Promise<void>>(async () => {});
+  const toggleRef = useRef<() => void>(() => {});
+  const phaseRef = useRef<Phase>("idle");
+  // La pantalla pedida tardó en abrir (o falta tocar «Nuevo pedido»): cuando aparezca, REM sigue solo.
+  const pending = useRef<{ title: string; said: string[]; until: number } | null>(null);
 
   useEffect(() => { const t = window.setTimeout(() => setWakeOn(readWake()), 0); return () => window.clearTimeout(t); }, []);
-  useEffect(() => onRemHandlerChange(() => { const h = remHandler(); setTitle(h?.title ?? null); setExamples(h?.examples ?? []); }), []);
+  useEffect(() => onRemHandlerChange(() => {
+    const h = remHandler();
+    setTitle(h?.title ?? null);
+    setExamples(h?.examples ?? []);
+    const p = pending.current;
+    if (!h || !p || h.title !== p.title) return;
+    pending.current = null;
+    if (Date.now() > p.until || phaseRef.current !== "idle") return;
+    setOpen(true);
+    void runRef.current(undefined, p.said);
+  }), []);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  // Botón 🎙️ REM dentro de una ventana (RemCallButton): igual que tocar el del encabezado.
+  useEffect(() => onRemCall(() => toggleRef.current()), []);
   useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [turns, interim]);
   useEffect(() => () => { session.current++; stopListening(); stopSpeaking(); }, []);
   // Después de elegir con la foto, la pantalla pide seguir: «Zapatera negra. ¿Cuántas?».
@@ -81,6 +98,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   }
 
   function close() {
+    pending.current = null;
     stop();
     setOpen(false);
   }
@@ -134,9 +152,12 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     if (current?.title === intent.title) return { h: current };
     go(intent.href);
     setPhase("thinking");
-    const h = await waitForRemHandler(intent.wait ? 5000 : 8000);
+    const h = await waitForRemHandler(15000, intent.title);
     if (session.current !== id) return { say: "" };
-    if (!h) return { say: intent.wait ?? `No pude abrir ${intent.name}. Ábrelo y vuelve a tocar REM.` };
+    if (!h) {
+      pending.current = { title: intent.title, said: alts, until: Date.now() + 120000 };
+      return { say: intent.wait ?? `${intent.name} está tardando en abrir. Cuando aparezca, sigo solo.` };
+    }
     return { h };
   }
 
@@ -208,11 +229,12 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
       }
     }
   }
-  useEffect(() => { runRef.current = run; });
+  useEffect(() => { runRef.current = run; toggleRef.current = toggle; });
 
   if (!supported) return null;
 
   function toggle() {
+    pending.current = null;
     if (!open) { setOpen(true); void run(); return; }
     if (phase === "idle") void run();
     else stop();

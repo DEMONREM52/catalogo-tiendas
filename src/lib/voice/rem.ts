@@ -50,12 +50,16 @@ export function onRemHandlerChange(fn: () => void): () => void {
   return () => { listeners.delete(fn); };
 }
 
-/** Espera a que una pantalla se registre (tras navegar). null si no llega a tiempo. */
-export function waitForRemHandler(ms = 8000): Promise<RemHandler | null> {
-  if (handler) return Promise.resolve(handler);
+/**
+ * Espera a que una pantalla se registre (tras navegar). Con `title`, solo sirve esa pantalla
+ * (la que estaba abierta antes de navegar no cuenta). null si no llega a tiempo.
+ */
+export function waitForRemHandler(ms = 8000, title?: string): Promise<RemHandler | null> {
+  const ok = () => (handler && (!title || handler.title === title) ? handler : null);
+  if (ok()) return Promise.resolve(ok());
   return new Promise((resolve) => {
-    const t = window.setTimeout(() => { off(); resolve(handler); }, ms);
-    const off = onRemHandlerChange(() => { if (handler) { window.clearTimeout(t); off(); resolve(handler); } });
+    const t = window.setTimeout(() => { off(); resolve(ok()); }, ms);
+    const off = onRemHandlerChange(() => { const h = ok(); if (h) { window.clearTimeout(t); off(); resolve(h); } });
   });
 }
 
@@ -73,6 +77,21 @@ export function resumeRem(reply: RemReply) {
 export function onRemResume(fn: (r: RemReply) => void): () => void {
   resumeListeners.add(fn);
   return () => { resumeListeners.delete(fn); };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Llamar a REM desde un botón dentro de una ventana (que tapa el botón del encabezado)
+
+const callListeners = new Set<() => void>();
+
+/** Abre REM y empieza a escuchar, como si se tocara el botón del encabezado. */
+export function callRem() {
+  callListeners.forEach((l) => l());
+}
+
+export function onRemCall(fn: () => void): () => void {
+  callListeners.add(fn);
+  return () => { callListeners.delete(fn); };
 }
 
 /**

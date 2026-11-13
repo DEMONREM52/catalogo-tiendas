@@ -15,6 +15,7 @@ import { draftAge, readStockDraft, saveStockDraft, type StockRequestDraft } from
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
 import { productHitFromPhoto } from "../../inventario/LineEditor";
 import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
+import { RemCallButton } from "@/components/rem/RemCallButton";
 import { matchPlace } from "@/lib/voice/spanish";
 
 export type PointOption = { id: string; name: string; kind: string; is_default?: boolean };
@@ -224,7 +225,7 @@ export function NewStockRequest({
       stockWord: "allá hay",
       custom: (t) => {
         // «Pídele a la bodega», «quiero hacer un pedido interno a Zamora»; sin destino aún, también «la bodega» sola.
-        const asked = t.match(/(?:pidele|pedirle|pedir|pide|pedido(?: interno)?)\s+(?:a|para)\s+(?:la |el )?(.+)$/);
+        const asked = t.match(/(?:pidele|pedirle|pedir|pide|pedido(?: interno)?)(?: (?:mercancia|productos|cosas|surtido))?\s+(?:a|para|de)\s+(?:la |el )?(.+)$/);
         const spoken = asked?.[1] ?? (!to ? t.replace(/^(?:a |para )?(?:la |el )?/, "") : null);
         if (spoken) {
           const p = pick(spoken);
@@ -266,9 +267,13 @@ export function NewStockRequest({
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--t-accent)" }}>Nuevo pedido interno</p>
                 <h3 className="mt-0.5 text-lg font-black">Pide mercancía a otro punto o bodega</h3>
               </div>
-              <button type="button" onClick={close} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
-                <X size={16} />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* La ventana tapa el encabezado: REM se llama desde aquí. */}
+                <RemCallButton />
+                <button type="button" onClick={close} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
+                  <X size={16} />
+                </button>
+              </div>
             </header>
 
             <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4">
