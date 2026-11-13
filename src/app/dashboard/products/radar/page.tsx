@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { ClipboardList, Download, ExternalLink, Loader2, Megaphone, Radar, RefreshCw, Search, Settings, Tag, X, Zap } from "lucide-react";
+import { ClipboardList, Download, ExternalLink, Eye, EyeOff, Loader2, Megaphone, Radar, RefreshCw, Search, Settings, Tag, X, Zap } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
@@ -24,6 +24,8 @@ import { DEFAULT_SETTINGS, RadarSettings, type RadarSettingsValue } from "./Rada
 import { AssignDialog, TasksPanel, useProductTasks, type ProductTask } from "./TasksPanel";
 import { PublishCalendar } from "./PublishCalendar";
 import { QuickEdit } from "./QuickEdit";
+import { useCan } from "@/lib/permission-runtime";
+import { undoToast } from "@/lib/ui/undo";
 import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
 /**
@@ -79,6 +81,8 @@ export default function ProductRadarPage() {
   const [issue, setIssue] = useState<IssueKey | null>(null);
   const [category, setCategory] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
+  // Activar / inactivar: permiso «Editar productos» (la base lo vuelve a revisar).
+  const canEditProducts = useCan("products");
   const [sort, setSort] = useState<Sort>("health");
   const [q, setQ] = useState("");
   const search = useSearchValue(q);
@@ -313,6 +317,20 @@ export default function ProductRadarPage() {
     }
     setSelected(new Set());
     toast(on ? `⭐ ${d.count} destacados: salen primero y resaltados en tus catálogos` : `Se quitó el destacado a ${d.count}`);
+  }
+
+  /** Inactivar (o activar) un producto desde su fila: se hace de una vez y se puede deshacer unos segundos. */
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  async function setActiveOne(r: { id: string; name: string }, active: boolean, offerUndo = true) {
+    if (!storeId) return;
+    setTogglingId(r.id);
+    const { data: upd, error: e } = await supabaseBrowser().from("products").update({ active }).eq("id", r.id).eq("store_id", storeId).select("id");
+    setTogglingId(null);
+    if (e || !upd?.length) { toast(e?.message ?? "No se pudo cambiar: revisa que tengas el permiso de Productos.", "error"); return; }
+    setData((d) => d ? { ...d, products: d.products.map((p) => p.id === r.id ? { ...p, active } : p) } : d);
+    if (offerUndo) {
+      undoToast(active ? `✅ Activaste «${r.name}»` : `🙈 Inactivaste «${r.name}»: ya no se vende ni sale en los catálogos`, () => void setActiveOne(r, !active, false), 6000);
+    }
   }
 
   async function bulkActive(active: boolean) {
@@ -569,7 +587,8 @@ export default function ProductRadarPage() {
                         categoryName={r.category_id ? catName.get(r.category_id) ?? null : null}
                         selected={selected.has(r.id)} onSelect={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}
                         onOpen={(section) => openEditor(r.id, section)} onQuick={() => setQuick(r.id)} onIssue={(iss) => onIssue(r, iss)} onPub={(pub) => updatePub(r.id, pub)} onPhoto={reportPhoto}
-                        isQuiet={r.issues.some((x) => x.key === "no_sales")} />
+                        isQuiet={r.issues.some((x) => x.key === "no_sales")}
+                        canToggle={canEditProducts} toggling={togglingId === r.id} onToggleActive={() => void setActiveOne(r, !r.active)} />
                     ))}
                   </AnimatePresence>
                 </ul>
@@ -626,11 +645,13 @@ export default function ProductRadarPage() {
 
 function RadarRow({
   row: r, index, storeId, today, canCosts, point, pointName, categoryName, selected, isQuiet, onSelect, onOpen, onQuick, onIssue, onPub, onPhoto,
+  canToggle, toggling, onToggleActive,
 }: {
   row: Row; index: number; storeId: string | null; today: string; canCosts: boolean; point: string | null; pointName: Map<string, string>;
   categoryName: string | null; selected: boolean; isQuiet: boolean;
   onSelect: () => void; onOpen: (section?: string) => void; onQuick: () => void; onIssue: (i: IssueDef) => void; onPub: (p: PublishState) => void;
   onPhoto: (url: string, check: PhotoCheck | null) => void;
+  canToggle: boolean; toggling: boolean; onToggleActive: () => void;
 }) {
   const [all, setAll] = useState(false);
   const chips = all ? r.issues : r.issues.slice(0, 4);
@@ -703,6 +724,14 @@ function RadarRow({
               <PublishButton compact storeId={storeId} productId={r.id} productName={r.name} state={r.pub} onChanged={onPub} />
               <button type="button" onClick={onQuick} className="inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }} title="Editor rápido aquí mismo"><Zap size={12} /> Rápido</button>
               <button type="button" onClick={() => onOpen()} className="inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }} title="Editar completo en otra ventana"><ExternalLink size={12} /> Editar</button>
+              {canToggle ? (
+                <button type="button" onClick={onToggleActive} disabled={toggling}
+                  className="inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-60"
+                  style={r.active ? { borderColor: "color-mix(in oklab, #e5484d 45%, var(--t-card-border))", color: "#e5484d" } : { borderColor: "color-mix(in oklab, #10b981 45%, var(--t-card-border))", color: "#10b981" }}
+                  title={r.active ? "Ya no hay: deja de venderse y sale de los catálogos (se puede volver a activar)" : "Volver a vender y mostrar en los catálogos"}>
+                  {toggling ? <Loader2 size={12} className="animate-spin" /> : r.active ? <EyeOff size={12} /> : <Eye size={12} />} {r.active ? "Inactivar" : "Activar"}
+                </button>
+              ) : null}
             </span>
           </div>
         </div>

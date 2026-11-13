@@ -1043,6 +1043,16 @@ export const RELEASES: Release[] = [
       { icon: "📦", text: "«Abre productos» → Productos" },
     ],
   },
+  {
+    id: 100, date: "2026-11-13", title: "🙈 Inactiva productos desde el Radar",
+    summary: "Cada producto del Radar trae el botón «Inactivar»: si ya no hay, tócalo y deja de venderse y de salir en los catálogos. Si te equivocas, toca «Deshacer». Los inactivos se ven quitando «Solo activos» y se reactivan con «Activar».",
+    paths: ["/dashboard/products/radar"],
+    demo: [
+      { icon: "📡", text: "Revisa tus productos en el Radar" },
+      { icon: "🙈", text: "«Inactivar» el que ya no hay" },
+      { icon: "↩️", text: "«Deshacer» si te equivocas" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
