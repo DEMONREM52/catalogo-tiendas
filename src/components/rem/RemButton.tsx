@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { announceUrlChange } from "@/lib/url-intent";
-import { beep, capture, fullDuplex, listen, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
+import { beep, capture, duplexCapable, duplexPref, echoDetected, fullDuplex, isEchoOf, listen, setDuplexPref, speak, startWake, stopListening, stopSpeaking, voiceSupported, VoiceError, wakeRest } from "@/lib/voice/speech";
 import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandler, type RemHandler, type RemReply } from "@/lib/voice/rem";
 import { normalize } from "@/lib/voice/spanish";
 
@@ -50,6 +50,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   // no dejó usar el micrófono sin tocar la pantalla (se reintenta al primer toque).
   const [lastHeard, setLastHeard] = useState("");
   const [wakeBlocked, setWakeBlocked] = useState(false);
+  const [duplexOn, setDuplexOn] = useState(true);
   const session = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<(initial?: RemReply, first?: string[]) => Promise<void>>(async () => {});
@@ -58,7 +59,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   // La pantalla pedida tardó en abrir (o falta tocar «Nuevo pedido»): cuando aparezca, REM sigue solo.
   const pending = useRef<{ title: string; said: string[]; until: number } | null>(null);
 
-  useEffect(() => { const t = window.setTimeout(() => setWakeOn(readWake()), 0); return () => window.clearTimeout(t); }, []);
+  useEffect(() => { const t = window.setTimeout(() => { setWakeOn(readWake()); setDuplexOn(duplexPref()); }, 0); return () => window.clearTimeout(t); }, []);
   useEffect(() => onRemHandlerChange(() => {
     const h = remHandler();
     setTitle(h?.title ?? null);
@@ -173,11 +174,16 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
     if (!cap.started()) beep("listen");
     setPhase("listening");
     cap.listening();
+    let alts: string[];
     try {
-      return heard(id, await cap.result);
+      alts = await cap.result;
     } catch (err) {
       return failed(id, err);
     }
+    if (session.current !== id) return null;
+    // Segundo filtro: si lo que «oyó» es casi todo lo que REM acaba de decir, era su propia voz: escucha otra vez.
+    if (alts[0] && isEchoOf(alts[0], r.say)) { setInterim(""); return hearOnce(id); }
+    return heard(id, alts);
   }
 
   function go(href: string) {
@@ -307,7 +313,7 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
   }
 
   const color = phase === "listening" ? "#ef4444" : phase === "speaking" ? "#8b5cf6" : phase === "thinking" ? "#f59e0b" : "var(--t-accent, #8b5cf6)";
-  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? (fullDuplex() ? "Hablando… puedes interrumpirlo" : "Hablando… toca 🔊 para contestar ya") : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
+  const status = phase === "listening" ? "Te escucho…" : phase === "speaking" ? (fullDuplex() ? "Hablando… puedes interrumpirlo" : echoDetected() ? "Hablando… (me oigo por el parlante: toca 🔊 para interrumpir)" : "Hablando… toca 🔊 para contestar ya") : phase === "thinking" ? "Buscando…" : wakeOn ? (wakeBlocked ? "Toca la pantalla para que escuche «Oye REM»" : "Esperando «Oye REM»") : "En pausa";
 
   return (
     <>
@@ -376,6 +382,19 @@ export function RemButton({ can }: { can: (permission: string) => boolean }) {
               {" "}Si no encuentra algo exacto, te pregunta; si le corriges («no, es la VTS 30»), aprende en este equipo.
             </p>
             <p className="mt-1">«Oye REM» escucha solo con RemHub abierto y a la vista. Gasta más batería; mejor en computador o tablet fija.</p>
+            {duplexCapable() ? (
+              <label className="mt-2 flex items-start gap-2 rounded-xl border p-2" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                <input type="checkbox" className="mt-0.5" checked={duplexOn} onChange={(e) => { setDuplexPref(e.target.checked); setDuplexOn(e.target.checked); }} />
+                <span>
+                  <b>Interrumpirlo hablando</b>
+                  <span className="block" style={{ color: "var(--t-muted)" }}>
+                    {echoDetected() && duplexOn
+                      ? "Se estaba oyendo a sí mismo por el parlante, así que ahora escucha al terminar de hablar. Con audífonos funciona; vuelve a marcar para probar otra vez."
+                      : "Escucha mientras habla y se calla cuando le hablas. Si se oye a sí mismo por el parlante, se apaga solo; con audífonos funciona mejor."}
+                  </span>
+                </span>
+              </label>
+            ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => void testWake()} disabled={phase !== "idle"} className="rounded-lg border px-2 py-1 font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
                 🧪 Probar «Oye REM»

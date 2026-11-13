@@ -34,9 +34,33 @@ export function voiceSupported(): boolean {
   return Boolean(ctor()) && typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** ¿Puede escuchar mientras habla (interrumpir con la voz)? En celulares, abrir el micrófono corta la voz. */
-export function fullDuplex(): boolean {
+const DUPLEX_KEY = "remhub:rem-duplex";
+/** Se oyó a sí mismo por el parlante en esta sesión: ya no escucha mientras habla (hasta recargar o reactivarlo). */
+let echoBlocked = false;
+
+/** ¿Este equipo puede escuchar mientras habla? En celulares, abrir el micrófono corta la voz. */
+export function duplexCapable(): boolean {
   return typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/** La opción «Interrumpirlo hablando» (encendida por defecto en computador). */
+export function duplexPref(): boolean {
+  try { return localStorage.getItem(DUPLEX_KEY) !== "0"; } catch { return true; }
+}
+
+export function setDuplexPref(on: boolean) {
+  try { if (on) localStorage.removeItem(DUPLEX_KEY); else localStorage.setItem(DUPLEX_KEY, "0"); } catch { /* sin almacenamiento */ }
+  if (on) echoBlocked = false;
+}
+
+/** ¿Se apagó solo porque se oía por el parlante? */
+export function echoDetected(): boolean {
+  return echoBlocked;
+}
+
+/** ¿Escucha mientras habla (interrumpir con la voz)? */
+export function fullDuplex(): boolean {
+  return duplexCapable() && duplexPref() && !echoBlocked;
 }
 
 export class VoiceError extends Error {
@@ -81,10 +105,14 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
   const Ctor = ctor();
   stopListening();
   stopWake();
-  const echoWords = new Set(normalize(spokenText(opts.echo ?? "")).split(" ").filter((w) => w.length > 1));
-  let speaking = Boolean(opts.echo);
+  const echo = opts.echo ?? "";
+  let speaking = Boolean(echo);
+  // Lo que empezó a oírse mientras REM hablaba, o hasta 1,8 s después (el reconocedor entrega tarde), se revisa:
+  // si es REM oyéndose por el parlante, se descarta.
+  let echoUntil = speaking ? Number.POSITIVE_INFINITY : 0;
   let startedDuringSpeech = false;
   let listenCalled = false;
+  let echoCount = 0;
   let started = false;
   let finished = false;
   let kept: string[][] = []; // frases ya cerradas de sesiones anteriores (Chrome corta cada tanto)
@@ -98,20 +126,8 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
   let rejectFn: (e: VoiceError) => void = () => {};
   const result = new Promise<string[]>((res, rej) => { resolveFn = res; rejectFn = rej; });
 
-  // Lo que REM dijo y el micrófono alcanzó a oír al principio: se quita.
-  const stripEcho = (text: string) => {
-    if (!startedDuringSpeech) return text;
-    const words = text.split(" ");
-    let i = 0;
-    while (i < words.length - 1 && echoWords.has(normalize(words[i]))) i++;
-    return words.slice(i).join(" ");
-  };
   const segs = () => [...kept, ...finals];
-  const textNow = () => stripEcho([...segs().map((s) => s[0]), interim].filter(Boolean).join(" ").trim());
-  const isEcho = (text: string) => {
-    const w = normalize(text).split(" ").filter((x) => x.length > 1);
-    return !w.length || w.filter((x) => echoWords.has(x)).length / w.length >= 0.6;
-  };
+  const textNow = () => [...segs().map((s) => s[0]), interim].filter(Boolean).join(" ").trim();
   const clearTimers = () => { window.clearTimeout(silence); window.clearTimeout(noSpeech); window.clearTimeout(hardStop); };
 
   function finish() {
@@ -127,7 +143,7 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
     const last = all.at(-1);
     if (last && last.length > 1 && !interim) {
       const head = all.slice(0, -1).map((s) => s[0]).join(" ");
-      last.slice(1).forEach((a) => alts.push(stripEcho(`${head} ${a}`.trim())));
+      last.slice(1).forEach((a) => alts.push(`${head} ${a}`.trim()));
     }
     resolveFn([...new Set(alts)]);
   }
@@ -148,45 +164,58 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
     r.continuous = true;
     r.interimResults = true;
     r.maxAlternatives = 3;
-    let base = 0; // resultados de esta sesión que eran eco (se ignoran)
+    const seen: number[] = []; // cuándo empezó a oírse cada resultado de esta sesión
+    const echoed = new Set<number>(); // resultados que eran su propia voz
     finals = [];
     r.onresult = (e) => {
       if (finished) return;
+      const now = Date.now();
       const fin: string[][] = [];
       let inter = "";
-      let lastFinalIndex = base;
-      for (let i = base; i < e.results.length; i++) {
+      for (let i = 0; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) {
-          const alts: string[] = [];
-          for (let k = 0; k < res.length; k++) if (res[k]?.transcript?.trim()) alts.push(res[k].transcript.trim());
-          if (alts.length) fin.push(alts);
-          lastFinalIndex = i + 1;
-        } else inter += `${res[0]?.transcript ?? ""} `;
+        if (seen[i] === undefined) seen[i] = now;
+        const alts: string[] = [];
+        for (let k = 0; k < res.length; k++) if (res[k]?.transcript?.trim()) alts.push(res[k].transcript.trim());
+        if (!alts.length) continue;
+        // Empezó mientras REM hablaba (o justo después): si es su propia voz, fuera; si trae algo más, se le quita lo de REM.
+        const suspect = seen[i] < echoUntil;
+        let use = alts;
+        if (suspect) {
+          if (isEchoOf(alts[0], echo)) {
+            // Se está oyendo por el parlante: dos veces y deja de escuchar mientras habla (en esta sesión).
+            if (alts[0].split(" ").length >= 3 && !echoed.has(i)) { echoed.add(i); if (++echoCount >= 2) echoBlocked = true; }
+            continue;
+          }
+          use = alts.map((a) => stripEcho(a, echo)).filter(Boolean);
+          if (!use.length) continue;
+          // Mientras habla (o justo después) el parlante se mezcla y sale cualquier cosa («nos comemos»): solo vale una
+          // respuesta corta clara o una frase de 3 palabras o más que casi no tenga palabras de REM.
+          const n = use[0].split(" ").length;
+          if (!(isQuickAnswer(use[0]) || (n >= 3 && echoRatio(use[0], echo) < 0.4))) continue;
+        }
+        if (res.isFinal) fin.push(use);
+        else inter += `${use[0]} `;
       }
       inter = inter.trim();
+      const text = [...fin.map((f) => f[0]), inter].join(" ").trim();
       if (!started) {
-        const text = [...fin.map((f) => f[0]), inter].join(" ").trim();
         if (!text) return;
-        if (speaking) {
-          // REM oyéndose a sí mismo por el parlante: se ignora (y lo ya cerrado no vuelve a contar).
-          if (!isQuickAnswer(text) && isEcho(text)) { base = lastFinalIndex; return; }
-          // Una palabra suelta mientras habla puede ser ruido; un «sí» o «la dos» sí cuenta.
-          if (text.split(" ").length < 2 && !isQuickAnswer(text)) return;
-          startedDuringSpeech = true;
-        }
+        // Mientras habla: una palabra suelta puede ser ruido o su propia voz; un «sí» o «la dos» sí cuenta.
+        if (speaking && text.split(" ").length < 2 && !isQuickAnswer(text)) return;
+        if (speaking) startedDuringSpeech = true;
         started = true;
         window.clearTimeout(noSpeech);
         opts.onUserStart?.();
       }
       finals = fin;
       interim = inter;
-      const now = textNow();
-      if (now) opts.onInterim?.(now);
+      const said = textNow();
+      if (said) opts.onInterim?.(said);
       if (!speaking || startedDuringSpeech) {
         window.clearTimeout(silence);
         // Respuesta corta ya cerrada: rápido. Frase: aguanta pausas para seguir hablando.
-        const ms = !interim && isQuickAnswer(now) ? 700 : interim ? 2000 : 1300;
+        const ms = !interim && isQuickAnswer(said) ? 700 : interim ? 2000 : 1300;
         silence = window.setTimeout(finish, ms);
       }
     };
@@ -216,11 +245,59 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
       if (finished || listenCalled) return;
       listenCalled = true;
       speaking = false;
+      if (echo && !started) {
+        // Nadie lo interrumpió: escucha en limpio desde aquí, para que lo que diga la persona no quede pegado
+        // a lo que el micrófono oyó de REM (se reinicia y solo lo de los primeros 0,3 s se revisa).
+        echoUntil = Date.now() + 300;
+        try { rec?.abort(); } catch { /* ya paró: onend vuelve a empezar */ }
+      } else if (echo) echoUntil = Date.now() + 1800;
       if (!started) noSpeech = window.setTimeout(finish, opts.noSpeechMs ?? 9000);
       else if (!interim && finals.length) { window.clearTimeout(silence); silence = window.setTimeout(finish, 1300); }
       hardStop = window.setTimeout(finish, 30_000);
     },
   };
+}
+
+// Números que la voz dice en palabras y el reconocedor puede escribir en cifras (o al revés).
+const NUM_WORDS = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez"];
+
+function echoWordsOf(said: string): Set<string> {
+  const words = normalize(spokenText(said)).split(" ").filter(Boolean);
+  const out = new Set(words);
+  words.forEach((w) => { const n = Number(w); if (Number.isInteger(n) && n >= 0 && n <= 10) out.add(NUM_WORDS[n]); });
+  return out;
+}
+
+/** Qué parte de lo oído es lo que REM dijo (0 a 1). Con 0,5 o más, es REM oyéndose. */
+export function echoRatio(heard: string, said: string): number {
+  if (!said.trim()) return 0;
+  const echo = echoWordsOf(said);
+  const w = normalize(heard).split(" ").filter((x) => x.length > 1 || /\d/.test(x));
+  if (!w.length) return 1;
+  return w.filter((x) => echo.has(x)).length / w.length;
+}
+
+/**
+ * ¿Lo oído era REM oyéndose por el parlante? La mitad o más son palabras de lo que dijo y quedan menos de 3 propias.
+ * («a bodega principal» tras «Pedido a bodega principal…» sí; «hola soy andrea qué hacemos quiero pedir mercancía» no).
+ */
+export function isEchoOf(heard: string, said: string): boolean {
+  if (!said.trim()) return false;
+  const echo = echoWordsOf(said);
+  const w = normalize(heard).split(" ").filter((x) => x.length > 1 || /\d/.test(x));
+  if (!w.length) return true;
+  const own = w.filter((x) => !echo.has(x)).length;
+  return own / w.length <= 0.5 && own < 3;
+}
+
+/** Quita del principio lo que era la voz de REM («pedido a bodega principal quiero cinco…» → «quiero cinco…»). */
+export function stripEcho(heard: string, said: string): string {
+  if (!said.trim()) return heard;
+  const echo = echoWordsOf(said);
+  const words = heard.split(" ").filter(Boolean);
+  let i = 0;
+  while (i < words.length && echo.has(normalize(words[i]))) i++;
+  return words.slice(i).join(" ");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -233,7 +310,7 @@ export function capture(opts: { echo?: string; onUserStart?: () => void; onInter
 export function listen(opts: { onInterim?: (text: string) => void; timeoutMs?: number } = {}): Promise<string[]> {
   const Ctor = ctor();
   if (!Ctor) return Promise.reject(new VoiceError("other", "Este navegador no puede escuchar. Usa Chrome."));
-  if (fullDuplex()) {
+  if (duplexCapable()) {
     const c = capture({ onInterim: opts.onInterim, noSpeechMs: opts.timeoutMs ?? 10_000 });
     c.listening();
     return c.result;

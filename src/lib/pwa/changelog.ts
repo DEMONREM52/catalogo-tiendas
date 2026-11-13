@@ -963,6 +963,16 @@ export const RELEASES: Release[] = [
       { icon: "👂", text: "Interruptor «Oye REM» arriba en el panel" },
     ],
   },
+  {
+    id: 92, date: "2026-11-13", title: "🎙️ REM ya no se responde a sí mismo",
+    summary: "Si el micrófono oye a REM por el parlante, lo reconoce y no lo toma como si fueras tú. Si pasa seguido, deja de escuchar mientras habla y te escucha al terminar (con audífonos puedes seguir interrumpiéndolo). Se puede apagar en ¿Qué le puedo decir? → «Interrumpirlo hablando».",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🔊", text: "REM ya no se oye a sí mismo por el parlante" },
+      { icon: "🎧", text: "Con audífonos puedes hablarle encima" },
+      { icon: "⚙️", text: "¿Qué le puedo decir? → «Interrumpirlo hablando»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
