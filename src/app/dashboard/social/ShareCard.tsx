@@ -283,7 +283,13 @@ export function ShareCard() {
   const [copied, setCopied] = useState("");
   const [q, setQ] = useState("");
   const [shuffleSeed, setShuffleSeed] = useState(0);
+  // «Elegir yo»: lo que se encontró buscando en todo el catálogo (no solo los 120 más nuevos) y los ya elegidos.
+  const [found, setFound] = useState<Prod[] | null>(null);
+  const [searchingPick, setSearchingPick] = useState(false);
+  const [known, setKnown] = useState<Record<string, Prod>>({});
   const run = useRef(0);
+  const pickReq = useRef(0);
+  const tried = useRef(new Set<string>());
 
   useEffect(() => {
     void (async () => {
@@ -298,18 +304,72 @@ export function ShareCard() {
     })();
   }, []);
 
+  const remember = (rows: Prod[]) => rows.length && setKnown((cur) => {
+    const next = { ...cur };
+    rows.forEach((p) => { next[p.id] = p; });
+    return next;
+  });
+
+  /** Trae esos productos (con foto y activos) por id, en el orden pedido. */
+  async function productsByIds(storeId: string, ids: string[]): Promise<Prod[]> {
+    if (!ids.length) return [];
+    const { data } = await supabaseBrowser().from("products").select("id,name,image_url,price_3").eq("store_id", storeId).eq("active", true).in("id", ids.slice(0, 100));
+    const byId = new Map(((data ?? []) as Prod[]).filter((p) => p.image_url).map((p) => [p.id, p]));
+    return ids.map((id) => byId.get(id)).filter(Boolean) as Prod[];
+  }
+
+  // Los elegidos guardados de otra vez que ya no están entre los más nuevos: se traen para que sigan saliendo.
+  useEffect(() => {
+    if (!store || s.pick !== "manual") return;
+    const have = new Set(products.map((p) => p.id));
+    const missing = s.picked.filter((id) => !have.has(id) && !known[id] && !tried.current.has(id));
+    if (!missing.length) return;
+    missing.forEach((id) => tried.current.add(id));
+    let gone = false;
+    void productsByIds(store.id, missing).then((rows) => { if (!gone) remember(rows); });
+    return () => { gone = true; };
+  }, [store, s.pick, s.picked, products, known]);
+
+  // Buscar en todo el catálogo: el mismo buscador de Productos (sin tildes, tolera errores); si no está, por nombre y código.
+  useEffect(() => {
+    const text = q.trim();
+    const id = ++pickReq.current;
+    if (!store || text.length < 2) { const t = window.setTimeout(() => { if (id === pickReq.current) { setFound(null); setSearchingPick(false); } }, 0); return () => window.clearTimeout(t); }
+    const t = window.setTimeout(async () => {
+      setSearchingPick(true);
+      const sb = supabaseBrowser();
+      let ids: string[] = [];
+      const { data, error } = await sb.rpc("search_products_safe", { p_store_id: store.id, p_query: text, p_limit: 60, p_offset: 0, p_status: "active", p_category_id: null });
+      if (!error) ids = ((data ?? []) as Array<{ id: string }>).map((r) => String(r.id));
+      else {
+        const words = text.replace(/[%,()*]/g, " ").split(/\s+/).filter(Boolean).slice(0, 5);
+        let query = sb.from("products").select("id").eq("store_id", store.id).eq("active", true);
+        if (words.length === 1) query = query.or(`name.ilike.%${words[0]}%,sku.ilike.%${words[0]}%`);
+        else words.forEach((w) => { query = query.ilike("name", `%${w}%`); });
+        const r = await query.order("created_at", { ascending: false }).limit(60);
+        ids = ((r.data ?? []) as Array<{ id: string }>).map((x) => String(x.id));
+      }
+      const rows = await productsByIds(store.id, ids);
+      if (id !== pickReq.current) return;
+      remember(rows);
+      setFound(rows);
+      setSearchingPick(false);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [q, store]);
+
   const url = store ? `${storeSpaceOrigin(store.slug) ?? `${PRODUCTION_ORIGIN}/${store.slug}`}/` : "";
 
   // Productos que van en la tarjeta.
   const chosen = useMemo(() => {
     if (s.pick === "manual") {
-      const byId = new Map(products.map((p) => [p.id, p]));
+      const byId = new Map([...Object.values(known), ...products].map((p) => [p.id, p]));
       return s.picked.map((id) => byId.get(id)).filter(Boolean) as Prod[];
     }
     if (!shuffleSeed) return products;
     // «Al azar»: mezcla estable para cada toque del botón.
     return [...products].map((p, i) => ({ p, k: Math.sin(i * 9301 + shuffleSeed * 49297) })).sort((a, b) => a.k - b.k).map((x) => x.p);
-  }, [products, s.pick, s.picked, shuffleSeed]);
+  }, [products, known, s.pick, s.picked, shuffleSeed]);
 
   function update(change: Partial<Settings>) {
     setS((cur) => {
@@ -365,7 +425,10 @@ export function ShareCard() {
 
   if (!store) return null;
   const fmt = FORMATS.find((f) => f.id === s.format) ?? FORMATS[0];
-  const filtered = q.trim() ? products.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) : products;
+  // Con texto: lo encontrado en todo el catálogo (mientras llega, lo que ya está a la mano). Los elegidos siempre a la vista primero.
+  const localHits = q.trim() ? products.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) : products;
+  const pickedRows = s.picked.map((id) => known[id] ?? products.find((p) => p.id === id)).filter(Boolean) as Prod[];
+  const filtered = [...pickedRows, ...((q.trim() && found) ? found : localHits).filter((p) => !s.picked.includes(p.id))];
   const label = "mb-1.5 block text-[11px] font-bold uppercase tracking-wide";
 
   return (
@@ -480,9 +543,16 @@ export function ShareCard() {
                 <div className="relative mb-2">
                   <Search size={14} className="absolute left-2.5 top-2.5 opacity-50" />
                   <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="w-full rounded-lg border py-1.5 pl-8 pr-10 text-xs" style={{ borderColor: "var(--t-card-border)", background: "var(--t-input-bg, var(--t-card-bg))", color: "var(--t-text)" }} />
-                  <span className="absolute right-0.5 top-0.5"><ProductPhotoButton storeId={store?.id} compact className="h-7 border-0 px-2" pickLabel="Buscar" onPick={(h) => setQ(h.name)} /></span>
+                  <span className="absolute right-0.5 top-0.5"><ProductPhotoButton storeId={store?.id} compact className="h-7 border-0 px-2" pickLabel="Buscar" onPick={(h) => {
+                    // Con la foto: lo busca y, si tiene foto, queda elegido de una vez.
+                    setQ(h.name);
+                    if (!s.picked.includes(h.id) && s.picked.length < 6) void productsByIds(store.id, [h.id]).then((rows) => { if (rows[0]) { remember(rows); togglePick(rows[0].id); } });
+                  }} /></span>
                 </div>
-                <p className="mb-2 text-[11px]" style={{ color: "var(--t-muted)" }}>Toca hasta 6. Salen en el orden en que los tocas.</p>
+                <p className="mb-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+                  Toca hasta 6. Salen en el orden en que los tocas. Busca entre todos tus productos con foto.
+                  {searchingPick ? " Buscando…" : q.trim().length >= 2 && found && !found.length ? " No hay productos con foto que coincidan." : ""}
+                </p>
                 <div className="grid max-h-56 grid-cols-4 gap-2 overflow-auto sm:grid-cols-6">
                   {filtered.map((p) => {
                     const at = s.picked.indexOf(p.id);

@@ -1003,6 +1003,16 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "Tócala: ves la conversación o la apagas" },
     ],
   },
+  {
+    id: 96, date: "2026-11-13", title: "📦 Productos recuerda cómo lo dejaste",
+    summary: "La lista de productos recuerda la búsqueda, los filtros, la categoría, el orden y hasta dónde bajaste: al volver de editar un producto sigues donde ibas. Y en la tarjeta para compartir, «Elegir yo» busca entre todos tus productos con foto, no solo los más nuevos.",
+    paths: ["/dashboard/products", "/dashboard/social"],
+    demo: [
+      { icon: "🔎", text: "Tu búsqueda y filtros siguen ahí" },
+      { icon: "↩️", text: "Vuelves al mismo punto de la lista" },
+      { icon: "🖼️", text: "«Elegir yo» con cualquier producto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

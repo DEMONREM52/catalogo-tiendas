@@ -55,6 +55,49 @@ type SortBy = "newest" | "oldest" | "name" | "price" | "price-desc" | "stock";
 type LandingFilter = "all" | "landing" | "no-landing";
 type ImageFilter = "all" | "with-image" | "without-image";
 
+/**
+ * Cómo estaba la lista la última vez (en este equipo): búsqueda, filtros, categoría, orden y filtros abiertos.
+ * Y hasta dónde se había bajado (en esta pestaña), para volver ahí después de editar un producto.
+ */
+const VIEW_KEY = "remhub:products-view";
+const SCROLL_KEY = "remhub:products-scroll";
+type ProductsView = {
+  q: string; statusFilter: StatusFilter; stockFilter: StockFilter; categoryFilter: string; sortBy: SortBy;
+  minPrice: string; maxPrice: string; landingFilter: LandingFilter; imageFilter: ImageFilter;
+  createdFrom: string; createdTo: string; socialFilter: SocialFilter; showFilters: boolean;
+};
+type ProductsScroll = { y: number; count: number; mode: "list" | "search" };
+
+const oneOf = <T extends string>(v: unknown, list: readonly T[], fallback: T): T => (list.includes(v as T) ? (v as T) : fallback);
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+function readProductsView(): ProductsView | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null") as Record<string, unknown> | null;
+    if (!v || typeof v !== "object") return null;
+    return {
+      q: str(v.q),
+      statusFilter: oneOf(v.statusFilter, ["all", "active", "inactive"] as const, "all"),
+      stockFilter: oneOf(v.stockFilter, ["all", "in", "out", "unlimited"] as const, "all"),
+      categoryFilter: str(v.categoryFilter) || "all",
+      sortBy: oneOf(v.sortBy, ["newest", "oldest", "name", "price", "price-desc", "stock"] as const, "newest"),
+      minPrice: str(v.minPrice), maxPrice: str(v.maxPrice),
+      landingFilter: oneOf(v.landingFilter, ["all", "landing", "no-landing"] as const, "all"),
+      imageFilter: oneOf(v.imageFilter, ["all", "with-image", "without-image"] as const, "all"),
+      createdFrom: str(v.createdFrom), createdTo: str(v.createdTo),
+      socialFilter: oneOf(v.socialFilter, ["all", "pending", "prepared", "none"] as const, "all"),
+      showFilters: v.showFilters === true,
+    };
+  } catch { return null; }
+}
+
+function readProductsScroll(): ProductsScroll | null {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(SCROLL_KEY) ?? "null") as ProductsScroll | null;
+    return v && Number.isFinite(v.y) && Number.isFinite(v.count) ? v : null;
+  } catch { return null; }
+}
+
 /* ========= UI ========= */
 // Todo con los tokens del tema (Pearl, Obsidian o el personal): sin colores fijos.
 function clsWrap() {
@@ -203,6 +246,13 @@ export default function ProductsListPage() {
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
 
+  // Recordar la lista: primero se recupera cómo estaba y luego se carga con eso.
+  const [restored, setRestored] = useState(false);
+  const firstLimit = useRef(PAGE_SIZE);
+  const pendingScroll = useRef<(ProductsScroll & { until: number }) | null>(null);
+  const skipFirstReload = useRef(true);
+  const listNow = useRef<{ count: number; mode: "list" | "search" }>({ count: 0, mode: "list" });
+
   // cancelar requests viejos cuando el usuario sigue escribiendo
   const reqIdRef = useRef(0);
 
@@ -300,7 +350,7 @@ export default function ProductsListPage() {
       const { data, error } = await query
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
-        .limit(PAGE_SIZE);
+        .limit(firstLimit.current);
 
       if (error) throw error;
 
@@ -308,7 +358,7 @@ export default function ProductsListPage() {
       const normalized = rows;
       setProducts(normalized);
 
-      setHasMore(rows.length === PAGE_SIZE);
+      setHasMore(rows.length === firstLimit.current);
       setCursor(computeNextCursor(rows));
     } catch (e: any) {
       await Swal.fire({
@@ -553,11 +603,68 @@ export default function ProductsListPage() {
     else if (result === "inactivate") await toggleProductStatus(product);
   }
 
-  // init
+  // init: recupera cómo estaba la lista (filtros, búsqueda, hasta dónde se bajó) y luego carga.
   useEffect(() => {
+    const t = window.setTimeout(() => {
+      const v = readProductsView();
+      if (v) {
+        setQ(v.q); setStatusFilter(v.statusFilter); setStockFilter(v.stockFilter); setCategoryFilter(v.categoryFilter);
+        setSortBy(v.sortBy); setMinPrice(v.minPrice); setMaxPrice(v.maxPrice); setLandingFilter(v.landingFilter);
+        setImageFilter(v.imageFilter); setCreatedFrom(v.createdFrom); setCreatedTo(v.createdTo); setSocialFilter(v.socialFilter);
+        setShowFilters(v.showFilters);
+      }
+      const sc = readProductsScroll();
+      if (sc && sc.y > 150) {
+        const count = sc.mode === "search" ? Math.min(sc.count, SEARCH_PAGE) : Math.min(Math.max(sc.count, PAGE_SIZE), 200);
+        if (sc.mode === "list") firstLimit.current = count;
+        pendingScroll.current = { ...sc, count, until: Date.now() + 12000 };
+      }
+      setRestored(true);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
     loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [restored]);
+
+  // Se guarda cada cambio de búsqueda o filtros.
+  useEffect(() => {
+    if (!restored) return;
+    const view: ProductsView = { q, statusFilter, stockFilter, categoryFilter, sortBy, minPrice, maxPrice, landingFilter, imageFilter, createdFrom, createdTo, socialFilter, showFilters };
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch { /* sin almacenamiento */ }
+  }, [restored, q, statusFilter, stockFilter, categoryFilter, sortBy, minPrice, maxPrice, landingFilter, imageFilter, createdFrom, createdTo, socialFilter, showFilters]);
+
+  // Hasta dónde se bajó (para volver ahí al regresar de un producto).
+  useEffect(() => { listNow.current = { count: products.length, mode: isSearchMode ? "search" : "list" }; });
+  useEffect(() => {
+    if (!restored) return;
+    let t = 0;
+    const save = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        if (window.location.pathname !== "/dashboard/products" || pendingScroll.current) return;
+        try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ y: Math.round(window.scrollY), ...listNow.current })); } catch { /* sin almacenamiento */ }
+      }, 150);
+    };
+    window.addEventListener("scroll", save, { passive: true });
+    return () => { window.clearTimeout(t); window.removeEventListener("scroll", save); };
+  }, [restored]);
+
+  // Al volver: cuando la lista ya tiene lo que se había cargado, baja a donde se estaba.
+  useEffect(() => {
+    const p = pendingScroll.current;
+    if (!p || loading) return;
+    if (Date.now() > p.until) { pendingScroll.current = null; firstLimit.current = PAGE_SIZE; return; }
+    if (searching || p.mode !== (isSearchMode ? "search" : "list") || !products.length) return;
+    const enough = products.length >= p.count || (isSearchMode ? !hasMoreSearch : !hasMore);
+    if (!enough) return;
+    pendingScroll.current = null;
+    firstLimit.current = PAGE_SIZE;
+    requestAnimationFrame(() => window.scrollTo({ top: p.y }));
+  }, [products, loading, searching, isSearchMode, hasMore, hasMoreSearch]);
 
   useEffect(() => {
     if (!storeId || !products.length) {
@@ -594,6 +701,11 @@ export default function ProductsListPage() {
   // búsqueda dinámica PRO: cuando cambia texto o filtros
   useEffect(() => {
     if (!storeId) return;
+    // La primera vez la lista ya la trajo loadFirstPage con estos mismos filtros: no se carga dos veces.
+    if (skipFirstReload.current) {
+      skipFirstReload.current = false;
+      if (!dq.trim()) return;
+    }
 
     (async () => {
       const s = dq.trim();
