@@ -18,7 +18,7 @@ import { useErpFinderSource } from "../useErpFinder";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
 import { matchesSearch, smartFilter } from "@/lib/search";
 import { CreditMeter } from "../clientes/CreditMeter";
-import type { CreditState } from "../clientes/terceros";
+import { FULL_COLUMNS, normalizeThird, type CreditState, type ThirdParty } from "../clientes/terceros";
 import { OfflineDrafts } from "./OfflineDrafts";
 import { OfflineReadiness } from "./OfflineReadiness";
 import { PRACTICE_PRINT_EVENT } from "@/lib/pos/drill";
@@ -197,6 +197,10 @@ export default function PosPage() {
   // Ventana completa para crear un tercero desde el POS.
   const [newClient, setNewClient] = useState<{ key: number; prefill: { name?: string; document_number?: string } } | null>(null);
   const [canCredit, setCanCredit] = useState(false);
+  // Editar todos los datos del cliente elegido (el mismo formulario de Clientes; mismos permisos que allá).
+  const [canEditThird, setCanEditThird] = useState(false);
+  const [editThird, setEditThird] = useState<ThirdParty | null>(null);
+  const [loadingThird, setLoadingThird] = useState(false);
   // POS fino (20261319): vender a crédito, apartar y cotizar se pueden quitar uno por uno.
   const [posPerms, setPosPerms] = useState({ credit: true, layaway: true, quote: true });
   const [listOverride, setListOverride] = useState<number | null>(null);
@@ -643,6 +647,7 @@ export default function PosPage() {
       }
       setStore(access.store);
       setCanCredit(hasStorePermission(access, "credit"));
+      setCanEditThird(hasStorePermission(access, "clients") || hasStorePermission(access, "credit"));
       setPosPerms({
         credit: hasStorePermission(access, "pos_credit") || hasStorePermission(access, "credit"),
         layaway: hasStorePermission(access, "pos_layaways"),
@@ -762,6 +767,19 @@ export default function PosPage() {
     } finally {
       setSavingClient(false);
     }
+  }
+
+  /** Abre la ficha completa del cliente elegido (dirección, ciudad, régimen, lista, crédito…). */
+  async function openFullClient() {
+    if (!selectedClient) return;
+    setLoadingThird(true);
+    const { data, error } = await supabaseBrowser().from("billing_customers").select(FULL_COLUMNS).eq("id", selectedClient.id).single();
+    setLoadingThird(false);
+    if (error || !data) {
+      await Swal.fire({ icon: "error", title: "No se pudo abrir el cliente", text: error ? getStoreDataSchemaErrorMessage(error) : "No se encontró.", background: "var(--t-bg-base)", color: "var(--t-text)" });
+      return;
+    }
+    setEditThird(normalizeThird(data as unknown as Record<string, unknown>));
   }
 
   async function updateClient() {
@@ -2370,6 +2388,18 @@ export default function PosPage() {
               {savingClient ? "Guardando…" : "✏️ Modificar tercero (guardar cambios)"}
             </button>
           ) : null}
+          {selectedClient && canEditThird ? (
+            <button
+              type="button"
+              onClick={() => void openFullClient()}
+              disabled={loadingThird}
+              className="w-full rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+              style={{ background: "linear-gradient(135deg, var(--t-accent, #8b5cf6), #ec4899)" }}
+              title="Abre la ficha completa: documento, dirección, ciudad, régimen, lista de precios, vendedor, crédito y más"
+            >
+              {loadingThird ? "Abriendo…" : "🗂️ Editar todos los datos del cliente"}
+            </button>
+          ) : null}
 
  
           <div>
@@ -2768,6 +2798,25 @@ export default function PosPage() {
         onClose={() => setPicking(null)}
         onAdd={(qty) => { const p = picking; setPicking(null); if (p) { addProduct(p, false, qty, true); setSearch(""); } }}
       />
+      {editThird && store ? (
+        <ThirdPartyForm
+          key={editThird.id}
+          open
+          onClose={() => setEditThird(null)}
+          storeId={store.id}
+          initial={editThird}
+          canCredit={canCredit}
+          existing={[]}
+          onSaved={(row) => {
+            // Se actualiza el cliente de la venta con lo guardado (nombre, documento, lista, crédito…).
+            setClients((prev) => prev.map((c) => (c.id === row.id ? {
+              ...c, name: row.name, email: row.email, mobile: row.mobile, document_number: row.document_number, price_list: row.price_list,
+              kinds: row.kinds, active: row.active, credit_enabled: row.credit_enabled, credit_limit: row.credit_limit, credit_days: row.credit_days, credit_blocked: row.credit_blocked,
+            } : c)));
+            setEditThird(null);
+          }}
+        />
+      ) : null}
       {newClient && store ? (
         <ThirdPartyForm
           key={newClient.key}

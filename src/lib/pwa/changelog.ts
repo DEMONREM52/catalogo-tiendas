@@ -973,6 +973,16 @@ export const RELEASES: Release[] = [
       { icon: "⚙️", text: "¿Qué le puedo decir? → «Interrumpirlo hablando»" },
     ],
   },
+  {
+    id: 93, date: "2026-11-13", title: "POS: editar todos los datos del cliente",
+    summary: "Con un cliente elegido en el POS, «Editar todos los datos del cliente» abre su ficha completa (la misma de Clientes): documento, dirección, ciudad, régimen, lista de precios, vendedor, crédito y más. Al guardar, la venta toma los datos nuevos.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "👤", text: "Elige el cliente de la venta" },
+      { icon: "🗂️", text: "Toca «Editar todos los datos del cliente»" },
+      { icon: "💾", text: "Guarda: la venta se actualiza sola" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
