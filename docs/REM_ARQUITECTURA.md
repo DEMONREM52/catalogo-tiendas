@@ -91,6 +91,7 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 | `src/lib/rem/period.ts` | Fechas dichas: hoy, ayer, antier, el lunes, hace 3 días, 5 de noviembre, 5/11. Rangos: este mes, el mes pasado, esta semana, la semana pasada, en octubre, este año. Siempre con la fecha de Colombia. |
 | `src/lib/rem/money.ts` | Valores dentro de una frase: «50 mil», «cincuenta mil», «$20.000», «1 millón 200 mil». |
 | `src/lib/rem/actions.ts` | Registro cerrado de acciones con riesgo, confirmación y permisos: `sales.summary`, `profit.summary`, `stock.product`, `expenses.summary`, `debts.summary`, `payables.summary`, `cash.status`, `goals.progress`, `tasks.mine`. |
+| `src/lib/rem/suggest.ts` | «¿Quisiste decir…?»: corrige palabras mal oídas por cómo suenan, sugiere páginas, consultas y formularios parecidos (solo los que la persona puede usar) y guarda la frase elegida como atajo de esa persona. |
 | `src/lib/rem/team.ts` | Lo que REM no entendió en la tienda (sin nombres) y las frases que el dueño o el administrador enseñan para todos (migración 20261322). |
 | `src/lib/rem/respond.ts` | Respuestas: explicar, cómo se hace, crear aquí, qué sé hacer, «¿te refieres a…?». |
 | `src/lib/rem/brain.ts` | Une todo y guarda el estado corto de la conversación: el tema, lo que ofreció y las opciones que dio. |
@@ -113,7 +114,24 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 5. La pantalla abierta reclama la frase (`claims`). Por ejemplo, «solo los agotados» en Productos.
 6. Pantalla con voz por nombre: «quiero hacer un traslado».
 7. Abrir una página: «abre los gastos».
-8. No entendió: guarda la frase en «Lo que no te entendí».
+8. No entendió: guarda la frase en «Lo que no te entendí» y pregunta **«¿Quisiste decir…?»** con hasta 3 opciones (ver abajo).
+
+Antes del paso 1, si la persona tiene un **atajo** («la plata que entró hoy» = «¿cuánto vendimos hoy?»), REM lo usa.
+
+### «¿Quisiste decir…?» (`suggest.ts`)
+
+1. **Corrige palabras** que no son de RemHub por la más parecida que sí es, comparando cómo suenan en español (b=v, s=z=c, k=c=qu, ll=y, sin h):
+   - «bendimos» pasa a «vendimos», «rentavilidad» a «rentabilidad», «kiero ber» a «quiero ver» y «sinkuenta» a «cincuenta»;
+   - «oy», «ai» y «ago» pasan a «hoy», «hay» y «hago».
+   - No cambia palabras de relleno ni plurales, ni cambia el sonido del comienzo: «entró» no se vuelve «centro».
+2. **Vuelve a entender** lo corregido. Si ahora sí, lo ofrece con tildes y signos: «¿Cuánto vendimos hoy?».
+3. **Páginas y consultas parecidas,** solo entre lo que la persona puede usar:
+   - las páginas salen de su lista, ya filtrada por permisos y plan;
+   - las consultas y los formularios salen del catálogo, con sus permisos (`INTENT_CAP`).
+4. **Pregunta y espera.** Con «sí» (si hay una sola), «la dos», el nombre de la opción o «no». Si dice otra cosa, la procesa normal.
+5. **Aprende:** la frase original queda como atajo de esa persona (`aliases` en la memoria, máximo 200). Se ve y se borra en «Lo que REM sabe de ti», en «Cómo le dices tú».
+
+**Errores en los datos:** si un producto, un cliente, un proveedor o un punto no aparece tal como se dijo, REM busca los parecidos (por palabras y por sonido) y pregunta: «No encontré «juan peres». ¿Quisiste decir: uno, Juan Pérez?». Con «la uno» hace la consulta con ese.
 
 **En medio de un trabajo** (un traslado, una venta), REM responde preguntas como «¿cuánto vendimos hoy?» y sigue en esa pantalla. En ese modo:
 
@@ -223,7 +241,7 @@ Lo que alguien le enseña a REM no cambia lo que REM hace con los demás. Así n
 
 ## 6. Pruebas
 
-Se corren con `npm test` (299 en verde, 64 de REM) y `npm run test:sql`.
+Se corren con `npm test` (308 en verde, 73 de REM) y `npm run test:sql`.
 
 | Archivo | Qué prueba |
 |---|---|
@@ -233,7 +251,8 @@ Se corren con `npm test` (299 en verde, 64 de REM) y `npm run test:sql`.
 | `tests/rem/brain.test.ts` | Ofrecer → «sí» abre y «no» no abre, sin acceso no ofrece, permisos quitados en plena conversación, ambigüedad → «la segunda», pantalla con voz y «¿qué sabes hacer?» según permisos. |
 | `tests/rem/memory.test.ts` | Separación por usuario y por tienda, lo viejo por equipo (frases pasan, conversación se borra), frases no entendidas y borrar todo. |
 | `tests/rem/queries.test.ts` | Existencias (exacto, varios parecidos → «la dos», inactivo, agotado, sin conexión), gastos por rango y estado, cartera total y por cliente, valores y rangos dichos, gasto llenado por voz, ofrecer solo lo que se puede abrir, ventas por rango sin inventar, plan contra permiso, cantidades sueltas en medio de un traslado y frases de la tienda. |
-| `tests/rem/catalog-sync.test.ts` | La sincronización de la sección 5. |
+| `tests/rem/suggest.test.ts` | Corrección por sonido, «¿Quisiste decir…?» con tildes y sin repetidos, que nunca sugiera algo sin permiso, contestar con «sí», «la dos», el nombre o «no», atajos por persona, y nombres parecidos de productos, clientes, proveedores y puntos. |
+| `tests/rem/catalog-sync.test.ts` | La sincronización de la sección 5, más: cada consulta tiene su acción y cada intención sugerible tiene su capacidad con permisos. |
 | `tests/sql/rem_aprende_tienda.test.mjs` | Migración 20261322 (31 pruebas): quién anota, quién ve y quién enseña, sin nombres, aislamiento entre tiendas, enlaces peligrosos, limpieza a los 90 días, sin acceso directo a las tablas y que se pueda correr dos veces. |
 | `tests/voice/*.test.ts` | Lo que ya existía: voz, navegación, pronunciación y Productos por voz. Sigue pasando. |
 
@@ -254,6 +273,7 @@ Se corren con `npm test` (299 en verde, 64 de REM) y `npm run test:sql`.
 | Consultas: ventas y lo más vendido de un rango, ganancia y margen, pendientes, cuentas por pagar (total y por proveedor), caja, metas y comisión | ✅ (ventas por rango y ganancia: con permiso de rentabilidad) |
 | Llenar formularios por voz | ✅ gasto, cliente o proveedor (nombre, cédula o NIT, celular) y producto (nombre) · ⏳ otros formularios |
 | Conversación con contexto, ambigüedad y confianza | ✅ |
+| «¿Quisiste decir…?» con corrección por sonido, atajos por persona y nombres parecidos en los datos | ✅ |
 | Contexto de la página («crea uno nuevo», «¿para qué sirve esto?») | ✅ |
 | Registro de acciones con riesgo y confirmación | ✅ (las de riesgo alto siguen en sus pantallas, que ya confirman) |
 | Memoria por persona y tienda: ver, enseñar y borrar | ✅ |
@@ -269,7 +289,7 @@ Se corren con `npm test` (299 en verde, 64 de REM) y `npm run test:sql`.
 
 - **Una página nueva:** se agrega al buscador (`src/lib/search-index.ts`) con sus permisos y sinónimos. Si es un módulo nuevo, también va en `src/lib/rem/modules.ts`, con un «para qué sirve» que diga lo que la pantalla hace de verdad. Luego se corre `npm run rem:catalog`.
 - **Un «cómo se hace»:** se leen los campos y botones de la pantalla en el código, y se escriben los pasos con `verified: true`.
-- **Una consulta nueva:**
+- **Una consulta nueva** (además de lo de abajo, agrégala a `INTENT_CAP` en `suggest.ts` para que «¿Quisiste decir…?» revise sus permisos; la prueba de sincronización lo exige):
   1. Buscar una función `security definer` que ya revise tienda, permiso y puntos. Si no existe, se crea en una migración nueva, con su copia en `tests/sql/migraciones` y su prueba.
   2. Registrar la acción en `actions.ts` con su riesgo, sus permisos y su validación. Si falla, dice qué pasó y no inventa datos.
   3. Agregar la intención en `understand.ts` y su prueba en `tests/rem`.

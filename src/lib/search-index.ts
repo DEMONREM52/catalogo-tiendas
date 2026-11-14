@@ -98,7 +98,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/clientes?tab=puntos", emoji: "🎟️", label: "Puntos de fidelidad", hint: "Clientes", keywords: "fidelizacion premios", perms: ["clients"] },
   { href: "/dashboard/apartados", emoji: "📌", label: "Apartados", keywords: "separados abonos", perms: ["pos_layaways", "pos_quotes", "orders"] },
   { href: "/dashboard/apartados?tab=cotizaciones", emoji: "📝", label: "Cotizaciones", keywords: "presupuestos clientes", perms: ["pos", "orders"] },
-  { href: "/dashboard/caja", emoji: "💵", label: "Caja", keywords: "arqueo cierre efectivo", perms: ["cash", "cash_manage"] },
+  { href: "/dashboard/caja", emoji: "💵", label: "Caja", keywords: "arqueo cierre efectivo cuadre cuadrar", perms: ["cash", "cash_manage"] },
   { href: "/dashboard/garantias", emoji: "🛠️", label: "Garantías y devoluciones", keywords: "cambios devoluciones", perms: ["pos", "inventory", "sales_return"] },
   { href: "/dashboard/vender-mas", emoji: "🧩", label: "Funciones opcionales", keywords: "encender apagar carritos abandonados avisame cupones envio gratis recompra conteo", perms: ["store", "orders", "products_prices", "catalogs", "products"] },
   { href: "/dashboard/vender-mas?ver=carritos", emoji: "🛒", label: "Carritos abandonados", keywords: "clientes que no compraron whatsapp recuperar", perms: ["orders"] },

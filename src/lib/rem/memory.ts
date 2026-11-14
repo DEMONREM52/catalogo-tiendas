@@ -10,7 +10,7 @@
  *   · Se puede ver, corregir y borrar desde la conversación de REM («Lo que REM sabe de ti»).
  */
 
-export type MemoryName = "phrases" | "learned" | "log" | "misses";
+export type MemoryName = "phrases" | "learned" | "log" | "misses" | "aliases";
 
 let scope = "";
 const listeners = new Set<() => void>();
@@ -113,7 +113,7 @@ export function resolveMiss(text: string) {
 
 /** Borra todo lo que REM guardó de esta persona en esta tienda (en este equipo). */
 export function forgetEverything() {
-  for (const n of ["phrases", "learned", "log", "misses"] as const) removeMemory(n);
+  for (const n of ["phrases", "learned", "log", "misses", "aliases"] as const) removeMemory(n);
 }
 
 // ---------------------------------------------------------------------------------------------

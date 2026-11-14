@@ -25,6 +25,7 @@ import { onRemCall, onRemHandlerChange, onRemResume, remHandler, waitForRemHandl
 import { normalize } from "@/lib/voice/spanish";
 import { forgetLearnedProducts, forgetPhraseKey, phraseKey, learnedCount, learnedPhrase, learnedProductsCount, learnPhrase, listPhrases, navRequest, navTarget, readLog, smallTalk, writeLog, type LogTurn, type NavLink } from "@/lib/voice/navigate";
 import { modulePerms, VOICE_SCREENS, type VoiceScreen } from "@/lib/rem/catalog";
+import { aliasFor, forgetAlias, learnAlias, listAliases, pickSuggestion, suggestFor, suggestionReply, type Suggestion } from "@/lib/rem/suggest";
 import { dismissTeamMiss, forgetStore, loadStorePhrases, reportMiss, reviewMisses, teachStore, type TeamMiss } from "@/lib/rem/team";
 import { emptyBrain, think, type BrainState, type Thought } from "@/lib/rem/brain";
 import { capabilitiesAnswer } from "@/lib/rem/respond";
@@ -375,13 +376,31 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
       // Lo que no entendió en esta conversación: si enseguida, dicho de otra forma, sí, aprende la frase.
       let missed: string | null = null;
       const learnMissed = (href: string, label: string) => { if (missed) { learnPhrase(missed, href, label); resolveMiss(missed); setLearned(learnedCount()); missed = null; } };
+      // «¿Quisiste decir…?» que REM acaba de ofrecer (src/lib/rem/suggest.ts).
+      let offered: { from: string; options: Suggestion[] } | null = null;
       const miss = (text: string) => {
         missed = text;
         recordMiss(text, window.location.pathname);
         // Para que el dueño o un administrador le enseñe (sin el nombre de quien lo dijo).
         if (storeId) reportMiss(storeId, phraseKey(text), window.location.pathname);
+        // En vez de solo «no te entendí»: lo más parecido entre lo que esta persona puede usar.
+        const options = suggestFor(text, remCtx(), can);
+        if (options.length) { offered = { from: text, options }; talkNext = suggestionReply(options); }
       };
       const opener = async (alts: string[]): Promise<"done" | "handler" | "miss" | "talk"> => {
+        // ¿Contesta «¿Quisiste decir…?»? Con «sí», «la dos» o el nombre se hace; la frase queda como atajo suyo.
+        if (offered) {
+          const o: { from: string; options: Suggestion[] } = offered;
+          offered = null;
+          const pick = pickSuggestion(alts[0] ?? "", o.options);
+          if (pick === "no") { missed = null; talkNext = { say: "Bueno. Dímelo de otra forma y lo intento." }; return "talk"; }
+          if (pick) { learnAlias(o.from, pick.phrase); setMemTick((n) => n + 1); return openerCore([pick.phrase]); }
+        }
+        // Atajo aprendido de esta persona: «la plata que entró hoy» → «¿cuánto vendimos hoy?».
+        const alias = aliasFor(alts[0] ?? "");
+        return openerCore(alias ? [alias, ...alts] : alts);
+      };
+      const openerCore = async (alts: string[]): Promise<"done" | "handler" | "miss" | "talk"> => {
         const t = normalize(alts[0] ?? "");
         const talk = smallTalk(t);
         if (talk) { talkNext = { say: talk }; return "talk"; }
@@ -425,6 +444,7 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
         const r = await opener(said);
         if (r === "done") return;
         if (r === "miss" && !remHandler()) miss(said[0]);
+        else if (r === "talk") missed = null;
       }
       const h = found.h ?? remHandler();
       // Si respondió una pregunta («¿cuánto vendimos hoy?») con la pantalla abierta, dice eso y sigue con la pantalla.
@@ -453,6 +473,7 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
           if (r === "done") return;
           if (r === "handler" && found.h) { reply = await found.h.start(said); break; }
           if (r === "talk") { missed = null; continue; }
+          // miss() puede dejar listo un «¿Quisiste decir…?» (talkNext) para la siguiente vuelta.
           if (HELP.test(t)) missed = null; else miss(said[0]);
           if (++tries >= 4) { await say(id, { say: idleHint() }); return stop(); }
         }
@@ -555,7 +576,7 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
   }
 
   /** Lo que REM guardó de esta persona, para verlo, corregirlo o borrarlo. */
-  const memory = panel ? { phrases: listPhrases(), products: learnedProductsCount(), misses: readMisses(), tick: memTick } : null;
+  const memory = panel ? { phrases: listPhrases(), aliases: listAliases(), products: learnedProductsCount(), misses: readMisses(), tick: memTick } : null;
   const memChanged = () => { setMemTick((n) => n + 1); setLearned(learnedCount()); };
   function teach(text: string, href: string) {
     const l = links.find((x) => x.href === href);
@@ -766,7 +787,7 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
               </details>
               {memory ? (
                 <details className="border-t px-4 py-2 text-xs" style={{ borderColor: "rgba(196,181,253,.18)", color: "var(--t-muted)" }}>
-                  <summary className="cursor-pointer font-semibold">Lo que REM sabe de ti{memory.phrases.length + memory.products ? ` (${memory.phrases.length + memory.products})` : ""}</summary>
+                  <summary className="cursor-pointer font-semibold">Lo que REM sabe de ti{memory.phrases.length + memory.aliases.length + memory.products ? ` (${memory.phrases.length + memory.aliases.length + memory.products})` : ""}</summary>
                   <p className="mt-1">Solo en este equipo, solo tuyo y solo en esta tienda. No da permisos: lo que no puedes abrir, no lo abre.</p>
                   <p className="mt-1">Lo que no te entiende se le muestra al dueño o al administrador <b>sin tu nombre</b>, para que le enseñe a REM. Se borra solo a los 90 días.</p>
                   {memory.misses.length ? (
@@ -801,13 +822,27 @@ export function RemButton({ can, links = [], userId = null, storeId = null, canB
                       </ul>
                     </div>
                   ) : null}
+                  {memory.aliases.length ? (
+                    <div className="mt-2">
+                      <b style={{ color: "var(--t-text)" }}>Cómo le dices tú</b>
+                      <span className="block">Frases tuyas que REM corrigió con «¿Quisiste decir…?».</span>
+                      <ul className="mt-1 space-y-1">
+                        {memory.aliases.slice(0, 12).map((a) => (
+                          <li key={a.key} className="flex items-center gap-1.5">
+                            <span className="min-w-0 flex-1 truncate" title={`«${a.key}» = «${a.to}»`}>«{a.key}» = «{a.to}»</span>
+                            <button type="button" aria-label={`Olvidar «${a.key}»`} onClick={() => { forgetAlias(a.key); memChanged(); }} className="rounded px-1 hover:bg-white/10">✕</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {memory.products ? (
                     <p className="mt-2 flex items-center gap-2">
                       <span className="flex-1">{memory.products} {memory.products === 1 ? "producto aprendido" : "productos aprendidos"} (cómo los nombras).</span>
                       <button type="button" onClick={() => { forgetLearnedProducts(); memChanged(); }} className="rounded-lg border px-2 py-0.5 font-bold" style={{ borderColor: "rgba(196,181,253,.25)", color: "var(--t-text)" }}>Olvidar</button>
                     </p>
                   ) : null}
-                  {!memory.phrases.length && !memory.products && !memory.misses.length ? <p className="mt-1">Todavía no ha aprendido nada.</p> : null}
+                  {!memory.phrases.length && !memory.aliases.length && !memory.products && !memory.misses.length ? <p className="mt-1">Todavía no ha aprendido nada.</p> : null}
                   {listStorePhrases().length ? (
                     <p className="mt-2">La tienda le enseñó {listStorePhrases().length} {listStorePhrases().length === 1 ? "frase" : "frases"}; también te sirven a ti.</p>
                   ) : null}

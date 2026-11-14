@@ -1133,6 +1133,16 @@ export const RELEASES: Release[] = [
       { icon: "👤", text: "«Crea un cliente Juan Pérez»" },
     ],
   },
+  {
+    id: 109, date: "2026-11-13", title: "🤔 REM te pregunta «¿Quisiste decir…?»",
+    summary: "Si REM oye mal o te equivocas al decirlo («cuanto bendimos oy», «el cuadre de caja», «cuánto debe juan peres»), ya no se queda en «no te entendí»: te propone lo más parecido y tú dices «sí», «la dos» o «no». Lo que elijas lo aprende: la próxima vez te entiende directo. Solo te sugiere lo que puedes usar.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🗣️", text: "«Cuanto bendimos oy»" },
+      { icon: "🤔", text: "«¿Quisiste decir…?»" },
+      { icon: "🧠", text: "La próxima vez entiende" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

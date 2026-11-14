@@ -84,3 +84,14 @@ test("docs/REM_CAPACIDADES.md está al día (si falla: npm run rem:catalog)", ()
   assert.ok(doc.includes(catalogVersion()), "la versión del catálogo cambió: corre npm run rem:catalog");
   assert.equal(doc.trimEnd(), catalogMarkdown().trimEnd());
 });
+
+test("cada consulta del catálogo tiene su acción registrada, y cada intención sugerible su capacidad (con permisos)", async () => {
+  const { listActions } = await import("@/lib/rem/actions");
+  const { INTENT_CAP } = await import("@/lib/rem/suggest");
+  const actions = new Set(listActions().map((a) => a.id));
+  const missing = CAPABILITIES.filter((c) => c.kind === "query").filter((c) => !actions.has(c.runner)).map((c) => `${c.id} → ${c.runner}`);
+  assert.deepEqual(missing, [], "consulta sin acción en src/lib/rem/actions.ts");
+  const ids = new Set(CAPABILITIES.map((c) => c.id));
+  const orphan = Object.entries(INTENT_CAP).filter(([, id]) => !ids.has(id)).map(([k, id]) => `${k} → ${id}`);
+  assert.deepEqual(orphan, [], "intención sugerible sin capacidad en el catálogo (sus permisos no se revisarían)");
+});

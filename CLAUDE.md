@@ -11,4 +11,5 @@ REM no usa IA: entiende con reglas (src/lib/rem y src/lib/voice). Arquitectura y
   - Las consultas usan funciones de la base que revisan tienda, permiso y puntos.
   - Riesgo alto: «Di sí o no» con el registro exacto. Crítico: no por voz.
   - Nunca `service_role` ni datos inventados.
+- **Consulta o formulario por voz nuevo:** agrégalo también a `INTENT_CAP` en src/lib/rem/suggest.ts, para que «¿Quisiste decir…?» revise sus permisos antes de sugerirlo.
 - **Frase que REM no entiende:** se arregla con su prueba en tests/voice o tests/rem. No dupliques reglas entre src/lib/voice y src/lib/rem.

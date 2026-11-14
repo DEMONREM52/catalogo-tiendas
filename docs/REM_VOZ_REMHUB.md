@@ -43,6 +43,17 @@ Cómo está hecho y qué falta: [REM_ARQUITECTURA.md](REM_ARQUITECTURA.md). Todo
 - **¿Te refieres a…?** Si algo puede ser dos cosas, pregunta antes («¿Te refieres a Lista general o a Rentabilidad?») y entiende «la segunda».
 - **En medio de un traslado o una venta** también responde estas preguntas, y sigue donde ibas.
 
+## Si te equivocas o REM oye mal
+
+REM no se queda en «no te entendí»: busca lo más parecido y pregunta.
+
+- «cuanto bendimos oy» → «¿Quisiste decir «¿Cuánto vendimos hoy?»? Di sí o no.»
+- «el cuadre de caja» → «¿Quisiste decir: uno, Abrir Caja; dos, Abrir o cerrar caja?». Contestas «la uno», el nombre o «no».
+- «cuánto debe juan peres» → «No encontré a «juan peres» en la cartera. ¿Quisiste decir: uno, Juan Pérez?».
+- Lo mismo con productos («zapatera negrra»), proveedores y puntos.
+
+Solo sugiere lo que puedes usar. Si eliges una opción, **la próxima vez entiende tu forma de decirlo directo**. Esa forma queda en «Lo que REM sabe de ti», en «Cómo le dices tú», donde la puedes borrar.
+
 ## Buscar y manejar productos
 
 «Ren, búscame en los productos la cámara SC30A».

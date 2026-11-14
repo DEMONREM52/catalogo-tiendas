@@ -16,6 +16,22 @@ import type { Confirm, Risk } from "./catalog";
 import type { DebtQuery, ExpenseQuery, GoalsQuery, PayablesQuery, ProfitQuery, SalesQuery, StockQuery, Topic } from "./understand";
 import { bogotaToday, type Range } from "./period";
 import { normalize } from "@/lib/voice/spanish";
+import { phonetic, similarity } from "@/lib/voice/fuzzy";
+
+/** Nombres que se parecen a lo dicho (por cómo suenan), para «¿Quisiste decir…?». Máximo 3. */
+export function similarNames(said: string, names: string[], min = 0.72): string[] {
+  const words = normalize(said).split(" ").filter((w) => w.length >= 3).map(phonetic);
+  if (!words.length) return [];
+  const scored = [...new Set(names)].map((n) => {
+    const nw = normalize(n).split(" ").filter((w) => w.length >= 2).map(phonetic);
+    // Cada palabra dicha con su mejor parecida del nombre; vale el promedio.
+    const s = words.reduce((a, w) => a + Math.max(0, ...nw.map((x) => similarity(w, x))), 0) / words.length;
+    return { n, s };
+  });
+  return scored.filter((x) => x.s >= min).sort((a, b) => b.s - a.s).slice(0, 3).map((x) => x.n);
+}
+
+const ORDS = ["uno", "dos", "tres"];
 
 export type RpcResult = { data: unknown; error: { message: string } | null };
 
@@ -211,7 +227,7 @@ registerAction<SalesQuery>({
     const bad = dbError(error, v);
     if (bad || !v) return { ok: false, topic, reply: { say: bad ?? "No pude consultar las ventas." } };
     if (q.point) {
-      const p = findPoint(q.point, v.points ?? []);
+      const p = findPoint(q.point, v.points ?? []) ?? (() => { const n = similarNames(q.point, (v.points ?? []).map((x) => x.name))[0]; return n ? (v.points ?? []).find((x) => x.name === n) ?? null : null; })();
       if (!p) {
         const names = (v.points ?? []).map((x) => x.name);
         return { ok: false, topic: { kind: "sales", q: { ...q, point: null } }, reply: { say: names.length
@@ -259,7 +275,22 @@ registerAction<StockQuery & { id?: string; name?: string }>({
       const { data, error } = await env.rpc("search_products_safe", { p_store_id: env.storeId, p_query: q.product, p_limit: 6, p_offset: 0, p_status: "all", p_category_id: null });
       if (error) return { ok: false, topic, reply: { say: "No pude buscar el producto: la conexión falló." } };
       const rows = ((data ?? []) as ProductRow[]).filter((r) => r && r.id);
-      if (!rows.length) return { ok: false, topic, reply: { say: `No encontré «${q.product}» en los productos. Dímelo de otra forma o con el código.` } };
+      if (!rows.length) {
+        // ¿Se dijo mal una palabra? Se busca por cada palabra y se ofrecen los parecidos.
+        const words = normalize(q.product).split(" ").filter((w) => w.length >= 4).slice(0, 3);
+        const near: ProductRow[] = [];
+        for (const w of words) {
+          const r = await env.rpc("search_products_safe", { p_store_id: env.storeId, p_query: w, p_limit: 4, p_offset: 0, p_status: "all", p_category_id: null });
+          for (const p of ((r.data ?? []) as ProductRow[])) if (p?.id && !near.some((x) => x.id === p.id)) near.push(p);
+        }
+        const best = similarNames(q.product, near.map((p) => p.name), 0.45).map((n) => near.find((p) => p.name === n)!).filter(Boolean);
+        const few = (best.length ? best : near).slice(0, 3);
+        if (!few.length) return { ok: false, topic, reply: { say: `No encontré «${q.product}» en los productos. Dímelo de otra forma o con el código.` } };
+        return { ok: false, topic, reply: {
+          say: `No encontré «${q.product}». ¿Quisiste decir: ${few.map((r, i) => `${ORDS[i]}, ${r.name.toLowerCase()}`).join("; ")}?`,
+          show: `No encontré «${q.product}». ¿Quisiste decir…?\n${few.map((r, i) => `${i + 1}. ${r.name}`).join("\n")}`,
+        }, choices: few.map((r) => ({ name: r.name, action: "stock.product", params: { product: r.name, id: r.id, name: r.name } })) };
+      }
       const exact = rows.filter((r) => sameProduct(q.product, r));
       if (exact.length === 1 || rows.length === 1) product = exact[0] ?? rows[0];
       else {
@@ -341,7 +372,13 @@ registerAction<DebtQuery>({
       const words = normalize(q.customer).split(" ").filter((w) => w.length > 1);
       const mine = (v.items ?? []).filter((i) => { const n = normalize(i.customer); return words.every((w) => n.includes(w)); });
       const people = [...new Set(mine.map((i) => i.customer_id))];
-      if (!mine.length) return { ok: true, topic, reply: { say: `No encontré deudas abiertas de «${q.customer}».` } };
+      if (!mine.length) {
+        const near = similarNames(q.customer, (v.items ?? []).map((i) => i.customer));
+        if (near.length) return { ok: false, topic, reply: {
+          say: `No encontré a «${q.customer}» en la cartera. ¿Quisiste decir: ${near.map((n, i) => `${ORDS[i]}, ${n}`).join("; ")}?`,
+        }, choices: near.map((n) => ({ name: n, action: "debts.summary", params: { customer: normalize(n) } })) };
+        return { ok: true, topic, reply: { say: `No encontré deudas abiertas de «${q.customer}».` } };
+      }
       if (people.length > 1) {
         const names = [...new Set(mine.map((i) => i.customer))].slice(0, 3);
         return { ok: false, topic, reply: { say: `Hay varios clientes que se llaman así: ${names.join(", ")}. Dime el nombre completo.` } };
@@ -463,7 +500,13 @@ registerAction<PayablesQuery>({
     if (q.supplier) {
       const words = normalize(q.supplier).split(" ").filter((w) => w.length > 1);
       open = open.filter((r) => { const n = normalize(r.supplier_name ?? ""); return words.every((w) => n.includes(w)); });
-      if (!open.length) return { ok: true, topic, reply: { say: `No le debes nada a «${q.supplier}».` } };
+      if (!open.length) {
+        const near = similarNames(q.supplier, (v.rows ?? []).filter((r) => r.status === "open").map((r) => r.supplier_name ?? "").filter(Boolean));
+        if (near.length) return { ok: false, topic, reply: {
+          say: `No encontré a «${q.supplier}». ¿Quisiste decir: ${near.map((n, i) => `${ORDS[i]}, ${n}`).join("; ")}?`,
+        }, choices: near.map((n) => ({ name: n, action: "payables.summary", params: { supplier: normalize(n) } })) };
+        return { ok: true, topic, reply: { say: `No le debes nada a «${q.supplier}».` } };
+      }
     }
     if (!open.length) return { ok: true, topic, reply: { say: "No le debes nada a ningún proveedor." } };
     const sum = open.reduce((a, r) => a + Number(r.balance), 0);
