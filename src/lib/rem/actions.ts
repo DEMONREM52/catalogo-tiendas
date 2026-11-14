@@ -13,7 +13,8 @@
 
 import type { RemReply } from "@/lib/voice/rem";
 import type { Confirm, Risk } from "./catalog";
-import type { DebtQuery, ExpenseQuery, SalesQuery, StockQuery, Topic } from "./understand";
+import type { DebtQuery, ExpenseQuery, GoalsQuery, PayablesQuery, ProfitQuery, SalesQuery, StockQuery, Topic } from "./understand";
+import { bogotaToday, type Range } from "./period";
 import { normalize } from "@/lib/voice/spanish";
 
 export type RpcResult = { data: unknown; error: { message: string } | null };
@@ -136,9 +137,29 @@ registerAction<SalesQuery>({
     const canClose = CLOSE_PERMS.some((p) => env.can(p));
 
     if (q.range) {
-      // erp_home_today y erp_daily_close son de un día. Por rango existe el informe de Rentabilidad (con costo y ganancia).
-      return { ok: false, topic, offer: { href: "/dashboard/rentabilidad?tab=points", label: "Informe por fechas y horas" }, reply: {
-        say: `Las ventas ${q.range.label} todavía no te las sé sumar por voz. Están en Rentabilidad, en el informe por fechas. ¿Te lo abro?`,
+      // Varios días: el resumen de Rentabilidad (erp_profit_summary: pide «Ver rentabilidad» y respeta los puntos).
+      if (!env.can("profit_view")) {
+        return { ok: false, topic, reply: { say: `Las ventas de varios días (${q.range.label}) las ve quien tiene el permiso de rentabilidad. Hoy, ayer o un día suelto sí te los digo.` } };
+      }
+      const r = await profitOf(q.range, env);
+      if ("error" in r) return { ok: false, topic, reply: { say: r.error } };
+      const pt = q.point ? findPoint(q.point, r.by_point) : null;
+      if (q.point && !pt) return { ok: false, topic, reply: { say: `${cap(q.range.label)} no encontré ventas en «${q.point}».` } };
+      const k = pt ? { revenue: pt.revenue, orders: pt.orders } : r.kpis;
+      const where = pt ? ` en ${pt.name}` : "";
+      if (q.scope === "top") {
+        const top = [...r.products].sort((a, b) => Number(b.units) - Number(a.units)).slice(0, 5);
+        if (!top.length) return { ok: true, topic, reply: { say: `${cap(q.range.label)} no hay ventas.` } };
+        return { ok: true, topic, reply: {
+          say: `Lo más vendido ${q.range.label}: ${top.map((t, i) => `${i + 1}, ${String(t.name ?? "").toLowerCase()}, ${Math.round(Number(t.units))}`).join("; ")}.`,
+          show: `Lo más vendido ${q.range.label}:\n${top.map((t, i) => `${i + 1}. ${t.name} · ${Math.round(Number(t.units))}`).join("\n")}`,
+        } };
+      }
+      if (!Number(k.orders)) return { ok: true, topic, reply: { say: `${cap(q.range.label)} no hay ventas${where}.` } };
+      const pts = !pt && r.by_point.length > 1 ? r.by_point.slice(0, 3) : [];
+      return { ok: true, topic, offer: { href: "/dashboard/rentabilidad?tab=points", label: "Informe por fechas y horas" }, reply: {
+        say: `${cap(q.range.label)} van ${sales(Number(k.orders))}${where}, por ${pesos(Number(k.revenue))}.${pts.length ? ` La que más vendió: ${pts[0].name}.` : ""} ¿Te abro el informe?`,
+        show: `Ventas ${q.range.label}${where}: ${sales(Number(k.orders))} · ${money(Number(k.revenue))}${pts.length ? `\n${pts.map((p) => `📍 ${p.name}: ${money(Number(p.revenue))}`).join("\n")}` : ""}\n¿Te abro el informe?`,
       } };
     }
 
@@ -337,6 +358,199 @@ registerAction<DebtQuery>({
     return { ok: true, topic, offer, reply: {
       say: `Te deben ${pesos(k.open)} entre ${k.customers} ${k.customers === 1 ? "cliente" : "clientes"}.${k.overdue_count ? ` De eso, ${pesos(k.overdue)} está vencido.` : " Nada está vencido."} ¿Te abro la cartera?`,
       show: `Cartera: ${money(k.open)} · ${k.customers} clientes${k.overdue_count ? `\nVencido: ${money(k.overdue)} (${k.overdue_count} doc.)` : ""}\n¿Te abro la cartera?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Rentabilidad de un rango (también sirve para las ventas de varios días)
+
+type ProfitSummary = {
+  kpis: { revenue: number; cost: number; profit: number; orders: number; units: number; lines: number; lines_estimated: number };
+  by_point: Array<{ name: string; revenue: number; profit: number; orders: number; count?: number; total?: number }>;
+  products: Array<{ name: string | null; units: number; revenue: number; profit: number }>;
+};
+
+/** Del rango dicho (fechas de Colombia) a lo que pide la base: desde las 00:00 del primer día hasta las 00:00 del día siguiente al último. */
+export function rangeStamps(r: Range): { from: string; to: string } {
+  const next = new Date(`${r.to}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return { from: `${r.from}T00:00:00-05:00`, to: `${next.toISOString().slice(0, 10)}T00:00:00-05:00` };
+}
+
+async function profitOf(range: Range, env: ActionEnv): Promise<ProfitSummary | { error: string }> {
+  const { from, to } = rangeStamps(range);
+  const { data, error } = await env.rpc("erp_profit_summary", { p_store: env.storeId, p_from: from, p_to: to, p_point: null });
+  if (error) return { error: /permiso|rentabilidad/i.test(error.message) ? "Tu usuario no tiene permiso para ver la rentabilidad." : /rango/i.test(error.message) ? "Ese rango de fechas no sirve." : "No pude consultar: la conexión falló." };
+  const v = data as ProfitSummary | null;
+  if (!v?.kpis) return { error: "No pude consultar la rentabilidad." };
+  return { kpis: v.kpis, by_point: (v.by_point ?? []).map((p) => ({ ...p, count: p.orders, total: p.revenue })), products: v.products ?? [] };
+}
+
+registerAction<ProfitQuery>({
+  id: "profit.summary",
+  label: "Consultar la ganancia",
+  risk: "low",
+  confirm: "none",
+  perms: ["profit_view"],
+  validate: (q) => (q.range.from > q.range.to ? "Ese rango de fechas no sirve." : null),
+  async run(q, env) {
+    const topic: Topic = { kind: "profit", q };
+    const r = await profitOf(q.range, env);
+    if ("error" in r) return { ok: false, topic, reply: { say: r.error } };
+    const pt = q.point ? findPoint(q.point, r.by_point) : null;
+    if (q.point && !pt) return { ok: false, topic, reply: { say: `${cap(q.range.label)} no encontré ventas en «${q.point}».` } };
+    const rev = Number(pt ? pt.revenue : r.kpis.revenue);
+    const profit = Number(pt ? pt.profit : r.kpis.profit);
+    const where = pt ? ` en ${pt.name}` : "";
+    if (!rev) return { ok: true, topic, reply: { say: `${cap(q.range.label)} no hay ventas${where}, así que no hay ganancia.` } };
+    const margin = Math.round((profit / rev) * 100);
+    const est = !pt && r.kpis.lines_estimated ? " Algunas ventas tienen el costo estimado." : "";
+    return { ok: true, topic, offer: { href: "/dashboard/rentabilidad?tab=summary", label: "Resumen de rentabilidad" }, reply: {
+      say: `${cap(q.range.label)}${where} la ganancia va en ${pesos(profit)}, sobre ventas de ${pesos(rev)}: un margen del ${margin} %.${est} ¿Te abro la rentabilidad?`,
+      show: `Ganancia ${q.range.label}${where}: ${money(profit)}\nVentas: ${money(rev)} · margen ${margin} %${est ? `\n${est.trim()}` : ""}\n¿Te abro la rentabilidad?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Pendientes del inicio («Tus pendientes»)
+
+type Task = { key: string; title: string; body: string; href: string; count: number; severity: string };
+
+registerAction<Record<string, never>>({
+  id: "tasks.mine",
+  label: "Consultar mis pendientes",
+  risk: "low",
+  confirm: "none",
+  perms: [],
+  validate: () => null,
+  async run(_q, env) {
+    const { data, error } = await env.rpc("erp_my_tasks", { p_store: env.storeId });
+    if (error) return { ok: false, reply: { say: "No pude consultar tus pendientes: la conexión falló." } };
+    const v = data as { ok?: boolean; error?: string; tasks?: Task[] } | null;
+    if (v?.ok === false) return { ok: false, reply: { say: v.error ?? "No pude consultar tus pendientes." } };
+    const tasks = v?.tasks ?? [];
+    if (!tasks.length) return { ok: true, reply: { say: "Todo al día: no tienes nada pendiente." } };
+    const first = tasks.find((t) => t.severity === "warning") ?? tasks[0];
+    return { ok: true, offer: { href: first.href, label: first.title }, reply: {
+      say: `Tienes ${tasks.length} ${tasks.length === 1 ? "pendiente" : "pendientes"}: ${tasks.slice(0, 4).map((t) => t.title.toLowerCase()).join("; ")}. ¿Te abro ${first.title.toLowerCase()}?`,
+      show: `Tus pendientes:\n${tasks.map((t) => `• ${t.title}`).join("\n")}\n¿Te abro «${first.title}»?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Cuentas por pagar (lo que se les debe a los proveedores)
+
+type Payable = { supplier_name: string | null; balance: number; due_date: string | null; days_left: number | null; status: string };
+
+registerAction<PayablesQuery>({
+  id: "payables.summary",
+  label: "Consultar las cuentas por pagar",
+  risk: "low",
+  confirm: "none",
+  perms: ["payables"],
+  validate: () => null,
+  async run(q, env) {
+    const topic: Topic = { kind: "payables", q };
+    const { data, error } = await env.rpc("erp_payables_board", { p_store: env.storeId, p_only_alerts: false });
+    if (error) return { ok: false, topic, reply: { say: "No pude consultar las cuentas por pagar: la conexión falló." } };
+    const v = data as { ok?: boolean; error?: string; rows?: Payable[] } | null;
+    if (!v?.ok) return { ok: false, topic, reply: { say: v?.error ?? "No pude consultar las cuentas por pagar." } };
+    let open = (v.rows ?? []).filter((r) => r.status === "open" && Number(r.balance) > 0);
+    const offer = { href: "/dashboard/inventario?tab=payables", label: "Cuentas por pagar" };
+    if (q.supplier) {
+      const words = normalize(q.supplier).split(" ").filter((w) => w.length > 1);
+      open = open.filter((r) => { const n = normalize(r.supplier_name ?? ""); return words.every((w) => n.includes(w)); });
+      if (!open.length) return { ok: true, topic, reply: { say: `No le debes nada a «${q.supplier}».` } };
+    }
+    if (!open.length) return { ok: true, topic, reply: { say: "No le debes nada a ningún proveedor." } };
+    const sum = open.reduce((a, r) => a + Number(r.balance), 0);
+    const late = open.filter((r) => r.days_left !== null && r.days_left < 0);
+    const soon = open.filter((r) => r.days_left !== null && r.days_left >= 0 && r.days_left <= 7);
+    const lateSum = late.reduce((a, r) => a + Number(r.balance), 0);
+    const who = q.supplier ? `A ${open[0].supplier_name ?? q.supplier} le debes` : "Les debes a los proveedores";
+    return { ok: true, topic, offer, reply: {
+      say: `${who} ${pesos(sum)} en ${open.length} ${open.length === 1 ? "factura" : "facturas"}.${late.length ? ` Vencido: ${pesos(lateSum)}.` : ""}${soon.length ? ` ${soon.length} vence${soon.length === 1 ? "" : "n"} en los próximos 7 días.` : ""} ¿Te abro las cuentas por pagar?`,
+      show: `${who}: ${money(sum)} (${open.length} fact.)${late.length ? `\nVencido: ${money(lateSum)} (${late.length})` : ""}${soon.length ? `\nVencen en 7 días: ${soon.length}` : ""}\n¿Te abro las cuentas por pagar?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Caja (cómo están las cajas de mis puntos)
+
+type CashPoint = { name: string; open: { opened_at: string; opened_by: string | null; breakdown?: { expected?: number } } | null; last_closed: { difference: number } | null };
+
+registerAction<Record<string, never>>({
+  id: "cash.status",
+  label: "Consultar la caja",
+  risk: "low",
+  confirm: "none",
+  perms: ["cash", "cash_manage"],
+  validate: () => null,
+  async run(_q, env) {
+    const { data, error } = await env.rpc("erp_cash_board", { p_store: env.storeId });
+    if (error) return { ok: false, reply: { say: "No pude consultar la caja: la conexión falló." } };
+    const v = data as { ok?: boolean; error?: string; points?: CashPoint[] } | null;
+    if (!v?.ok) return { ok: false, reply: { say: v?.error ?? "No pude consultar la caja." } };
+    const pts = v.points ?? [];
+    if (!pts.length) return { ok: true, reply: { say: "No tienes cajas a tu cargo." } };
+    const hour = (iso: string) => new Date(iso).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Bogota" });
+    const parts = pts.slice(0, 4).map((p) => p.open
+      ? `${p.name}: abierta desde las ${hour(p.open.opened_at)}${p.open.breakdown?.expected !== undefined ? `, debería haber ${pesos(Number(p.open.breakdown.expected))}` : ""}`
+      : `${p.name}: cerrada`);
+    return { ok: true, offer: { href: "/dashboard/caja", label: "Caja" }, reply: {
+      say: `${parts.join(". ")}. ¿Te abro la caja?`,
+      show: `${parts.map((x) => `💵 ${x}`).join("\n")}\n¿Te abro la caja?`,
+    } };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Metas del mes y comisión
+
+type Goal = { point: string | null; seller: string | null; amount: number; done: number; pct: number; per_day_needed: number | null };
+
+registerAction<GoalsQuery>({
+  id: "goals.progress",
+  label: "Consultar metas y comisiones",
+  risk: "low",
+  confirm: "none",
+  perms: [],
+  validate: () => null,
+  async run(q, env) {
+    if (q.what === "commission") {
+      // El mes de Colombia, desde el día 1 a las 00:00.
+      const now = new Date();
+      const today = bogotaToday(now);
+      const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+      const { data, error } = await env.rpc("erp_commissions", { p_store: env.storeId, p_from: `${first.toISOString().slice(0, 10)}T00:00:00-05:00`, p_to: now.toISOString() });
+      if (error) return { ok: false, reply: { say: "No pude consultar las comisiones: la conexión falló." } };
+      const v = data as { ok?: boolean; error?: string; all?: boolean; sellers?: Array<{ seller: string; commission: number; sales: number }> } | null;
+      if (!v?.ok) return { ok: false, reply: { say: v?.error ?? "No pude consultar las comisiones." } };
+      const list = v.sellers ?? [];
+      if (!v.all) {
+        const me = list[0];
+        return { ok: true, reply: { say: me ? `Este mes llevas ${pesos(Number(me.commission))} de comisión, sobre ventas de ${pesos(Number(me.sales))}.` : "Este mes todavía no tienes comisión." } };
+      }
+      if (!list.length) return { ok: true, reply: { say: "Este mes todavía no hay comisiones." } };
+      const top = list.slice(0, 3);
+      return { ok: true, offer: { href: "/dashboard/equipo", label: "Comisiones y metas" }, reply: {
+        say: `Comisiones del mes: ${top.map((s) => `${s.seller}, ${pesos(Number(s.commission))}`).join("; ")}. ¿Te abro comisiones y metas?`,
+      } };
+    }
+    const { data, error } = await env.rpc("erp_goals_progress", { p_store: env.storeId, p_month: null });
+    if (error) return { ok: false, reply: { say: "No pude consultar las metas: la conexión falló." } };
+    const v = data as { ok?: boolean; error?: string; goals?: Goal[] } | null;
+    if (!v?.ok) return { ok: false, reply: { say: v?.error ?? "No pude consultar las metas." } };
+    const goals = v.goals ?? [];
+    if (!goals.length) return { ok: true, reply: { say: "Este mes no hay metas puestas." } };
+    const line = (g: Goal) => `${g.seller ?? g.point ?? "la tienda"} va en ${Math.round(Number(g.pct))} %, ${pesos(Number(g.done))} de ${pesos(Number(g.amount))}${g.per_day_needed ? `; le faltan ${pesos(Number(g.per_day_needed))} por día` : ""}`;
+    return { ok: true, offer: { href: "/dashboard/equipo", label: "Comisiones y metas" }, reply: {
+      say: `${goals.slice(0, 3).map(line).join(". ")}. ¿Te abro las metas?`,
+      show: `Metas del mes:\n${goals.map((g) => `🎯 ${g.seller ?? g.point ?? "Tienda"}: ${Math.round(Number(g.pct))} % · ${money(Number(g.done))} / ${money(Number(g.amount))}`).join("\n")}\n¿Te abro las metas?`,
     } };
   },
 });

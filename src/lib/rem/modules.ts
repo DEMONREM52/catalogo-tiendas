@@ -74,16 +74,46 @@ export const MODULES: ModuleInfo[] = [
     id: "layaways", name: "Apartados y cotizaciones", path: "/dashboard/apartados",
     aliases: "apartados separados abonos cotizaciones presupuestos",
     about: "Para separar productos a un cliente que va abonando, y para hacer cotizaciones.",
+    howto: [{
+      id: "layaways.create", goal: "hacer un apartado", keywords: "apartado apartar aparto separar separo separado abono producto",
+      steps: ["Abre el POS y arma el carrito con lo que el cliente quiere separar.", "Toca «📌 Apartar». Las unidades quedan reservadas.", "Cuando el cliente abone, en Apartados toca «💵 Abonar». Para entregarlo, desde Apartados se abre el POS con la venta lista."],
+      href: "/dashboard/pos", verified: true,
+    }, {
+      id: "quotes.create", goal: "hacer una cotización", keywords: "cotizacion cotizar presupuesto",
+      steps: ["Abre el POS y arma el carrito.", "Toca «📝 Cotizar». Se guarda y la puedes compartir por WhatsApp.", "Las cotizaciones quedan en Apartados y cotizaciones."],
+      href: "/dashboard/pos", verified: true,
+    }],
   },
   {
     id: "promos", name: "Promociones y combos", path: "/dashboard/promociones",
     aliases: "promociones promos combos descuentos ofertas",
     about: "Para crear descuentos, ofertas y combos de productos.",
+    howto: [{
+      id: "promos.create", goal: "crear una promoción", keywords: "promocion promo descuento oferta",
+      steps: [
+        "Abre Promociones y combos y toca «➕ Nueva promoción».",
+        "Ponle un nombre y elige el tipo: porcentaje de descuento o precio fijo, con su valor.",
+        "Elige a qué aplica: productos elegidos, una categoría o toda la tienda.",
+        "Pon desde y hasta qué día, y en qué puntos; si no marcas ninguno, aplica en todos.",
+        "Toca «💾 Guardar promoción».",
+      ],
+      href: "/dashboard/promociones", verified: true,
+    }],
   },
   {
     id: "warranty", name: "Garantías y devoluciones", path: "/dashboard/garantias",
     aliases: "garantias devoluciones cambios reclamos",
     about: "Para registrar garantías, cambios y devoluciones de lo vendido.",
+    howto: [{
+      id: "warranty.create", goal: "registrar una garantía o devolución", keywords: "garantia devolucion reclamo cambio falla devuelve",
+      steps: [
+        "Abre Garantías y devoluciones y toca «➕ Recibir garantía o devolución».",
+        "Elige si es garantía, porque falla, o devolución, porque no lo quiere, y el punto.",
+        "Busca el producto, escribe el cliente y qué falla o por qué lo devuelve. Celular, factura y fecha de compra son opcionales.",
+        "Toca «💾 Recibir». Si el producto dañado sale del inventario, hazlo con un ajuste «Producto dañado».",
+      ],
+      href: "/dashboard/garantias", verified: true,
+    }],
   },
   {
     id: "fiscal", name: "Factura electrónica", path: "/dashboard/fiscal",

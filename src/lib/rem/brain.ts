@@ -7,7 +7,7 @@
 
 import { normalize } from "@/lib/voice/spanish";
 import { runAction, type ActionEnv, type ActionResult } from "./actions";
-import { capabilitiesAnswer, chooseAnswer, createAnswer, draftExpenseAnswer, explainAnswer, howtoAnswer, type Answer, type Offer } from "./respond";
+import { capabilitiesAnswer, chooseAnswer, createAnswer, draftClientAnswer, draftExpenseAnswer, draftProductAnswer, explainAnswer, howtoAnswer, type Answer, type Offer } from "./respond";
 import { CONFIDENT, resolveChoice, understand, unavailable, type RemContext, type Topic, type UnderstandingProvider, localRules } from "./understand";
 import { moduleOfPath, type ModuleInfo } from "./modules";
 
@@ -16,7 +16,7 @@ export const emptyBrain = (): BrainState => ({ topic: null, offer: null, choices
 
 export type Thought = Answer & { topic?: Topic | null };
 
-const YES = /^(?:(?:oye )?(?:rem|ren) )?(?:si|claro|dale|de una|hagale|por favor|abrela|abrelo|abrelos|abrela por favor|abre|hazlo|ok|okey|listo|bueno|va|vale|si por favor|si senor|si senora|si claro|si dale|si abrela|si abrelo|si muestramelos|muestramelos|si muestrame|sii+)$/;
+const YES = /^(?:(?:oye )?(?:rem|ren) )?(?:si|claro|dale|de una|hagale|por favor|abrela|abrelo|abrelos|abrelas|abrela por favor|abre|hazlo|ok|okey|listo|bueno|va|vale|si por favor|si senor|si senora|si claro|si dale|si abrela|si abrelo|si abrelos|si abrelas|si muestramelos|muestramelos|si muestrame|si llevame|llevame|sii+)$/;
 const NO = /^(?:(?:oye )?(?:rem|ren) )?(?:no|nop|no gracias|todavia no|aun no|despues|mejor no|asi esta bien|dejalo|no por ahora|no hace falta)$/;
 
 export type ThinkOptions = {
@@ -66,7 +66,7 @@ export async function think(text: string, ctx: RemContext, env: ActionEnv | null
   if (!u) return null;
   const i = u.intent;
   if (u.confidence < CONFIDENT && i.kind !== "choose") return null;
-  if (opts.inScreen && (i.kind === "create" || i.kind === "choose" || i.kind === "draft_expense")) return null;
+  if (opts.inScreen && (i.kind === "create" || i.kind === "choose" || i.kind === "draft_expense" || i.kind === "draft_client" || i.kind === "draft_product")) return null;
   // En medio de un traslado o una venta, «hay termos» o «quedan cinco» son de la pantalla: solo la pregunta completa.
   if (opts.inScreen && u.confidence < 0.8) return null;
   const isAvailable = (m: ModuleInfo) => ctx.links.some((l) => moduleOfPath(l.href)?.id === m.id);
@@ -85,6 +85,13 @@ export async function think(text: string, ctx: RemContext, env: ActionEnv | null
     case "expenses": return act("expenses.summary", i.q, { kind: "expenses", q: i.q });
     case "debts": return act("debts.summary", i.q, { kind: "debts", q: i.q });
     case "draft_expense": return keep(draftExpenseAnswer(i.draft, ctx.links), state, opts);
+    case "draft_client": return keep(draftClientAnswer(i.draft, ctx.links), state, opts);
+    case "draft_product": return keep(draftProductAnswer(i.name, ctx.links), state, opts);
+    case "profit": return act("profit.summary", i.q, { kind: "profit", q: i.q });
+    case "payables": return act("payables.summary", i.q, { kind: "payables", q: i.q });
+    case "tasks": return act("tasks.mine", {}, null);
+    case "cash": return act("cash.status", {}, null);
+    case "goals": return act("goals.progress", i.q, null);
     case "explain":
       state.topic = { kind: "module", module: i.module.id };
       return keep(explainAnswer(i.module, i.available, ctx.links, i.why), state, opts);

@@ -1123,6 +1123,16 @@ export const RELEASES: Release[] = [
       { icon: "👑", text: "Enseñarle a REM para todos" },
     ],
   },
+  {
+    id: 108, date: "2026-11-13", title: "🧠 REM responde de todo el negocio",
+    summary: "Pregúntale «¿qué tengo pendiente?», «¿cuánto vendimos este mes?», «¿cuánto ganamos?», «¿cuánto le debemos a los proveedores?», «¿cómo va la caja?» o «¿cómo van las metas?». Y dile «crea un cliente que se llama Juan Pérez con cédula…» o «crea un producto que se llama…»: te abre el formulario lleno para que lo revises y guardes. También explica cómo hacer apartados, cotizaciones, promociones y garantías.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "✅", text: "«¿Qué tengo pendiente?»" },
+      { icon: "📈", text: "«¿Cuánto ganamos este mes?»" },
+      { icon: "👤", text: "«Crea un cliente Juan Pérez»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

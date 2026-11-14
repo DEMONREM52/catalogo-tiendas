@@ -8,7 +8,7 @@ import type { RemReply } from "@/lib/voice/rem";
 import type { NavLink } from "@/lib/voice/navigate";
 import { CAPABILITIES, VOICE_SCREENS, type Capability } from "./catalog";
 import type { HowTo, ModuleInfo } from "./modules";
-import type { ExpenseDraft, Unavailable } from "./understand";
+import type { ClientDraft, ExpenseDraft, Unavailable } from "./understand";
 
 /** Lo que REM ofreció hacer enseguida («¿Te lo abro?»): con «sí», se hace. */
 export type Offer = { href: string; label: string };
@@ -86,19 +86,43 @@ export function createAnswer(options: Capability[], hidden: number, m: ModuleInf
   };
 }
 
+const FORM_SAY: Record<string, string> = { "form:gasto-por-voz": "un gasto", "form:tercero-por-voz": "un cliente o proveedor", "form:producto-por-voz": "un producto" };
+
+/** «¿Qué sabes hacer?», según lo que esta persona puede usar. */
+/** Lo que se le puede preguntar, en pocas palabras (para «¿qué sabes hacer?»). Sale del catálogo: si se agrega una consulta, aparece. */
+const ASK_SAY: Record<string, string> = {
+  "query:sales": "las ventas", "query:stock": "las existencias", "query:expenses": "los gastos", "query:debts": "la cartera",
+  "query:profit": "la ganancia", "query:tasks": "tus pendientes", "query:payables": "lo que se les debe a los proveedores",
+  "query:cash": "la caja", "query:goals": "las metas",
+};
+
 /** «¿Qué sabes hacer?», según lo que esta persona puede usar. */
 export function capabilitiesAnswer(can: (p: string) => boolean): Answer {
-  const screens = VOICE_SCREENS.filter((v) => v.perms.some((p) => can(p))).map((v) => v.name.toLowerCase());
-  const sales = CAPABILITIES.find((c) => c.id === "query:sales");
+  const ok = (perms: string[]) => !perms.length || perms.some((p) => can(p));
+  const screens = VOICE_SCREENS.filter((v) => ok(v.perms)).map((v) => v.name.toLowerCase());
+  const queries = CAPABILITIES.filter((c) => c.kind === "query" && c.status === "ready" && ok(c.perms));
+  const forms = CAPABILITIES.filter((c) => c.id.endsWith("-por-voz") && ok(c.perms));
+  const asks = queries.map((q) => ASK_SAY[q.id] ?? q.label.toLowerCase());
+  const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs.at(-1)}` : xs[0] ?? "");
   const parts = [
     "Te explico para qué sirve cualquier sección y cómo se usa",
     "abro la sección que necesites",
-    sales && sales.perms.some((p) => can(p)) ? "te digo cuánto se ha vendido hoy, ayer o un día que me digas" : null,
-    screens.length ? `y trabajo contigo por voz en ${screens.join(", ")}` : null,
+    asks.length ? `te digo ${list(asks)}` : null,
+    forms.length ? `te lleno hablando ${list(forms.map((c) => FORM_SAY[c.id] ?? c.label.toLowerCase()))}, para que tú lo guardes` : null,
+    screens.length ? `y trabajo contigo por voz en ${list(screens)}` : null,
   ].filter(Boolean);
   return { reply: {
     say: `${parts.join(", ")}. Lo que guarda o cambia algo siempre te lo pregunto antes. ¿Qué hacemos?`,
-    show: `Puedo:\n• Explicarte cualquier sección y cómo se usa («¿para qué sirve la rentabilidad?»)\n• Abrir secciones («abre los gastos»)${sales && sales.perms.some((p) => can(p)) ? "\n• Decirte las ventas («¿cuánto vendimos hoy?», «¿y ayer?»)" : ""}${screens.length ? `\n• Trabajar por voz: ${screens.join(", ")}` : ""}\n• Crear según donde estés («crea uno nuevo»)\nLo que guarda o cambia algo, siempre te lo pregunto antes.`,
+    show: [
+      "Puedo:",
+      "• Explicarte cualquier sección y cómo se usa («¿para qué sirve la rentabilidad?»)",
+      "• Abrir secciones («abre los gastos»)",
+      ...queries.map((q) => `• ${q.label}: «${q.examples[0] ?? ""}»`),
+      ...forms.map((c) => `• ${c.label}: «${c.examples[0] ?? ""}»`),
+      screens.length ? `• Trabajar por voz: ${screens.join(", ")}` : "",
+      "• Crear según donde estés («crea uno nuevo»)",
+      "Lo que guarda o cambia algo, siempre te lo pregunto antes.",
+    ].filter(Boolean).join("\n"),
   } };
 }
 
@@ -121,5 +145,35 @@ export function draftExpenseAnswer(d: ExpenseDraft, links: NavLink[]): Answer {
   return {
     reply: { say: `Te abro un gasto${value}${detail}. Revisa la categoría y lo demás, y guárdalo tú.`, end: true },
     go: { href: url.pathname + url.search, label: "Nuevo gasto" },
+  };
+}
+
+/** «Crea un cliente que se llama Juan Pérez con cédula…»: abre «Nuevo tercero» lleno. Guarda la persona. */
+export const CLIENT_FORM = "/dashboard/clientes";
+export function draftClientAnswer(d: ClientDraft, links: NavLink[]): Answer {
+  if (!links.some((l) => l.href === CLIENT_FORM && l.action)) return { reply: { say: "Tu usuario no tiene permiso para crear clientes o proveedores. Pídeselo al administrador de la tienda." } };
+  const url = new URL(CLIENT_FORM, "https://x");
+  url.searchParams.set("nuevo", "tercero");
+  url.searchParams.set("tipo", d.kind);
+  if (d.name) url.searchParams.set("nombre", d.name);
+  if (d.document) url.searchParams.set("documento", d.document);
+  if (d.mobile) url.searchParams.set("celular", d.mobile);
+  if (d.nit) url.searchParams.set("nit", "1");
+  const who = d.kind === "supplier" ? "proveedor" : "cliente";
+  const extra = [d.document ? `${d.nit ? "NIT" : "documento"} ${d.document}` : null, d.mobile ? `celular ${d.mobile}` : null].filter(Boolean).join(" y ");
+  return {
+    reply: { say: `Te abro un ${who} nuevo${d.name ? `, ${d.name}` : ""}${extra ? `, con ${extra}` : ""}. Revisa los datos y guárdalo tú.`, end: true },
+    go: { href: url.pathname + url.search, label: `Nuevo ${who}` },
+  };
+}
+
+/** «Crea un producto que se llama zapatera negra»: abre «Nuevo producto» con el nombre. Guarda la persona. */
+export const PRODUCT_FORM = "/dashboard/products/crear";
+export function draftProductAnswer(name: string, links: NavLink[]): Answer {
+  if (!links.some((l) => l.href === PRODUCT_FORM)) return { reply: { say: "Tu usuario no tiene permiso para crear productos. Pídeselo al administrador de la tienda." } };
+  const href = name ? `${PRODUCT_FORM}?nombre=${encodeURIComponent(name)}` : PRODUCT_FORM;
+  return {
+    reply: { say: `Te abro un producto nuevo${name ? `: ${name}` : ""}. Completa lo demás y créalo tú.`, end: true },
+    go: { href, label: "Nuevo producto" },
   };
 }

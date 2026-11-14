@@ -44,6 +44,16 @@ export default function CreateProductPage() {
 
   // form
   const [name, setName] = useState("");
+  // REM: «crea un producto que se llama zapatera negra» llega con ?nombre=. Solo llena; crea la persona.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const said = (url.searchParams.get("nombre") ?? "").trim().slice(0, 120);
+    if (!said) return;
+    url.searchParams.delete("nombre");
+    window.history.replaceState(null, "", url.toString());
+    const t = window.setTimeout(() => setName(said), 0);
+    return () => window.clearTimeout(t);
+  }, []);
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
 

@@ -32,7 +32,13 @@ Cómo está hecho y qué falta: [REM_ARQUITECTURA.md](REM_ARQUITECTURA.md). Todo
 - **Gastos:** «¿cuánto hemos gastado este mes?», «¿y el mes pasado?», «gastos pendientes», «gastos vencidos», «gastos de la semana pasada».
 - **Cartera:** «¿cuánto nos deben?», «¿cómo va la cartera?», «¿cuánto debe Juan Pérez?».
 - **Llenar un gasto:** «registra un gasto de 50 mil en arriendo». Abre «Nuevo gasto» con el valor, el detalle y, si la reconoce, la categoría. Tú lo revisas y lo guardas.
-- **Ventas de un mes o una semana:** todavía no las suma; te ofrece abrir el informe por fechas de Rentabilidad.
+- **Ventas de un mes o una semana:** «¿cuánto vendimos este mes?», «lo más vendido la semana pasada», «ventas de octubre en la sede Zamora». Necesita el permiso de rentabilidad.
+- **Ganancia:** «¿cuánto ganamos este mes?», «¿y el mes pasado?». Dice la ganancia, las ventas y el margen.
+- **Pendientes:** «¿qué tengo pendiente?». Los mismos de «Tus pendientes» del inicio; ofrece abrir el más urgente.
+- **Proveedores:** «¿cuánto le debemos a los proveedores?», «¿qué facturas vencen?», «¿cuánto le debemos a Distribuidora La Esperanza?».
+- **Caja:** «¿cómo va la caja?», «¿cuánto hay en caja?». Por punto: abierta o cerrada, y cuánto debería haber.
+- **Metas y comisión:** «¿cómo van las metas?», «¿cuánto llevo de comisión?».
+- **Crear hablando:** «crea un cliente que se llama Juan Pérez con cédula 1020304050», «registra un proveedor Distribuidora La Esperanza con NIT 900123456», «crea un producto que se llama zapatera negra». Abre el formulario lleno; tú lo revisas y lo guardas.
 - **Crear según dónde estás:** en Productos, «ayúdame a crear uno nuevo» abre el formulario. En Nómina pregunta: «¿nueva nómina o nuevo empleado?».
 - **¿Te refieres a…?** Si algo puede ser dos cosas, pregunta antes («¿Te refieres a Lista general o a Rentabilidad?») y entiende «la segunda».
 - **En medio de un traslado o una venta** también responde estas preguntas, y sigue donde ibas.

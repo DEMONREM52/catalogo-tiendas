@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `39357628` · 109 capacidades · 32 módulos.
+Versión del catálogo: `4c4af866` · 116 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -13,9 +13,9 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Inicio e informes | `/dashboard` | Es la primera pantalla: tus pendientes, las ventas de hoy de tus puntos comparadas con ayer, lo más vendido de la semana, las metas del mes y el cierre del día. | — |
 | POS / Vender | `/dashboard/pos` | Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. | hacer una venta (por voz) |
 | Caja | `/dashboard/caja` | Sirve para abrir y cerrar la caja de cada punto, contar el efectivo y ver si hay diferencias. | abrir la caja (3 pasos); cerrar la caja (3 pasos) |
-| Apartados y cotizaciones | `/dashboard/apartados` | Para separar productos a un cliente que va abonando, y para hacer cotizaciones. | — |
-| Promociones y combos | `/dashboard/promociones` | Para crear descuentos, ofertas y combos de productos. | — |
-| Garantías y devoluciones | `/dashboard/garantias` | Para registrar garantías, cambios y devoluciones de lo vendido. | — |
+| Apartados y cotizaciones | `/dashboard/apartados` | Para separar productos a un cliente que va abonando, y para hacer cotizaciones. | hacer un apartado (3 pasos); hacer una cotización (3 pasos) |
+| Promociones y combos | `/dashboard/promociones` | Para crear descuentos, ofertas y combos de productos. | crear una promoción (5 pasos) |
+| Garantías y devoluciones | `/dashboard/garantias` | Para registrar garantías, cambios y devoluciones de lo vendido. | registrar una garantía o devolución (4 pasos) |
 | Factura electrónica | `/dashboard/fiscal` | Para la facturación electrónica ante la DIAN: los documentos enviados, los que están pendientes o rechazados y la numeración con sus resoluciones. | — |
 | Datos de facturación | `/dashboard/store/billing` | Son los datos de facturación de la tienda. Solo los ve el dueño o el administrador. | — |
 | Productos | `/dashboard/products` | Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame. | crear un producto (5 pasos); subir productos desde Excel (sin pasos) |
@@ -62,6 +62,11 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | `stock.product` Consultar las existencias de un producto | bajo | — | Editar productos (`products`), Ver lista general de productos (`products_view`), Inventario y kardex (`inventory`), POS / Facturar (`pos`), Compras (`purchases`) |
 | `expenses.summary` Consultar los gastos | bajo | — | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`) |
 | `debts.summary` Consultar la cartera | bajo | — | Cartera (`receivables`), Créditos y cupos (`credit`) |
+| `profit.summary` Consultar la ganancia | bajo | — | Ver rentabilidad (`profit_view`) |
+| `tasks.mine` Consultar mis pendientes | bajo | — | cualquiera de la tienda |
+| `payables.summary` Consultar las cuentas por pagar | bajo | — | Cuentas por pagar (`payables`) |
+| `cash.status` Consultar la caja | bajo | — | Caja de su punto 💵 (`cash`), Revisar cajas (`cash_manage`) |
+| `goals.progress` Consultar metas y comisiones | bajo | — | cualquiera de la tienda |
 
 ## Matriz de permisos: páginas y formularios
 
@@ -168,6 +173,8 @@ Sale del buscador Ctrl+K (`src/lib/search-index.ts`) y del menú (`src/lib/modul
 | Rentabilidad | página | `/dashboard/rentabilidad` | Ver rentabilidad (`profit_view`), Reglas de precio por punto (`profit_rules`), Aprobar reglas de precio (`profit_approve`), Beneficiarios y repartos (`profit_beneficiaries`), Preparar liquidaciones (`profit_settle`), Aprobar liquidaciones (`profit_settle_approve`), Pagar liquidaciones (`profit_pay`), Autorizar precios 🔓 (`price_approve`) |  |
 | Gastos y nómina | página | `/dashboard/gastos` | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`), Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) |  |
 | Gasto llenado por voz | formulario | `/dashboard/gastos?tab=expenses&nuevo=gasto` | Gastos (`expenses`), Pagar gastos (`expenses_pay`) |  |
+| Cliente o proveedor llenado por voz | formulario | `/dashboard/clientes?nuevo=tercero` | Terceros (`clients`) |  |
+| Producto llenado por voz | formulario | `/dashboard/products/crear` | Crear productos ✨ (`products_create`), Editar productos (`products`) |  |
 
 ## Rutas que REM no abre directo
 

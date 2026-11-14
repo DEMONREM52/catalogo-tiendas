@@ -27,6 +27,10 @@ export type StockQuery = { product: string };
 export type ExpenseQuery = { range: Range; status: "all" | "open" | "overdue" };
 export type DebtQuery = { customer: string | null };
 export type ExpenseDraft = { amount: number | null; detail: string };
+export type ClientDraft = { kind: "customer" | "supplier"; name: string; document: string | null; mobile: string | null; nit: boolean };
+export type ProfitQuery = { range: Range; point: string | null };
+export type PayablesQuery = { supplier: string | null };
+export type GoalsQuery = { what: "goals" | "commission" };
 
 /** De qué se venía hablando (para «¿y las de ayer?», «¿y el mes pasado?»). */
 export type Topic =
@@ -34,6 +38,8 @@ export type Topic =
   | { kind: "expenses"; q: ExpenseQuery }
   | { kind: "debts"; q: DebtQuery }
   | { kind: "stock"; q: StockQuery }
+  | { kind: "profit"; q: ProfitQuery }
+  | { kind: "payables"; q: PayablesQuery }
   | { kind: "module"; module: string };
 
 export type RemContext = {
@@ -57,6 +63,13 @@ export type Intent =
   | { kind: "expenses"; q: ExpenseQuery }
   | { kind: "debts"; q: DebtQuery }
   | { kind: "draft_expense"; draft: ExpenseDraft }
+  | { kind: "draft_client"; draft: ClientDraft }
+  | { kind: "draft_product"; name: string }
+  | { kind: "profit"; q: ProfitQuery }
+  | { kind: "payables"; q: PayablesQuery }
+  | { kind: "tasks" }
+  | { kind: "cash" }
+  | { kind: "goals"; q: GoalsQuery }
   | { kind: "create"; options: Capability[]; hidden: number; module: ModuleInfo | null }
   | { kind: "capabilities" }
   | { kind: "choose"; ask: "explain" | "howto"; options: ModuleInfo[] };
@@ -118,6 +131,25 @@ const EXPENSE_WORD = /\b(?:gast\w*|egresos?)\b/;
 const EXPENSE_ASK = /\b(?:cuanto|cuanta|cuantos|cuantas|total|resumen|como van|como vamos|dime|muestrame|pendientes?|por pagar|sin pagar|vencid\w*|este mes|del mes|mes pasado|semana|hoy|ayer|antier|ano|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/;
 // «Registra un gasto de 50 mil en arriendo»: abre el formulario lleno; la persona revisa y guarda.
 const EXPENSE_DO = /^(?:(?:quiero|necesito|vamos a|voy a|puedes|me puedes|ayudame a|hay que) )?(?:registra|registrar|registrame|anota|anotar|anotame|apunta|apuntar|apuntame|agrega|agregar|crea|crear|mete|meter|pon|poner|haz|hazme|ingresa|ingresar)?\s*(?:me\s+)?(?:un |el |otro )?(?:nuevo )?gasto\b\s*(.*)$/;
+
+// Pendientes: «¿qué tengo pendiente?», «¿qué me falta por hacer?».
+const TASKS = /^(?:que (?:tengo|hay|me queda|nos queda|tenemos) (?:pendiente|pendientes|por hacer)|(?:mis |los )?pendientes|que pendientes (?:tengo|hay|tenemos)|que hay pendiente|que hay por hacer|que me falta(?: por hacer)?|que nos falta(?: por hacer)?|tengo (?:algo )?pendiente|tengo pendientes|que tengo que hacer|que hay que hacer|que debo hacer)(?: hoy| ahora| ahorita)?$/;
+// Cuentas por pagar: «¿cuánto le debemos a los proveedores?», «¿qué facturas vencen?», «¿cuánto le debemos a Distribuidora X?».
+const PAYABLE = /\b(?:le debemos|les debemos|debemos|cuentas por pagar|deuda con (?:los )?proveedores|deudas con (?:los )?proveedores|facturas (?:de (?:los )?proveedores )?(?:por pagar|vencidas|que vencen|pendientes)|que facturas vencen|que (?:se )?vence(?:n)?)\b/;
+const PAYABLE_WHO = /\b(?:le|les)? ?debemos (?:a |al |a la |a los )?(?:proveedor |la distribuidora )?(.+)$/;
+// Caja: «¿cómo va la caja?», «¿cuánto hay en caja?», «¿está abierta la caja?».
+const CASH = /\b(?:caja|cajas)\b/;
+const CASH_ASK = /\b(?:como va|como van|como esta|como estan|cuanto hay|cuanta plata|cuanto dinero|cuanto efectivo|que hay en|abierta|abiertas|cerrada|cerradas|esta abierta|estan abiertas|quien abrio|estado|en caja|cuadra|deberia haber)\b/;
+// Metas y comisiones: «¿cómo van las metas?», «¿cuánto llevo de comisión?».
+const GOALS = /\b(?:metas?|comision(?:es)?)\b/;
+const GOALS_ASK = /\b(?:como va|como van|como voy|como vamos|cuanto|cuanta|en cuanto|llevo|llevamos|voy|vamos|mi|mis|nuestra|nuestras|de hoy|del mes|este mes)\b/;
+// Ganancia: «¿cuánto ganamos este mes?», «¿cuál es la utilidad de la semana?».
+const PROFIT = /\b(?:ganamos|gane|ganado|hemos ganado|ganancias?|utilidad(?:es)?|margen)\b/;
+const PROFIT_ASK = /\b(?:cuanto|cuanta|cual|como va|como van|como vamos|dime|muestrame|total|hoy|ayer|semana|mes|ano|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/;
+// «Crea un cliente que se llama Juan Pérez con cédula 1020304050», «nuevo proveedor Distribuidora La Esperanza».
+const CLIENT_DO = /^(?:(?:quiero|necesito|vamos a|voy a|puedes|me puedes|ayudame a) )?(?:crea|crear|creame|registra|registrar|registrame|agrega|agregar|anade|anadir|ingresa|ingresar|nuevo|nueva|haz|hazme|mete|meter)\s+(?:me\s+)?(?:un |una |el |la |a |al )?(?:nuevo |nueva )?(cliente|clienta|proveedor|proveedora|tercero)\b\s*(.*)$/;
+// «Crea un producto que se llama zapatera negra».
+const PRODUCT_DO = /^(?:(?:quiero|necesito|vamos a|voy a|puedes|me puedes|ayudame a) )?(?:crea|crear|creame|registra|registrar|agrega|agregar|anade|anadir|ingresa|ingresar|nuevo|haz|hazme)\s+(?:me\s+)?(?:un |el )?(?:nuevo )?producto\b\s*(?:que se llama |llamado |llamada |de nombre |con el nombre |con nombre )?(.+)$/;
 
 const CREATE_HERE = /^(?:(?:ayudame|ayudeme|me ayudas|me puedes ayudar) a |quiero |puedes |podrias |vamos a |necesito |hay que )?(?:crear|crea|creame|hacer|haz|hazme|registrar|registra|agregar|agrega|anadir|anade|abrir|abre)?\s*(?:me\s+)?(?:uno|una|otro|otra)?\s*(?:nuevo|nueva)?$/;
 const CAPS = /^(?:que (?:sabes|puedes) hacer|que haces|en que (?:me )?(?:puedes )?ayudar|en que me ayudas|que cosas (?:sabes|puedes) hacer|para que sirves|cuales son tus funciones|que te puedo pedir)$/;
@@ -226,6 +258,44 @@ function expensesOf(t: string, ctx: RemContext, base: ExpenseQuery | null): Expe
   return { range, status };
 }
 
+/** Números dichos con pausas («300 123 4567»): se juntan. */
+const joinDigits = (t: string) => t.replace(/(\d)[\s.-]+(?=\d)/g, "$1");
+
+function clientOf(kindWord: string, rest: string): ClientDraft | null {
+  const kind = /^proveedor/.test(kindWord) ? "supplier" : "customer";
+  let t = joinDigits(rest);
+  const docM = t.match(/\b(?:con )?(?:cedula|cc|c c|nit|documento|numero de documento|identificacion)(?: numero| de ciudadania)?(?: es)? (\d{5,12})\b/);
+  const mobM = t.match(/\b(?:con )?(?:celular|cel|telefono|whatsapp|numero de celular|numero de telefono|movil)(?: es)? (\d{7,12})\b/);
+  const nit = /\bnit\b/.test(t);
+  t = t.replace(/\b(?:con )?(?:cedula|cc|c c|nit|documento|numero de documento|identificacion)(?: numero| de ciudadania)?(?: es)? \d{5,12}\b/, " ")
+    .replace(/\b(?:con )?(?:celular|cel|telefono|whatsapp|numero de celular|numero de telefono|movil)(?: es)? \d{7,12}\b/, " ")
+    .replace(/^(?:que se llama|llamado|llamada|de nombre|con el nombre|con nombre|a nombre de|que es)\s+/, "")
+    .replace(/\s+(?:y|con|de|el|la)$/, "")
+    .replace(/\s+/g, " ").trim();
+  if (t.split(" ").length > 8) t = t.split(" ").slice(0, 8).join(" ");
+  return { kind, name: titleCase(t), document: docM?.[1] ?? null, mobile: mobM?.[1] ?? null, nit };
+}
+
+/** Nombre bonito: «Juan Pérez», «Distribuidora la Esperanza», códigos en mayúscula («HM03»). */
+const titleCase = (t: string) => t.split(" ").map((w, i) => (/\d/.test(w) ? w.toUpperCase() : i > 0 && ["de", "del", "la", "las", "los", "y", "e"].includes(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(" ");
+
+/** El pedazo como se dijo (con tildes), buscándolo palabra por palabra en lo dicho. */
+export function asSaid(original: string, fragment: string): string {
+  const words = original.replace(/[¿?¡!,.;:]/g, " ").split(/\s+/).filter(Boolean);
+  const want = fragment.split(" ").filter(Boolean);
+  if (!want.length) return fragment;
+  const norm = words.map((w) => normalize(w));
+  for (let i = 0; i + want.length <= norm.length; i++) {
+    if (want.every((w, j) => norm[i + j] === w)) return words.slice(i, i + want.length).join(" ");
+  }
+  return fragment;
+}
+
+function profitRange(t: string, ctx: RemContext, base: ProfitQuery | null): ProfitQuery {
+  const range = parseRange(t, ctx.now) ?? base?.range ?? parseRange("este mes", ctx.now)!;
+  return { range, point: t.match(POINT)?.[1]?.trim() ?? (base && !parseRange(t, ctx.now) ? base.point : null) };
+}
+
 function draftOf(rest: string): ExpenseDraft {
   const money = moneyIn(rest);
   let words = money ? [...money.words.slice(0, money.start), ...money.words.slice(money.end)] : rest.split(" ");
@@ -258,6 +328,13 @@ export const localRules: UnderstandingProvider = {
         return { intent: { kind: "expenses", q: expensesOf(rest, ctx, ctx.topic.q) }, confidence: 0.85, provider: this.id, why: "seguimiento de gastos" };
       }
     }
+    if (ctx.topic?.kind === "profit") {
+      const f = t.match(FOLLOW);
+      const rest = f ? f[1] : t;
+      if ((parseRange(rest, ctx.now) || POINT.test(rest)) && (f || rest.split(" ").length <= 4) && !HARD_NAV.test(rest)) {
+        return { intent: { kind: "profit", q: profitRange(rest, ctx, ctx.topic.q) }, confidence: 0.85, provider: this.id, why: "seguimiento de ganancia" };
+      }
+    }
     if (ctx.topic?.kind === "module") {
       const f = t.match(/^y (?:como|que pasos)\b.*$/);
       if (f) {
@@ -268,10 +345,40 @@ export const localRules: UnderstandingProvider = {
 
     if (CAPS.test(t)) return { intent: { kind: "capabilities" }, confidence: 1, provider: this.id, why: "qué sabe hacer" };
 
+    if (TASKS.test(t)) return { intent: { kind: "tasks" }, confidence: 0.9, provider: this.id, why: "pendientes" };
+
+    // «Crea un cliente que se llama Juan Pérez», «nuevo producto zapatera negra».
+    const cd = t.match(CLIENT_DO);
+    if (cd && !/^(?:cuanto|como|que|cual)/.test(t)) {
+      const d = clientOf(cd[1], cd[2]);
+      if (d) d.name = titleCase(asSaid(text, d.name.toLowerCase()));
+      if (d) return { intent: { kind: "draft_client", draft: d }, confidence: 0.85, provider: this.id, why: "llenar tercero" };
+    }
+    const pd = t.match(PRODUCT_DO);
+    if (pd && !/^(?:cuanto|como|que|cual)/.test(t) && !/^(?:nuevo|nueva)$/.test(pd[1].trim())) {
+      return { intent: { kind: "draft_product", name: titleCase(asSaid(text, pd[1].trim())).slice(0, 120) }, confidence: 0.85, provider: this.id, why: "llenar producto" };
+    }
+
     // «Registra un gasto de 50 mil en arriendo».
     const ed = t.match(EXPENSE_DO);
     if (ed && !/^(?:cuanto|como|que|cual)/.test(t)) {
       return { intent: { kind: "draft_expense", draft: draftOf(ed[1]) }, confidence: 0.85, provider: this.id, why: "llenar gasto" };
+    }
+
+    const howtoFirst = HOWTO.test(t) && !HOW_IS.test(t);
+    if (CASH.test(t) && CASH_ASK.test(t) && !HARD_NAV.test(t) && !howtoFirst && !EXPLAIN.test(t)) {
+      return { intent: { kind: "cash" }, confidence: 0.85, provider: this.id, why: "caja" };
+    }
+    if (GOALS.test(t) && GOALS_ASK.test(t) && !HARD_NAV.test(t) && !howtoFirst && !EXPLAIN.test(t)) {
+      return { intent: { kind: "goals", q: { what: /\bcomision/.test(t) ? "commission" : "goals" } }, confidence: 0.85, provider: this.id, why: "metas" };
+    }
+    if (PROFIT.test(t) && PROFIT_ASK.test(t) && !HARD_NAV.test(t) && !howtoFirst && !EXPLAIN.test(t)) {
+      return { intent: { kind: "profit", q: profitRange(t, ctx, null) }, confidence: 0.85, provider: this.id, why: "ganancia" };
+    }
+    if (PAYABLE.test(t) && !EXPENSE_WORD.test(t) && !HARD_NAV.test(t) && !howtoFirst && !EXPLAIN.test(t)) {
+      const who = t.match(PAYABLE_WHO)?.[1]?.replace(/\s+(?:todavia|aun|ahora|en total)$/, "").trim() ?? null;
+      const supplier = who && !/^(?:los proveedores|proveedores|todos|nadie|en total|total)$/.test(who) ? who : null;
+      return { intent: { kind: "payables", q: { supplier } }, confidence: 0.85, provider: this.id, why: "cuentas por pagar" };
     }
 
     const stock = HARD_NAV.test(t) ? null : stockOf(t);

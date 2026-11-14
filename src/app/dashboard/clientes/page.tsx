@@ -18,7 +18,11 @@ import { Repurchase } from "./Repurchase";
 import { useFeature } from "@/lib/useFeature";
 import { StatementDrawer } from "./StatementDrawer";
 import { ThirdPartyForm } from "./ThirdPartyForm";
+import { useUrlAction } from "@/lib/url-intent";
 import { KINDS, errorText, initials, kindInfo, loadBalances, loadThirdParties, money, waLink, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
+
+/** Datos que trae REM para un tercero nuevo («crea un cliente que se llama…»). */
+type Prefill = NonNullable<React.ComponentProps<typeof ThirdPartyForm>["prefill"]>;
 
 type Tab = "terceros" | "cartera" | "avisos" | "frecuentes" | "puntos" | "recompra";
 type CreditFilter = "all" | "with" | "overdue" | "over" | "blocked";
@@ -40,7 +44,7 @@ export default function TercerosPage() {
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
   const [credit, setCredit] = useState<CreditFilter>("all");
   const [limit, setLimit] = useState(PAGE);
-  const [form, setForm] = useState<{ open: boolean; row: ThirdParty | null; key: number }>({ open: false, row: null, key: 0 });
+  const [form, setForm] = useState<{ open: boolean; row: ThirdParty | null; key: number; prefill?: Prefill; kinds?: ThirdKind[] }>({ open: false, row: null, key: 0 });
   const [statementFor, setStatementFor] = useState<ThirdParty | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -109,9 +113,26 @@ export default function TercerosPage() {
     return { open, overdue, withCredit };
   }, [balances, parties]);
 
-  function openForm(row: ThirdParty | null) {
-    setForm((f) => ({ open: true, row, key: f.key + 1 }));
+  function openForm(row: ThirdParty | null, prefill?: Prefill, kinds?: ThirdKind[]) {
+    setForm((f) => ({ open: true, row, key: f.key + 1, prefill, kinds }));
   }
+  // REM: «crea un cliente que se llama Juan Pérez con cédula…» llega con ?nuevo=tercero&nombre=…. Solo llena; guarda la persona.
+  useUrlAction("tercero", () => {
+    if (!canEdit) return;
+    const url = new URL(window.location.href);
+    const get = (k: string) => (url.searchParams.get(k) ?? "").trim();
+    const nit = get("nit") === "1";
+    const prefill: Prefill = {
+      ...(get("nombre") ? { name: get("nombre").slice(0, 120) } : {}),
+      ...(/^\d{5,12}$/.test(get("documento")) ? { document_number: get("documento") } : {}),
+      ...(/^\d{7,12}$/.test(get("celular")) ? { mobile: get("celular") } : {}),
+      ...(nit ? { person_type: "juridica" as const, document_type: "NIT" } : {}),
+    };
+    const kinds: ThirdKind[] = get("tipo") === "supplier" ? ["supplier"] : ["customer"];
+    for (const k of ["tipo", "nombre", "documento", "celular", "nit"]) url.searchParams.delete(k);
+    window.history.replaceState(null, "", url.toString());
+    openForm(null, prefill, kinds);
+  });
 
   function onSaved(row: ThirdParty) {
     setParties((cur) => {
@@ -399,7 +420,8 @@ export default function TercerosPage() {
           onClose={() => setForm((f) => ({ ...f, open: false }))}
           storeId={store.id}
           initial={form.row}
-          defaultKinds={kind !== "all" ? [kind] : ["customer"]}
+          defaultKinds={form.kinds ?? (kind !== "all" ? [kind] : ["customer"])}
+          prefill={form.row ? undefined : form.prefill}
           canCredit={perm.credit}
           balance={form.row ? balances.get(form.row.id) : null}
           existing={parties}

@@ -43,13 +43,18 @@ REM es el asistente de voz de RemHub. Este documento explica cómo está hecho, 
   - `erp_daily_close(p_store, p_day)`: el cierre de un día, por punto y por vendedor. Basta uno de los permisos `reports`, `cash_manage` o `profit_view`.
   - `search_products_safe` + `erp_product_stock_by_point(p_product)`: existencias de un producto por punto. Basta uno de los permisos `products`, `products_view`, `inventory`, `pos` o `purchases`. Muestra todos los puntos, igual que la pantalla.
   - `erp_expenses_list(...)`: gastos de un rango, solo de los puntos de la persona. Basta uno de los permisos `expenses`, `expenses_pay` o `budgets`.
+  - `erp_profit_summary(p_store, p_from, p_to)`: ventas, costo y ganancia de un rango (y por punto y producto). Pide `profit_view` y respeta los puntos. REM la usa para «¿cuánto vendimos este mes?», «lo más vendido este mes» y «¿cuánto ganamos?».
+  - `erp_my_tasks(p_store)`: «Tus pendientes» del inicio. Cada pendiente sale solo si la persona tiene el permiso.
+  - `erp_payables_board(p_store)`: cuentas por pagar a proveedores. Pide `payables` y respeta los puntos.
+  - `erp_cash_board(p_store)`: cajas de los puntos de la persona. Pide `cash` o `cash_manage`.
+  - `erp_goals_progress` y `erp_commissions`: metas y comisión del mes. Quien no administra el equipo ve solo lo suyo.
   - `erp_receivables_overview(p_store)`: la cartera. Es la misma que usa la pantalla de Cartera. **Su definición no está en el repositorio**: se creó antes y sus permisos no se pudieron leer. REM solo la llama si la persona tiene `receivables` o `credit`, como la pestaña.
 - **Planes:** `canOpen` en `DashboardShell` ya descuenta lo que el plan bloquea (`saas_plan_blocked_permissions`), y la lista que recibe REM sale de ahí. Cuando algo no está disponible, REM distingue si es por el plan o por el permiso: compara con `canOpenByRole`, que no cuenta el plan.
 
 ### Lo que NO se verificó (pendiente)
 
 - **Las políticas RLS de cada tabla.** REM no las toca: toda escritura pasa por las funciones de cada pantalla, que ya existían.
-- **Los pasos manuales de cada módulo.** Solo están escritos los que se leyeron en el código: crear producto, registrar gasto, ingresar factura de compra, crear cliente o tercero, abrir y cerrar caja, crear categoría y crear usuario. En el resto, REM explica para qué sirve el módulo y ofrece abrirlo. No inventa pasos.
+- **Los pasos manuales de cada módulo.** Solo están escritos los que se leyeron en el código: crear producto, registrar gasto, ingresar factura de compra, crear cliente o tercero, abrir y cerrar caja, crear categoría, crear usuario, apartado, cotización, promoción y garantía o devolución. En el resto, REM explica para qué sirve el módulo y ofrece abrirlo. No inventa pasos.
 - **Prueba con micrófono y parlante reales** (computador, iPhone y Android).
 
 ---
@@ -85,7 +90,7 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 | `src/lib/rem/understand.ts` | Comprensión: normaliza el texto (tildes, «rem/ren», «por favor»), detecta la intención, saca los datos (fecha, punto, «las mías», «lo más vendido»), sigue el tema de la conversación, maneja la ambigüedad y da un nivel de confianza. |
 | `src/lib/rem/period.ts` | Fechas dichas: hoy, ayer, antier, el lunes, hace 3 días, 5 de noviembre, 5/11. Rangos: este mes, el mes pasado, esta semana, la semana pasada, en octubre, este año. Siempre con la fecha de Colombia. |
 | `src/lib/rem/money.ts` | Valores dentro de una frase: «50 mil», «cincuenta mil», «$20.000», «1 millón 200 mil». |
-| `src/lib/rem/actions.ts` | Registro cerrado de acciones con riesgo, confirmación y permisos: `sales.summary`, `stock.product`, `expenses.summary`, `debts.summary`. |
+| `src/lib/rem/actions.ts` | Registro cerrado de acciones con riesgo, confirmación y permisos: `sales.summary`, `profit.summary`, `stock.product`, `expenses.summary`, `debts.summary`, `payables.summary`, `cash.status`, `goals.progress`, `tasks.mine`. |
 | `src/lib/rem/team.ts` | Lo que REM no entendió en la tienda (sin nombres) y las frases que el dueño o el administrador enseñan para todos (migración 20261322). |
 | `src/lib/rem/respond.ts` | Respuestas: explicar, cómo se hace, crear aquí, qué sé hacer, «¿te refieres a…?». |
 | `src/lib/rem/brain.ts` | Une todo y guarda el estado corto de la conversación: el tema, lo que ofreció y las opciones que dio. |
@@ -100,8 +105,9 @@ Cada capa hace una sola cosa. Una capa de comprensión nunca ejecuta y nunca dec
 2. «Apágate».
 3. «Ayuda» o «¿qué sabes hacer?»: responde según los permisos de la persona.
 4. **Cerebro:** responde a lo que REM acaba de ofrecer («sí, ábrela»), o elige entre las opciones que dio. Si no, intenta entender:
-   - «registra un gasto de 50 mil en arriendo» (abre el formulario lleno);
-   - existencias, cartera, gastos y ventas;
+   - «qué tengo pendiente»;
+   - «registra un gasto de 50 mil en arriendo», «crea un cliente que se llama…», «crea un producto que se llama…» (abren el formulario lleno);
+   - caja, metas y comisión, ganancia, cuentas por pagar, existencias, cartera, gastos y ventas;
    - explicar o «cómo se hace»;
    - «crea uno nuevo».
 5. La pantalla abierta reclama la frase (`claims`). Por ejemplo, «solo los agotados» en Productos.
@@ -217,7 +223,7 @@ Lo que alguien le enseña a REM no cambia lo que REM hace con los demás. Así n
 
 ## 6. Pruebas
 
-Se corren con `npm test` (294 en verde, 59 de REM) y `npm run test:sql`.
+Se corren con `npm test` (299 en verde, 64 de REM) y `npm run test:sql`.
 
 | Archivo | Qué prueba |
 |---|---|
@@ -242,11 +248,11 @@ Se corren con `npm test` (294 en verde, 59 de REM) y `npm run test:sql`.
 | Auditoría de REM, rutas, permisos y consultas | ✅ |
 | Catálogo de capacidades armado desde el código | ✅ |
 | Explicar módulos | ✅ los 32 |
-| «Cómo se hace» | ✅ 8 con pasos verificados + 4 por voz · ⏳ el resto: explica y abre |
+| «Cómo se hace» | ✅ 12 con pasos verificados + 4 por voz · ⏳ el resto: explica y abre |
 | Consultas: ventas hoy, ayer, otro día, por punto, las propias y lo más vendido | ✅ |
 | Consultas: existencias de un producto, gastos por rango (pendientes y vencidos), cartera total y por cliente | ✅ |
-| Ventas de un rango («este mes») | ⏳ lo dice y abre el informe de Rentabilidad; sumar por voz necesita una función nueva en la base |
-| Llenar formularios por voz | ✅ gasto («registra un gasto de 50 mil en arriendo») · ⏳ otros formularios |
+| Consultas: ventas y lo más vendido de un rango, ganancia y margen, pendientes, cuentas por pagar (total y por proveedor), caja, metas y comisión | ✅ (ventas por rango y ganancia: con permiso de rentabilidad) |
+| Llenar formularios por voz | ✅ gasto, cliente o proveedor (nombre, cédula o NIT, celular) y producto (nombre) · ⏳ otros formularios |
 | Conversación con contexto, ambigüedad y confianza | ✅ |
 | Contexto de la página («crea uno nuevo», «¿para qué sirve esto?») | ✅ |
 | Registro de acciones con riesgo y confirmación | ✅ (las de riesgo alto siguen en sus pantallas, que ya confirman) |
