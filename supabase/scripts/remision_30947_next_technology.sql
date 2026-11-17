@@ -190,6 +190,7 @@ declare
   v_proveedor            text    := 'NEXT TECHNOLOGY';
   v_proveedor_id         uuid    := null;              -- solo si la Parte 1 muestra proveedores parecidos: el id del correcto
   v_reactivar_inactivos  boolean := false;             -- true = si un código existe pero está inactivo, se reactiva
+  v_crear_aunque_parezca text[]  := '{}';              -- códigos que se crean nuevos aunque otro producto tenga el código en el nombre, p. ej. '{88130}'
   v_remision             text    := '30947';
   v_fecha                date    := '2026-11-03';
   v_vence                date    := '2026-12-03';
@@ -326,7 +327,7 @@ begin
     else
       select string_agg(name || ' [código ' || coalesce(sku, '—') || ']', ' · ') into v_ex from public.products
       where store_id = v_store and ((' ' || upper(name) || ' ') like ('% ' || r.codigo || ' %') or upper(btrim(coalesce(barcode, ''))) = r.codigo);
-      if v_ex is not null then
+      if v_ex is not null and not (r.codigo = any (v_crear_aunque_parezca)) then
         v_prob := v_prob || (r.codigo || ': no hay producto con ese código, pero sí con el código en el nombre: ' || v_ex
                              || '. Si es el mismo, ponle el código ' || r.codigo || ' en RemHub y vuelve a correr.');
       end if;
