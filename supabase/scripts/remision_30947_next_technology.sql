@@ -4,7 +4,8 @@
 -- Qué hace (todo con las MISMAS funciones de la app, actuando como el dueño):
 --   · Proveedor NEXT TECHNOLOGY: lo reutiliza si existe con ese nombre exacto; si no, lo crea
 --     (plazo 30 días, SIN NIT: el 1041204773 de la remisión no está confirmado como suyo).
---   · Productos: reutiliza los que ya tienen ese código; crea los que faltan con
+--   · Productos: reutiliza el que tiene ese código; si ninguno, el que tiene el código en el
+--     nombre (ej.: «CLOSET ARMABLE DE TELA 88130» [código 529] para el 88130); crea los que faltan con
 --     nombre = descripción de la remisión (que ya termina en el código) y código exacto.
 --   · Ingreso de factura (erp_receive_invoice, igual que Inventario → Ingreso de factura):
 --     compra + 44 líneas + kardex + suma a la bodega + costo promedio + último costo
@@ -106,29 +107,35 @@ m as (
   from d left join public.products pr on pr.store_id = (select id from t limit 1) and upper(btrim(pr.sku)) = d.codigo
   group by d.codigo
 ),
-dup as (
-  select d.codigo, string_agg(pr.name || ' [código ' || coalesce(pr.sku, '—') || ']', ' · ') as cuales
+-- Si ningún producto tiene el código, el que lo tiene en el nombre (o en el código de barras).
+nm as (
+  select d.codigo, count(pr.id) as n, (array_agg(pr.id))[1] as id, string_agg(pr.name || ' [código ' || coalesce(pr.sku, '—') || ']', ' · ') as cuales
   from d join public.products pr on pr.store_id = (select id from t limit 1)
-    and upper(btrim(coalesce(pr.sku, ''))) <> d.codigo
     and ((' ' || upper(pr.name) || ' ') like ('% ' || d.codigo || ' %') or upper(btrim(coalesce(pr.barcode, ''))) = d.codigo)
   group by d.codigo
 ),
+pick as (
+  select d.codigo, m.n as n_sku, case when m.n = 0 then coalesce(nm.n, 0) else 0 end as n_nom, nm.cuales,
+         case when m.n = 1 then m.id when m.n = 0 and nm.n = 1 then nm.id end as id
+  from d join m using (codigo) left join nm using (codigo)
+),
 det as (
   select d.codigo, d.descripcion, d.cantidad::bigint as cantidad, d.costo::numeric as costo, (d.cantidad * d.costo)::numeric as subtotal,
-         m.n, pr.name as actual, pr.active, coalesce(pr.stock, 0) as stock_total, coalesce(pr.cost_price, 0) as costo_prom,
-         coalesce(sl.qty, 0) as stock_bodega, dup.cuales,
+         pk.n_sku, pr.name as actual, pr.sku as sku_actual, pr.active, coalesce(pr.stock, 0) as stock_total, coalesce(pr.cost_price, 0) as costo_prom,
+         coalesce(sl.qty, 0) as stock_bodega, pk.cuales,
          case when pr.id is null then null else concat_ws(' / ', pr.markup_1, pr.markup_2, pr.markup_3, pr.markup_4, pr.markup_5) end as pct_actual,
          case
-           when m.n > 1 then 'REVISAR: ' || m.n || ' productos con este código'
-           when m.n = 1 and not coalesce(pr.active, true) then 'REVISAR: existe pero está inactivo'
-           when m.n = 1 then 'Reutilizar (suma unidades)'
-           when dup.cuales is not null then 'REVISAR: posible duplicado'
+           when pk.n_sku > 1 then 'REVISAR: ' || pk.n_sku || ' productos con este código'
+           when pk.n_nom > 1 then 'REVISAR: ' || pk.n_nom || ' productos con este código en el nombre'
+           when pk.id is not null and (select count(*) from pick p2 where p2.id = pk.id) > 1 then 'REVISAR: el mismo producto para varios códigos'
+           when pk.id is not null and not coalesce(pr.active, true) then 'REVISAR: existe pero está inactivo'
+           when pk.n_sku = 1 then 'Reutilizar (suma unidades)'
+           when pk.id is not null then 'Reutilizar por el nombre (suma unidades)'
            else 'Crear'
          end as accion
-  from d join m using (codigo)
-  left join public.products pr on pr.id = m.id
+  from d join pick pk using (codigo)
+  left join public.products pr on pr.id = pk.id
   left join public.erp_stock_levels sl on sl.product_id = pr.id and sl.warehouse_id = (select id from w limit 1)
-  left join dup using (codigo)
 ),
 est as (
   select det.*,
@@ -171,7 +178,8 @@ union all
 select row_number() over (order by codigo)::integer, codigo, descripcion, cantidad, costo, subtotal, accion, actual, stock_bodega, stock_total, pct_actual,
        precio_estimado,
        concat_ws(' | ',
-         case when cuales is not null and accion <> 'Crear' then 'Otros con el código en el nombre: ' || cuales end,
+         case when accion like 'Reutilizar por el nombre%' then 'Tiene el código en el nombre; su código en RemHub es ' || coalesce(sku_actual, '—') || ' (no se cambia)' end,
+         case when accion like 'REVISAR: % en el nombre' then cuales end,
          case when actual is not null and upper(btrim(actual)) <> upper(btrim(descripcion)) then 'Nombre en RemHub distinto al de la remisión (no se cambia)' end)
 from est
 order by orden;
@@ -190,7 +198,8 @@ declare
   v_proveedor            text    := 'NEXT TECHNOLOGY';
   v_proveedor_id         uuid    := null;              -- solo si la Parte 1 muestra proveedores parecidos: el id del correcto
   v_reactivar_inactivos  boolean := false;             -- true = si un código existe pero está inactivo, se reactiva
-  v_crear_aunque_parezca text[]  := '{}';              -- códigos que se crean nuevos aunque otro producto tenga el código en el nombre, p. ej. '{88130}'
+  v_crear_aunque_parezca text[]  := '{}';              -- códigos que se crean NUEVOS aunque un producto tenga el código en el nombre, p. ej. '{88130}'
+                                                       -- (sin esto, ese producto se usa en la factura)
   v_remision             text    := '30947';
   v_fecha                date    := '2026-11-03';
   v_vence                date    := '2026-12-03';
@@ -202,7 +211,7 @@ declare
   -- ---------------------------------------------------------- trabajo
   v_rows jsonb; v_store uuid; v_owner uuid; v_wh uuid; v_wh_name text; v_sup uuid; v_sup_new boolean := false;
   v_n integer; v_q bigint; v_t numeric; v_prob text[] := '{}'; r record; v_id uuid; v_items jsonb := '[]'::jsonb;
-  v_ids jsonb := '{}'::jsonb; v_inactive jsonb := '{}'::jsonb; v_before jsonb := '{}'::jsonb; v_created integer := 0; v_reused integer := 0; v_reactivated integer := 0;
+  v_ids jsonb := '{}'::jsonb; v_inactive jsonb := '{}'::jsonb; v_by_name jsonb := '{}'::jsonb; v_before jsonb := '{}'::jsonb; v_created integer := 0; v_reused integer := 0; v_reactivated integer := 0;
   v_purchase uuid; pu record; v_step integer; v_dir text; v_basis text; v_base numeric; v_exp numeric; pr record; v_ex text := '';
   v_fmt text;
 begin
@@ -310,13 +319,27 @@ begin
     raise notice 'Ojo: otro proveedor tiene un documento %. Se sigue porque es de otro proveedor.', v_remision;
   end if;
 
-  -- 5. Productos: uno por código; sin duplicados escondidos.
+  -- 5. Productos: primero por código; si ninguno lo tiene, el que tiene el código en el nombre
+  --    (o en el código de barras), p. ej. «CLOSET ARMABLE DE TELA 88130» [código 529] para el 88130.
   for r in select x->>'codigo' as codigo, x->>'descripcion' as descripcion from jsonb_array_elements(v_rows) x loop
-    select count(*) into v_n from public.products where store_id = v_store and upper(btrim(sku)) = r.codigo;
+    v_id := null;
+    select count(*), (array_agg(id))[1] into v_n, v_id from public.products where store_id = v_store and upper(btrim(sku)) = r.codigo;
     if v_n > 1 then
       v_prob := v_prob || (r.codigo || ': ' || v_n || ' productos con ese código');
-    elsif v_n = 1 then
-      select id into v_id from public.products where store_id = v_store and upper(btrim(sku)) = r.codigo;
+      v_id := null;
+    elsif v_n = 0 and not (r.codigo = any (v_crear_aunque_parezca)) then
+      select count(*), (array_agg(id))[1], string_agg(name || ' [código ' || coalesce(sku, '—') || ']', ' · ')
+      into v_n, v_id, v_ex from public.products
+      where store_id = v_store and ((' ' || upper(name) || ' ') like ('% ' || r.codigo || ' %') or upper(btrim(coalesce(barcode, ''))) = r.codigo);
+      if v_n > 1 then
+        v_prob := v_prob || (r.codigo || ': ' || v_n || ' productos tienen ese código en el nombre (' || v_ex
+                             || '). Ponle el código ' || r.codigo || ' al correcto en RemHub y vuelve a correr.');
+        v_id := null;
+      elsif v_n = 1 then
+        v_by_name := v_by_name || jsonb_build_object(r.codigo, v_ex);
+      end if;
+    end if;
+    if v_id is not null then
       if not coalesce((select active from public.products where id = v_id), true) then
         v_inactive := v_inactive || jsonb_build_object(r.codigo, true);
         if not v_reactivar_inactivos then
@@ -324,15 +347,16 @@ begin
         end if;
       end if;
       v_ids := v_ids || jsonb_build_object(r.codigo, v_id);
-    else
-      select string_agg(name || ' [código ' || coalesce(sku, '—') || ']', ' · ') into v_ex from public.products
-      where store_id = v_store and ((' ' || upper(name) || ' ') like ('% ' || r.codigo || ' %') or upper(btrim(coalesce(barcode, ''))) = r.codigo);
-      if v_ex is not null and not (r.codigo = any (v_crear_aunque_parezca)) then
-        v_prob := v_prob || (r.codigo || ': no hay producto con ese código, pero sí con el código en el nombre: ' || v_ex
-                             || '. Si es el mismo, ponle el código ' || r.codigo || ' en RemHub y vuelve a correr.');
-      end if;
     end if;
   end loop;
+  -- Un mismo producto no puede recibir dos códigos de la remisión.
+  select string_agg(x.codigos, ' · ') into v_ex from (
+    select string_agg(key, ' y ' order by key) || ' → ' || min(p.name) as codigos
+    from jsonb_each(v_ids) j join public.products p on p.id = (j.value #>> '{}')::uuid
+    group by p.id having count(*) > 1) x;
+  if v_ex is not null then
+    v_prob := v_prob || ('Varios códigos caen en el mismo producto: ' || v_ex || '. Ponle a cada producto su código en RemHub y vuelve a correr.');
+  end if;
   if array_length(v_prob, 1) > 0 then
     raise exception 'No se hizo nada. Revisa:%', E'\n· ' || array_to_string(v_prob, E'\n· ');
   end if;
@@ -443,7 +467,10 @@ begin
 
   v_fmt := format('Ingreso #%s · remisión %s de %s%s · %s referencias (%s nuevas, %s ya existían%s) · %s und. a %s · total $%s a crédito, vence %s · cuenta por pagar abierta $%s · ganancia %s %% (%s; precios por %s)',
     pu.number, v_remision, upper(btrim(v_proveedor)), case when v_sup_new then ' (proveedor nuevo, NIT pendiente)' else '' end,
-    v_codigos_esperados, v_created, v_reused, case when v_reactivated > 0 then ', ' || v_reactivated || ' reactivadas' else '' end,
+    v_codigos_esperados, v_created, v_reused,
+    case when v_by_name <> '{}'::jsonb then ', de ellas ' || (select count(*) from jsonb_object_keys(v_by_name)) || ' por el nombre: '
+         || (select string_agg(key || ' = ' || (value #>> '{}'), ' · ' order by key) from jsonb_each(v_by_name)) else '' end
+    || case when v_reactivated > 0 then ', ' || v_reactivated || ' reactivadas' else '' end,
     replace(to_char(v_unidades_esperadas, 'FM999,999'), ',', '.'), v_wh_name,
     replace(to_char(v_total_esperado, 'FM999,999,999'), ',', '.'), to_char(v_vence, 'DD/MM/YYYY'),
     replace(to_char(v_total_esperado, 'FM999,999,999'), ',', '.'), v_pct, v_ex, case v_basis when 'last' then 'último costo' else 'costo promedio' end);
