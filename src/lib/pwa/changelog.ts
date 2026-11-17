@@ -1143,6 +1143,16 @@ export const RELEASES: Release[] = [
       { icon: "🧠", text: "La próxima vez entiende" },
     ],
   },
+  {
+    id: 110, date: "2026-11-17", title: "✅ «Por debajo del costo» con el costo correcto",
+    summary: "El POS avisaba «precio por debajo del costo» comparando siempre con el costo promedio, aunque el precio se calcula con el último costo. Ahora el aviso, la alerta al administrador y la lista de Rentabilidad usan el mismo costo con que se calcula la ganancia del punto: si el punto usa el último costo, el aviso sale solo cuando de verdad se pierde plata.",
+    paths: ["/dashboard/pos", "/dashboard/rentabilidad"],
+    demo: [
+      { icon: "🏷️", text: "Último costo $30.000" },
+      { icon: "🛒", text: "Vendido a $36.512" },
+      { icon: "✅", text: "Sin aviso falso" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

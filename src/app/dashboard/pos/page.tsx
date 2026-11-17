@@ -1516,8 +1516,12 @@ export default function PosPage() {
     }
 
     // Precio por debajo del costo (20261225): se avisa antes de cobrar y la venta queda registrada para el dueño.
+    // Con el punto (20261323): compara contra el mismo costo con que se guarda la ganancia de la venta.
     if (!editingDoc) {
-      const { data: low } = await supabaseBrowser().rpc("erp_below_cost_check", { p_store: store.id, p_items: cart.map((i) => ({ product_id: i.productId, price: i.price })) });
+      const items = cart.map((i) => ({ product_id: i.productId, price: i.price }));
+      const withPoint = await supabaseBrowser().rpc("erp_below_cost_check", { p_store: store.id, p_items: items, p_point: pointId || null });
+      // Base sin 20261323 todavía: la versión de antes (sin punto).
+      const low = withPoint.error ? (await supabaseBrowser().rpc("erp_below_cost_check", { p_store: store.id, p_items: items })).data : withPoint.data;
       const list = Array.isArray(low) ? (low as Array<{ name: string }>) : [];
       if (list.length) {
         const go = await Swal.fire({
