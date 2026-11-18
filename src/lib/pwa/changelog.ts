@@ -1183,6 +1183,16 @@ export const RELEASES: Release[] = [
       { icon: "📸", text: "Foto, nombre, categorías" },
     ],
   },
+  {
+    id: 114, date: "2026-11-18", title: "🏷️ Códigos del proveedor y aviso de costo",
+    summary: "En el ingreso, cada producto tiene «+ cód. proveedor»: anotas cómo lo llama el proveedor (ej. 88130 para tu 529) y desde ahí el buscador lo encuentra también con ese código, en ingresos, POS y traslados. Los ves y quitas en la ficha del producto. Además, debajo de cada costo sale cuánto cambió frente a la última compra; si pasa del 20 % se marca en rojo y al registrar se pide confirmar.",
+    paths: ["/dashboard/inventario", "/dashboard/products"],
+    demo: [
+      { icon: "🏷️", text: "88130 = producto 529" },
+      { icon: "▲", text: "Costo +18 % vs última compra" },
+      { icon: "⚠️", text: "Confirmar si pasa del 20 %" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

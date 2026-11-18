@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import Swal from "@/lib/swal";
 import { MoneyInput } from "../MoneyInput";
 import { errorMessage, inputClass, inputStyle, money, toast, type ProductHit, type Warehouse } from "./shared";
 import { basisCost, priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
@@ -230,6 +231,7 @@ function HitRow({
         <span className="block truncate font-semibold">{hit.name}<InactiveTag hit={hit} /></span>
         <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
           {[hit.sku, hit.barcode].filter(Boolean).join(" · ") || "Sin código"}
+          {hit.supplier_code ? ` · 🏷️ cód. proveedor ${hit.supplier_code}` : ""}
           {Number(hit.cost_price) > 0 ? ` · Costo ${money(hit.cost_price)}` : ""}
         </span>
       </span>
@@ -662,6 +664,8 @@ export type Line = {
   note?: string;
   /** % de ganancia para los 5 precios que se guarda en el producto al registrar la factura (vacío = no cambia). */
   markup?: number | null;
+  /** Código con que este proveedor llama al producto (se aprende al registrar: el buscador lo encuentra después). */
+  supplier_code?: string;
 };
 
 /** Celda «% venta»: el % para los 5 precios y, en vivo, a cómo queda el precio de venta frente al de hoy. */
@@ -791,6 +795,86 @@ function LineNote({ value, onChange, name }: { value: string; onChange: (v: stri
   );
 }
 
+/** «Cód. proveedor» de la línea: cómo llama el proveedor a este producto (ej. 88130 para el 529). */
+function SupplierCode({ value, known, onChange, name }: { value?: string; known?: string; onChange: (v: string) => void; name: string }) {
+  const [editing, setEditing] = useState(false);
+  const shown = value ?? known ?? "";
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        maxLength={60}
+        defaultValue={shown}
+        placeholder="CÓDIGO DEL PROVEEDOR"
+        aria-label={`Código del proveedor para ${name}`}
+        className="mt-1 w-full rounded-lg border bg-transparent px-2 py-1 text-[11px] uppercase tracking-wide outline-none"
+        style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") {
+            e.preventDefault();
+            if (e.key === "Enter") onChange(e.currentTarget.value.toUpperCase().trim());
+            setEditing(false);
+          }
+        }}
+        onBlur={(e) => {
+          onChange(e.currentTarget.value.toUpperCase().trim());
+          setEditing(false);
+        }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="mt-0.5 block max-w-full truncate text-left text-[11px] uppercase tracking-wide transition hover:opacity-100"
+      style={{ color: shown ? "var(--t-text)" : "var(--t-muted)", opacity: shown ? 0.9 : 0.6 }}
+      title={shown ? "Código con que este proveedor llama al producto: el buscador lo encuentra por él" : "Anota cómo llama el proveedor a este producto: la próxima vez lo encuentras con ese código"}
+    >
+      {shown ? `🏷️ cód. proveedor: ${shown}` : "+ cód. proveedor"}
+    </button>
+  );
+}
+
+export type LastCost = { unit_cost: number; at: string; number: number | null; supplier: string | null };
+
+/** Costo de la última compra de cada producto y desde qué % se pide confirmar (20261325). null si falta la migración o el permiso. */
+export async function loadLastCosts(storeId: string, ids: string[], excludePurchase?: string | null) {
+  const { data, error } = await supabaseBrowser().rpc("erp_purchase_last_costs", { p_store: storeId, p_ids: [...new Set(ids)], p_exclude_purchase: excludePurchase ?? null });
+  const d = data as { ok?: boolean; alert_pct?: number; can_config?: boolean; items?: Array<LastCost & { product_id: string }> } | null;
+  if (error || !d?.ok) return null;
+  return {
+    alertPct: Number(d.alert_pct ?? 20),
+    canConfig: Boolean(d.can_config),
+    items: Object.fromEntries((d.items ?? []).map((r) => [r.product_id, { unit_cost: Number(r.unit_cost), at: r.at, number: r.number, supplier: r.supplier }])) as Record<string, LastCost>,
+  };
+}
+
+/** Cambio del costo frente a la última compra, en % (null si no hay con qué comparar). */
+export function costChangePct(cost: number, last?: LastCost | null) {
+  if (!last || !(last.unit_cost > 0) || !(cost > 0)) return null;
+  return ((cost - last.unit_cost) / last.unit_cost) * 100;
+}
+
+export const pctText = (n: number) => `${Math.abs(n) >= 10 ? Math.round(Math.abs(n)) : Math.abs(n).toFixed(1).replace(".", ",")} %`;
+
+/** Debajo del costo: «▲ 18 % vs $25.000». En rojo si pasa del % de aviso. */
+function CostChange({ cost, last, alertPct }: { cost: number; last?: LastCost; alertPct: number }) {
+  if (!last) return <span className="mt-0.5 block text-right text-[10px]" style={{ color: "var(--t-muted)" }} title="Este producto no tiene compras registradas">primera compra</span>;
+  const pct = costChangePct(cost, last);
+  if (pct === null) return null;
+  const when = last.at ? new Date(last.at).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+  const title = `Última compra: ${money(last.unit_cost)}${last.number ? ` · ingreso #${last.number}` : ""}${last.supplier ? ` · ${last.supplier}` : ""}${when ? ` · ${when}` : ""}`;
+  if (Math.abs(pct) < 0.5) return <span className="mt-0.5 block text-right text-[10px]" style={{ color: "var(--t-muted)" }} title={title}>= última compra</span>;
+  const big = Math.abs(pct) > alertPct;
+  const color = big ? "#e5484d" : pct > 0 ? "#d97706" : "#10b981";
+  return (
+    <span className="mt-0.5 block text-right text-[10px] tabular-nums" style={{ color, fontWeight: big ? 800 : 600 }} title={title}>
+      {pct > 0 ? "▲" : "▼"} {pctText(pct)} vs {money(last.unit_cost)}{big ? " ⚠️" : ""}
+    </span>
+  );
+}
+
 export function lineFromHit(hit: ProductHit, mode: "purchase" | "adjust", warehouseId: string): Line {
   return {
     product_id: hit.id,
@@ -801,6 +885,7 @@ export function lineFromHit(hit: ProductHit, mode: "purchase" | "adjust", wareho
     unit_cost: Number(hit.cost_price ?? 0),
     tax_rate: Number(hit.tax_rate ?? 0),
     warehouse_id: warehouseId,
+    ...(mode === "purchase" && hit.supplier_code ? { supplier_code: String(hit.supplier_code).toUpperCase() } : {}),
   };
 }
 
@@ -870,7 +955,13 @@ export function LineEditor({
   pricing,
   onCreateProduct,
   canEditProducts,
+  supplierId,
+  editingPurchaseId,
 }: {
+  /** Ingresos: proveedor elegido (para mostrar los códigos que ya se le conocen). */
+  supplierId?: string | null;
+  /** Ingresos: al editar uno, se compara el costo con la compra anterior a esa. */
+  editingPurchaseId?: string | null;
   /** Crear un producto nuevo desde la búsqueda (solo en ingresos). */
   onCreateProduct?: (name: string) => void;
   /** Ingresos: puede activar/inactivar y usar el editor rápido de cada producto (permiso de Productos). */
@@ -919,6 +1010,52 @@ export function LineEditor({
       const back = await activateProducts(storeId, done, false);
       if (back.done.length) setStatus((cur) => ({ ...cur, ...Object.fromEntries(back.done.map((id) => [id, { active: false, auto: false }])) }));
     }, 6000);
+  }
+
+  // Códigos que ya se le conocen a este proveedor (producto → código), para mostrarlos en cada línea.
+  const [knownCodes, setKnownCodes] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!isPurchase || !supplierId) { const t = window.setTimeout(() => setKnownCodes({}), 0); return () => window.clearTimeout(t); }
+    let alive = true;
+    void supabaseBrowser().rpc("erp_supplier_codes", { p_store: storeId, p_supplier: supplierId }).then(({ data }) => {
+      const d = data as { ok?: boolean; items?: Array<{ product_id: string; code: string }> } | null;
+      if (!alive) return;
+      setKnownCodes(d?.ok ? Object.fromEntries((d.items ?? []).map((r) => [r.product_id, r.code])) : {});
+    });
+    return () => { alive = false; };
+  }, [isPurchase, supplierId, storeId]);
+
+  // Costo de la última compra de cada producto (para «▲ 18 % vs $25.000»).
+  const [lastCosts, setLastCosts] = useState<{ alertPct: number; canConfig: boolean; items: Record<string, LastCost>; asked: Set<string> }>({ alertPct: 20, canConfig: false, items: {}, asked: new Set() });
+  const costKey = isPurchase ? [...new Set(lines.map((l) => l.product_id))].filter((id) => !lastCosts.asked.has(id)).sort().join(",") : "";
+  useEffect(() => {
+    if (!costKey) return;
+    let alive = true;
+    const ids = costKey.split(",");
+    void loadLastCosts(storeId, ids, editingPurchaseId).then((r) => {
+      if (!alive) return;
+      setLastCosts((cur) => ({
+        alertPct: r?.alertPct ?? cur.alertPct, canConfig: r?.canConfig ?? cur.canConfig,
+        items: { ...cur.items, ...(r?.items ?? {}) }, asked: new Set([...cur.asked, ...ids]),
+      }));
+    });
+    return () => { alive = false; };
+  }, [costKey, storeId, editingPurchaseId]);
+  const showCostChange = isPurchase && lastCosts.asked.size > 0;
+  async function configAlert() {
+    const r = await Swal.fire({
+      title: "Aviso de cambio de costo", input: "number", inputValue: String(lastCosts.alertPct),
+      inputAttributes: { min: "1", max: "500", step: "1" },
+      text: "Si el costo sube o baja más que este % frente a la última compra, se marca en rojo y al registrar se pide confirmar.",
+      showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+    });
+    if (!r.isConfirmed) return;
+    const { data, error } = await supabaseBrowser().rpc("erp_purchase_settings_set", { p_store: storeId, p_cost_alert_pct: Number(r.value) });
+    const d = data as { ok?: boolean; alert_pct?: number; message?: string } | null;
+    if (error || !d?.ok) return void toast("No se guardó", "error", d?.message ?? (error ? errorMessage(error) : undefined));
+    setLastCosts((cur) => ({ ...cur, alertPct: Number(d.alert_pct) }));
+    void toast(`Listo: avisa desde ${Number(d.alert_pct)} %`);
   }
 
   /** Desde el editor rápido: activo ↔ inactivo, de una vez y con «Deshacer». */
@@ -1095,6 +1232,16 @@ export function LineEditor({
               💤 {autoOff.length === 1 ? `«${autoOff[0].name}» se apagó solo` : `${autoOff.length} productos se apagaron solos`} por quedarse sin unidades: <b style={{ color: "var(--t-text)" }}>se {autoOff.length === 1 ? "activa" : "activan"} solos al registrar el ingreso</b>.
             </p>
           ) : null}
+          {showCostChange ? (
+            <p className="flex flex-wrap items-center justify-end gap-2 text-[11px]" style={{ color: "var(--t-muted)" }}>
+              Debajo de cada costo: cuánto cambió frente a la última compra. En rojo ⚠️ si pasa del {lastCosts.alertPct} % (se confirma al registrar).
+              {lastCosts.canConfig ? (
+                <button type="button" onClick={() => void configAlert()} className="rounded-full border px-2 py-0.5 font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                  ⚙️ Cambiar %
+                </button>
+              ) : null}
+            </p>
+          ) : null}
           <div
             className={`hidden gap-3 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide md:grid ${grid}`}
             style={{ color: "var(--t-muted)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}
@@ -1151,6 +1298,10 @@ export function LineEditor({
                       {isPurchase ? (
                         <div className="flex flex-wrap items-center gap-x-3">
                           <LineNote value={line.note ?? ""} name={line.name} onChange={(v) => patch(index, { note: v })} />
+                          {supplierId ? (
+                            <SupplierCode value={line.supplier_code} known={knownCodes[line.product_id]} name={line.name}
+                              onChange={(v) => patch(index, { supplier_code: v })} />
+                          ) : null}
                           {canEditProducts ? (
                             <button type="button" onClick={() => void openQuick(line.product_id)}
                               className="text-xs font-bold uppercase transition hover:brightness-125" style={{ color: "var(--t-accent)" }}
@@ -1212,6 +1363,9 @@ export function LineEditor({
                           onValueChange={(v) => patch(index, { unit_cost: v ?? 0 })}
                         />
                       </div>
+                      {showCostChange && lastCosts.asked.has(line.product_id) ? (
+                        <CostChange cost={line.unit_cost} last={lastCosts.items[line.product_id]} alertPct={lastCosts.alertPct} />
+                      ) : null}
                     </div>
                   ) : (
                     <div className="text-right text-sm">

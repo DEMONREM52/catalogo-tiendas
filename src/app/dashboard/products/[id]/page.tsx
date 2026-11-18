@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PublishButton } from "@/components/products/PublishButton";
 import { OfferPanel } from "../OfferPanel";
+import { SupplierCodesPanel } from "../SupplierCodesPanel";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import Swal from "@/lib/swal";
@@ -374,6 +375,7 @@ export default function EditProductPage() {
                 <p className="mt-1">ID del producto: <span className="font-mono">{d.id}</span></p>
               </details>
             </div>
+            {storeId ? <SupplierCodesPanel storeId={storeId} productId={d.id} /> : null}
 
             </div>
           </div>

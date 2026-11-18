@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AttachmentPicker, uploadStaged, type Staged } from "./AttachmentsUI";
-import { LineEditor, activateProducts, inactiveAmong, searchProductsRpc, type Line, type LineEditorHandle } from "./LineEditor";
+import { LineEditor, activateProducts, costChangePct, inactiveAmong, loadLastCosts, pctText, searchProductsRpc, type Line, type LineEditorHandle } from "./LineEditor";
 import { clearDraft, loadDraftFiles, readDraft, saveDraftFiles, timeAgo, writeDraft } from "./draft";
 import {
   Btn, Empty, Panel, askReason, confirmAction, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, useRunOnChange,
@@ -410,6 +410,27 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
         return;
       }
     }
+    // Costos que cambiaron mucho frente a la última compra (se revisa contra la base en este momento).
+    const lc = await loadLastCosts(ctx.storeId, valid.map((l) => l.product_id), editing?.id ?? null);
+    if (lc) {
+      const jumps = valid
+        .map((l) => ({ l, pct: costChangePct(l.unit_cost, lc.items[l.product_id]) }))
+        .filter((x): x is { l: Line; pct: number } => x.pct !== null && Math.abs(x.pct) > lc.alertPct);
+      if (jumps.length) {
+        const list = jumps.slice(0, 6)
+          .map(({ l, pct }) => `${l.name}: ${money(lc.items[l.product_id].unit_cost)} → ${money(l.unit_cost)} (${pct > 0 ? "▲" : "▼"} ${pctText(pct)})`)
+          .join(" · ") + (jumps.length > 6 ? ` · y ${jumps.length - 6} más` : "");
+        const title = jumps.length === 1 ? "Un costo cambió mucho" : `${jumps.length} costos cambiaron mucho`;
+        if (!(await confirmAction(title, `Frente a la última compra (más del ${lc.alertPct} %): ${list}. ¿Están bien?`, "Sí, están bien"))) return;
+      }
+    }
+    // Códigos del proveedor anotados en las líneas: quedan aprendidos para buscar con ellos la próxima vez.
+    const saveCodes = async () => {
+      const codes = valid.filter((l) => l.supplier_code).map((l) => ({ code: l.supplier_code, product_id: l.product_id, description: l.name }));
+      if (!codes.length || !f.supplier) return;
+      const { error: codeError } = await supabaseBrowser().rpc("erp_supplier_item_map_save", { p_store: ctx.storeId, p_supplier: f.supplier, p_items: codes });
+      if (codeError) void toast("Los códigos del proveedor no se guardaron", "warning", errorMessage(codeError));
+    };
     // Se activan después de registrar (si el ingreso falla, no cambia nada). Devuelve una frase para el mensaje final.
     const activateNow = async () => {
       if (!toActivate.length) return "";
@@ -468,6 +489,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       }
       await saveNotes(editing.id);
       await saveMarkups();
+      await saveCodes();
       const activated = await activateNow();
       const filesFailed = staged.length ? await uploadStaged(ctx.storeId, editing.id, staged) : 0;
       const done = editing;
@@ -505,6 +527,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     }
     if (purchaseId) await saveNotes(purchaseId as string);
     if (purchaseId) await saveMarkups();
+    if (purchaseId) await saveCodes();
     const activated = purchaseId ? await activateNow() : "";
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
@@ -718,6 +741,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 pricing={pricing}
                 onCreateProduct={canCreateProducts ? (name) => setQuickName(name) : undefined}
                 canEditProducts={canCreateProducts}
+                supplierId={form.supplier || null}
+                editingPurchaseId={editing?.id ?? null}
               />
               {quickName !== null ? (
                 <QuickProductModal

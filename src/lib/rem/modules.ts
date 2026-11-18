@@ -176,6 +176,8 @@ export const MODULES: ModuleInfo[] = [
         "Registra la factura del proveedor con los productos, las cantidades y los costos. También se puede cargar el XML.",
         "Si un producto está inactivo, igual sale en el buscador marcado «Inactivo»: lo agregas y lo activas ahí mismo o al registrar.",
         "Con «⚡ Editar rápido», debajo del nombre de cada producto, le cambias la foto, el nombre, el código de barras, las categorías o la descripción sin salir de la factura.",
+        "Con «+ cód. proveedor» anotas cómo llama el proveedor a ese producto: al registrar queda aprendido y el buscador lo encuentra con ese código.",
+        "Debajo de cada costo sale cuánto cambió frente a la última compra. Si cambia más del % de aviso (20 % si no lo cambias), al registrar te pide confirmar.",
         "Con eso suben las existencias y los precios se calculan con el porcentaje de ganancia de la tienda.",
       ],
       href: "/dashboard/inventario?tab=purchases", voice: "También puedes decirme «registrar una compra».", verified: true,

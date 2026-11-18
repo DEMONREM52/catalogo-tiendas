@@ -23,8 +23,11 @@ export type Warehouse = {
   next_invoice_number: number; next_remision_number: number;
 };
 export const WAREHOUSE_COLUMNS = "id,code,name,address,is_default,active,kind,phone,invoice_prefix,remision_prefix,next_invoice_number,next_remision_number";
-/** active / auto_inactive: los trae erp_search_products desde 20261324 (antes no venían: se toma como activo). */
-export type ProductHit = { id: string; name: string; sku: string | null; barcode: string | null; cost_price: number; tax_rate: number; stock: number; wh_qty: number; active?: boolean; auto_inactive?: boolean };
+/**
+ * active / auto_inactive: los trae erp_search_products desde 20261324 (antes no venían: se toma como activo).
+ * supplier_code: desde 20261325, el código de proveedor con que se encontró (si se buscó por ese código).
+ */
+export type ProductHit = { id: string; name: string; sku: string | null; barcode: string | null; cost_price: number; tax_rate: number; stock: number; wh_qty: number; active?: boolean; auto_inactive?: boolean; supplier_code?: string | null };
 
 export const money = (value: number | null | undefined) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(Number(value ?? 0));
