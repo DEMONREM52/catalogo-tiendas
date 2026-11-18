@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `4c4af866` · 116 capacidades · 32 módulos.
+Versión del catálogo: `3a37fe47` · 116 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -22,7 +22,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Radar de productos | `/dashboard/products/radar` | Revisa los productos y te dice qué les falta: sin foto, sin precio, quietos o sin ventas. También arma el plan del día para publicar en redes con recordatorio, y desde ahí puedes inactivar los que ya no hay. | — |
 | Lista general de productos | `/dashboard/lista-productos` | Es para consultar productos y precios sin poder cambiarlos. | — |
 | Categorías | `/dashboard/categories` | Agrupa los productos para ordenar el catálogo y los informes. | crear una categoría (3 pasos) |
-| Inventario | `/dashboard/inventario` | Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. | ingresar una factura de compra (3 pasos); hacer un traslado (por voz); hacer un conteo (por voz) |
+| Inventario | `/dashboard/inventario` | Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. | ingresar una factura de compra (4 pasos); hacer un traslado (por voz); hacer un conteo (por voz) |
 | Pedidos | `/dashboard/pedidos` | Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. | hacer un pedido interno (por voz) |
 | Centro de operaciones | `/dashboard/operaciones` | Reúne los documentos y movimientos de la tienda en un solo lugar: ventas, pedidos, traslados y lo de inventario. | — |
 | Terceros y cartera | `/dashboard/clientes` | Aquí están los clientes y los proveedores, la cartera con lo que te deben, los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. | crear un cliente (4 pasos) |

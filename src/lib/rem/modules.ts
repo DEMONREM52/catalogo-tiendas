@@ -174,6 +174,7 @@ export const MODULES: ModuleInfo[] = [
       steps: [
         "Abre Inventario y luego Facturas de compra.",
         "Registra la factura del proveedor con los productos, las cantidades y los costos. También se puede cargar el XML.",
+        "Si un producto está inactivo, igual sale en el buscador marcado «Inactivo»: lo agregas y lo activas ahí mismo o al registrar.",
         "Con eso suben las existencias y los precios se calculan con el porcentaje de ganancia de la tienda.",
       ],
       href: "/dashboard/inventario?tab=purchases", voice: "También puedes decirme «registrar una compra».", verified: true,

@@ -1163,6 +1163,16 @@ export const RELEASES: Release[] = [
       { icon: "🙈", text: "Inactivar al instante" },
     ],
   },
+  {
+    id: 112, date: "2026-11-18", title: "📦 Ingresa mercancía de productos inactivos",
+    summary: "Si un producto inactivo vuelve a llegar, ahora sale en el buscador del ingreso (también por foto, por voz y al asociar un XML) marcado «🙈 Inactivo». Lo agregas a la factura y lo activas ahí mismo, uno por uno o todos con un toque. Si al registrar sigue inactivo, RemHub te pregunta si lo activas. Los que se apagaron solos por quedarse sin unidades se activan solos al registrar.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔎", text: "Sale aunque esté inactivo" },
+      { icon: "✅", text: "Activar aquí mismo" },
+      { icon: "📦", text: "Registrar el ingreso" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

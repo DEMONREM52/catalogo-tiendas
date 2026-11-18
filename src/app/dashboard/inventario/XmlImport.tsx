@@ -253,13 +253,14 @@ function XmlReview({ storeId, warehouseId, canCreateProducts, inv, match, file, 
 function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId: string; initial: string; onPick: (h: ProductHit) => void; onCancel: () => void }) {
   // Se empieza buscando con la primera palabra de la descripción (lo demás suele ser presentación).
   const [q, setQ] = useState(initial.split(" ")[0] ?? "");
-  const { hits, loading } = useProductSearch({ storeId, query: q, enabled: true, limit: 8 });
+  // También los inactivos (lo que vuelve a llegar); al registrar se ofrece activarlos.
+  const { hits, loading } = useProductSearch({ storeId, query: q, enabled: true, limit: 8, includeInactive: true });
   return (
     <div className="w-full min-w-[220px] space-y-1">
       <div className="flex gap-1">
         <input autoFocus className={inputClass} style={inputStyle} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto, SKU o código"
           onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter" && hits[0]) onPick(hits[0]); }} />
-        <ProductPhotoButton storeId={storeId} activeOnly compact className="px-2" pickLabel="Asociar" onPick={async (h) => { const row = await productHitFromPhoto(storeId, h); if (row) onPick(row); }} />
+        <ProductPhotoButton storeId={storeId} compact className="px-2" pickLabel="Asociar" onPick={async (h) => { const row = await productHitFromPhoto(storeId, h, null, false, true); if (row) onPick(row); }} />
         <button type="button" className="px-2 text-xs" onClick={onCancel}>✕</button>
       </div>
       {loading ? <p className="text-xs">Buscando…</p> : null}
@@ -267,7 +268,7 @@ function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId: strin
         {hits.map((h) => (
           <li key={h.id}>
             <button type="button" className="block w-full px-2 py-1.5 text-left text-xs hover:opacity-80" onClick={() => onPick(h)}>
-              <b>{h.name}</b> <span style={{ color: "var(--t-muted)" }}>{[h.sku, h.barcode].filter(Boolean).join(" · ")} · Stock {h.stock}</span>
+              <b>{h.name}</b>{h.active === false ? <span className="font-bold" style={{ color: h.auto_inactive ? "#0ea5e9" : "#e5484d" }}> {h.auto_inactive ? "💤 sin unidades" : "🙈 inactivo"}</span> : null} <span style={{ color: "var(--t-muted)" }}>{[h.sku, h.barcode].filter(Boolean).join(" · ")} · Stock {h.stock}</span>
             </button>
           </li>
         ))}

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
-import { errorMessage, inputClass, inputStyle, money, type ProductHit, type Warehouse } from "./shared";
+import { errorMessage, inputClass, inputStyle, money, toast, type ProductHit, type Warehouse } from "./shared";
 import { basisCost, priceFromMarkup, uniformMarkup, type PurchasePricing } from "./purchase-pricing";
 import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
@@ -15,13 +15,42 @@ import { ProductPhotoButton } from "../PhotoSearchControls";
 import type { FinderHit } from "@/components/product-finder/ProductFinder";
 
 /**
+ * erp_search_products. Con includeInactive también trae los inactivos a mano (ingresos; la base exige permiso de
+ * Ingresos, Inventario o Productos). Si falta correr 20261324 se busca como antes, sin inactivos.
+ */
+export async function searchProductsRpc(args: { storeId: string; q: string; warehouseId?: string | null; inStockOnly?: boolean; limit?: number; includeInactive?: boolean }) {
+  const sb = supabaseBrowser();
+  const base = { p_store: args.storeId, p_q: args.q, p_warehouse: args.warehouseId ?? null, p_in_stock: Boolean(args.inStockOnly), p_limit: args.limit ?? 20 };
+  if (args.includeInactive) {
+    const res = await sb.rpc("erp_search_products", { ...base, p_include_inactive: true });
+    if (!res.error || !/p_include_inactive|Could not find the function|schema cache/i.test(res.error.message ?? "")) return res;
+  }
+  return sb.rpc("erp_search_products", base);
+}
+
+/** El producto está inactivo a mano (no por falta de unidades). */
+export const isManualInactive = (p: { active?: boolean | null; auto_inactive?: boolean | null }) => p.active === false && !p.auto_inactive;
+
+/** Etiqueta para un producto inactivo en los resultados (nada si está activo). */
+function InactiveTag({ hit }: { hit: ProductHit }) {
+  if (hit.active !== false) return null;
+  const auto = Boolean(hit.auto_inactive);
+  return (
+    <span className="ml-1.5 inline-block rounded-full px-1.5 py-px align-middle text-[10px] font-bold"
+      title={auto ? "Se apagó solo al quedarse sin unidades: se vuelve a activar solo al entrarle unidades" : "Lo inactivaron a mano: no se vende ni sale en los catálogos"}
+      style={auto ? { background: "color-mix(in oklab, #0ea5e9 16%, transparent)", color: "#0ea5e9" } : { background: "color-mix(in oklab, #e5484d 16%, transparent)", color: "#e5484d" }}>
+      {auto ? "💤 Sin unidades" : "🙈 Inactivo"}
+    </span>
+  );
+}
+
+/**
  * Producto elegido con la búsqueda por foto → la misma fila que da el buscador (con existencias de la bodega).
  * null si no está disponible aquí (inactivo, o sin existencias cuando solo se aceptan con existencias).
  */
-export async function productHitFromPhoto(storeId: string, hit: FinderHit, warehouseId?: string | null, inStockOnly?: boolean): Promise<ProductHit | null> {
-  const sb = supabaseBrowser();
+export async function productHitFromPhoto(storeId: string, hit: FinderHit, warehouseId?: string | null, inStockOnly?: boolean, includeInactive?: boolean): Promise<ProductHit | null> {
   for (const q of [hit.code, hit.name].filter((x): x is string => Boolean(x))) {
-    const { data } = await sb.rpc("erp_search_products", { p_store: storeId, p_q: q, p_warehouse: warehouseId ?? null, p_in_stock: Boolean(inStockOnly), p_limit: 40 });
+    const { data } = await searchProductsRpc({ storeId, q, warehouseId, inStockOnly, limit: 40, includeInactive });
     const row = ((data ?? []) as ProductHit[]).find((r) => r.id === hit.id);
     if (row) return row;
   }
@@ -29,10 +58,11 @@ export async function productHitFromPhoto(storeId: string, hit: FinderHit, wareh
 }
 
 /** Botón 📷 de los buscadores de inventario: elige con foto y entrega la fila lista (o avisa por qué no). */
-function InventoryPhotoButton({ storeId, warehouseId, inStockOnly, excludeIds, onPick, onMessage }: {
+function InventoryPhotoButton({ storeId, warehouseId, inStockOnly, includeInactive, excludeIds, onPick, onMessage }: {
   storeId: string;
   warehouseId?: string | null;
   inStockOnly?: boolean;
+  includeInactive?: boolean;
   excludeIds?: string[];
   onPick: (product: ProductHit) => void;
   onMessage: (text: string | null) => void;
@@ -42,12 +72,12 @@ function InventoryPhotoButton({ storeId, warehouseId, inStockOnly, excludeIds, o
     <span data-rem-photo className="contents">
       <ProductPhotoButton
         storeId={storeId}
-        activeOnly
+        activeOnly={!includeInactive}
         pickLabel="Agregar"
         onPick={async (hit) => {
           onMessage(null);
           if (excludeIds?.includes(hit.id)) { onMessage(`«${hit.name}» ya está en la lista.`); return; }
-          const row = await productHitFromPhoto(storeId, hit, warehouseId, inStockOnly);
+          const row = await productHitFromPhoto(storeId, hit, warehouseId, inStockOnly, includeInactive);
           if (row) onPick(row);
           else onMessage(inStockOnly ? `«${hit.name}» no tiene existencias en esta bodega.` : `«${hit.name}» no está disponible aquí (puede estar inactivo).`);
         }}
@@ -102,6 +132,7 @@ export function useProductSearch({
   query,
   enabled,
   limit = 15,
+  includeInactive,
 }: {
   storeId: string;
   warehouseId?: string | null;
@@ -109,6 +140,8 @@ export function useProductSearch({
   query: string;
   enabled: boolean;
   limit?: number;
+  /** También los inactivos a mano (ingresos: «volvió a llegar»). */
+  includeInactive?: boolean;
 }) {
   const [hits, setHits] = useState<ProductHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,7 +150,7 @@ export function useProductSearch({
 
   useEffect(() => {
     if (!enabled) return;
-    const key = `${storeId}|${warehouseId ?? ""}|${inStockOnly ? 1 : 0}|${limit}|${query.trim().toLowerCase()}`;
+    const key = `${storeId}|${warehouseId ?? ""}|${inStockOnly ? 1 : 0}|${limit}|${includeInactive ? 1 : 0}|${query.trim().toLowerCase()}`;
     let alive = true;
     const cached = cache.current.get(key);
     if (cached) {
@@ -127,13 +160,7 @@ export function useProductSearch({
     }
     setLoading(true);
     const timer = window.setTimeout(async () => {
-      const { data, error: err } = await supabaseBrowser().rpc("erp_search_products", {
-        p_store: storeId,
-        p_q: query,
-        p_warehouse: warehouseId ?? null,
-        p_in_stock: Boolean(inStockOnly),
-        p_limit: limit,
-      });
+      const { data, error: err } = await searchProductsRpc({ storeId, q: query, warehouseId, inStockOnly, limit, includeInactive });
       if (!alive) return;
       setLoading(false);
       if (err) {
@@ -149,7 +176,7 @@ export function useProductSearch({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [enabled, query, storeId, warehouseId, inStockOnly, limit]);
+  }, [enabled, query, storeId, warehouseId, inStockOnly, limit, includeInactive]);
 
   return { hits, loading, error };
 }
@@ -195,7 +222,7 @@ function HitRow({
     >
       <Thumb src={thumb} size={big ? 52 : 44} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{hit.name}</span>
+        <span className="block truncate font-semibold">{hit.name}<InactiveTag hit={hit} /></span>
         <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
           {[hit.sku, hit.barcode].filter(Boolean).join(" · ") || "Sin código"}
           {Number(hit.cost_price) > 0 ? ` · Costo ${money(hit.cost_price)}` : ""}
@@ -244,6 +271,7 @@ export function ProductPicker({
   storeId,
   warehouseId,
   inStockOnly,
+  includeInactive,
   excludeIds,
   addedQty,
   keepOpen,
@@ -254,6 +282,8 @@ export function ProductPicker({
   storeId: string;
   warehouseId?: string | null;
   inStockOnly?: boolean;
+  /** También los inactivos a mano (salen marcados «🙈 Inactivo»). */
+  includeInactive?: boolean;
   excludeIds?: string[];
   /** Productos ya agregados: se muestran con su cantidad en vez de ocultarse. */
   addedQty?: Record<string, number>;
@@ -270,7 +300,7 @@ export function ProductPicker({
   const boxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open });
+  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, includeInactive });
 
   useEffect(() => {
     function onDown(event: MouseEvent) {
@@ -322,7 +352,7 @@ export function ProductPicker({
           }}
           onKeyDown={keys.onKeyDown}
         />
-        <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
+        <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} includeInactive={includeInactive} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
       </div>
       {photoMsg ? <p className="mt-1 text-xs font-semibold" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}
       {open ? (
@@ -369,6 +399,7 @@ export function ProductSearchModal({
   storeId,
   warehouseId,
   inStockOnly,
+  includeInactive,
   excludeIds,
   addedQty,
   title = "Agregar producto",
@@ -376,6 +407,8 @@ export function ProductSearchModal({
   stockLabel,
   onCreate,
 }: {
+  /** También los inactivos a mano (salen marcados «🙈 Inactivo»). */
+  includeInactive?: boolean;
   /** Si viene, se ofrece crear un producto nuevo (con lo que se escribió como nombre). */
   onCreate?: (name: string) => void;
   open: boolean;
@@ -395,7 +428,7 @@ export function ProductSearchModal({
   const listRef = useRef<HTMLDivElement>(null);
   // Solo en el navegador (el portal necesita document.body).
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
-  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, limit: 20 });
+  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, limit: 20, includeInactive });
   const visible = hits.filter((h) => !excludeIds?.includes(h.id));
   const thumbs = useThumbs(open ? visible.map((h) => h.id) : []);
 
@@ -482,7 +515,7 @@ export function ProductSearchModal({
                   <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
                 ) : null}
               </div>
-              <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
+              <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} includeInactive={includeInactive} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
             </div>
             {photoMsg ? <p className="px-4 pt-1 text-xs font-semibold sm:px-5" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}
             <div ref={listRef} className="mt-2 min-h-[30vh] flex-1 overflow-y-auto overscroll-contain px-2 pb-2 sm:px-3">
@@ -768,6 +801,56 @@ export function lineFromHit(hit: ProductHit, mode: "purchase" | "adjust", wareho
 
 export type LineEditorHandle = { openPicker: () => void };
 
+type ActiveState = { active: boolean; auto: boolean };
+
+/** Activa productos (editar el producto: la base revisa el permiso de Productos). Devuelve los que sí quedaron activos. */
+export async function activateProducts(storeId: string, ids: string[], active = true): Promise<{ done: string[]; error: string | null }> {
+  if (!ids.length) return { done: [], error: null };
+  const { data, error } = await supabaseBrowser().from("products").update({ active }).eq("store_id", storeId).in("id", ids).select("id");
+  const done = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  if (error) return { done, error: errorMessage(error) };
+  return { done, error: done.length >= new Set(ids).size ? null : "Revisa que tengas el permiso de Productos." };
+}
+
+/** Productos de la lista que siguen inactivos a mano (consulta la base; para avisar antes de registrar). */
+export async function inactiveAmong(storeId: string, ids: string[]): Promise<Array<{ id: string; name: string }>> {
+  const out: Array<{ id: string; name: string }> = [];
+  const uniq = [...new Set(ids)];
+  for (let i = 0; i < uniq.length; i += 150) {
+    const { data } = await supabaseBrowser().from("products").select("id,name,active,auto_inactive").eq("store_id", storeId).in("id", uniq.slice(i, i + 150));
+    for (const r of (data ?? []) as Array<{ id: string; name: string; active: boolean | null; auto_inactive: boolean | null }>) {
+      if (isManualInactive(r)) out.push({ id: r.id, name: r.name });
+    }
+  }
+  return out;
+}
+
+/** Si los productos de la lista están activos. Solo se consulta lo que no se sabe (lo elegido en el buscador ya lo trae). */
+function useActiveStatus(storeId: string, ids: string[], enabled: boolean) {
+  const [map, setMap] = useState<Record<string, ActiveState>>({});
+  const missing = enabled ? [...new Set(ids)].filter((id) => !(id in map)).sort().join(",") : "";
+  useEffect(() => {
+    if (!missing) return;
+    let alive = true;
+    void (async () => {
+      const list = missing.split(",");
+      const next: Record<string, ActiveState> = {};
+      for (let i = 0; i < list.length; i += 150) {
+        const { data, error } = await supabaseBrowser().from("products").select("id,active,auto_inactive").eq("store_id", storeId).in("id", list.slice(i, i + 150));
+        if (error) return;
+        for (const r of (data ?? []) as Array<{ id: string; active: boolean | null; auto_inactive: boolean | null }>) {
+          next[r.id] = { active: r.active !== false, auto: Boolean(r.auto_inactive) };
+        }
+      }
+      // Lo que no volvió (borrado o sin acceso) se da por activo para no preguntar en bucle.
+      for (const id of list) next[id] ??= { active: true, auto: false };
+      if (alive) setMap((cur) => ({ ...cur, ...next }));
+    })();
+    return () => { alive = false; };
+  }, [missing, storeId]);
+  return [map, setMap] as const;
+}
+
 type Col = "qty" | "cost" | "tax" | "markup";
 
 export function LineEditor({
@@ -781,9 +864,12 @@ export function LineEditor({
   editorRef,
   pricing,
   onCreateProduct,
+  canActivate,
 }: {
   /** Crear un producto nuevo desde la búsqueda (solo en ingresos). */
   onCreateProduct?: (name: string) => void;
+  /** Ingresos: puede activar aquí los productos inactivos (permiso de Productos). */
+  canActivate?: boolean;
   storeId: string;
   /** Si viene, cada producto tiene su «% venta» (solo en ingresos y con permiso de precios). */
   pricing?: PurchasePricing | null;
@@ -809,6 +895,26 @@ export function LineEditor({
   const cols: Col[] = isPurchase ? (withPrice ? ["qty", "cost", "tax", "markup"] : ["qty", "cost", "tax"]) : ["qty"];
 
   useImperativeHandle(editorRef, () => ({ openPicker: () => setModalOpen(true) }), []);
+
+  // Ingresos: también se agregan productos inactivos («volvió a llegar») y se pueden activar aquí mismo.
+  const [status, setStatus] = useActiveStatus(storeId, lines.map((l) => l.product_id), isPurchase);
+  const [activating, setActivating] = useState<string | null>(null);
+  const manualOff = isPurchase ? lines.filter((l) => status[l.product_id] && !status[l.product_id].active && !status[l.product_id].auto) : [];
+  const autoOff = isPurchase ? lines.filter((l) => status[l.product_id] && !status[l.product_id].active && status[l.product_id].auto) : [];
+  async function activate(ids: string[], key: string) {
+    setActivating(key);
+    const { done, error } = await activateProducts(storeId, ids);
+    setActivating(null);
+    if (done.length) setStatus((cur) => ({ ...cur, ...Object.fromEntries(done.map((id) => [id, { active: true, auto: false }])) }));
+    if (error && !done.length) return void toast("No se pudo activar", "error", error);
+    // Una sola ventanita a la vez: si faltaron algunos, se avisa eso (sin «Deshacer»).
+    if (error) return void toast(`Se activaron ${done.length} de ${ids.length}`, "warning", error);
+    const one = done.length === 1 ? lines.find((l) => l.product_id === done[0])?.name : null;
+    undoToast(one ? `✅ Activaste «${one}»: ya se vende y sale en los catálogos` : `✅ Activaste ${done.length} productos: ya se venden y salen en los catálogos`, async () => {
+      const back = await activateProducts(storeId, done, false);
+      if (back.done.length) setStatus((cur) => ({ ...cur, ...Object.fromEntries(back.done.map((id) => [id, { active: false, auto: false }])) }));
+    }, 6000);
+  }
 
   function cellRef(productId: string, col: Col) {
     return (el: HTMLInputElement | null) => {
@@ -843,6 +949,9 @@ export function LineEditor({
   function addHit(hit: ProductHit) {
     const exists = lines.some((l) => l.product_id === hit.id);
     pendingFocus.current = hit.id;
+    if (isPurchase && typeof hit.active === "boolean") {
+      setStatus((cur) => ({ ...cur, [hit.id]: { active: hit.active !== false, auto: Boolean(hit.auto_inactive) } }));
+    }
     if (!exists) {
       onChange([...lines, lineFromHit(hit, mode, warehouseId)]);
       return;
@@ -911,6 +1020,7 @@ export function LineEditor({
         warehouseId={isPurchase ? null : warehouseId}
         excludeIds={isPurchase ? undefined : lines.map((l) => l.product_id)}
         addedQty={isPurchase ? addedQty : undefined}
+        includeInactive={isPurchase}
         inputRef={searchRef}
         placeholder={lines.length ? "🔎 Buscar otro producto (nombre, SKU o código de barras)…" : "🔎 Busca el primer producto: nombre, SKU o código de barras…"}
         onPick={addHit}
@@ -922,6 +1032,31 @@ export function LineEditor({
         </p>
       ) : (
         <div className="space-y-2">
+          {manualOff.length ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border p-3 text-sm"
+              style={{ borderColor: "color-mix(in oklab, #e5484d 40%, var(--t-card-border))", background: "color-mix(in oklab, #e5484d 7%, transparent)" }}>
+              <span className="text-lg" aria-hidden>🙈</span>
+              <span className="min-w-0 flex-1">
+                <b>{manualOff.length === 1 ? `«${manualOff[0].name}» está inactivo` : `${manualOff.length} productos de esta factura están inactivos`}.</b>{" "}
+                <span style={{ color: "var(--t-muted)" }}>
+                  Las unidades entran igual al inventario, pero no se venden ni salen en los catálogos hasta que {manualOff.length === 1 ? "lo actives" : "los actives"}.
+                  {canActivate ? "" : " Pídele a alguien con permiso de Productos que los active."}
+                </span>
+              </span>
+              {canActivate ? (
+                <button type="button" disabled={Boolean(activating)} onClick={() => void activate(manualOff.map((l) => l.product_id), "all")}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+                  style={{ background: "linear-gradient(135deg,#10b981,#0ea5e9)" }}>
+                  {activating === "all" ? "Activando…" : manualOff.length === 1 ? "✅ Activarlo" : `✅ Activar los ${manualOff.length}`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {autoOff.length ? (
+            <p className="rounded-2xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #0ea5e9 35%, var(--t-card-border))", color: "var(--t-muted)" }}>
+              💤 {autoOff.length === 1 ? `«${autoOff[0].name}» se apagó solo` : `${autoOff.length} productos se apagaron solos`} por quedarse sin unidades: <b style={{ color: "var(--t-text)" }}>se {autoOff.length === 1 ? "activa" : "activan"} solos al registrar el ingreso</b>.
+            </p>
+          ) : null}
           <div
             className={`hidden gap-3 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide md:grid ${grid}`}
             style={{ color: "var(--t-muted)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}
@@ -958,6 +1093,23 @@ export function LineEditor({
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold" title={line.name}>{line.name}</div>
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
+                      {isPurchase && status[line.product_id] && !status[line.product_id].active ? (
+                        status[line.product_id].auto ? (
+                          <div className="text-[11px] font-bold" style={{ color: "#0ea5e9" }} title="Se apagó solo al quedarse sin unidades">💤 Se activa solo al registrar</div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold" style={{ color: "#e5484d" }}>
+                            🙈 Inactivo
+                            {canActivate ? (
+                              <button type="button" disabled={Boolean(activating)} onClick={() => void activate([line.product_id], line.product_id)}
+                                className="rounded-full border px-2 py-px font-black disabled:opacity-60"
+                                style={{ borderColor: "color-mix(in oklab, #10b981 45%, var(--t-card-border))", color: "#10b981" }}
+                                title="Volver a vender y mostrar en los catálogos (se aplica ya)">
+                                {activating === line.product_id ? "…" : "Activar"}
+                              </button>
+                            ) : null}
+                          </div>
+                        )
+                      ) : null}
                       {isPurchase ? <LineNote value={line.note ?? ""} name={line.name} onChange={(v) => patch(index, { note: v })} /> : null}
                       {lineExtra ? lineExtra(line) : null}
                     </div>
@@ -1100,6 +1252,7 @@ export function LineEditor({
         warehouseId={isPurchase ? null : warehouseId}
         excludeIds={isPurchase ? undefined : lines.map((l) => l.product_id)}
         addedQty={isPurchase ? addedQty : undefined}
+        includeInactive={isPurchase}
         title={isPurchase ? "Agregar producto a la factura" : "Agregar producto al conteo"}
         onPick={addHit}
         onCreate={isPurchase ? onCreateProduct : undefined}

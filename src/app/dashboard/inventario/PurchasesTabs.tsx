@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AttachmentPicker, uploadStaged, type Staged } from "./AttachmentsUI";
-import { LineEditor, type Line, type LineEditorHandle } from "./LineEditor";
+import { LineEditor, activateProducts, inactiveAmong, searchProductsRpc, type Line, type LineEditorHandle } from "./LineEditor";
 import { clearDraft, loadDraftFiles, readDraft, saveDraftFiles, timeAgo, writeDraft } from "./draft";
 import {
   Btn, Empty, Panel, askReason, confirmAction, errorMessage, inputClass, inputStyle, money, tableWrap, td, th, toast, useRunOnChange,
@@ -389,6 +389,34 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     if (!valid.length) return void toast("Agrega al menos un producto", "warning");
     if (valid.length < f.lines.length && !(await confirmAction("Hay productos con cantidad 0", "Esos productos no se registrarán. ¿Continuar?", "Continuar"))) return;
     if (!navigator.onLine) return void toast("Sin conexión a internet", "warning", "Tu ingreso quedó guardado como borrador en este equipo. Regístralo cuando vuelva la conexión.");
+    // Productos inactivos a mano («volvió a llegar»): las unidades entran igual; se ofrece activarlos al registrar.
+    const off = await inactiveAmong(ctx.storeId, valid.map((l) => l.product_id));
+    let toActivate: string[] = [];
+    if (off.length) {
+      const names = off.slice(0, 5).map((o) => `«${o.name}»`).join(", ") + (off.length > 5 ? ` y ${off.length - 5} más` : "");
+      const title = off.length === 1 ? "Este producto está inactivo" : `${off.length} productos están inactivos`;
+      if (canCreateProducts) {
+        const ask = await Swal.fire({
+          icon: "question", title,
+          text: `${names}. Las unidades entran igual al inventario. ¿${off.length === 1 ? "Lo activas" : "Los activas"} para que se venda${off.length === 1 ? "" : "n"} y salga${off.length === 1 ? "" : "n"} en los catálogos?`,
+          showDenyButton: true, showCancelButton: true,
+          confirmButtonText: off.length === 1 ? "✅ Activarlo y registrar" : "✅ Activarlos y registrar",
+          denyButtonText: "Registrar sin activar", cancelButtonText: "Seguir editando",
+          background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#10b981", denyButtonColor: "#64748b",
+        });
+        if (ask.isDismissed) return;
+        if (ask.isConfirmed) toActivate = off.map((o) => o.id);
+      } else if (!(await confirmAction(title, `${names}: las unidades entran, pero no se venden ni salen en los catálogos hasta que alguien con permiso de Productos ${off.length === 1 ? "lo active" : "los active"}. ¿Registrar igual?`, "Registrar igual"))) {
+        return;
+      }
+    }
+    // Se activan después de registrar (si el ingreso falla, no cambia nada). Devuelve una frase para el mensaje final.
+    const activateNow = async () => {
+      if (!toActivate.length) return "";
+      const { done, error: actError } = await activateProducts(ctx.storeId, toActivate);
+      if (actError) return ` ⚠️ Se activaron ${done.length} de ${toActivate.length} productos inactivos (${actError})`;
+      return done.length === 1 ? " ✅ El producto inactivo quedó activo." : ` ✅ Se activaron ${done.length} productos que estaban inactivos.`;
+    };
     const items = valid.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, tax_rate: l.tax_rate, warehouse_id: l.warehouse_id }));
     // Orden y comentario de cada producto (se guardan aparte para no tocar el registro del ingreso).
     const notes = valid.map((l) => ({ product_id: l.product_id, warehouse_id: l.warehouse_id, note: (l.note ?? "").trim().toUpperCase() }));
@@ -440,6 +468,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       }
       await saveNotes(editing.id);
       await saveMarkups();
+      const activated = await activateNow();
       const filesFailed = staged.length ? await uploadStaged(ctx.storeId, editing.id, staged) : 0;
       const done = editing;
       clearDraft(draftKey(done));
@@ -449,7 +478,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       const res = await Swal.fire({
         icon: filesFailed ? "warning" : "success",
         title: `Ingreso #${done.number} actualizado`,
-        text: filesFailed ? "Los cambios se guardaron, pero algunos archivos no se subieron." : "Inventario, costo promedio y cuenta por pagar quedaron al día.",
+        text: (filesFailed ? "Los cambios se guardaron, pero algunos archivos no se subieron." : "Inventario, costo promedio y cuenta por pagar quedaron al día.") + activated,
         showCancelButton: true,
         confirmButtonText: "🧾 Ver comprobante",
         cancelButtonText: "Cerrar",
@@ -476,6 +505,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     }
     if (purchaseId) await saveNotes(purchaseId as string);
     if (purchaseId) await saveMarkups();
+    const activated = purchaseId ? await activateNow() : "";
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
       : { data: null };
@@ -499,7 +529,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     } else {
       receiptWin?.close();
     }
-    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`, "success", "Se abrió el comprobante: elige si lo quieres a costo o con Precio 1 a 5 y se imprime.");
+    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`, "success", `Se abrió el comprobante: elige si lo quieres a costo o con Precio 1 a 5 y se imprime.${activated}`);
     void load();
   }
 
@@ -526,7 +556,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       examples: ["Diez de la A B guion doce cuarenta a doce mil", "Cinco secadores", "El costo es doce mil quinientos", "La dos (cuando te lea opciones)", "Cambia la zapatera a cuatro · Quita el último", "Foto", "Listo (registras en pantalla)"],
       intro: () => (form.lines.length ? `La factura lleva ${form.lines.length} productos. Dime más o di listo.` : "Dime los productos de la factura, cuántos y, si quieres, a cómo: diez de tal referencia a doce mil."),
       search: async (q, limit) => {
-        const { data } = await supabaseBrowser().rpc("erp_search_products", { p_store: ctx.storeId, p_q: q, p_warehouse: defaultWh || null, p_in_stock: false, p_limit: limit ?? 6 });
+        // También los inactivos: «volvió a llegar» (se avisa al registrar).
+        const { data } = await searchProductsRpc({ storeId: ctx.storeId, q, warehouseId: defaultWh || null, limit: limit ?? 6, includeInactive: true });
         const rows = (data ?? []) as ProductHit[];
         rows.forEach((h) => voiceHits.current.set(h.id, h));
         return rows.map((h) => ({ id: h.id, name: h.name, sku: h.sku, barcode: h.barcode, avail: null }));
@@ -686,6 +717,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 warehouses={warehouses}
                 pricing={pricing}
                 onCreateProduct={canCreateProducts ? (name) => setQuickName(name) : undefined}
+                canActivate={canCreateProducts}
               />
               {quickName !== null ? (
                 <QuickProductModal
