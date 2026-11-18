@@ -633,6 +633,7 @@ export default function ProductRadarPage() {
 
       {quickRow && storeId && data ? (
         <QuickEdit storeId={storeId} productId={quickRow.id} categories={data.categories} issues={quickRow.issues}
+          active={quickRow.active} canToggle={canEditProducts} toggling={togglingId === quickRow.id} onToggleActive={() => void setActiveOne(quickRow, !quickRow.active)}
           onClose={() => setQuick(null)} onSaved={() => void load()} onOpenFull={() => openEditor(quickRow.id)} />
       ) : null}
       {showSettings && storeId ? <RadarSettings storeId={storeId} value={settings} onClose={() => setShowSettings(false)} onSaved={setSettings} /> : null}

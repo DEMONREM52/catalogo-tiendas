@@ -1153,6 +1153,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Sin aviso falso" },
     ],
   },
+  {
+    id: 111, date: "2026-11-18", title: "🙈 Activa o inactiva desde el editor rápido",
+    summary: "En el editor rápido del Radar, arriba, ahora se ve si el producto está activo o inactivo, con un botón para cambiarlo de una vez (sin esperar a «Guardar cambios») y «Deshacer» por unos segundos.",
+    paths: ["/dashboard/products/radar"],
+    demo: [
+      { icon: "⚡", text: "Editor rápido" },
+      { icon: "🟢", text: "Activo" },
+      { icon: "🙈", text: "Inactivar al instante" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

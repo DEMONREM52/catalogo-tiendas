@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { m as motion } from "framer-motion";
-import { ExternalLink, Loader2, Save, X, Zap } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Loader2, Save, X, Zap } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
@@ -13,14 +13,16 @@ import { requestImageIndex } from "@/lib/image-search/indexer";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { IssueDef } from "@/lib/products/radar";
 
-type Form = { name: string; description: string; image_url: string | null; barcode: string; active: boolean; category_id: string | null };
+type Form = { name: string; description: string; image_url: string | null; barcode: string; category_id: string | null };
 
 /**
- * Editor rápido al lado del Radar: foto, nombre, descripción corta, categorías, código de barras y activo.
- * Para lo demás (precios, fotos extra, ficha completa) está «Abrir completo».
+ * Editor rápido al lado del Radar: foto, nombre, descripción corta, categorías y código de barras.
+ * Activar / inactivar va aparte y se hace de una vez (igual que el botón de la fila, con «Deshacer»);
+ * no espera a «Guardar cambios». Para lo demás (precios, fotos extra, ficha completa) está «Completo».
  */
-export function QuickEdit({ storeId, productId, categories, issues, onClose, onSaved, onOpenFull }: {
+export function QuickEdit({ storeId, productId, categories, issues, active, canToggle, toggling, onToggleActive, onClose, onSaved, onOpenFull }: {
   storeId: string; productId: string; categories: PickerCategory[]; issues: IssueDef[];
+  active: boolean; canToggle: boolean; toggling: boolean; onToggleActive: () => void;
   onClose: () => void; onSaved: () => void; onOpenFull: () => void;
 }) {
   const [form, setForm] = useState<Form | null>(null);
@@ -36,11 +38,11 @@ export function QuickEdit({ storeId, productId, categories, issues, onClose, onS
       const sb = supabaseBrowser();
       const [{ data: u }, { data: p }] = await Promise.all([
         sb.auth.getUser(),
-        sb.from("products").select("name,description,image_url,barcode,active,category_id").eq("id", productId).eq("store_id", storeId).maybeSingle(),
+        sb.from("products").select("name,description,image_url,barcode,category_id").eq("id", productId).eq("store_id", storeId).maybeSingle(),
       ]);
       if (!alive || !p) return;
-      const row = p as { name: string; description: string | null; image_url: string | null; barcode: string | null; active: boolean | null; category_id: string | null };
-      const f: Form = { name: row.name ?? "", description: row.description ?? "", image_url: row.image_url, barcode: row.barcode ?? "", active: row.active !== false, category_id: row.category_id };
+      const row = p as { name: string; description: string | null; image_url: string | null; barcode: string | null; category_id: string | null };
+      const f: Form = { name: row.name ?? "", description: row.description ?? "", image_url: row.image_url, barcode: row.barcode ?? "", category_id: row.category_id };
       const ids = await loadProductCategoryIds(productId, row.category_id, categories);
       if (!alive) return;
       setUserId(u.user?.id ?? null);
@@ -59,7 +61,7 @@ export function QuickEdit({ storeId, productId, categories, issues, onClose, onS
       const sb = supabaseBrowser();
       const { error } = await sb.from("products").update({
         name: form.name.trim(), description: form.description, image_url: form.image_url,
-        barcode: form.barcode.trim() || null, active: form.active, category_id: cats[0] ?? null,
+        barcode: form.barcode.trim() || null, category_id: cats[0] ?? null,
       }).eq("id", productId).eq("store_id", storeId);
       if (error) throw error;
       const warn = cats.join(",") !== origCats ? await saveProductCategoryIds(productId, cats) : null;
@@ -98,6 +100,25 @@ export function QuickEdit({ storeId, productId, categories, issues, onClose, onS
           {issues.length ? (
             <div className="flex flex-wrap gap-1">{issues.map((i) => <span key={i.key} className="rounded-full border px-2 py-0.5 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }} title={i.help}>{i.emoji} {i.label}</span>)}</div>
           ) : <p className="text-xs font-bold text-emerald-500">✓ Ficha completa</p>}
+          <div className="flex items-center gap-3 rounded-2xl border p-3"
+            style={{ borderColor: active ? "color-mix(in oklab, #10b981 45%, var(--t-card-border))" : "color-mix(in oklab, #e5484d 45%, var(--t-card-border))" }}>
+            <span className="text-xl" aria-hidden>{active ? "🟢" : "🙈"}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black">{active ? "Activo" : "Inactivo"}</p>
+              <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+                {active ? "Se vende y aparece en los catálogos." : "No se vende ni aparece en los catálogos."}
+                {canToggle ? "" : " Para cambiarlo necesitas el permiso de Productos."}
+              </p>
+            </div>
+            {canToggle ? (
+              <button type="button" onClick={onToggleActive} disabled={toggling}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black disabled:opacity-60"
+                style={active ? { borderColor: "color-mix(in oklab, #e5484d 45%, var(--t-card-border))", color: "#e5484d" } : { borderColor: "color-mix(in oklab, #10b981 45%, var(--t-card-border))", color: "#10b981" }}
+                title={active ? "Deja de venderse y sale de los catálogos (se puede volver a activar)" : "Volver a vender y mostrar en los catálogos"}>
+                {toggling ? <Loader2 size={14} className="animate-spin" /> : active ? <EyeOff size={14} /> : <Eye size={14} />} {active ? "Inactivar" : "Activar"}
+              </button>
+            ) : null}
+          </div>
           {!form ? <div className="space-y-3"><Skeleton className="h-40 w-40 rounded-2xl" /><Skeleton className="h-11 w-full" /><Skeleton className="h-24 w-full" /></div> : (
             <>
               <div className="grid gap-3 sm:grid-cols-[150px_minmax(0,1fr)]">
@@ -110,9 +131,6 @@ export function QuickEdit({ storeId, productId, categories, issues, onClose, onS
                     <input value={form.name} maxLength={160} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" style={style} /></label>
                   <label className="block"><span className="text-xs font-bold">📊 Código de barras</span>
                     <input value={form.barcode} maxLength={60} inputMode="numeric" onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" style={style} placeholder="Opcional" /></label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-bold">
-                    <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Activo (se vende y aparece en los catálogos)
-                  </label>
                 </div>
               </div>
               <CategoryPicker categories={categories} value={cats} onChange={setCats} disabled={busy} />
