@@ -21,7 +21,8 @@ type Form = { name: string; description: string; image_url: string | null; barco
  * no espera a «Guardar cambios». Para lo demás (precios, fotos extra, ficha completa) está «Completo».
  */
 export function QuickEdit({ storeId, productId, categories, issues, active, canToggle, toggling, onToggleActive, onClose, onSaved, onOpenFull }: {
-  storeId: string; productId: string; categories: PickerCategory[]; issues: IssueDef[];
+  /** issues: lo que le falta según el Radar. Sin issues (p. ej. desde un ingreso) no se muestra esa fila. */
+  storeId: string; productId: string; categories: PickerCategory[]; issues?: IssueDef[];
   active: boolean; canToggle: boolean; toggling: boolean; onToggleActive: () => void;
   onClose: () => void; onSaved: () => void; onOpenFull: () => void;
 }) {
@@ -97,7 +98,7 @@ export function QuickEdit({ storeId, productId, categories, issues, active, canT
           <button type="button" onClick={() => void close()} className="grid h-9 w-9 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          {issues.length ? (
+          {!issues ? null : issues.length ? (
             <div className="flex flex-wrap gap-1">{issues.map((i) => <span key={i.key} className="rounded-full border px-2 py-0.5 text-[11px] font-bold" style={{ borderColor: "var(--t-card-border)" }} title={i.help}>{i.emoji} {i.label}</span>)}</div>
           ) : <p className="text-xs font-bold text-emerald-500">✓ Ficha completa</p>}
           <div className="flex items-center gap-3 rounded-2xl border p-3"

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useImperativeHandle, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
@@ -13,6 +14,10 @@ import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { searchDelay } from "@/lib/search-timing";
 import { ProductPhotoButton } from "../PhotoSearchControls";
 import type { FinderHit } from "@/components/product-finder/ProductFinder";
+import type { PickerCategory } from "../products/CategoryPicker";
+
+// El mismo editor rápido del Radar (se carga solo al abrirlo: trae el editor de texto).
+const QuickEdit = dynamic(() => import("../products/radar/QuickEdit").then((m) => m.QuickEdit), { ssr: false });
 
 /**
  * erp_search_products. Con includeInactive también trae los inactivos a mano (ingresos; la base exige permiso de
@@ -864,12 +869,12 @@ export function LineEditor({
   editorRef,
   pricing,
   onCreateProduct,
-  canActivate,
+  canEditProducts,
 }: {
   /** Crear un producto nuevo desde la búsqueda (solo en ingresos). */
   onCreateProduct?: (name: string) => void;
-  /** Ingresos: puede activar aquí los productos inactivos (permiso de Productos). */
-  canActivate?: boolean;
+  /** Ingresos: puede activar/inactivar y usar el editor rápido de cada producto (permiso de Productos). */
+  canEditProducts?: boolean;
   storeId: string;
   /** Si viene, cada producto tiene su «% venta» (solo en ingresos y con permiso de precios). */
   pricing?: PurchasePricing | null;
@@ -914,6 +919,39 @@ export function LineEditor({
       const back = await activateProducts(storeId, done, false);
       if (back.done.length) setStatus((cur) => ({ ...cur, ...Object.fromEntries(back.done.map((id) => [id, { active: false, auto: false }])) }));
     }, 6000);
+  }
+
+  /** Desde el editor rápido: activo ↔ inactivo, de una vez y con «Deshacer». */
+  async function toggleOne(id: string) {
+    if (status[id] && !status[id].active) return void activate([id], id);
+    setActivating(id);
+    const { done, error } = await activateProducts(storeId, [id], false);
+    setActivating(null);
+    if (!done.length) return void toast("No se pudo inactivar", "error", error ?? undefined);
+    setStatus((cur) => ({ ...cur, [id]: { active: false, auto: false } }));
+    const name = lines.find((l) => l.product_id === id)?.name ?? "el producto";
+    undoToast(`🙈 Inactivaste «${name}»: las unidades entran igual, pero no se vende ni sale en los catálogos`, async () => {
+      const back = await activateProducts(storeId, [id]);
+      if (back.done.length) setStatus((cur) => ({ ...cur, [id]: { active: true, auto: false } }));
+    }, 6000);
+  }
+
+  // Editor rápido (foto, nombre, código de barras, categorías, descripción) sin salir del ingreso.
+  const [quickId, setQuickId] = useState<string | null>(null);
+  const [cats, setCats] = useState<PickerCategory[] | null>(null);
+  const [thumbFix, setThumbFix] = useState<Record<string, string | null>>({});
+  async function openQuick(id: string) {
+    setQuickId(id);
+    if (cats) return;
+    const { data } = await supabaseBrowser().from("product_categories").select("id,name,active").eq("store_id", storeId).order("name");
+    setCats(((data ?? []) as Array<{ id: string; name: string; active: boolean | null }>).filter((c) => c.active !== false).map(({ id: cid, name }) => ({ id: cid, name })));
+  }
+  async function afterQuickSave(id: string) {
+    const { data } = await supabaseBrowser().from("products").select("name,sku,image_url").eq("id", id).eq("store_id", storeId).maybeSingle();
+    if (!data) return;
+    const row = data as { name: string; sku: string | null; image_url: string | null };
+    setThumbFix((cur) => ({ ...cur, [id]: row.image_url }));
+    onChange(latest.current.map((l) => (l.product_id === id ? { ...l, name: row.name, sku: row.sku } : l)));
   }
 
   function cellRef(productId: string, col: Col) {
@@ -1040,10 +1078,10 @@ export function LineEditor({
                 <b>{manualOff.length === 1 ? `«${manualOff[0].name}» está inactivo` : `${manualOff.length} productos de esta factura están inactivos`}.</b>{" "}
                 <span style={{ color: "var(--t-muted)" }}>
                   Las unidades entran igual al inventario, pero no se venden ni salen en los catálogos hasta que {manualOff.length === 1 ? "lo actives" : "los actives"}.
-                  {canActivate ? "" : " Pídele a alguien con permiso de Productos que los active."}
+                  {canEditProducts ? "" : " Pídele a alguien con permiso de Productos que los active."}
                 </span>
               </span>
-              {canActivate ? (
+              {canEditProducts ? (
                 <button type="button" disabled={Boolean(activating)} onClick={() => void activate(manualOff.map((l) => l.product_id), "all")}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black text-white disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg,#10b981,#0ea5e9)" }}>
@@ -1089,7 +1127,7 @@ export function LineEditor({
                 >
                   <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-1">
                     <span className="hidden w-5 shrink-0 text-center text-xs tabular-nums md:block" style={{ color: "var(--t-muted)" }}>{index + 1}</span>
-                    <Thumb src={lineThumbs[line.product_id]} size={44} zoom alt={line.name} />
+                    <Thumb src={line.product_id in thumbFix ? thumbFix[line.product_id] : lineThumbs[line.product_id]} size={44} zoom alt={line.name} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold" title={line.name}>{line.name}</div>
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
@@ -1099,7 +1137,7 @@ export function LineEditor({
                         ) : (
                           <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold" style={{ color: "#e5484d" }}>
                             🙈 Inactivo
-                            {canActivate ? (
+                            {canEditProducts ? (
                               <button type="button" disabled={Boolean(activating)} onClick={() => void activate([line.product_id], line.product_id)}
                                 className="rounded-full border px-2 py-px font-black disabled:opacity-60"
                                 style={{ borderColor: "color-mix(in oklab, #10b981 45%, var(--t-card-border))", color: "#10b981" }}
@@ -1110,7 +1148,18 @@ export function LineEditor({
                           </div>
                         )
                       ) : null}
-                      {isPurchase ? <LineNote value={line.note ?? ""} name={line.name} onChange={(v) => patch(index, { note: v })} /> : null}
+                      {isPurchase ? (
+                        <div className="flex flex-wrap items-center gap-x-3">
+                          <LineNote value={line.note ?? ""} name={line.name} onChange={(v) => patch(index, { note: v })} />
+                          {canEditProducts ? (
+                            <button type="button" onClick={() => void openQuick(line.product_id)}
+                              className="text-xs font-bold uppercase transition hover:brightness-125" style={{ color: "var(--t-accent)" }}
+                              title="Editor rápido: foto, nombre, código de barras, categorías, descripción y activo">
+                              ⚡ Editar rápido
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {lineExtra ? lineExtra(line) : null}
                     </div>
                     <button
@@ -1244,6 +1293,14 @@ export function LineEditor({
           ) : null}
         </div>
       )}
+
+      {quickId && cats ? (
+        <QuickEdit storeId={storeId} productId={quickId} categories={cats}
+          active={status[quickId]?.active ?? true} canToggle={Boolean(canEditProducts)} toggling={activating === quickId}
+          onToggleActive={() => void toggleOne(quickId)}
+          onClose={() => setQuickId(null)} onSaved={() => void afterQuickSave(quickId)}
+          onOpenFull={() => window.open(`/dashboard/products/${quickId}`, `remhub-producto-${quickId}`)} />
+      ) : null}
 
       <ProductSearchModal
         open={modalOpen}

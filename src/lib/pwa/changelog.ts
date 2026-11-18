@@ -1173,6 +1173,16 @@ export const RELEASES: Release[] = [
       { icon: "📦", text: "Registrar el ingreso" },
     ],
   },
+  {
+    id: 113, date: "2026-11-18", title: "⚡ Editor rápido en el ingreso de mercancía",
+    summary: "Cada producto de la factura de compra tiene «⚡ Editar rápido» (debajo del nombre): el mismo editor del Radar para cambiar la foto, el nombre, el código de barras, las categorías, la descripción o activarlo/inactivarlo, sin salir del ingreso. Lo que cambies se ve de una vez en la línea.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "📦", text: "Factura de compra" },
+      { icon: "⚡", text: "Editar rápido" },
+      { icon: "📸", text: "Foto, nombre, categorías" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

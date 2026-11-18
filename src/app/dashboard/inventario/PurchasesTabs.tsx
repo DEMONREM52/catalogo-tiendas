@@ -717,7 +717,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                 warehouses={warehouses}
                 pricing={pricing}
                 onCreateProduct={canCreateProducts ? (name) => setQuickName(name) : undefined}
-                canActivate={canCreateProducts}
+                canEditProducts={canCreateProducts}
               />
               {quickName !== null ? (
                 <QuickProductModal
