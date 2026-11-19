@@ -50,7 +50,7 @@ export type IssueKey =
   | "no_photo" | "no_price" | "below_cost" | "no_cost" | "no_category" | "duplicate_name"
   | "out_of_stock" | "hidden_with_stock" | "no_sales" | "publish_due" | "never_published"
   | "no_short_desc" | "no_long_desc" | "one_photo" | "no_features" | "no_barcode"
-  | "photo_bad" | "photo_repeated" | "low_margin" | "long_name";
+  | "photo_bad" | "photo_repeated" | "low_margin" | "long_name" | "code_in_name";
 
 export type IssueDef = { key: IssueKey; label: string; short: string; emoji: string; level: IssueLevel; weight: number; section: EditorSectionKey; help: string };
 
@@ -74,6 +74,7 @@ export const ISSUES: Record<IssueKey, IssueDef> = {
   one_photo: { key: "one_photo", label: "Una sola foto", short: "Más fotos", emoji: "🖼️", level: "tip", weight: 4, section: "media", help: "Más fotos (y un video) dan confianza." },
   no_features: { key: "no_features", label: "Sin características", short: "Detalles", emoji: "✨", level: "tip", weight: 3, section: "features", help: "Color, talla, material, lo que lo hace especial." },
   long_name: { key: "long_name", label: "Nombre muy largo", short: "Nombre largo", emoji: "📏", level: "tip", weight: 2, section: "basic", help: "Más de 90 letras: se corta en el catálogo y en el POS." },
+  code_in_name: { key: "code_in_name", label: "Código en el nombre", short: "Código", emoji: "🔖", level: "tip", weight: 2, section: "basic", help: "El nombre trae un código (ej. 88130) distinto al código del producto. Si es el del proveedor, guárdalo en «Códigos de proveedores» de la ficha; si es el suyo, ponlo como código del producto. Así se encuentra al ingresar facturas." },
   no_barcode: { key: "no_barcode", label: "Sin código de barras", short: "Barras", emoji: "📊", level: "tip", weight: 2, section: "basic", help: "Con código de barras se vende más rápido en el POS." },
 };
 
@@ -123,6 +124,28 @@ export type RadarContext = {
   photoChecks?: Map<string, PhotoCheck>;
 };
 
+const codeKey = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[\s-]+/g, "");
+
+/**
+ * Un código metido en el nombre que no es el código ni el código de barras del producto (ej. «CLOSET … 88130» con código 529).
+ * Cuenta: solo números de 4 a 13 cifras (no años 1900-2099) o letras + números («CH21250», «SL-29001»). No cuenta medidas («550W», «128GB»).
+ */
+export function codeInName(name: string, code: string | null, barcode: string | null): string | null {
+  const own = codeKey(code), bar = codeKey(barcode);
+  const words = name.toUpperCase().split(/[^A-Z0-9-]+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    // «SL 29001» → SL29001: 1 a 3 letras seguidas de un número («TELA 88130» no se junta).
+    const w = /^[A-Z]{1,3}$/.test(words[i]) && /^\d{3,}$/.test(words[i + 1] ?? "") ? words[i] + words[i + 1] : words[i];
+    const k = codeKey(w);
+    const digitsOnly = /^\d{4,13}$/.test(k) && !(/^(19|20)\d{2}$/.test(k));
+    const lettersDigits = /^[A-Z]{1,5}\d{3,}$/.test(k);
+    if (!digitsOnly && !lettersDigits) continue;
+    if (k === own || (own && (own.includes(k) || k.includes(own))) || (bar && bar.includes(k))) continue;
+    return w;
+  }
+  return null;
+}
+
 /** Lo que le falta a un producto, de lo más grave a lo menos. */
 export function productIssues(p: RadarProduct, ctx: RadarContext): IssueDef[] {
   const out: IssueKey[] = [];
@@ -158,6 +181,7 @@ export function productIssues(p: RadarProduct, ctx: RadarContext): IssueDef[] {
   if (p.image && p.gallery === 0 && !p.video) out.push("one_photo");
   if (!p.highlights && !p.specs) out.push("no_features");
   if (!p.barcode) out.push("no_barcode");
+  if (codeInName(p.name, p.code, p.barcode)) out.push("code_in_name");
 
   return out.map((k) => ISSUES[k]).sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level] || b.weight - a.weight);
 }

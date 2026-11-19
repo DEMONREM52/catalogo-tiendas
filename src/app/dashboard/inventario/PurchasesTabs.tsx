@@ -23,6 +23,7 @@ import { usePurchasePricing } from "./purchase-pricing";
 import { XmlImportButton } from "./XmlImport";
 import { FileImportButton } from "./FileImport";
 import { loadPurchaseOrder, poSummary } from "./PurchaseOrders";
+import { ArrivalsBanner, loadArrivals, type Arrival } from "./Arrivals";
 import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
 import { normalize, parseAmount } from "@/lib/voice/spanish";
 import type { ProductHit } from "./shared";
@@ -181,6 +182,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const canPrices = ctx.can("products_prices");
   // Crear producto rápido sin salir de la factura (null = cerrado; texto = nombre sugerido).
   const [quickName, setQuickName] = useState<string | null>(null);
+  // «¡Volvió!» después de registrar (20261330): lo que pasó de 0 unidades a tener.
+  const [arrivals, setArrivals] = useState<{ title: string; items: Arrival[] } | null>(null);
   // Vencimientos (opcional, 20261226): después de registrar se ofrece anotar fechas.
   const [expiryAsk, setExpiryAsk] = useState<{ purchaseId: string; number: number | null; lines: ExpiryLine[] } | null>(null);
   const [expiryOpen, setExpiryOpen] = useState(false);
@@ -587,6 +590,10 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
       : { data: null };
+    if (purchaseId) {
+      const arr = await loadArrivals(ctx.storeId, valid.map((l) => l.product_id));
+      setArrivals(arr?.length ? { title: `¡Volvió! Con el ingreso #${created?.number ?? ""}`, items: arr } : null);
+    }
     let filesFailed = 0;
     if (staged.length) {
       filesFailed = created?.id ? await uploadStaged(ctx.storeId, created.id as string, staged) : staged.length;
@@ -762,6 +769,11 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <Btn variant="ghost" onClick={() => setRestored(false)}>Entendido</Btn>
                   <Btn variant="danger" onClick={() => void discardDraft()}>Descartar borrador</Btn>
                 </span>
+              </div>
+            ) : null}
+            {arrivals ? (
+              <div className="mb-3">
+                <ArrivalsBanner storeId={ctx.storeId} title={arrivals.title} items={arrivals.items} canBadge={canCreateProducts} onClose={() => setArrivals(null)} />
               </div>
             ) : null}
             {!editing ? (

@@ -90,7 +90,10 @@ export default function ProductRadarPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [twins, setTwins] = useState<string | null>(null);
-  const [taskFilter, setTaskFilter] = useState<{ title: string; ids: Set<string> } | null>(null);
+  // label: texto propio del aviso (p. ej. «Llegaron en 7 días»); sin label es una tarea.
+  const [taskFilter, setTaskFilter] = useState<{ title: string; ids: Set<string>; label?: string } | null>(null);
+  // Lo que llegó o volvió en los últimos 7 días (20261330).
+  const [arrivals, setArrivals] = useState<Array<{ product_id: string; kind: "new" | "back"; no_photo: boolean; no_category: boolean; waiting: number }>>([]);
   const [quick, setQuick] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [assign, setAssign] = useState(false);
@@ -100,6 +103,32 @@ export default function ProductRadarPage() {
   useEffect(() => {
     void getDashboardStore().then((a) => (a.store ? setStoreId(a.store.id) : setError("No tienes acceso a ninguna tienda."))).catch(() => setError("No se pudo cargar la tienda."));
   }, []);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let alive = true;
+    void supabaseBrowser().rpc("erp_product_arrivals_list", { p_store: storeId, p_since: null, p_days: 7 }).then(({ data: a }) => {
+      const d = a as { ok?: boolean; items?: Array<{ product_id: string; kind: "new" | "back"; no_photo: boolean; no_category: boolean; waiting: number }> } | null;
+      if (alive && d?.ok) setArrivals(d.items ?? []);
+    });
+    return () => { alive = false; };
+  }, [storeId]);
+  function showArrivals(onlyIncomplete: boolean) {
+    const list = onlyIncomplete ? arrivals.filter((a) => a.no_photo || a.no_category) : arrivals;
+    setTwins(null);
+    setTaskFilter({ title: "llegaron", ids: new Set(list.map((a) => a.product_id)),
+      label: onlyIncomplete ? "🧩 Llegaron en los últimos 7 días y les falta foto o categoría" : "📦 Llegaron o volvieron en los últimos 7 días" });
+  }
+  // ?llegaron=1 (desde el aviso «¡Volvió!» del ingreso): abre ese filtro una vez.
+  const arrivalsLink = useRef(false);
+  useEffect(() => {
+    if (arrivalsLink.current || !arrivals.length) return;
+    if (new URLSearchParams(window.location.search).get("llegaron") !== "1") return;
+    arrivalsLink.current = true;
+    const t = window.setTimeout(() => showArrivals(false), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivals]);
 
   const load = useCallback(async () => {
     if (!storeId) return;
@@ -447,6 +476,18 @@ export default function ProductRadarPage() {
             <Tile emoji="📦" label="Agotados" value={stats.out} color="#d97706" active={issue === "out_of_stock"} onClick={() => { setView("all"); clearFilters(); setIssue(issue === "out_of_stock" ? null : "out_of_stock"); }} />
             <Tile emoji="✅" label="Listos" value={stats.ready} color="#10b981" active={view === "listos"} onClick={() => { setView("listos"); setIssue(null); clearFilters(); }} />
           </div>
+          {arrivals.length ? (() => {
+            const back = arrivals.filter((a) => a.kind === "back").length;
+            const incomplete = arrivals.filter((a) => a.no_photo || a.no_category).length;
+            const waiting = arrivals.reduce((s, a) => s + Number(a.waiting || 0), 0);
+            return (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))", background: "color-mix(in oklab, #10b981 6%, transparent)" }}>
+                <span className="font-bold">📦 Llegaron en 7 días: {arrivals.length}{back ? ` (🔁 ${back} volvieron)` : ""}{waiting ? ` · 🔔 ${waiting} cliente${waiting === 1 ? "" : "s"} esperando` : ""}</span>
+                <button type="button" onClick={() => showArrivals(false)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>Ver para publicar</button>
+                {incomplete ? <button type="button" onClick={() => showArrivals(true)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "#d97706", color: "#d97706" }}>🧩 {incomplete} sin foto o categoría</button> : null}
+              </div>
+            );
+          })() : null}
 
           {/* ---------------- plan del día y salud */}
           {!proMissing ? (
@@ -561,6 +602,7 @@ export default function ProductRadarPage() {
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "#d97706", background: "color-mix(in oklab, #d97706 10%, transparent)" }}>
                   {twins
                     ? <span>👯 <b>{visible.length} productos</b> se llaman igual. Revisa si alguno sobra (ocúltalo o elimínalo desde la vista sencilla) o cámbiale el nombre para distinguirlos.</span>
+                    : taskFilter?.label ? <span><b>{taskFilter.label}</b> ({visible.length})</span>
                     : <span>📋 Productos de la tarea <b>«{taskFilter?.title}»</b> ({visible.length})</span>}
                   <button type="button" onClick={clearFilters} className="ml-auto inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}><X size={12} /> Quitar</button>
                 </motion.div>

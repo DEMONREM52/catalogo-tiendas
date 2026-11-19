@@ -147,8 +147,8 @@ export const MODULES: ModuleInfo[] = [
   },
   {
     id: "radar", name: "Radar de productos", path: "/dashboard/products/radar",
-    aliases: "radar falencias publicame publicar productos sin foto sin precio quietos",
-    about: "Revisa los productos y te dice qué les falta: sin foto, sin precio, quietos o sin ventas. También arma el plan del día para publicar en redes con recordatorio, y desde ahí puedes inactivar los que ya no hay.",
+    aliases: "radar falencias publicame publicar productos sin foto sin precio quietos volvio llegaron codigo en el nombre",
+    about: "Revisa los productos y te dice qué les falta: sin foto, sin precio, quietos o sin ventas, o con un código metido en el nombre. También arma el plan del día para publicar en redes con recordatorio, muestra lo que llegó o volvió en los últimos 7 días (y lo que llegó sin foto o sin categoría), y desde ahí puedes inactivar los que ya no hay.",
   },
   {
     id: "product-list", name: "Lista general de productos", path: "/dashboard/lista-productos",

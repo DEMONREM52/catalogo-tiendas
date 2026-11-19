@@ -1233,6 +1233,16 @@ export const RELEASES: Release[] = [
       { icon: "📅", text: "Desde / hasta" },
     ],
   },
+  {
+    id: 119, date: "2026-11-19", title: "📦 ¡Volvió! y lo que llegó",
+    summary: "Al registrar un ingreso, RemHub te dice qué productos volvieron a tener unidades (o llegaron por primera vez), cuántos clientes los esperaban en «Avísame» y cuáles llegaron sin foto o sin categoría. Desde ahí avisas a esos clientes, les pones «🆕 Nuevo» por 15 días o los abres en el Radar para publicarlos. El Radar también muestra lo que llegó en 7 días y marca los productos con un código metido en el nombre (ej. «CLOSET … 88130»).",
+    paths: ["/dashboard/inventario", "/dashboard/products/radar"],
+    demo: [
+      { icon: "🔁", text: "¡Volvió!" },
+      { icon: "🔔", text: "3 clientes lo esperaban" },
+      { icon: "🔖", text: "Código en el nombre" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
