@@ -190,9 +190,72 @@ function base64(bytes: Uint8Array) {
   return btoa(bin);
 }
 
-/** RawBT (Android): la app recibe los bytes por un enlace y los imprime. Si no está instalada, se abre su página en Play Store. */
+/**
+ * RawBT (Android): la app recibe los bytes por un enlace y los imprime.
+ * Si NO está instalada, Android abría Play Store y la persona no veía su comprobante. Ahora el enlace trae una
+ * dirección de respaldo: la MISMA página con «#rawbt-no-instalada» (solo cambia el «#», así que la página no se
+ * recarga ni se pierde lo que estaba haciendo) y aquí se avisa con un recuadro: ver el comprobante, imprimir con el
+ * navegador desde ahora o instalar RawBT.
+ */
+const RAWBT_MISSING = "#rawbt-no-instalada";
+const RAWBT_STORE = "https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter";
+let printView: { url: string; at: number } | null = null;
+let rawbtWatching = false;
+
+/** Comprobante en línea de lo que se está imprimiendo (para ofrecerlo si la impresión directa no sale). */
+export function setPrintViewUrl(url: string | null) {
+  printView = url ? { url, at: Date.now() } : null;
+}
+
+function showRawbtMissing() {
+  try { history.replaceState(history.state, "", window.location.pathname + window.location.search); } catch { /* sin historial */ }
+  document.getElementById("remhub-rawbt-missing")?.remove();
+  // Solo el de la impresión que acaba de pasar (no uno viejo de otra venta).
+  const view = printView && Date.now() - printView.at < 30_000 ? printView.url : null;
+  const box = document.createElement("div");
+  box.id = "remhub-rawbt-missing";
+  box.setAttribute("role", "alert");
+  box.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483000;max-width:520px;margin:0 auto;padding:14px;border-radius:18px;border:1px solid #f59e0b;background:var(--t-bg-base,#fff);color:var(--t-text,#111);box-shadow:0 20px 60px rgba(0,0,0,.35);font:13px/1.4 system-ui,sans-serif";
+  const btn = (text: string, primary = false) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = text;
+    b.style.cssText = `margin:8px 8px 0 0;padding:8px 12px;border-radius:999px;font-weight:700;font-size:12px;cursor:pointer;${primary ? "background:#8b5cf6;color:#fff;border:0" : "background:transparent;color:inherit;border:1px solid rgba(127,127,127,.45)"}`;
+    return b;
+  };
+  const title = document.createElement("b");
+  title.textContent = "🖨️ No se imprimió: falta la app RawBT";
+  const text = document.createElement("p");
+  text.style.margin = "4px 0 0";
+  text.textContent = "Este celular está puesto para imprimir con la app RawBT, pero no está instalada. Lo que hiciste sí quedó guardado.";
+  const close = () => box.remove();
+  const toBrowser = btn(view ? "Ver comprobante e imprimir con el navegador desde ahora" : "Imprimir con el navegador desde ahora", true);
+  toBrowser.onclick = () => { savePrinterSettings({ mode: "browser" }); if (view) window.open(view, "_blank"); close(); };
+  box.append(title, text, toBrowser);
+  if (view) { const b = btn("Solo ver el comprobante"); b.onclick = () => { window.open(view, "_blank"); close(); }; box.append(b); }
+  const install = btn("Instalar RawBT");
+  install.onclick = () => { window.open(RAWBT_STORE, "_blank"); close(); };
+  const x = btn("Cerrar");
+  x.onclick = close;
+  box.append(install, x);
+  document.body.appendChild(box);
+}
+
+function watchRawbtMissing() {
+  if (rawbtWatching || typeof window === "undefined") return;
+  rawbtWatching = true;
+  window.addEventListener("hashchange", () => { if (window.location.hash === RAWBT_MISSING) showRawbtMissing(); });
+}
+
+// Si el teléfono recargó la página en vez de solo cambiar el «#», el aviso sale igual al volver a cargar.
+if (typeof window !== "undefined" && window.location.hash === RAWBT_MISSING) {
+  window.setTimeout(showRawbtMissing, 800);
+}
+
 function sendRawbt(bytes: Uint8Array) {
-  window.location.href = `intent:base64,${base64(bytes)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+  watchRawbtMissing();
+  const back = `${window.location.origin}${window.location.pathname}${window.location.search}${RAWBT_MISSING}`;
+  window.location.href = `intent:base64,${base64(bytes)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.browser_fallback_url=${encodeURIComponent(back)};end;`;
 }
 
 /** Imprime una página en un marco oculto (con Chrome --kiosk-printing no aparece ninguna ventana). */

@@ -3,7 +3,7 @@
 import Swal from "@/lib/swal";
 import { loadOrderTicket } from "./order-ticket";
 import { getPrinterSettings, isDirect } from "./settings";
-import { printTicket, type PrintResult } from "./transports";
+import { printTicket, setPrintViewUrl, type PrintResult } from "./transports";
 import type { TicketData } from "./ticket";
 
 const swalTheme = { background: "var(--t-bg-base)", color: "var(--t-text)" } as const;
@@ -12,6 +12,8 @@ const swalTheme = { background: "var(--t-bg-base)", color: "var(--t-text)" } as 
 export async function printOrderDirect(token: string, size: "tirilla" | "carta"): Promise<PrintResult> {
   const t = await loadOrderTicket(token).catch(() => null);
   if (!t) return { ok: false, message: "No se pudo leer el comprobante para imprimirlo." };
+  // Si la impresión directa no sale (ej. falta la app RawBT), se ofrece este comprobante.
+  setPrintViewUrl(`${window.location.origin}/pedido/${token}?formato=${size === "carta" ? "carta" : "t80"}`);
   return printTicket(t, size);
 }
 

@@ -1273,6 +1273,16 @@ export const RELEASES: Release[] = [
       { icon: "📍", text: "A cómo queda en el punto" },
     ],
   },
+  {
+    id: 123, date: "2026-11-19", title: "🖨️ Sin RawBT ya no te manda a Play Store",
+    summary: "Si un celular quedó puesto para imprimir con la app RawBT y no la tiene instalada, al crear una venta o remisión ya no se abre Play Store: te quedas en RemHub y sale un aviso para ver el comprobante, imprimir con el navegador desde ahora o instalar RawBT.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🧾", text: "Creas la remisión" },
+      { icon: "⚠️", text: "Falta RawBT: te avisa" },
+      { icon: "👀", text: "Ves el comprobante" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
