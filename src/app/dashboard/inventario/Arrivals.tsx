@@ -1,8 +1,63 @@
 "use client";
 
 import { useState } from "react";
+import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { fetchPublicItems } from "@/lib/catalog/public-prices";
+import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { toast } from "./shared";
+
+type CatalogOption = { slug: string; name: string; access_key: string | null };
+
+/** Elige el catálogo (si hay varios) con el que se comparten las novedades: sus precios y su enlace. */
+async function pickCatalog(storeId: string): Promise<{ store: { id: string; slug: string; name: string }; cat: CatalogOption } | null> {
+  const sb = supabaseBrowser();
+  const [{ data: st }, { data: cats }] = await Promise.all([
+    sb.from("stores").select("id,slug,name").eq("id", storeId).maybeSingle(),
+    sb.from("store_catalogs").select("slug,name,access_key,active").eq("store_id", storeId).order("sort_order"),
+  ]);
+  const store = st as { id: string; slug: string; name: string } | null;
+  const list = ((cats ?? []) as Array<CatalogOption & { active?: boolean | null }>).filter((c) => c.active !== false && c.slug);
+  if (!store?.slug) { void toast("No encontré el enlace de la tienda", "error"); return null; }
+  if (!list.length) return { store, cat: { slug: "detal", name: "Catálogo", access_key: null } };
+  if (list.length === 1) return { store, cat: list[0] };
+  const r = await Swal.fire({
+    title: "¿Con qué catálogo?", text: "Sus precios y su enlace son los que se comparten.", input: "select",
+    inputOptions: Object.fromEntries(list.map((c) => [c.slug, c.name])), showCancelButton: true, confirmButtonText: "Seguir", cancelButtonText: "Cancelar",
+    background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#10b981",
+  });
+  if (!r.isConfirmed) return null;
+  return { store, cat: list.find((c) => c.slug === r.value) ?? list[0] };
+}
+
+/** «Novedades»: catálogo en PDF con solo estos productos, o texto para WhatsApp con precio y enlace de cada uno. */
+export async function shareNovedades(storeId: string, productIds: string[], how: "pdf" | "whatsapp") {
+  const ids = [...new Set(productIds)].slice(0, 300);
+  if (!ids.length) return;
+  const picked = await pickCatalog(storeId);
+  if (!picked) return;
+  const { store, cat } = picked;
+  const keyQ = cat.access_key ? `&key=${encodeURIComponent(cat.access_key)}` : "";
+  if (how === "pdf") {
+    window.open(`/documento/catalogo?tienda=${encodeURIComponent(store.slug)}&catalogo=${encodeURIComponent(cat.slug)}${keyQ}&ids=${ids.join(",")}&titulo=${encodeURIComponent("Novedades")}`, "_blank");
+    return;
+  }
+  const sb = supabaseBrowser();
+  const items = new Map<string, { name: string; price: number }>();
+  for (let i = 0; i < ids.length; i += 60) {
+    const got = await fetchPublicItems(sb, { id: store.id, slug: store.slug }, cat.slug, cat.access_key, ids.slice(i, i + 60));
+    got.forEach((v, k) => items.set(k, { name: v.name, price: v.price }));
+  }
+  if (!items.size) return void toast("Ninguno está disponible en ese catálogo", "warning", "Revisa que tengan precio y unidades en ese catálogo.");
+  const lines = ids.filter((id) => items.has(id)).slice(0, 40).map((id) => {
+    const it = items.get(id)!;
+    return `• ${it.name} — $${Math.round(it.price).toLocaleString("es-CO")}\n  ${PRODUCTION_ORIGIN}/${store.slug}/producto/${id}?catalogo=${encodeURIComponent(cat.slug)}${keyQ}`;
+  });
+  const text = `🆕 ¡Llegó mercancía a ${store.name}!\n\n${lines.join("\n")}${items.size > 40 ? `\n\n…y ${items.size - 40} más en el catálogo: ${PRODUCTION_ORIGIN}/${store.slug}/${encodeURIComponent(cat.slug)}` : ""}`;
+  try { await navigator.clipboard.writeText(text); } catch { /* sin portapapeles */ }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  void toast("Texto de novedades copiado", "success", "Se abrió WhatsApp para que elijas a quién mandarlo (también puedes pegarlo en un estado o grupo).");
+}
 
 /**
  * «¡Volvió!» (20261330): después de registrar un ingreso, lo que pasó de 0 unidades a tener otra vez (o llegó por
@@ -75,6 +130,8 @@ export function ArrivalsBanner({ storeId, title, items, canBadge, onClose }: {
         {canBadge && !badged ? (
           <button type="button" disabled={busy} onClick={() => void badgeNew()} className={chip} style={{ borderColor: "var(--t-card-border)" }}>{busy ? "Poniendo…" : "🆕 Ponerles «Nuevo» 15 días"}</button>
         ) : null}
+        <button type="button" onClick={() => void shareNovedades(storeId, items.map((i) => i.product_id), "whatsapp")} className={chip} style={{ borderColor: "var(--t-card-border)" }}>💬 Novedades por WhatsApp</button>
+        <button type="button" onClick={() => void shareNovedades(storeId, items.map((i) => i.product_id), "pdf")} className={chip} style={{ borderColor: "var(--t-card-border)" }}>📄 Novedades en PDF</button>
         <a href="/dashboard/products/radar?llegaron=1" target="_blank" rel="noreferrer" className={chip} style={{ borderColor: "var(--t-card-border)" }}>📣 Verlos en el Radar para publicar{incomplete ? " y completar" : ""}</a>
       </div>
     </div>

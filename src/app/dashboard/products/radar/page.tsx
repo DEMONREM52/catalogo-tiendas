@@ -24,6 +24,7 @@ import { DEFAULT_SETTINGS, RadarSettings, type RadarSettingsValue } from "./Rada
 import { AssignDialog, TasksPanel, useProductTasks, type ProductTask } from "./TasksPanel";
 import { PublishCalendar } from "./PublishCalendar";
 import { QuickEdit } from "./QuickEdit";
+import { shareNovedades } from "../../inventario/Arrivals";
 import { useCan } from "@/lib/permission-runtime";
 import { undoToast } from "@/lib/ui/undo";
 import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
@@ -484,6 +485,8 @@ export default function ProductRadarPage() {
               <div className="flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-xs" style={{ borderColor: "color-mix(in oklab, #10b981 40%, var(--t-card-border))", background: "color-mix(in oklab, #10b981 6%, transparent)" }}>
                 <span className="font-bold">📦 Llegaron en 7 días: {arrivals.length}{back ? ` (🔁 ${back} volvieron)` : ""}{waiting ? ` · 🔔 ${waiting} cliente${waiting === 1 ? "" : "s"} esperando` : ""}</span>
                 <button type="button" onClick={() => showArrivals(false)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>Ver para publicar</button>
+                {storeId ? <button type="button" onClick={() => void shareNovedades(storeId, arrivals.map((a) => a.product_id), "whatsapp")} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>💬 Novedades por WhatsApp</button> : null}
+                {storeId ? <button type="button" onClick={() => void shareNovedades(storeId, arrivals.map((a) => a.product_id), "pdf")} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>📄 PDF</button> : null}
                 {incomplete ? <button type="button" onClick={() => showArrivals(true)} className="rounded-full border px-2.5 py-1 font-bold" style={{ borderColor: "#d97706", color: "#d97706" }}>🧩 {incomplete} sin foto o categoría</button> : null}
               </div>
             );

@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { RichText } from "@/components/RichText";
 import type { CatalogPayload, CategoryRow, ProductRow } from "@/app/[slug]/[mode]/catalog-data";
+import { fetchPublicItems } from "@/lib/catalog/public-prices";
 
 /**
  * Catálogo en PDF para mandar por WhatsApp o imprimir:
  *   /documento/catalogo?tienda=<slug>&catalogo=<catálogo>[&key=<clave del catálogo privado>]
+ *   [&ids=<id,id,…>&titulo=<texto>]: solo esos productos (máx. 300) con un título, ej. «Novedades» de un ingreso.
  * Usa los mismos datos y precios del catálogo público (el de ese punto o lista). «Guardar como PDF» en la ventana de impresión.
  */
 export default function CatalogPdfPage() {
@@ -23,6 +25,10 @@ function CatalogPdf() {
   const slug = search.get("tienda") ?? "";
   const mode = search.get("catalogo") ?? "";
   const key = search.get("key");
+  // Solo estos productos (ej. lo que llegó en un ingreso) y su título.
+  const idsParam = search.get("ids") ?? "";
+  const onlyIds = useMemo(() => [...new Set(idsParam.split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)))].slice(0, 300), [idsParam]);
+  const title = (search.get("titulo") ?? "").slice(0, 60);
   const [payload, setPayload] = useState<Ok | null>(null);
   const [items, setItems] = useState<ProductRow[]>([]);
   const [error, setError] = useState("");
@@ -46,6 +52,28 @@ function CatalogPdf() {
       const p = (e ? null : data) as CatalogPayload | null;
       if (!p || p.status !== "ok") return setError(p?.status === "locked" ? "Ese catálogo es privado: abre el enlace con su clave." : "No se encontró el catálogo.");
       setPayload(p);
+      if (onlyIds.length) {
+        // Solo unos productos: precio y unidades del catálogo, de a 60.
+        const rows: ProductRow[] = [];
+        for (let i = 0; i < onlyIds.length; i += 60) {
+          setProgress(`Cargando productos… ${rows.length} de ${onlyIds.length}`);
+          const chunk = onlyIds.slice(i, i + 60);
+          const [got, extra] = await Promise.all([
+            fetchPublicItems(sb, { id: p.store.id, slug: p.store.slug }, p.catalog.slug, key, chunk),
+            sb.from("products").select("id,description,category_id").in("id", chunk),
+          ]);
+          const more = new Map(((extra.data ?? []) as Array<{ id: string; description: string | null; category_id: string | null }>).map((r) => [r.id, r]));
+          for (const id of chunk) {
+            const it = got.get(id);
+            if (!it) continue;
+            rows.push({ id, name: it.name, description: more.get(id)?.description ?? null, price_retail: it.price, price_wholesale: it.price, min_wholesale: it.min_wholesale,
+              active: true, image_url: it.image_url, category_id: more.get(id)?.category_id ?? null, stock: it.stock, product_details: null });
+          }
+        }
+        if (!rows.length) return setError("Esos productos no están disponibles en este catálogo (sin precio, sin unidades o fuera del catálogo).");
+        setItems(rows);
+        return;
+      }
       // La base entrega como máximo 60 por página: se piden todas las páginas hasta completar el total.
       const PAGE = 60;
       const all: ProductRow[] = [];
@@ -70,7 +98,7 @@ function CatalogPdf() {
       }
       setItems(all);
     })();
-  }, [slug, mode, key]);
+  }, [slug, mode, key, onlyIds]);
 
   // QR de cada producto (lleva a su página para pedirlo por WhatsApp).
   useEffect(() => {
@@ -179,6 +207,7 @@ function CatalogPdf() {
             {payload.catalog.logo_url || st.logo_url ? <img src={payload.catalog.logo_url || st.logo_url || ""} alt="" style={{ width: "18mm", height: "18mm", objectFit: "contain" }} /> : null}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "18pt", fontWeight: 900 }}>{st.name}</div>
+              {title ? <div style={{ fontSize: "14pt", fontWeight: 900, color: "#059669" }}>🆕 {title}</div> : null}
               <div style={{ fontSize: "10pt", color: "#4b5563" }}>{payload.catalog.name} · Precios al {today}{st.whatsapp ? ` · Pedidos por WhatsApp ${st.whatsapp}` : ""}</div>
             </div>
           </header>

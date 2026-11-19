@@ -1243,6 +1243,16 @@ export const RELEASES: Release[] = [
       { icon: "🔖", text: "Código en el nombre" },
     ],
   },
+  {
+    id: 120, date: "2026-11-19", title: "🆕 Comparte las novedades de un ingreso",
+    summary: "Lo que llegó o volvió con un ingreso (y lo de los últimos 7 días en el Radar) se comparte de una vez: «💬 Novedades por WhatsApp» arma el mensaje con el nombre, el precio y el enlace de cada producto del catálogo que elijas, y «📄 Novedades en PDF» abre el catálogo en PDF solo con esos productos y el título «Novedades».",
+    paths: ["/dashboard/inventario", "/dashboard/products/radar"],
+    demo: [
+      { icon: "📦", text: "Llegó mercancía" },
+      { icon: "💬", text: "Mensaje con precios y enlaces" },
+      { icon: "📄", text: "PDF de novedades" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
