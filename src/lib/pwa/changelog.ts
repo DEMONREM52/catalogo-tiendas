@@ -1223,6 +1223,16 @@ export const RELEASES: Release[] = [
       { icon: "⚠️", text: "Desde qué día falta" },
     ],
   },
+  {
+    id: 118, date: "2026-11-19", title: "🏷️ Etiquetas en el catálogo: Nuevo, Bajó de precio, Promoción, Destacado",
+    summary: "En cada producto (Precios, y también en el editor rápido) eliges qué etiqueta se ve en el catálogo y desde/hasta cuándo: 🆕 Llegó nuevo, ⬇️ Bajó de precio (escribes el precio de antes y sale tachado, solo si es mayor que el de hoy), 🔥 En promoción (con un texto corto como «2x1») y ⭐ Destacado (sale primero). Se apagan solas al vencer y no cambian lo que se cobra.",
+    paths: ["/dashboard/products", "/dashboard/products/radar"],
+    demo: [
+      { icon: "🆕", text: "Llegó nuevo" },
+      { icon: "⬇️", text: "Antes $45.000" },
+      { icon: "📅", text: "Desde / hasta" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

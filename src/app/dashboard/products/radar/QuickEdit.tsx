@@ -12,6 +12,7 @@ import { CategoryPicker, loadProductCategoryIds, saveProductCategoryIds, type Pi
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { IssueDef } from "@/lib/products/radar";
+import { BadgesPanel } from "../BadgesPanel";
 
 type Form = { name: string; description: string; image_url: string | null; barcode: string; category_id: string | null };
 
@@ -135,6 +136,7 @@ export function QuickEdit({ storeId, productId, categories, issues, active, canT
                 </div>
               </div>
               <CategoryPicker categories={categories} value={cats} onChange={setCats} disabled={busy} />
+              <BadgesPanel storeId={storeId} productId={productId} compact />
               <div>
                 <p className="mb-1 text-xs font-bold">💬 Descripción corta</p>
                 <RichTextEditor value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Una o dos frases que salen debajo del nombre." minHeight={90} />

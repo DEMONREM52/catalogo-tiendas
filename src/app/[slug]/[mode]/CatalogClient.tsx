@@ -2034,6 +2034,9 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                   >
                     <div className="pointer-events-none absolute left-6 top-6 z-[1] flex flex-col items-start gap-1">
                       {deal?.before && deal.label ? <span className="offer-ribbon rounded-full px-2.5 py-1 text-[11px] font-black uppercase text-white shadow-lg">{deal.label}</span> : null}
+                      {/* Etiquetas elegidas en el producto (20261329). */}
+                      {deal?.badges?.includes("new") ? <span className="rounded-full px-2.5 py-1 text-[11px] font-black uppercase text-white shadow-lg" style={{ background: "linear-gradient(135deg,#0ea5e9,#6366f1)" }}>🆕 Nuevo</span> : null}
+                      {deal?.badges?.includes("promo") ? <span className="rounded-full px-2.5 py-1 text-[11px] font-black uppercase text-white shadow-lg" style={{ background: "linear-gradient(135deg,#ef4444,#f97316)" }}>🔥 {deal.promo_text || "En promoción"}</span> : null}
                       {rank ? (
                         <span className="catalog-best-badge inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black text-white shadow-lg">
                           {rank === 1 ? "👑" : "🔥"} {rank <= 3 ? `Top ${rank} en ventas` : "Más vendido"}

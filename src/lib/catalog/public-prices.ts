@@ -47,8 +47,12 @@ export async function fetchPublicItems(sb: SupabaseClient, store: { id: string; 
   return out;
 }
 
-/** Oferta o destacado de un producto en un catálogo (20261309): precio de antes, de ahora, % y fin. */
-export type PublicDeal = { id: string; now: number; before: number | null; pct: number | null; ends_at: string | null; label: string | null; featured: boolean };
+/**
+ * Oferta o destacado de un producto en un catálogo (20261309): precio de antes, de ahora, % y fin.
+ * badges (20261329): etiquetas vigentes elegidas en el producto: new, price_drop, promo, featured.
+ */
+export type PublicBadge = "new" | "price_drop" | "promo" | "featured";
+export type PublicDeal = { id: string; now: number; before: number | null; pct: number | null; ends_at: string | null; label: string | null; featured: boolean; badges: PublicBadge[]; promo_text: string | null };
 
 export async function fetchPublicDeals(sb: SupabaseClient, storeSlug: string, catalog: string, key: string | null): Promise<Map<string, PublicDeal>> {
   const out = new Map<string, PublicDeal>();
@@ -60,6 +64,7 @@ export async function fetchPublicDeals(sb: SupabaseClient, storeSlug: string, ca
     out.set(id, {
       id, now: Number(r.now ?? 0), before: r.before == null ? null : Number(r.before), pct: r.pct == null ? null : Number(r.pct),
       ends_at: r.ends_at ?? null, label: r.label ?? null, featured: Boolean(r.featured),
+      badges: Array.isArray(r.badges) ? (r.badges as PublicBadge[]) : [], promo_text: r.promo_text ?? null,
     });
   }
   return out;

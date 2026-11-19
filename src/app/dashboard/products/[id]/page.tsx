@@ -5,6 +5,7 @@ import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PublishButton } from "@/components/products/PublishButton";
 import { OfferPanel } from "../OfferPanel";
 import { SupplierCodesPanel } from "../SupplierCodesPanel";
+import { BadgesPanel } from "../BadgesPanel";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
 import Swal from "@/lib/swal";
@@ -406,6 +407,7 @@ export default function EditProductPage() {
             </div>
           )}
           {storeId ? <OfferPanel storeId={storeId} productId={d.id} normalPrice={prices[2] || prices[0]} /> : null}
+          {storeId ? <BadgesPanel storeId={storeId} productId={d.id} /> : null}
           <Field label="Desde cuántas unidades es precio mayorista" icon="📦" help="Si un cliente lleva esta cantidad o más, se le cobra el precio al por mayor.">
             <input className={`${inputCls} max-w-[10rem]`} style={inputStyle} inputMode="numeric" value={String(d.min_wholesale ?? 1)}
               onChange={(e) => setDraft({ ...d, min_wholesale: Math.max(1, digitsOnlyToNumber(e.target.value, 1)) })} />

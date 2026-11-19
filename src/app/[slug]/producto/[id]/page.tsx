@@ -329,6 +329,13 @@ export default async function PublicProductPage({ params, searchParams }: PagePr
                   {bestRank === 1 ? "👑 El más vendido de la tienda" : `🔥 Top ${bestRank} en ventas`}
                 </p>
               ) : null}
+              {deal?.badges?.includes("new") || deal?.badges?.includes("promo") || deal?.badges?.includes("featured") ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {deal.badges.includes("new") ? <span className="rounded-full px-3 py-1.5 text-xs font-black uppercase text-white shadow-lg" style={{ background: "linear-gradient(135deg,#0ea5e9,#6366f1)" }}>🆕 Nuevo</span> : null}
+                  {deal.badges.includes("promo") ? <span className="rounded-full px-3 py-1.5 text-xs font-black uppercase text-white shadow-lg" style={{ background: "linear-gradient(135deg,#ef4444,#f97316)" }}>🔥 {deal.promo_text || "En promoción"}</span> : null}
+                  {deal.badges.includes("featured") ? <span className="featured-badge rounded-full px-3 py-1.5 text-xs font-black uppercase shadow-lg">⭐ Destacado</span> : null}
+                </div>
+              ) : null}
               <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-6xl">{product.name}</h1>
               {deal?.before ? (
                 <div className="mt-6">

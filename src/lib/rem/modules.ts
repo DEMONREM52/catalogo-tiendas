@@ -128,7 +128,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "products", name: "Productos", path: "/dashboard/products",
     aliases: "productos articulos referencias items mercancia catalogo de productos", keys: "producto|productos|articulos|referencias",
-    about: "Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame.",
+    about: "Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame. En cada producto, en Precios, eliges qué etiquetas se ven en el catálogo y desde/hasta cuándo: Llegó nuevo, Bajó de precio (con el precio de antes que escribas), En promoción y Destacado.",
     creates: ["/dashboard/products/crear", "/dashboard/products/importar"],
     howto: [{
       id: "products.create", goal: "crear un producto", keywords: "producto articulo referencia item",
