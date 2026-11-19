@@ -746,6 +746,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   inputRef={searchRef}
                   addedQty={Object.fromEntries(lines.map((l) => [l.product_id, used(l.product_id)]))}
                   placeholder={`🔎 Buscar en ${names.get(from) ?? "origen"} (solo con existencias)…  ·  F2 para abrir la búsqueda`}
+                  pricePoints={targets.map((t) => ({ id: t, name: names.get(t) ?? "el punto" }))}
                   onPick={addProduct}
                 />
                 <ProductSearchModal
@@ -756,6 +757,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   inStockOnly
                   addedQty={Object.fromEntries(lines.map((l) => [l.product_id, used(l.product_id)]))}
                   title={`Agregar producto al traslado (sale de ${names.get(from) ?? "origen"})`}
+                  pricePoints={targets.map((t) => ({ id: t, name: names.get(t) ?? "el punto" }))}
                   onPick={(hit) => { setPickerOpen(false); addProduct(hit); }}
                 />
                 {lines.length > 0 ? (
@@ -973,7 +975,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   </div>
                 ) : editingId === row.id ? (
                   <TransferEditor
-                    transferId={row.id} storeId={ctx.storeId} fromId={row.from_warehouse_id} fromName={names.get(row.from_warehouse_id)} number={row.number}
+                    transferId={row.id} storeId={ctx.storeId} fromId={row.from_warehouse_id} fromName={names.get(row.from_warehouse_id)} toId={row.to_warehouse_id} toName={names.get(row.to_warehouse_id)} number={row.number}
                     items={row.erp_transfer_items.map((i) => ({ product_id: i.product_id, name: itemName(i), sku: (Array.isArray(i.products) ? i.products[0] : i.products)?.sku ?? null, qty: i.qty }))}
                     packedSigned={(row.erp_transfer_signatures ?? []).some((s) => s.step === "packed")}
                     onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void load(); }}

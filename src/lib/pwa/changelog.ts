@@ -1263,6 +1263,16 @@ export const RELEASES: Release[] = [
       { icon: "＋", text: "Un toque y queda" },
     ],
   },
+  {
+    id: 122, date: "2026-11-19", title: "🚚 Traslados: precio por mayor y del punto al buscar",
+    summary: "Al buscar un producto para armar o corregir un traslado ya no sale el costo: sale el precio por mayor y a cómo queda en el punto que recibe (con su regla de precio, igual que en su POS).",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔎", text: "Buscas el producto" },
+      { icon: "🏷️", text: "Precio por mayor" },
+      { icon: "📍", text: "A cómo queda en el punto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

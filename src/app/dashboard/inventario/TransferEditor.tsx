@@ -15,8 +15,8 @@ import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearch
 
 type Item = { product_id: string; name: string; sku?: string | null; qty: number; original: number };
 
-export function TransferEditor({ transferId, storeId, fromId, fromName, number, items, packedSigned, onClose, onSaved }: {
-  transferId: string; storeId: string; fromId: string; fromName?: string; number: number;
+export function TransferEditor({ transferId, storeId, fromId, fromName, toId, toName, number, items, packedSigned, onClose, onSaved }: {
+  transferId: string; storeId: string; fromId: string; fromName?: string; toId?: string; toName?: string; number: number;
   items: Array<{ product_id: string; name: string; sku?: string | null; qty: number }>;
   packedSigned: boolean; onClose: () => void; onSaved: () => void;
 }) {
@@ -32,6 +32,8 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
   const searchRef = useRef<HTMLInputElement>(null);
   const thumbs = useThumbs(lines.map((l) => l.product_id));
+  // En el buscador: precio por mayor y a cómo queda en el punto que recibe (nunca el costo).
+  const pricePoints = toId ? [{ id: toId, name: toName ?? "el punto" }] : undefined;
 
   const setQty = (id: string, qty: number) => setLines((cur) => cur.map((l) => (l.product_id === id ? { ...l, qty: Math.max(0, Math.floor(qty || 0)) } : l)));
   function add(hit: ProductHit) {
@@ -119,12 +121,12 @@ export function TransferEditor({ transferId, storeId, fromId, fromName, number, 
       {/* Agregar: buscador directo o ventana con fotos (F2). */}
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="min-w-0 flex-1">
-          <ProductPicker storeId={storeId} warehouseId={fromId} inStockOnly inputRef={searchRef} addedQty={addedQty}
+          <ProductPicker storeId={storeId} warehouseId={fromId} inStockOnly inputRef={searchRef} addedQty={addedQty} pricePoints={pricePoints}
             placeholder={`➕ Escribe para agregar un producto de ${fromName ?? "la bodega de origen"}…`} onPick={add} />
         </div>
         <Btn onClick={() => setModal(true)}><span title="Atajo: F2">➕ Agregar producto (F2)</span></Btn>
       </div>
-      <ProductSearchModal open={modal} onClose={() => setModal(false)} storeId={storeId} warehouseId={fromId} inStockOnly
+      <ProductSearchModal open={modal} onClose={() => setModal(false)} storeId={storeId} warehouseId={fromId} inStockOnly pricePoints={pricePoints}
         addedQty={addedQty} title={`Agregar al traslado #${number}`} onPick={(hit) => { setModal(false); add(hit); }} />
 
       {lines.length > 8 ? (

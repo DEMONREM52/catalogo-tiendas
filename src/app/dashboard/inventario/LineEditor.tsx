@@ -187,6 +187,45 @@ export function useProductSearch({
   return { hits, loading, error };
 }
 
+/** Puntos que reciben (traslado): el buscador muestra precio por mayor y a cómo queda en cada uno, nunca el costo. */
+export type PricePoint = { id: string; name: string };
+type PickPrice = { p2: number; at: Array<{ name: string; price: number }> };
+
+/** Precio por mayor de la madre (precio 2) y el del punto que recibe (20261332). Sin la migración: solo el de la madre. */
+function usePickPrices(storeId: string, points: PricePoint[] | undefined, ids: string[]) {
+  const [prices, setPrices] = useState<Map<string, PickPrice>>(() => new Map());
+  const key = points?.length ? [...new Set(ids)].sort().join(",") : "";
+  const pointsKey = (points ?? []).map((p) => `${p.id}:${p.name}`).join("|");
+  useEffect(() => {
+    if (!key) return;
+    let alive = true;
+    void (async () => {
+      const sb = supabaseBrowser();
+      const list = key.split(",");
+      const pts = pointsKey.split("|").map((s) => { const i = s.indexOf(":"); return { id: s.slice(0, i), name: s.slice(i + 1) }; });
+      const out = new Map<string, PickPrice>();
+      let missing = false;
+      for (const pt of pts) {
+        const { data, error } = await sb.rpc("erp_transfer_pick_prices", { p_store: storeId, p_point: pt.id, p_ids: list });
+        if (error || !Array.isArray(data)) { missing = true; break; }
+        for (const r of data as Array<{ product_id: string; price_2: number; point_price_2: number }>) {
+          const cur = out.get(r.product_id) ?? { p2: Number(r.price_2 ?? 0), at: [] };
+          cur.at.push({ name: pt.name, price: Number(r.point_price_2 ?? 0) });
+          out.set(r.product_id, cur);
+        }
+      }
+      if (missing) {
+        out.clear();
+        const { data } = await sb.rpc("erp_product_list_prices", { p_ids: list });
+        for (const r of (Array.isArray(data) ? data : []) as Array<{ product_id: string; price_2: number }>) out.set(r.product_id, { p2: Number(r.price_2 ?? 0), at: [] });
+      }
+      if (alive) setPrices((prev) => { const next = new Map(prev); out.forEach((v, k) => next.set(k, v)); return next; });
+    })();
+    return () => { alive = false; };
+  }, [key, pointsKey, storeId]);
+  return prices;
+}
+
 function HitRow({
   hit,
   thumb,
@@ -198,7 +237,12 @@ function HitRow({
   onHover,
   big,
   stockLabel,
+  prices,
+  hideCost,
 }: {
+  /** Con puntos que reciben: precio por mayor y del punto en vez del costo. */
+  prices?: PickPrice;
+  hideCost?: boolean;
   hit: ProductHit;
   thumb?: string | null;
   active: boolean;
@@ -232,8 +276,16 @@ function HitRow({
         <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
           {[hit.sku, hit.barcode].filter(Boolean).join(" · ") || "Sin código"}
           {hit.supplier_code ? ` · 🏷️ cód. proveedor ${hit.supplier_code}` : ""}
-          {Number(hit.cost_price) > 0 ? ` · Costo ${money(hit.cost_price)}` : ""}
+          {!hideCost && Number(hit.cost_price) > 0 ? ` · Costo ${money(hit.cost_price)}` : ""}
         </span>
+        {prices ? (
+          <span className="block truncate text-xs" style={{ color: "var(--t-muted)" }}>
+            Por mayor <b style={{ color: "var(--t-text)" }}>{prices.p2 > 0 ? money(prices.p2) : "sin precio"}</b>
+            {prices.at.map((a) => (
+              <span key={a.name}> · En {a.name} <b style={{ color: "var(--t-accent)" }}>{a.price > 0 ? money(a.price) : "sin precio"}</b></span>
+            ))}
+          </span>
+        ) : null}
       </span>
       <span className="shrink-0 text-right text-xs" style={{ color: "var(--t-muted)" }}>
         {stockLabel ? stockLabel(hit) : showWarehouse ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
@@ -285,7 +337,10 @@ export function ProductPicker({
   inputRef,
   placeholder = "Buscar por nombre, SKU o código de barras…",
   onPick,
+  pricePoints,
 }: {
+  /** Traslado: muestra precio por mayor y a cómo queda en estos puntos, en vez del costo. */
+  pricePoints?: PricePoint[];
   storeId: string;
   warehouseId?: string | null;
   inStockOnly?: boolean;
@@ -319,6 +374,7 @@ export function ProductPicker({
 
   const visible = hits.filter((h) => !excludeIds?.includes(h.id));
   const thumbs = useThumbs(open ? visible.map((h) => h.id) : []);
+  const prices = usePickPrices(storeId, pricePoints, open ? visible.map((h) => h.id) : []);
 
   function pick(hit: ProductHit) {
     onPick(hit);
@@ -389,6 +445,8 @@ export function ProductPicker({
               flash={flash === hit.id}
               showWarehouse={Boolean(warehouseId)}
               added={addedQty?.[hit.id]}
+              hideCost={Boolean(pricePoints)}
+              prices={pricePoints ? prices.get(hit.id) : undefined}
               onPick={() => pick(hit)}
               onHover={() => keys.setActive(i)}
             />
@@ -413,7 +471,10 @@ export function ProductSearchModal({
   onPick,
   stockLabel,
   onCreate,
+  pricePoints,
 }: {
+  /** Traslado: muestra precio por mayor y a cómo queda en estos puntos, en vez del costo. */
+  pricePoints?: PricePoint[];
   /** También los inactivos a mano (salen marcados «🙈 Inactivo»). */
   includeInactive?: boolean;
   /** Si viene, se ofrece crear un producto nuevo (con lo que se escribió como nombre). */
@@ -438,6 +499,7 @@ export function ProductSearchModal({
   const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, limit: 20, includeInactive });
   const visible = hits.filter((h) => !excludeIds?.includes(h.id));
   const thumbs = useThumbs(open ? visible.map((h) => h.id) : []);
+  const prices = usePickPrices(storeId, pricePoints, open ? visible.map((h) => h.id) : []);
 
   function pick(hit: ProductHit) {
     onPick(hit);
@@ -561,6 +623,8 @@ export function ProductSearchModal({
                   showWarehouse={Boolean(warehouseId)}
                   stockLabel={stockLabel}
                   added={addedQty?.[hit.id]}
+                  hideCost={Boolean(pricePoints)}
+                  prices={pricePoints ? prices.get(hit.id) : undefined}
                   onPick={() => pick(hit)}
                   onHover={() => keys.setActive(i)}
                 />
