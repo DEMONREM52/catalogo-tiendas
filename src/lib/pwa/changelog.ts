@@ -1193,6 +1193,16 @@ export const RELEASES: Release[] = [
       { icon: "⚠️", text: "Confirmar si pasa del 20 %" },
     ],
   },
+  {
+    id: 115, date: "2026-11-19", title: "📊 Carga la factura desde Excel o CSV",
+    summary: "En el ingreso de mercancía, «📊 Cargar Excel o CSV»: subes la factura o remisión del proveedor, RemHub encuentra solo la fila de encabezados y las columnas (puedes cambiarlas) y reconoce cada producto por el código aprendido, el código, el código de barras, el código dentro del nombre (88130 → «CLOSET … 88130») o el mismo nombre. Los que no existen se crean de una vez, con su código si está libre. Antes de pasar a la factura ves qué se reutiliza, qué se crea, si cuadra con el total y si esa factura ya se ingresó.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "📊", text: "Excel o CSV del proveedor" },
+      { icon: "🔎", text: "Reconoce los productos" },
+      { icon: "✅", text: "Revisas y registras" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

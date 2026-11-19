@@ -173,7 +173,7 @@ export const MODULES: ModuleInfo[] = [
       id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura de compra ingreso mercancia ingresar xml",
       steps: [
         "Abre Inventario y luego Facturas de compra.",
-        "Registra la factura del proveedor con los productos, las cantidades y los costos. También se puede cargar el XML.",
+        "Registra la factura del proveedor con los productos, las cantidades y los costos. También se puede cargar el XML, o un Excel o CSV con «📊 Cargar Excel o CSV» (reconoce los productos y crea los que falten antes de pasarlos a la factura).",
         "Si un producto está inactivo, igual sale en el buscador marcado «Inactivo»: lo agregas y lo activas ahí mismo o al registrar.",
         "Con «⚡ Editar rápido», debajo del nombre de cada producto, le cambias la foto, el nombre, el código de barras, las categorías o la descripción sin salir de la factura.",
         "Con «+ cód. proveedor» anotas cómo llama el proveedor a ese producto: al registrar queda aprendido y el buscador lo encuentra con ese código.",

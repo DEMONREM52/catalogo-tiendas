@@ -21,6 +21,7 @@ import { QuickProductModal } from "./QuickProductModal";
 import { lineFromHit } from "./LineEditor";
 import { usePurchasePricing } from "./purchase-pricing";
 import { XmlImportButton } from "./XmlImport";
+import { FileImportButton } from "./FileImport";
 import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
 import { normalize, parseAmount } from "@/lib/voice/spanish";
 import type { ProductHit } from "./shared";
@@ -649,6 +650,17 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <span className="rounded-full border px-3 py-1 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }} title="Se guarda solo en este equipo mientras escribes">
                     💾 {draftLabel}
                   </span>
+                ) : null}
+                {!editing ? (
+                  <FileImportButton storeId={ctx.storeId} warehouseId={defaultWh} suppliers={suppliers} supplierId={form.supplier} invoiceRef={form.invoiceRef}
+                    canCreateProducts={canCreateProducts} canPrices={canBuy && canPrices}
+                    onApply={(x) => {
+                      // Igual que el XML: lo que ya estaba se conserva; lo del archivo se agrega (o reemplaza ese producto).
+                      setForm((cur) => ({
+                        ...cur, supplier: x.supplier || cur.supplier, invoiceRef: x.invoiceRef || cur.invoiceRef,
+                        lines: [...cur.lines.filter((l) => !x.lines.some((n) => n.product_id === l.product_id)), ...x.lines],
+                      }));
+                    }} />
                 ) : null}
                 {!editing ? (
                   <XmlImportButton storeId={ctx.storeId} warehouseId={defaultWh} canCreateProducts={canCreateProducts} onSuppliersChanged={reloadSuppliers}

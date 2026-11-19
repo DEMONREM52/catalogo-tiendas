@@ -250,7 +250,7 @@ function XmlReview({ storeId, warehouseId, canCreateProducts, inv, match, file, 
   return typeof document === "undefined" ? null : createPortal(body, document.body);
 }
 
-function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId: string; initial: string; onPick: (h: ProductHit) => void; onCancel: () => void }) {
+export function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId: string; initial: string; onPick: (h: ProductHit) => void; onCancel: () => void }) {
   // Se empieza buscando con la primera palabra de la descripción (lo demás suele ser presentación).
   const [q, setQ] = useState(initial.split(" ")[0] ?? "");
   // También los inactivos (lo que vuelve a llegar); al registrar se ofrece activarlos.
