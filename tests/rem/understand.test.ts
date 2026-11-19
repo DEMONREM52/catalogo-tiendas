@@ -48,7 +48,7 @@ test("cómo se hace algo: pasos verificados de la pantalla", () => {
   const cl = intent("cómo creo un cliente");
   assert.equal(cl && cl.kind === "howto" ? cl.howto?.id : null, "clients.create");
   assert.equal(moduleName("cómo registro un proveedor"), "Terceros y cartera", "un proveedor se crea como tercero, no es una compra");
-  for (const [t, id] of [["cómo abro la caja", "cash.open"], ["cómo hago el cierre de caja", "cash.close"], ["cómo creo una categoría", "categories.create"], ["cómo creo un usuario", "users.create"], ["cómo agrego un empleado al sistema", "users.create"]] as const) {
+  for (const [t, id] of [["cómo abro la caja", "cash.open"], ["cómo hago el cierre de caja", "cash.close"], ["cómo creo una categoría", "categories.create"], ["cómo creo un usuario", "users.create"], ["cómo agrego un empleado al sistema", "users.create"], ["cómo hago una orden de compra", "inventory.purchase_order"]] as const) {
     const h = intent(t);
     assert.equal(h && h.kind === "howto" ? h.howto?.id : null, id, t);
   }

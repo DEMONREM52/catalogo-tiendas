@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { URL_CHANGE_EVENT } from "@/lib/url-intent";
-import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench, ScanLine } from "lucide-react";
+import { BadgeDollarSign, BarChart3, BookOpen, Boxes, CalendarClock, Factory, FileText, Handshake, Hourglass, PackageSearch, Receipt, ShieldCheck, Truck, Warehouse as WarehouseIcon, Wrench, ScanLine, ClipboardList } from "lucide-react";
 import { SectionTabs } from "@/components/ui/SectionTabs";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -23,12 +23,13 @@ const CountsTab = nextDynamic(() => import("./CountsTab").then((m) => m.CountsTa
 const StaleStockTab = nextDynamic(() => import("./StaleStock").then((m) => m.StaleStockTab), { loading: tabLoading });
 const ExpiryTab = nextDynamic(() => import("./InventoryExtras").then((m) => m.ExpiryTab), { loading: tabLoading });
 const PurchasesTab = nextDynamic(() => import("./PurchasesTabs").then((m) => m.PurchasesTab), { loading: tabLoading });
+const PurchaseOrdersTab = nextDynamic(() => import("./PurchaseOrders").then((m) => m.PurchaseOrdersTab), { loading: tabLoading });
 const SuppliersTab = nextDynamic(() => import("./PurchasesTabs").then((m) => m.SuppliersTab), { loading: tabLoading });
 const PayablesTab = nextDynamic(() => import("./Payables").then((m) => m.PayablesTab), { loading: tabLoading });
 const InternalCreditTab = nextDynamic(() => import("./InternalCredit").then((m) => m.InternalCreditTab), { loading: tabLoading });
 const ManifestsTab = nextDynamic(() => import("./ManifestsUI").then((m) => m.ManifestsTab), { loading: tabLoading });
 
-type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry" | "conteos";
+type TabKey = "overview" | "stock" | "warehouses" | "transfers" | "adjustments" | "kardex" | "purchases" | "orders" | "suppliers" | "payables" | "internal" | "manifests" | "audit" | "stale" | "expiry" | "conteos";
 
 const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; permissions: string[] }> = [
   { key: "overview", icon: <BarChart3 />, color: "#8b5cf6", label: "Resumen", permissions: ["inventory", "purchases", "payables"] },
@@ -41,6 +42,7 @@ const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; 
   { key: "stale", icon: <Hourglass />, color: "#64748b", label: "Sin movimiento", permissions: ["inventory", "reports"] },
   { key: "expiry", icon: <CalendarClock />, color: "#f43f5e", label: "Vencimientos", permissions: ["inventory", "purchases", "products"] },
   { key: "purchases", icon: <Receipt />, color: "#10b981", label: "Ingreso de factura", permissions: ["purchases"] },
+  { key: "orders", icon: <ClipboardList />, color: "#8b5cf6", label: "Órdenes de compra", permissions: ["purchases"] },
   { key: "suppliers", icon: <Factory />, color: "#0ea5e9", label: "Proveedores", permissions: ["suppliers", "purchases"] },
   { key: "payables", icon: <BadgeDollarSign />, color: "#f43f5e", label: "Cuentas por pagar", permissions: ["payables"] },
   { key: "internal", icon: <Handshake />, color: "#8b5cf6", label: "Cuenta con puntos", permissions: ["internal_credit", "internal_credit_manage"] },
@@ -52,7 +54,7 @@ const TABS: Array<{ key: TabKey; icon: ReactNode; color: string; label: string; 
 type GroupKey = "stock" | "buy" | "control";
 const GROUPS: Array<{ key: GroupKey; icon: ReactNode; color: string; label: string; hint: string; tabs: TabKey[] }> = [
   { key: "stock", icon: <Boxes />, color: "#0ea5e9", label: "Inventario", hint: "Existencias, bodegas, traslados y ajustes", tabs: ["overview", "stock", "warehouses", "transfers", "adjustments", "conteos", "kardex"] },
-  { key: "buy", icon: <Receipt />, color: "#10b981", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "suppliers", "payables", "internal"] },
+  { key: "buy", icon: <Receipt />, color: "#10b981", label: "Compras y pagos", hint: "Facturas de compra, proveedores y lo que se debe", tabs: ["purchases", "orders", "suppliers", "payables", "internal"] },
   { key: "control", icon: <PackageSearch />, color: "#f59e0b", label: "Control", hint: "Lo quieto, lo que vence, manifiestos y auditoría", tabs: ["stale", "expiry", "manifests", "audit"] },
 ];
 const groupOf = (k: TabKey) => GROUPS.find((g) => g.tabs.includes(k))?.key ?? "stock";
@@ -163,6 +165,7 @@ export default function InventarioPage() {
       {current.key === "stale" ? <StaleStockTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "expiry" ? <ExpiryTab ctx={ctx} warehouses={warehouses} /> : null}
       {current.key === "purchases" ? <PurchasesTab ctx={ctx} warehouses={ctx.pointId ? warehouses.filter((w) => w.id === ctx.pointId) : warehouses} /> : null}
+      {current.key === "orders" ? <PurchaseOrdersTab ctx={ctx} /> : null}
       {current.key === "suppliers" ? <SuppliersTab ctx={ctx} /> : null}
       {current.key === "payables" ? <PayablesTab ctx={ctx} /> : null}
       {current.key === "internal" ? <InternalCreditTab ctx={ctx} /> : null}

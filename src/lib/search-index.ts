@@ -77,6 +77,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/inventario?tab=stale", emoji: "⏳", label: "Productos sin movimiento", hint: "Inventario", keywords: "quietos no se venden", perms: ["inventory", "reports"] },
   { href: "/dashboard/inventario?tab=expiry", emoji: "📅", label: "Vencimientos", hint: "Inventario", keywords: "vence caducidad lotes", perms: ["inventory", "purchases", "products"] },
   { href: "/dashboard/inventario?tab=purchases", emoji: "🛒", label: "Facturas de compra", hint: "Inventario", keywords: "compras ingresos proveedor historial", perms: ["purchases"] },
+  { href: "/dashboard/inventario?tab=orders", emoji: "📋", label: "Órdenes de compra", hint: "Inventario", keywords: "orden de compra pedido al proveedor pedir mercancia faltantes llego comparar", perms: ["purchases"] },
   { href: "/dashboard/inventario?tab=suppliers", emoji: "🏭", label: "Proveedores", hint: "Inventario", keywords: "proveedor terceros", perms: ["suppliers", "purchases"] },
   { href: "/dashboard/inventario?tab=payables", emoji: "💳", label: "Cuentas por pagar", hint: "Inventario", keywords: "deudas proveedores pagar abonos vencidas", perms: ["payables"] },
   { href: "/dashboard/inventario?tab=internal", emoji: "🤝", label: "Cuenta con puntos", hint: "Inventario", keywords: "deuda puntos bodega liquidacion del punto mercancia en punto abono cuadrar", perms: CREDIT },

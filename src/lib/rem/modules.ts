@@ -182,6 +182,15 @@ export const MODULES: ModuleInfo[] = [
       ],
       href: "/dashboard/inventario?tab=purchases", voice: "También puedes decirme «registrar una compra».", verified: true,
     }, {
+      id: "inventory.purchase_order", goal: "hacer una orden de compra", keywords: "orden de compra ordenes de compra pedido pedir mercancia",
+      steps: [
+        "Abre Inventario, luego Compras y pagos, y la pestaña Órdenes de compra. Toca «＋ Nueva orden».",
+        "Elige el proveedor, la fecha en que debe llegar y agrega los productos con su cantidad y el costo esperado. Toca «Guardar orden». No mueve el inventario.",
+        "Puedes mandársela al proveedor con «Enviar por WhatsApp» o «Copiar».",
+        "Cuando llegue la mercancía, abre la orden y toca «Recibir con factura»: la factura se llena con lo pendiente. Al registrarla, la orden compara lo pedido con lo que llegó.",
+      ],
+      href: "/dashboard/inventario?tab=orders", verified: true,
+    }, {
       id: "inventory.transfer", goal: "hacer un traslado", keywords: "traslado trasladar enviar mercancia mover bodega punto",
       steps: [], href: "/dashboard/inventario?tab=transfers",
       voice: "Dime «quiero hacer un traslado» y lo hacemos hablando: me dices los productos y las cantidades, y antes de enviarlo te pregunto «¿Lo envío?».", verified: true,

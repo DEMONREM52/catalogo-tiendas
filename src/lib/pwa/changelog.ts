@@ -1203,6 +1203,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Revisas y registras" },
     ],
   },
+  {
+    id: 116, date: "2026-11-19", title: "📋 Órdenes de compra",
+    summary: "Nueva pestaña en Inventario → Compras y pagos: arma lo que le pides al proveedor (productos, cantidades, costo esperado y fecha) y mándaselo por WhatsApp. No mueve el inventario. Cuando llegue, «📥 Recibir con factura» llena el ingreso con lo pendiente; al registrarlo, la orden te muestra qué faltó, qué sobró, qué llegó con otro costo y qué llegó sin pedirlo.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "📋", text: "Pides al proveedor" },
+      { icon: "📥", text: "Recibes con la factura" },
+      { icon: "⚖️", text: "Faltó, sobró, otro costo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

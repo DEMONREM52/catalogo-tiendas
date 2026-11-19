@@ -22,6 +22,7 @@ import { lineFromHit } from "./LineEditor";
 import { usePurchasePricing } from "./purchase-pricing";
 import { XmlImportButton } from "./XmlImport";
 import { FileImportButton } from "./FileImport";
+import { loadPurchaseOrder, poSummary } from "./PurchaseOrders";
 import { useListVoice, type ListVoiceAdapter } from "@/lib/voice/useListVoice";
 import { normalize, parseAmount } from "@/lib/voice/spanish";
 import type { ProductHit } from "./shared";
@@ -144,6 +145,8 @@ type PurchaseForm = {
   dueDate: string;
   notes: string;
   lines: Line[];
+  /** Orden de compra que se está recibiendo con esta factura (se asocia al registrar). */
+  order?: { id: string; number: number } | null;
 };
 
 type Editing = { id: string; number: number };
@@ -225,6 +228,47 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.storeId]);
+
+  // «📥 Recibir con factura» desde una orden de compra: ?oc=ID llena la factura con lo pendiente.
+  useEffect(() => {
+    if (!draftReady) return;
+    const oc = new URLSearchParams(window.location.search).get("oc");
+    if (!oc) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("oc");
+    window.history.replaceState(null, "", url.toString());
+    void receiveOrder(oc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftReady]);
+
+  async function receiveOrder(id: string) {
+    const d = await loadPurchaseOrder(id);
+    if (!d) return;
+    if (d.order.status !== "open" && d.order.status !== "partial") return void toast(`La orden N.º ${d.order.number} ya no está pendiente`, "warning");
+    const pend = d.items.filter((i) => i.pending > 0);
+    if (!pend.length) return void toast("Esa orden ya llegó completa", "warning");
+    if (formHasWork(form) && !(await confirmAction("Ya tienes una factura empezada", `Los productos de la orden N.º ${d.order.number} se agregan a lo que llevas.`, "Agregar"))) return;
+    setForm((cur) => ({
+      ...cur, supplier: d.order.supplier_id, order: { id: d.order.id, number: d.order.number },
+      lines: [...cur.lines.filter((l) => !pend.some((p) => p.product_id === l.product_id)),
+        ...pend.map((p) => ({ product_id: p.product_id, name: p.name, sku: p.sku, current: 0, qty: p.pending, unit_cost: Number(p.unit_cost), tax_rate: 0, warehouse_id: defaultWh }))],
+    }));
+    void toast(`Orden N.º ${d.order.number}: ${pend.length} producto(s) pendientes en la factura`, "success", "Corrige cantidades y costos con lo que llegó de verdad. Al registrar, la orden queda asociada y se compara.");
+  }
+
+  async function pickOrder() {
+    if (!form.supplier) return void toast("Elige primero el proveedor", "warning");
+    const { data, error } = await supabaseBrowser().rpc("erp_po_list", { p_store: ctx.storeId, p_status: "pending", p_supplier: form.supplier });
+    const d = data as { ok?: boolean; items?: Array<{ id: string; number: number; units: number; units_received: number; total: number; created_at: string }> } | null;
+    if (error || !d?.ok) return void toast("No se pudieron leer las órdenes", "error", /Could not find|schema cache/i.test(error?.message ?? "") ? "Falta correr la migración 20261327 en Supabase." : undefined);
+    if (!d.items?.length) return void toast("Ese proveedor no tiene órdenes de compra pendientes", "warning");
+    const r = await Swal.fire({
+      title: "¿Qué orden llegó?", input: "select", showCancelButton: true, confirmButtonText: "Usar", cancelButtonText: "Cancelar",
+      inputOptions: Object.fromEntries(d.items.map((o) => [o.id, `N.º ${o.number} · ${Number(o.units_received)} de ${Number(o.units)} und. · ${money(Number(o.total))}`])),
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+    });
+    if (r.isConfirmed && r.value) void receiveOrder(String(r.value));
+  }
 
   // Guardado automático del borrador (cada cambio, con una pequeña espera).
   useEffect(() => {
@@ -529,6 +573,16 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     if (purchaseId) await saveNotes(purchaseId as string);
     if (purchaseId) await saveMarkups();
     if (purchaseId) await saveCodes();
+    let orderNote = "";
+    if (purchaseId && f.order) {
+      const { data: link, error: linkError } = await supabaseBrowser().rpc("erp_po_link", { p_order: f.order.id, p_purchase: purchaseId as string });
+      const lk = link as { ok?: boolean; message?: string } | null;
+      if (linkError || !lk?.ok) void toast(`El ingreso quedó, pero no se asoció a la orden N.º ${f.order.number}`, "warning", lk?.message ?? (linkError ? errorMessage(linkError) : undefined));
+      else {
+        const det = await loadPurchaseOrder(f.order.id);
+        orderNote = det ? ` 📋 Orden N.º ${f.order.number}: ${poSummary(det)}.` : "";
+      }
+    }
     const activated = purchaseId ? await activateNow() : "";
     const { data: created } = purchaseId
       ? await supabaseBrowser().from("erp_purchases").select("id,number").eq("id", purchaseId as string).maybeSingle()
@@ -544,7 +598,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     clearDraft(draftKey(null));
     setRestored(false);
     // Se conservan proveedor, fecha, forma de pago, bodega y quién revisó para la siguiente factura.
-    setForm((cur) => ({ ...cur, lines: [], invoiceRef: "", notes: "" }));
+    setForm((cur) => ({ ...cur, lines: [], invoiceRef: "", notes: "", order: null }));
     if (purchaseId) setExpiryAsk({ purchaseId: purchaseId as string, number: created?.number ?? null, lines: f.lines.filter((l) => l.qty > 0).map((l) => ({ product_id: l.product_id, name: l.name, qty: l.qty, warehouse_id: l.warehouse_id || defaultWh })) });
     if (purchaseId) {
       const url = purchaseReceiptUrl(purchaseId as string, true);
@@ -553,7 +607,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     } else {
       receiptWin?.close();
     }
-    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`, "success", `Se abrió el comprobante: elige si lo quieres a costo o con Precio 1 a 5 y se imprime.${activated}`);
+    void toast(`Ingreso #${created?.number ?? ""} registrado: inventario, costo y cuenta por pagar actualizados`, "success", `Se abrió el comprobante: elige si lo quieres a costo o con Precio 1 a 5 y se imprime.${activated}${orderNote}`);
     void load();
   }
 
@@ -708,6 +762,20 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                   <Btn variant="ghost" onClick={() => setRestored(false)}>Entendido</Btn>
                   <Btn variant="danger" onClick={() => void discardDraft()}>Descartar borrador</Btn>
                 </span>
+              </div>
+            ) : null}
+            {!editing ? (
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                {form.order ? (
+                  <span className="rounded-full border px-3 py-1 font-bold" style={{ borderColor: "color-mix(in oklab, #8b5cf6 45%, var(--t-card-border))" }}>
+                    📋 Recibiendo la orden de compra N.º {form.order.number}
+                    <button type="button" className="ml-2 underline" onClick={() => patchForm({ order: null })}>quitar</button>
+                  </span>
+                ) : form.supplier ? (
+                  <button type="button" onClick={() => void pickOrder()} className="rounded-full border px-3 py-1 font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                    📋 Desde una orden de compra
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
