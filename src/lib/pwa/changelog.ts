@@ -1213,6 +1213,16 @@ export const RELEASES: Release[] = [
       { icon: "⚖️", text: "Faltó, sobró, otro costo" },
     ],
   },
+  {
+    id: 117, date: "2026-11-19", title: "📈 Flujo de caja de 30 días",
+    summary: "En Gastos y nómina → Flujo de caja (solo el dueño o el administrador): día por día de los próximos 30 días, lo que entra (ventas promedio de las últimas 4 semanas según el día de la semana, y la cartera que vence) frente a lo que sale (proveedores, gastos y gastos fijos, nómina). Escribe la plata que tienes hoy y te dice si alcanza o desde qué día te faltaría. Lo vencido sale aparte.",
+    paths: ["/dashboard/gastos"],
+    demo: [
+      { icon: "💵", text: "Plata de hoy" },
+      { icon: "📅", text: "30 días: entra y sale" },
+      { icon: "⚠️", text: "Desde qué día falta" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

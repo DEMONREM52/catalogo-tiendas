@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `870fb76b` · 117 capacidades · 32 módulos.
+Versión del catálogo: `5aac40b5` · 118 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -30,7 +30,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Landing pages | `/dashboard/landing` | Páginas de un producto para pauta y anuncios, con inventario aparte por punto y sus ventas y ganancia aparte. | — |
 | Mensajes | `/dashboard/mensajes` | Chat y llamadas con el equipo de la tienda. | — |
 | Rentabilidad | `/dashboard/rentabilidad` | Muestra la ganancia, que es la venta menos el costo, por punto y por producto. También están los precios por punto, los límites de precio, los repartos y liquidaciones de la ganancia y un simulador de precios. | — |
-| Gastos y nómina | `/dashboard/gastos` | Para los gastos de la tienda y de cada punto, los gastos fijos, los presupuestos, la nómina de los empleados, los vales y préstamos y las reservas. | registrar un gasto (4 pasos) |
+| Gastos y nómina | `/dashboard/gastos` | Para los gastos de la tienda y de cada punto, los gastos fijos, los presupuestos, la nómina de los empleados, los vales y préstamos y las reservas. El dueño o el administrador ven además el flujo de caja de los próximos 30 días: lo que entra (ventas promedio y cartera) frente a lo que sale (proveedores, gastos y nómina). | registrar un gasto (4 pasos) |
 | Comisiones y metas | `/dashboard/equipo` | Las metas del mes por punto o por vendedor, cómo van, y las comisiones. | — |
 | Nómina electrónica | `/dashboard/nomina-electronica` | Para enviar la nómina electrónica a la DIAN. | — |
 | Para el contador | `/dashboard/contador` | Arma los asientos contables con el PUC para exportarlos al programa del contador. | — |
@@ -100,6 +100,7 @@ Sale del buscador Ctrl+K (`src/lib/search-index.ts`) y del menú (`src/lib/modul
 | Resumen de gastos | página | `/dashboard/gastos?tab=overview` | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`), Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) |  |
 | Gastos | página | `/dashboard/gastos?tab=expenses` | Gastos (`expenses`), Pagar gastos (`expenses_pay`) |  |
 | Gastos fijos | página | `/dashboard/gastos?tab=recurring` | Gastos (`expenses`), Presupuestos, gastos fijos y reservas (`budgets`) |  |
+| Flujo de caja | página | `/dashboard/gastos?tab=flow` | Gastos (`expenses`), Pagar gastos (`expenses_pay`), Presupuestos, gastos fijos y reservas (`budgets`), Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) | sí |
 | Presupuestos | página | `/dashboard/gastos?tab=budgets` | Presupuestos, gastos fijos y reservas (`budgets`), Gastos (`expenses`) |  |
 | Nómina | página | `/dashboard/gastos?tab=payroll` | Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) |  |
 | Vales y préstamos | página | `/dashboard/gastos?tab=loans` | Nómina (`payroll`), Aprobar nómina (`payroll_approve`), Pagar nómina (`payroll_pay`) |  |

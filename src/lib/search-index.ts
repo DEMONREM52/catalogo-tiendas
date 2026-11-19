@@ -48,6 +48,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/gastos?tab=overview", emoji: "💼", label: "Resumen de gastos", hint: "Gastos y nómina", keywords: "cuanto gaste mes", perms: FIN },
   { href: "/dashboard/gastos?tab=expenses", emoji: "💸", label: "Gastos", hint: "Gastos y nómina", keywords: "egresos pagos por pagar", perms: ["expenses", "expenses_pay"] },
   { href: "/dashboard/gastos?tab=recurring", emoji: "🔁", label: "Gastos fijos", hint: "Gastos y nómina", keywords: "arriendo servicios mensuales", perms: ["expenses", "budgets"] },
+  { href: "/dashboard/gastos?tab=flow", emoji: "📈", label: "Flujo de caja", hint: "Gastos y nómina", keywords: "flujo de caja alcanza la plata proyeccion proximos 30 dias que tengo que pagar cuanto entra", perms: FIN, adminOnly: true },
   { href: "/dashboard/gastos?tab=budgets", emoji: "🎯", label: "Presupuestos", hint: "Gastos y nómina", keywords: "topes limites categorias", perms: ["budgets", "expenses"] },
   { href: "/dashboard/gastos?tab=payroll", emoji: "👥", label: "Nómina", hint: "Gastos y nómina", keywords: "empleados sueldos quincena pagos", perms: PAYROLL },
   { href: "/dashboard/gastos?tab=loans", emoji: "🤝", label: "Vales y préstamos", hint: "Gastos y nómina", keywords: "vale prestamo adelanto empleados cuotas", perms: PAYROLL },

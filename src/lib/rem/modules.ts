@@ -250,8 +250,8 @@ export const MODULES: ModuleInfo[] = [
   },
   {
     id: "expenses", name: "Gastos y nómina", path: "/dashboard/gastos",
-    aliases: "gastos egresos nomina sueldos empleados vales prestamos presupuestos gastos fijos reservas", keys: "gasto|gastos|nomina|nominas|sueldos|vales|prestamos|empleados|presupuestos",
-    about: "Para los gastos de la tienda y de cada punto, los gastos fijos, los presupuestos, la nómina de los empleados, los vales y préstamos y las reservas.",
+    aliases: "gastos egresos nomina sueldos empleados vales prestamos presupuestos gastos fijos reservas flujo de caja", keys: "gasto|gastos|nomina|nominas|sueldos|vales|prestamos|empleados|presupuestos",
+    about: "Para los gastos de la tienda y de cada punto, los gastos fijos, los presupuestos, la nómina de los empleados, los vales y préstamos y las reservas. El dueño o el administrador ven además el flujo de caja de los próximos 30 días: lo que entra (ventas promedio y cartera) frente a lo que sale (proveedores, gastos y nómina).",
     howto: [{
       id: "expenses.create", goal: "registrar un gasto", keywords: "gasto egreso pago salida",
       steps: [

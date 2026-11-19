@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useUrlTab } from "@/lib/url-intent";
-import { HandCoins, LayoutDashboard, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
+import { HandCoins, LayoutDashboard, LineChart, PiggyBank, Receipt, Repeat, Target, Users, Wallet } from "lucide-react";
 import { SectionTabs, type SectionTab } from "@/components/ui/SectionTabs";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
@@ -11,10 +11,11 @@ import { Expenses } from "./Expenses";
 import { BudgetsTab, RecurringTab, ReservesTab } from "./Planning";
 import { PayrollTab } from "./Payroll";
 import { LoansTab } from "./Loans";
+import { CashFlowTab } from "./CashFlow";
 import { cardStyle, rpcError, type Catalog, type Point } from "./shared";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
 
-type Tab = "overview" | "expenses" | "recurring" | "budgets" | "payroll" | "loans" | "reserves";
+type Tab = "overview" | "expenses" | "recurring" | "budgets" | "payroll" | "loans" | "reserves" | "flow";
 
 /** Gastos y nómina: egresos, gastos fijos, presupuestos, nómina y reservas de la madre y sus puntos. */
 export default function GastosPage() {
@@ -23,9 +24,11 @@ export default function GastosPage() {
   const [cat, setCat] = useState<Catalog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useUrlTab<Tab>(["overview", "expenses", "recurring", "budgets", "payroll", "loans", "reserves"], "overview");
+  const [tab, setTab] = useUrlTab<Tab>(["overview", "expenses", "recurring", "budgets", "payroll", "loans", "reserves", "flow"], "overview");
   const [openExpense, setOpenExpense] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  // Flujo de caja: solo el dueño o el administrador de la tienda (la base lo vuelve a revisar).
+  const [boss, setBoss] = useState(false);
 
   const loadCatalog = useCallback(async (store: string) => {
     const { data, error: e } = await supabaseBrowser().rpc("erp_finance_catalog", { p_store: store });
@@ -40,6 +43,7 @@ export default function GastosPage() {
       const store = access?.store;
       if (!store) return setReady(true);
       setStoreId(store.id);
+      setBoss(Boolean(access?.isOwner || access?.membership?.role === "store_admin"));
       const sb = supabaseBrowser();
       const [{ data: wh }, setup] = await Promise.all([
         sb.from("erp_warehouses").select("id,name").eq("store_id", store.id).eq("active", true).order("name"),
@@ -75,6 +79,7 @@ export default function GastosPage() {
     { key: "budgets", label: "Presupuestos", hint: "Topes por categoría", icon: <Target />, color: "#0ea5e9", hidden: !(can.budgets || can.expenses) },
     { key: "payroll", label: "Nómina", hint: "Empleados y pagos", icon: <Users />, color: "#10b981", hidden: !payroll },
     { key: "loans", label: "Vales y préstamos", hint: "Adelantos al equipo", icon: <HandCoins />, color: "#f59e0b", hidden: !payroll },
+    { key: "flow", label: "Flujo de caja", hint: "Si alcanza la plata los próximos 30 días", icon: <LineChart />, color: "#14b8a6", hidden: !boss },
     { key: "reserves", label: "Reservas", hint: "Ahorro para lo que viene", icon: <PiggyBank />, color: "#ec4899", hidden: !can.budgets },
   ];
 
@@ -96,6 +101,7 @@ export default function GastosPage() {
       {tab === "budgets" ? <BudgetsTab key={refresh} storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
       {tab === "payroll" ? <PayrollTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
       {tab === "loans" ? <LoansTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
+      {tab === "flow" && boss ? <CashFlowTab storeId={storeId} /> : null}
       {tab === "reserves" ? <ReservesTab storeId={storeId} points={points} cat={cat} onChanged={changed} /> : null}
     </main>
   );
