@@ -1253,6 +1253,16 @@ export const RELEASES: Release[] = [
       { icon: "📄", text: "PDF de novedades" },
     ],
   },
+  {
+    id: 121, date: "2026-11-19", title: "💡 «También llevan» en el POS",
+    summary: "Debajo del carrito, el POS sugiere lo que más se ha vendido junto con lo que el cliente lleva (últimos 120 días), por ejemplo «＋ FUNDA · 5 de cada 10». Solo sugiere lo que hay en ese punto y se agrega con un toque, con su precio de siempre. Se puede ocultar en cada venta.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "📱", text: "Llevan un celular" },
+      { icon: "💡", text: "También llevan funda" },
+      { icon: "＋", text: "Un toque y queda" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

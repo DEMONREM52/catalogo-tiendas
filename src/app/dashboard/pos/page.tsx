@@ -39,6 +39,7 @@ import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { useHeldSales } from "@/lib/pos/held";
 import { readCurrentSale, saveCurrentSale } from "@/lib/pos/current-sale";
 import { PosCartLines, focusPosField, lineStatus, type CartLine } from "./PosCart";
+import { AlsoBought } from "./AlsoBought";
 import { EMPTY_PAYMENT, PosPayment, paymentSummary, type PaymentState, type PayMethod, type PayPart } from "./PosPayment";
 import { LIMIT_LABEL, keepApprovals, useApprovals, usePriceFloors, type ApprovalState } from "./usePriceFloors";
 import { CashStatusChip } from "../caja/CashStatusChip";
@@ -216,6 +217,8 @@ export default function PosPage() {
       .filter((p) => (pointStock.get(p.id) ?? 0) > 0)
       .map((p) => ({ ...p, stock: pointStock.get(p.id) ?? 0 }));
   }, [activeProducts, pointStock]);
+  // Lo que se puede vender ahora en este punto (para «también llevan»).
+  const sellableById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   // Productos y clientes de la copia guardada (hora) cuando la base no respondió; o no hubo ni copia.
@@ -2561,6 +2564,9 @@ export default function PosPage() {
               flash={flash}
               onNext={goSearch}
             />
+            {store && !editingDoc && cart.length ? (
+              <AlsoBought storeId={store.id} cartIds={cart.map((c) => c.productId)} sellable={sellableById} onAdd={(p) => addProduct(p)} />
+            ) : null}
 
             {fromDoc ? (
               <div className="mt-2 flex items-start justify-between gap-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}>
