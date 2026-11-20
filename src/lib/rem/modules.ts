@@ -241,6 +241,7 @@ export const MODULES: ModuleInfo[] = [
         "En el documento toca «Nota crédito» para bajar la deuda o «Nota débito» para subirla. Necesitas el permiso «Créditos» y el documento debe estar confirmado.",
         "Elige el motivo, escribe el valor (la nota crédito no puede pasar del saldo) y el detalle, y confirma.",
         "Queda con número (NC-00001 o ND-00001) en la pestaña «Notas», en el estado de cuenta y en auditoría. Se puede anular con motivo.",
+        "Si devuelven productos, toca «Devolver productos» en el documento y escribe cuántas unidades de cada uno: vuelven a la bodega, se quitan del documento y la deuda baja. Pide también el permiso «Devolución de venta» y no se puede anular.",
       ],
       href: "/dashboard/clientes?tab=cartera", verified: true,
     }],

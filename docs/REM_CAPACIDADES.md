@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `02486474` · 118 capacidades · 32 módulos.
+Versión del catálogo: `76068288` · 118 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -25,7 +25,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Inventario | `/dashboard/inventario` | Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. | ingresar una factura de compra (7 pasos); hacer una orden de compra (4 pasos); hacer un traslado (por voz); hacer un conteo (por voz) |
 | Pedidos | `/dashboard/pedidos` | Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. | hacer un pedido interno (por voz) |
 | Centro de operaciones | `/dashboard/operaciones` | Reúne los documentos y movimientos de la tienda en un solo lugar: ventas, pedidos, traslados y lo de inventario. | — |
-| Terceros y cartera | `/dashboard/clientes` | Aquí están los clientes y los proveedores, la cartera con lo que te deben (abonos, notas crédito y débito, y el estado de cuenta para mandarle al cliente por WhatsApp o en PDF), los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. Consumidor final no puede tener crédito. | crear un cliente (4 pasos); mandarle el estado de cuenta a un cliente (3 pasos); hacer una nota crédito o débito (4 pasos) |
+| Terceros y cartera | `/dashboard/clientes` | Aquí están los clientes y los proveedores, la cartera con lo que te deben (abonos, notas crédito y débito, y el estado de cuenta para mandarle al cliente por WhatsApp o en PDF), los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. Consumidor final no puede tener crédito. | crear un cliente (4 pasos); mandarle el estado de cuenta a un cliente (3 pasos); hacer una nota crédito o débito (5 pasos) |
 | Catálogos y campañas | `/dashboard/social` | Para los catálogos en línea que compartes con los clientes, el catálogo en PDF y las campañas para redes. | — |
 | Landing pages | `/dashboard/landing` | Páginas de un producto para pauta y anuncios, con inventario aparte por punto y sus ventas y ganancia aparte. | — |
 | Mensajes | `/dashboard/mensajes` | Chat y llamadas con el equipo de la tienda. | — |

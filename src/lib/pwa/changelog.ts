@@ -1323,6 +1323,16 @@ export const RELEASES: Release[] = [
       { icon: "📤", text: "Estado de cuenta por WhatsApp" },
     ],
   },
+  {
+    id: 128, date: "2026-11-20", title: "📦 Nota crédito devolviendo productos",
+    summary: "En Cartera → Estado de cuenta, cada venta a crédito tiene «Devolver productos»: eliges cuántas unidades de cada producto devuelve el cliente, vuelven a la bodega de donde salieron, se quitan del documento (así ventas, ganancia y liquidaciones no las cuentan) y la deuda baja al precio al que se vendieron, con su nota crédito. El comprobante muestra la nota y lo devuelto.",
+    paths: ["/dashboard/clientes"],
+    demo: [
+      { icon: "📦", text: "1 × CASTILLO devuelto" },
+      { icon: "➖", text: "NC-00002: −$95.000" },
+      { icon: "🏬", text: "Vuelve a la bodega" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

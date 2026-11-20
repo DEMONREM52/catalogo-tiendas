@@ -20,6 +20,12 @@ test("el comprobante entiende la venta a crédito", () => {
   const rows = creditRows(p!.credit!, (n) => "$" + n.toLocaleString("es-CO"));
   assert.deepEqual(rows.map(([k]) => k), ["Plazo", "Vence", "Abonado", "Saldo pendiente"]);
   assert.equal(rows[1][1], "30/11/2026");
+  // Con una devolución parcial: la nota sale antes del saldo, con lo devuelto.
+  const withNote = normalizePayment({ method: "credito", credit: { total: 82000, balance: 82000, paid: 0, due_date: "2026-11-30", days: 10, status: "open",
+    notes: [{ number: "NC-00002", kind: "credit", amount: 95000, items: [{ name: "CASTILLO", qty: 1 }] }] } });
+  const nrows = creditRows(withNote!.credit!, (n) => "$" + n.toLocaleString("es-CO"));
+  assert.equal(nrows[2][0], "NC-00002 · devolución 1 × CASTILLO");
+  assert.equal(nrows[2][1], "−$95.000");
   // Contado: sin crédito, igual que antes.
   assert.equal(normalizePayment({ method: "efectivo", parts: [] })?.credit, null);
 });

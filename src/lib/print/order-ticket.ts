@@ -38,7 +38,10 @@ export async function loadOrderTicket(token: string): Promise<TicketData | null>
   const fiscal = (fiscalRes.error ? null : fiscalRes.data) as FiscalDoc | null;
   const pay = (payRes.error ? null : payRes.data) as {
     method?: string; parts?: Array<{ method: string; amount: number }>; received?: number | null; change?: number | null;
-    credit?: { balance: number; paid: number; due_date: string | null; days: number | null; status: string } | null;
+    credit?: {
+      balance: number; paid: number; due_date: string | null; days: number | null; status: string;
+      notes?: Array<{ number: string; kind: string; amount: number; items: Array<{ name: string; qty: number }> | null }>;
+    } | null;
   } | null;
   const point = doc?.point ?? null;
   const items = (data.items ?? []).map((i) => ({ name: String(i.name ?? "Producto"), qty: Number(i.qty), price: Number(i.price) }));
@@ -91,6 +94,10 @@ export async function loadOrderTicket(token: string): Promise<TicketData | null>
   if (credit) {
     if (credit.days) payment.push(["Plazo", `${credit.days} día${credit.days === 1 ? "" : "s"}`]);
     payment.push(["Vence", fmtDate(credit.due_date)]);
+    for (const n of credit.notes ?? []) {
+      payment.push([n.items?.length ? `${n.number} devolución` : n.number, `${n.kind === "credit" ? "-" : "+"}${ticketMoney(Number(n.amount))}`]);
+      for (const i of n.items ?? []) payment.push([`  ${i.qty} x ${i.name}`, ""]);
+    }
     if (Number(credit.paid) > 0) payment.push(["Abonado", ticketMoney(Number(credit.paid))]);
     payment.push([credit.status === "paid" ? "Saldo (pagado)" : "Saldo", ticketMoney(Number(credit.balance))]);
     if (order.status !== "cancelled") {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRunOnChange } from "../inventario/shared";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { Ban, FileMinus2, FilePlus2, FileText, HandCoins, Link2, MessageCircle, PlusCircle, Printer, Send, X } from "lucide-react";
+import { Ban, FileMinus2, FilePlus2, FileText, HandCoins, Link2, MessageCircle, PackageOpen, PlusCircle, Printer, Send, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { parseDdMmYyyy } from "@/components/forms/Fields";
@@ -27,7 +27,11 @@ type Note = {
   id: string; receivable_id: string; kind: "credit" | "debit"; number: string; amount: number; reason_code: string; reason: string;
   balance_before: number; balance_after: number; created_at: string; created_by_name: string | null;
   voided: boolean; voided_at: string | null; voided_by_name: string | null; void_reason: string | null; doc_number: string | null;
+  /** Devolución de productos (20261335): lo que volvió al inventario. */
+  items?: Array<{ product_id: string; name: string; qty: number; price: number }> | null;
 };
+type ReturnLine = { product_id: string; name: string; image_url: string | null; qty: number; price: number };
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 
 export const NOTE_REASONS: Record<Note["kind"], Array<[string, string]>> = {
   credit: [["descuento", "Descuento"], ["error_precio", "Error en el precio (se cobró de más)"], ["pronto_pago", "Descuento por pronto pago"],
@@ -35,7 +39,7 @@ export const NOTE_REASONS: Record<Note["kind"], Array<[string, string]>> = {
   debit: [["interes_mora", "Intereses de mora"], ["flete", "Flete o domicilio"], ["error_precio", "Error en el precio (faltó cobrar)"],
     ["cargo_adicional", "Cargo adicional"], ["otro", "Otro"]],
 };
-const reasonLabel = (kind: Note["kind"], code: string) => NOTE_REASONS[kind].find(([v]) => v === code)?.[1] ?? code;
+const reasonLabel = (kind: Note["kind"], code: string) => code === "devolucion" ? "Devolución de productos" : NOTE_REASONS[kind].find(([v]) => v === code)?.[1] ?? code;
 const noteRpcError = (e: { message?: string }) =>
   /Could not find the function|schema cache/i.test(e.message ?? "") ? "Falta ejecutar en Supabase la migración 20261334_credito_completo.sql." : e.message ?? "No se pudo.";
 
@@ -211,7 +215,7 @@ export function StatementDrawer({
       title: `${credit ? "Nota crédito" : "Nota débito / ajuste"} · ${r.doc_number ?? "documento"}`,
       html: `<div style="text-align:left;display:grid;gap:10px">
         <p style="font-size:12px;opacity:.8;margin:0">${credit
-          ? `Baja la deuda de este documento. Saldo actual: <b>${money(r.balance)}</b>. Si devuelven productos, usa «Devolución» del documento en el POS.`
+          ? `Baja la deuda de este documento. Saldo actual: <b>${money(r.balance)}</b>. Si devuelven productos, usa «Devolver productos» del documento (vuelven al inventario).`
           : `Sube la deuda de este documento (intereses, flete, algo que faltó cobrar). Saldo actual: <b>${money(r.balance)}</b>.`}</p>
         <label style="font-size:12px;opacity:.8">Motivo
           <select id="n-code" class="swal2-select" style="margin:6px 0 0;width:100%;display:block">${options}</select>
@@ -245,6 +249,71 @@ export function StatementDrawer({
     const o = out as { ok: boolean; message?: string; number?: string; balance?: number } | null;
     if (err || !o?.ok) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo hacer la nota", text: err ? noteRpcError(err) : o?.message });
     void Swal.fire({ ...swal, icon: "success", title: `${o.number} registrada`, text: `Nuevo saldo de ${r.doc_number ?? "el documento"}: ${money(o.balance ?? 0)}`, timer: 2200, showConfirmButton: false });
+    await refresh();
+  }
+
+  /** Nota crédito con devolución de productos: vuelven a la bodega y bajan del documento y de la deuda. */
+  async function returnItems(r: Receivable) {
+    setBusy(true);
+    const { data: out, error: err } = await supabaseBrowser().rpc("erp_receivable_return_lines", { p_receivable: r.id });
+    setBusy(false);
+    const info = out as { ok: boolean; message?: string; can_return?: boolean; balance?: number; lines?: ReturnLine[] } | null;
+    if (err || !info?.ok) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo abrir", text: err ? noteRpcError(err) : info?.message });
+    if (!info.can_return) return void Swal.fire({ ...swal, icon: "info", title: "Sin permiso", text: "Para devolver productos necesitas los permisos «Créditos» y «Devolución de venta»." });
+    const lines = info.lines ?? [];
+    const rows = lines.map((l, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.2)">
+        <div style="flex:1;min-width:0;text-align:left">
+          <div style="font-weight:700;font-size:13px">${esc(l.name)}</div>
+          <div style="font-size:11px;opacity:.7">Vendidos ${l.qty} × ${money(l.price)}</div>
+        </div>
+        <input id="rt-${i}" class="swal2-input" type="number" min="0" max="${l.qty}" value="0" inputmode="numeric" style="margin:0;width:76px;height:38px;text-align:center" />
+      </div>`).join("");
+    const res = await Swal.fire({
+      ...swal,
+      title: `Devolver productos · ${r.doc_number ?? "documento"}`,
+      width: 560,
+      html: `<div style="text-align:left">
+        <p style="font-size:12px;opacity:.8;margin:0 0 6px">Escribe cuántas unidades devuelve. Vuelven a la bodega de donde salieron, se quitan del documento y la deuda baja al precio al que se vendieron. Saldo actual: <b>${money(info.balance ?? r.balance)}</b>. Si devuelve todo, usa «Devolución» del documento en el POS.</p>
+        <div style="max-height:46vh;overflow:auto">${rows}</div>
+        <p style="margin:8px 0 0;font-size:13px">Valor a descontar: <b id="rt-total">$ 0</b></p>
+        <label style="font-size:12px;opacity:.8;display:block;margin-top:8px">Motivo (queda en el estado de cuenta y en auditoría)
+          <input id="rt-reason" class="swal2-input" style="margin:6px 0 0;width:100%" placeholder="Ej: llegó con una pieza rota" />
+        </label>
+        <p style="font-size:11px;opacity:.7;margin:8px 0 0">Una devolución de productos no se puede anular.</p>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: "Devolver y hacer nota crédito",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#0ea5e9",
+      didOpen: () => {
+        const sum = () => {
+          const t = lines.reduce((s, l, i) => s + Math.max(0, Math.min(l.qty, Number((document.getElementById(`rt-${i}`) as HTMLInputElement).value) || 0)) * l.price, 0);
+          const el = document.getElementById("rt-total");
+          if (el) el.textContent = money(t);
+        };
+        lines.forEach((_, i) => document.getElementById(`rt-${i}`)?.addEventListener("input", sum));
+      },
+      preConfirm: () => {
+        const items = lines
+          .map((l, i) => ({ product_id: l.product_id, qty: Math.floor(Number((document.getElementById(`rt-${i}`) as HTMLInputElement).value) || 0), max: l.qty, name: l.name }))
+          .filter((x) => x.qty > 0);
+        const over = items.find((x) => x.qty > x.max);
+        if (over) return Swal.showValidationMessage(`De «${over.name}» se vendieron ${over.max}.`);
+        if (!items.length) return Swal.showValidationMessage("Escribe cuántas unidades devuelve de al menos un producto.");
+        const reason = (document.getElementById("rt-reason") as HTMLInputElement).value.trim();
+        if (reason.length < 5) return Swal.showValidationMessage("Describe el motivo (mínimo 5 letras).");
+        return { items: items.map(({ product_id, qty }) => ({ product_id, qty })), reason };
+      },
+    });
+    if (!res.isConfirmed) return;
+    const v = res.value as { items: Array<{ product_id: string; qty: number }>; reason: string };
+    setBusy(true);
+    const { data: done, error: dErr } = await supabaseBrowser().rpc("erp_receivable_return_items", { p_receivable: r.id, p_items: v.items, p_reason: v.reason });
+    setBusy(false);
+    const d = done as { ok: boolean; message?: string; number?: string; amount?: number; units?: number; balance?: number } | null;
+    if (dErr || !d?.ok) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo devolver", text: dErr ? noteRpcError(dErr) : d?.message });
+    void Swal.fire({ ...swal, icon: "success", title: `${d.number}: ${d.units} unidad${d.units === 1 ? "" : "es"} devuelta${d.units === 1 ? "" : "s"}`, text: `Se descontaron ${money(d.amount ?? 0)}. Nuevo saldo: ${money(d.balance ?? 0)}.`, timer: 2600, showConfirmButton: false });
     await refresh();
   }
 
@@ -441,12 +510,17 @@ export function StatementDrawer({
                               <p className="text-xs" style={{ color: "var(--t-muted)" }}>
                                 {reasonLabel(n.kind, n.reason_code)} · {n.reason}
                               </p>
+                              {n.items?.length ? (
+                                <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                                  📦 Volvió al inventario: {n.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}
+                                </p>
+                              ) : null}
                               <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
                                 {new Date(n.created_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}{n.created_by_name ? ` · ${n.created_by_name}` : ""} · saldo {money(n.balance_before)} → {money(n.balance_after)}
                               </p>
                               {n.voided ? <p className="text-xs text-red-400">Anulada{n.voided_by_name ? ` por ${n.voided_by_name}` : ""}: {n.void_reason}</p> : null}
                             </div>
-                            {canCredit && !n.voided ? (
+                            {canCredit && !n.voided && !n.items?.length ? (
                               <button type="button" onClick={() => void voidNote(n)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-red-400 print:hidden" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }}>
                                 <Ban size={12} /> Anular
                               </button>
@@ -500,6 +574,11 @@ export function StatementDrawer({
                                 {canCredit && r.status === "open" && r.balance > 0 ? (
                                   <button type="button" disabled={busy} onClick={() => void addNote(r, "credit")} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-sky-500" style={{ borderColor: "color-mix(in oklab, #0ea5e9 45%, transparent)" }}>
                                     <FileMinus2 size={12} /> Nota crédito
+                                  </button>
+                                ) : null}
+                                {canCredit && r.status === "open" && r.balance > 0 && r.order_token ? (
+                                  <button type="button" disabled={busy} onClick={() => void returnItems(r)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-sky-500" style={{ borderColor: "color-mix(in oklab, #0ea5e9 45%, transparent)" }}>
+                                    <PackageOpen size={12} /> Devolver productos
                                   </button>
                                 ) : null}
                                 {canCredit && r.status !== "void" ? (

@@ -16,7 +16,12 @@ export async function qrDataUrl(text: string, size = 320): Promise<string | null
 }
 
 /** Venta a crédito (20261334): plazo, vencimiento, lo abonado y lo que falta. */
-export type ReceiptCredit = { total: number; balance: number; paid: number; issue_date: string | null; due_date: string | null; days: number | null; status: "open" | "overdue" | "paid" };
+export type ReceiptNote = { number: string; kind: "credit" | "debit"; amount: number; items: Array<{ name: string; qty: number }> | null };
+export type ReceiptCredit = {
+  total: number; balance: number; paid: number; issue_date: string | null; due_date: string | null; days: number | null; status: "open" | "overdue" | "paid";
+  /** Notas crédito/débito del documento (20261335): explican por qué cambió el total o el saldo. */
+  notes?: ReceiptNote[];
+};
 export type ReceiptPayment = { method: string; parts: Array<{ method: string; amount: number }>; received: number | null; change: number | null; credit?: ReceiptCredit | null };
 
 const dmy = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—");
@@ -26,6 +31,10 @@ export function creditRows(c: ReceiptCredit, money: (n: number) => string): Arra
   const rows: Array<[string, string]> = [];
   if (c.days !== null && c.days > 0) rows.push(["Plazo", `${c.days} día${c.days === 1 ? "" : "s"}`]);
   rows.push(["Vence", dmy(c.due_date)]);
+  for (const n of c.notes ?? []) {
+    const what = n.items?.length ? `devolución ${n.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}` : n.kind === "credit" ? "nota crédito" : "nota débito";
+    rows.push([`${n.number} · ${what}`, `${n.kind === "credit" ? "−" : "+"}${money(n.amount)}`]);
+  }
   if (c.paid > 0) rows.push(["Abonado", money(c.paid)]);
   rows.push([c.status === "paid" ? "Saldo (pagado)" : "Saldo pendiente", money(c.balance)]);
   return rows;
@@ -58,6 +67,12 @@ export function normalizePayment(v: unknown): ReceiptPayment | null {
         total: Number(c.total ?? 0), balance: Number(c.balance ?? 0), paid: Number(c.paid ?? 0),
         issue_date: c.issue_date ? String(c.issue_date) : null, due_date: c.due_date ? String(c.due_date) : null,
         days: c.days === null || c.days === undefined ? null : Number(c.days),
+        notes: Array.isArray(c.notes)
+          ? (c.notes as Array<Record<string, unknown>>).map((n) => ({
+              number: String(n.number ?? ""), kind: n.kind === "debit" ? "debit" : "credit", amount: Number(n.amount ?? 0),
+              items: Array.isArray(n.items) ? (n.items as Array<Record<string, unknown>>).map((i) => ({ name: String(i.name ?? ""), qty: Number(i.qty ?? 0) })) : null,
+            }))
+          : [],
         status: c.status === "paid" || c.status === "overdue" ? c.status : "open",
       }
     : null;
