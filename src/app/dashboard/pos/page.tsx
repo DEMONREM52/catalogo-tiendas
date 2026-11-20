@@ -18,7 +18,7 @@ import { useErpFinderSource } from "../useErpFinder";
 import { PosDocuments, type PosDocument } from "./PosDocuments";
 import { matchesSearch, smartFilter } from "@/lib/search";
 import { CreditMeter } from "../clientes/CreditMeter";
-import { FULL_COLUMNS, normalizeThird, type CreditState, type ThirdParty } from "../clientes/terceros";
+import { FULL_COLUMNS, creditBlockReason, normalizeThird, type CreditState, type ThirdParty } from "../clientes/terceros";
 import { OfflineDrafts } from "./OfflineDrafts";
 import { OfflineReadiness } from "./OfflineReadiness";
 import { PRACTICE_PRINT_EVENT } from "@/lib/pos/drill";
@@ -1453,6 +1453,12 @@ export default function PosPage() {
         await Swal.fire({ icon: "warning", title: "Elige el cliente", text: "Para vender a crédito busca y selecciona un cliente registrado (o créalo con «Guardar como cliente nuevo»).", background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
         return;
       }
+      // Nunca a Consumidor final ni a un cliente sin cédula/NIT (20261334; la base también lo impide).
+      const why = creditBlockReason(selectedClient);
+      if (why) {
+        await Swal.fire({ icon: "warning", title: "No se puede vender a crédito", text: why, background: "#0b0b0b", color: "#fff", confirmButtonColor: "#f59e0b" });
+        return;
+      }
       let state = creditState && creditState.for === selectedClient.id && creditState.amount === total ? creditState : null;
       if (!state && !creditUnavailable) {
         const { data, error } = await supabaseBrowser().rpc("erp_credit_check", { p_customer: selectedClient.id, p_amount: total });
@@ -2639,8 +2645,10 @@ export default function PosPage() {
                         <div className="space-y-2">
                           {!selectedClient ? (
                             <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                              💳 Para vender a crédito elige un <b>cliente registrado</b>. La deuda quedará en su cartera.
+                              💳 Para vender a crédito elige un <b>cliente registrado</b> (nunca Consumidor final). La deuda quedará en su cartera.
                             </p>
+                          ) : creditBlockReason(selectedClient) ? (
+                            <p className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">⛔ {creditBlockReason(selectedClient)}</p>
                           ) : creditUnavailable ? (
                             <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
                           ) : creditState?.for === selectedClient.id ? (

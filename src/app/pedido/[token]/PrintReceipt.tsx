@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 // Comprobante solo para impresión: hoja carta o tirilla de impresora POS (80 mm / 58 mm).
-import { payLabel, type ReceiptPayment } from "./receipt-extras";
+import { creditPromise, creditRows, payLabel, type ReceiptPayment } from "./receipt-extras";
 
 export type PrintFormat = "carta" | "t80" | "t58";
 
@@ -58,8 +58,13 @@ function payRows(p: Props) {
   const rows = parts.map((x) => [payLabel(x.method), p.money(x.amount)] as const);
   if (p.payment.received && p.payment.received > p.total) rows.push(["Recibido", p.money(p.payment.received)]);
   if (p.payment.change && p.payment.change > 0) rows.push(["Vuelto", p.money(p.payment.change)]);
+  if (p.payment.credit) rows.push(...creditRows(p.payment.credit, p.money));
   return rows;
 }
+
+/** «A crédito» / «Crédito · pagado» junto al número del documento. */
+const creditTag = (p: Props) => (p.payment?.credit ? (p.payment.credit.status === "paid" ? "Crédito · pagado" : "A crédito") : null);
+const bold = (k: string) => k === "Vuelto" || k.startsWith("Saldo");
 
 /** Reglas @page e impresión según el formato elegido. */
 export function PrintStyles({ format }: { format: PrintFormat }) {
@@ -116,6 +121,11 @@ function LetterReceipt(p: Props) {
           <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>{p.docTitle}</div>
           <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>{p.docNumber}</div>
           <div style={{ fontSize: 10, color: soft }}>{p.date}</div>
+          {creditTag(p) ? (
+            <div style={{ marginTop: 4, display: "inline-block", border: `1.5px solid ${ink}`, borderRadius: 999, padding: "1px 10px", fontSize: 10, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase" }}>
+              {creditTag(p)}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -195,12 +205,22 @@ function LetterReceipt(p: Props) {
             <div style={{ borderTop: `1px solid ${line}`, padding: "6px 12px", fontSize: 10.5 }}>
               <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: soft }}>Forma de pago</div>
               {payRows(p).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontWeight: k === "Vuelto" ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontWeight: bold(k) ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
               ))}
             </div>
           ) : null}
         </div>
       </div>
+
+      {p.payment?.credit && !p.docTitle.includes("ANULADO") ? (
+        <div style={{ marginTop: 22, breakInside: "avoid" }}>
+          <div style={{ fontSize: 10.5 }}>{creditPromise(p.payment.credit, p.total, p.money)}</div>
+          <div style={{ display: "flex", gap: 40, marginTop: 34 }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${ink}`, paddingTop: 3, fontSize: 9.5, color: soft }}>Firma del cliente</div>
+            <div style={{ width: 200, borderTop: `1px solid ${ink}`, paddingTop: 3, fontSize: 9.5, color: soft }}>C.C. / NIT</div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Pie */}
       <div style={{ marginTop: 26, paddingTop: 10, borderTop: `1px solid ${line}`, textAlign: "center", fontSize: 10, color: soft }}>
@@ -233,6 +253,7 @@ function TicketReceipt(p: Props) {
       </div>
       <div style={rule} />
       <div style={{ textAlign: "center", fontWeight: 800, textTransform: "uppercase" }}>{p.docTitle}</div>
+      {creditTag(p) ? <div style={{ textAlign: "center", fontWeight: 900, textTransform: "uppercase" }}>*** {creditTag(p)} ***</div> : null}
       <div style={{ textAlign: "center", fontWeight: 800, fontSize: font + 2 }}>{p.docNumber}</div>
       <div style={{ textAlign: "center" }}>{p.date}</div>
       <div style={rule} />
@@ -264,8 +285,15 @@ function TicketReceipt(p: Props) {
           <div style={rule} />
           <div style={{ fontWeight: 800 }}>FORMA DE PAGO</div>
           {payRows(p).map(([k, v]) => (
-            <div key={k} style={{ ...row, fontWeight: k === "Vuelto" ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
+            <div key={k} style={{ ...row, fontWeight: bold(k) ? 800 : 400 }}><span>{k}</span><span>{v}</span></div>
           ))}
+        </>
+      ) : null}
+      {p.payment?.credit && !p.docTitle.includes("ANULADO") ? (
+        <>
+          <div style={rule} />
+          <div style={{ fontSize: font - 1 }}>{creditPromise(p.payment.credit, p.total, p.money)}</div>
+          <div style={{ marginTop: 22, borderTop: "1px solid #000", fontSize: font - 2 }}>Firma y C.C. del cliente</div>
         </>
       ) : null}
       <div style={rule} />

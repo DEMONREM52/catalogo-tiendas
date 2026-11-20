@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { Ban, CheckCircle2, FilePlus2, Lock, Printer, Search, Undo2, X } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -40,6 +41,10 @@ const isConfirmed = (d: PosDocument) => d.status === "confirmed" || d.status ===
 
 const swalTheme = { background: "var(--t-bg-base)", color: "var(--t-text)" } as const;
 
+/** Documento a crédito (20261334): saldo y vencimiento de su cuenta por cobrar. */
+type DocCredit = { order_id: string; total: number; balance: number; due_date: string | null; overdue: boolean };
+const dmy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—");
+
 export function PosDocuments({
   storeId, pointId, pointName, refreshKey, editingId, printFormat, onEdit,
 }: {
@@ -59,6 +64,7 @@ export function PosDocuments({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null);
+  const [credits, setCredits] = useState<Map<string, DocCredit>>(() => new Map());
   const rights = useSaleVoidRights(storeId);
 
   useEffect(() => {
@@ -76,7 +82,17 @@ export function PosDocuments({
             return;
           }
           setError("");
-          setDocs((data ?? []) as PosDocument[]);
+          const list = (data ?? []) as PosDocument[];
+          setDocs(list);
+          // ¿Cuáles son a crédito? (si falta la migración 20261334, simplemente no se marca)
+          if (list.length) {
+            void supabaseBrowser()
+              .rpc("erp_orders_credit", { p_store: storeId, p_orders: list.map((d) => d.order_id) })
+              .then(({ data: cr, error: crErr }) => {
+                if (!alive || crErr) return;
+                setCredits(new Map(((cr ?? []) as DocCredit[]).map((c) => [c.order_id, c])));
+              });
+          }
         });
     }, 280);
     return () => {
@@ -233,6 +249,8 @@ export function PosDocuments({
                       const st = STATUS[doc.status] ?? { label: doc.status, color: "#94a3b8" };
                       const isOpen = expanded === doc.order_id;
                       const isEditing = editingId === doc.order_id;
+                      const credit = doc.status !== "cancelled" ? credits.get(doc.order_id) : undefined;
+                      const creditColor = credit ? (Number(credit.balance) <= 0 ? "#22c55e" : credit.overdue ? "#ef4444" : "#f59e0b") : "";
                       return (
                         <motion.div
                           key={doc.order_id}
@@ -274,6 +292,11 @@ export function PosDocuments({
                               >
                                 {isEditing ? "Editando" : st.label}
                               </span>
+                              {credit ? (
+                                <span className="mt-0.5 ml-1 inline-block rounded-full px-2 text-[10px] font-black text-white" style={{ background: creditColor }}>
+                                  {Number(credit.balance) <= 0 ? "Crédito pagado" : credit.overdue ? "Crédito vencido" : "A crédito"}
+                                </span>
+                              ) : null}
                             </span>
                           </button>
 
@@ -296,6 +319,18 @@ export function PosDocuments({
                                   </ul>
                                   {doc.seller_name ? (
                                     <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Atendió: {doc.seller_name}</p>
+                                  ) : null}
+                                  {credit ? (
+                                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: `color-mix(in oklab, ${creditColor} 45%, transparent)`, background: `color-mix(in oklab, ${creditColor} 8%, transparent)` }}>
+                                      <span>
+                                        💳 <b>Venta a crédito</b> · vence {dmy(credit.due_date)}
+                                        {Number(credit.balance) < Number(credit.total) ? <> · abonado {money(Number(credit.total) - Number(credit.balance))}</> : null}
+                                      </span>
+                                      <span className="font-black tabular-nums" style={{ color: creditColor }}>Saldo {money(Number(credit.balance))}</span>
+                                      <Link href="/dashboard/clientes?tab=cartera" className="w-full text-[11px] font-semibold underline" style={{ color: "var(--t-muted)" }}>
+                                        Abonos, notas crédito y estado de cuenta: Clientes → Cartera
+                                      </Link>
+                                    </div>
                                   ) : null}
                                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                                     {editable(doc) ? (

@@ -216,7 +216,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "clients", name: "Terceros y cartera", path: "/dashboard/clientes",
     aliases: "clientes terceros proveedores cartera creditos fiado deudas cobrar avisos de cobro fidelidad", keys: "cliente|clientes|tercero|terceros|cartera|fiado|creditos",
-    about: "Aquí están los clientes y los proveedores, la cartera con lo que te deben, los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad.",
+    about: "Aquí están los clientes y los proveedores, la cartera con lo que te deben (abonos, notas crédito y débito, y el estado de cuenta para mandarle al cliente por WhatsApp o en PDF), los avisos de cobro por WhatsApp, los clientes frecuentes y los puntos de fidelidad. Consumidor final no puede tener crédito.",
     howto: [{
       id: "clients.create", goal: "crear un cliente", keywords: "cliente tercero proveedor persona empresa",
       steps: [
@@ -226,6 +226,23 @@ export const MODULES: ModuleInfo[] = [
         "Toca «Crear tercero». Si el documento ya existe, te avisa.",
       ],
       href: "/dashboard/clientes", verified: true,
+    }, {
+      id: "clients.statement", goal: "mandarle el estado de cuenta a un cliente", keywords: "estado de cuenta extracto enviar mandar cliente deuda saldo pdf",
+      steps: [
+        "Abre Terceros y cartera, pestaña «Cartera».",
+        "En la fila del cliente toca «Estado de cuenta».",
+        "Toca «Enviar por WhatsApp», o «Ver, imprimir o PDF», o «Copiar enlace». El enlace vence en 30 días.",
+      ],
+      href: "/dashboard/clientes?tab=cartera", verified: true,
+    }, {
+      id: "clients.credit_note", goal: "hacer una nota crédito o débito", keywords: "nota credito nota debito ajuste descuento bajar subir deuda cartera",
+      steps: [
+        "Abre Terceros y cartera, pestaña «Cartera», y toca «Estado de cuenta» del cliente.",
+        "En el documento toca «Nota crédito» para bajar la deuda o «Nota débito» para subirla. Necesitas el permiso «Créditos» y el documento debe estar confirmado.",
+        "Elige el motivo, escribe el valor (la nota crédito no puede pasar del saldo) y el detalle, y confirma.",
+        "Queda con número (NC-00001 o ND-00001) en la pestaña «Notas», en el estado de cuenta y en auditoría. Se puede anular con motivo.",
+      ],
+      href: "/dashboard/clientes?tab=cartera", verified: true,
     }],
   },
   {

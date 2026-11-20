@@ -216,3 +216,18 @@ export function errorText(error: unknown) {
   }
   return String(error);
 }
+
+/**
+ * ¿Por qué este cliente NO puede tener crédito? (null si puede). Igual que erp__is_final_consumer (20261334):
+ * Consumidor final, «cliente general/mostrador», sin nombre o sin cédula/NIT real (vacío, 222222222222, 0, 1111…).
+ */
+export function creditBlockReason(c: { name?: string | null; document_number?: string | null } | null | undefined): string | null {
+  if (!c) return "Para vender a crédito elige un cliente registrado.";
+  const name = (c.name ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const doc = (c.document_number ?? "").replace(/\D/g, "");
+  if (!name || /(consumidor final|cliente general|cliente (de )?mostrador|cliente ocasional|sin nombre)/.test(name)) {
+    return "Consumidor final no puede comprar a crédito. Elige o crea el cliente con su nombre y cédula o NIT.";
+  }
+  if (!doc || /^(\d)\1*$/.test(doc)) return `Para dar crédito, ${c.name} necesita su cédula o NIT en la ficha del cliente.`;
+  return null;
+}

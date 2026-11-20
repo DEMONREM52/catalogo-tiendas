@@ -15,7 +15,25 @@ export async function qrDataUrl(text: string, size = 320): Promise<string | null
   }
 }
 
-export type ReceiptPayment = { method: string; parts: Array<{ method: string; amount: number }>; received: number | null; change: number | null };
+/** Venta a crédito (20261334): plazo, vencimiento, lo abonado y lo que falta. */
+export type ReceiptCredit = { total: number; balance: number; paid: number; issue_date: string | null; due_date: string | null; days: number | null; status: "open" | "overdue" | "paid" };
+export type ReceiptPayment = { method: string; parts: Array<{ method: string; amount: number }>; received: number | null; change: number | null; credit?: ReceiptCredit | null };
+
+const dmy = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—");
+
+/** Filas de crédito para el comprobante: plazo, vence, abonado y saldo. */
+export function creditRows(c: ReceiptCredit, money: (n: number) => string): Array<[string, string]> {
+  const rows: Array<[string, string]> = [];
+  if (c.days !== null && c.days > 0) rows.push(["Plazo", `${c.days} día${c.days === 1 ? "" : "s"}`]);
+  rows.push(["Vence", dmy(c.due_date)]);
+  if (c.paid > 0) rows.push(["Abonado", money(c.paid)]);
+  rows.push([c.status === "paid" ? "Saldo (pagado)" : "Saldo pendiente", money(c.balance)]);
+  return rows;
+}
+
+/** Texto que acepta el cliente al firmar una venta a crédito. */
+export const creditPromise = (c: ReceiptCredit, total: number, money: (n: number) => string) =>
+  `Recibí la mercancía a satisfacción y me comprometo a pagar ${money(total)} a más tardar el ${dmy(c.due_date)}.`;
 
 export const PAY_LABEL: Record<string, { label: string; emoji: string }> = {
   efectivo: { label: "Efectivo", emoji: "💵" },
@@ -23,6 +41,7 @@ export const PAY_LABEL: Record<string, { label: string; emoji: string }> = {
   nequi: { label: "Nequi / Daviplata", emoji: "📱" },
   tarjeta: { label: "Tarjeta", emoji: "💳" },
   mixto: { label: "Pago mixto", emoji: "🔀" },
+  credito: { label: "Crédito", emoji: "💳" },
 };
 export const payLabel = (m: string) => PAY_LABEL[m]?.label ?? (m ? m[0].toUpperCase() + m.slice(1) : "—");
 
@@ -33,7 +52,16 @@ export function normalizePayment(v: unknown): ReceiptPayment | null {
   if (!method) return null;
   const parts = Array.isArray(o.parts) ? (o.parts as Array<Record<string, unknown>>).map((p) => ({ method: String(p.method ?? ""), amount: Number(p.amount ?? 0) })).filter((p) => p.amount > 0) : [];
   const num = (x: unknown) => (x === null || x === undefined || x === "" ? null : Number(x));
-  return { method, parts, received: num(o.received), change: num(o.change) };
+  const c = o.credit && typeof o.credit === "object" ? (o.credit as Record<string, unknown>) : null;
+  const credit: ReceiptCredit | null = c
+    ? {
+        total: Number(c.total ?? 0), balance: Number(c.balance ?? 0), paid: Number(c.paid ?? 0),
+        issue_date: c.issue_date ? String(c.issue_date) : null, due_date: c.due_date ? String(c.due_date) : null,
+        days: c.days === null || c.days === undefined ? null : Number(c.days),
+        status: c.status === "paid" || c.status === "overdue" ? c.status : "open",
+      }
+    : null;
+  return { method, parts, received: num(o.received), change: num(o.change), credit };
 }
 
 type PdfData = {
@@ -151,6 +179,13 @@ export async function downloadReceiptPdf(d: PdfData) {
     for (const p of parts) { doc.text(payLabel(p.method), W - M - tW, py); doc.text(d.money(p.amount), W - M, py, { align: "right" }); py += 4.5; }
     if (d.payment.received && d.payment.received > d.total) { doc.text("Recibido", W - M - tW, py); doc.text(d.money(d.payment.received), W - M, py, { align: "right" }); py += 4.5; }
     if (d.payment.change && d.payment.change > 0) { doc.setFont("helvetica", "bold").text("Vuelto", W - M - tW, py); doc.text(d.money(d.payment.change), W - M, py, { align: "right" }); py += 4.5; }
+    if (d.payment.credit) {
+      for (const [k, v] of creditRows(d.payment.credit, d.money)) {
+        doc.setFont("helvetica", k.startsWith("Saldo") ? "bold" : "normal");
+        doc.text(k, W - M - tW, py); doc.text(v, W - M, py, { align: "right" }); py += 4.5;
+      }
+      doc.setFont("helvetica", "normal");
+    }
   }
   if (d.qr) {
     doc.addImage(d.qr, "PNG", M, y + 8, 26, 26);
@@ -162,6 +197,16 @@ export async function downloadReceiptPdf(d: PdfData) {
     const lines = doc.splitTextToSize(clean(d.resolution), W - M * 2);
     doc.setFontSize(7.5).setTextColor(70).text(lines, M, y);
     y += lines.length * 3.4 + 3;
+  }
+
+  // Venta a crédito: el cliente firma que recibió y que paga a la fecha.
+  if (d.payment?.credit && !d.cancelled) {
+    doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(0).text(creditPromise(d.payment.credit, d.total, d.money), M, y + 2, { maxWidth: W - M * 2 });
+    doc.setDrawColor(0).setLineWidth(0.3).line(M, y + 16, M + 75, y + 16);
+    doc.line(M + 90, y + 16, M + 150, y + 16);
+    doc.setFontSize(7.5).setTextColor(90).text("Firma del cliente", M, y + 20);
+    doc.text("C.C. / NIT", M + 90, y + 20);
+    y += 26;
   }
 
   // Pie

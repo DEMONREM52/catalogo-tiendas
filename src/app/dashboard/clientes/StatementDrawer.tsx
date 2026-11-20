@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useRunOnChange } from "../inventario/shared";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { Ban, FileText, HandCoins, MessageCircle, PlusCircle, Printer, X } from "lucide-react";
+import { Ban, FileMinus2, FilePlus2, FileText, HandCoins, Link2, MessageCircle, PlusCircle, Printer, Send, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { parseDdMmYyyy } from "@/components/forms/Fields";
@@ -22,6 +22,22 @@ type Payment = {
   created_by_name: string | null; voided: boolean; voided_reason: string | null; doc_number: string | null;
 };
 type Statement = { state: CreditState; totals: { billed: number; paid: number; open: number; documents: number }; receivables: Receivable[]; payments: Payment[] };
+/** Nota crédito (baja la deuda) o débito (la sube) sobre un documento de cartera (20261334). */
+type Note = {
+  id: string; receivable_id: string; kind: "credit" | "debit"; number: string; amount: number; reason_code: string; reason: string;
+  balance_before: number; balance_after: number; created_at: string; created_by_name: string | null;
+  voided: boolean; voided_at: string | null; voided_by_name: string | null; void_reason: string | null; doc_number: string | null;
+};
+
+export const NOTE_REASONS: Record<Note["kind"], Array<[string, string]>> = {
+  credit: [["descuento", "Descuento"], ["error_precio", "Error en el precio (se cobró de más)"], ["pronto_pago", "Descuento por pronto pago"],
+    ["producto_defectuoso", "Producto defectuoso (sin devolverlo)"], ["acuerdo", "Acuerdo con el cliente"], ["otro", "Otro"]],
+  debit: [["interes_mora", "Intereses de mora"], ["flete", "Flete o domicilio"], ["error_precio", "Error en el precio (faltó cobrar)"],
+    ["cargo_adicional", "Cargo adicional"], ["otro", "Otro"]],
+};
+const reasonLabel = (kind: Note["kind"], code: string) => NOTE_REASONS[kind].find(([v]) => v === code)?.[1] ?? code;
+const noteRpcError = (e: { message?: string }) =>
+  /Could not find the function|schema cache/i.test(e.message ?? "") ? "Falta ejecutar en Supabase la migración 20261334_credito_completo.sql." : e.message ?? "No se pudo.";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 
@@ -82,9 +98,10 @@ export function StatementDrawer({
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [loaded, setLoaded] = useState<{ id: string; data: Statement } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"open" | "all" | "payments">("open");
+  const [tab, setTab] = useState<"open" | "all" | "payments" | "notes">("open");
   const [busy, setBusy] = useState(false);
   const [nowMs] = useState(() => Date.now());
+  const [notes, setNotes] = useState<{ id: string; list: Note[] } | null>(null);
 
   const partyId = party?.id ?? null;
   const load = useCallback(async () => {
@@ -96,7 +113,11 @@ export function StatementDrawer({
     }
     setError(null);
     setLoaded({ id: partyId, data: res as Statement });
+    // Notas crédito/débito (si falta la migración 20261334, la lista queda vacía).
+    const { data: nl, error: nErr } = await supabaseBrowser().rpc("erp_customer_receivable_notes", { p_customer: partyId });
+    setNotes({ id: partyId, list: nErr ? [] : ((nl ?? []) as Note[]) });
   }, [partyId]);
+  const noteList = notes && notes.id === partyId ? notes.list : [];
   // Solo se muestran los datos del tercero abierto (nunca los del anterior).
   const data = loaded && loaded.id === partyId ? loaded.data : null;
   useRunOnChange(load);
@@ -181,6 +202,96 @@ export function StatementDrawer({
     await refresh();
   }
 
+  /** Nota crédito (baja la deuda) o nota débito / ajuste (la sube) de un documento. */
+  async function addNote(r: Receivable, kind: Note["kind"]) {
+    const credit = kind === "credit";
+    const options = NOTE_REASONS[kind].map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    const res = await Swal.fire({
+      ...swal,
+      title: `${credit ? "Nota crédito" : "Nota débito / ajuste"} · ${r.doc_number ?? "documento"}`,
+      html: `<div style="text-align:left;display:grid;gap:10px">
+        <p style="font-size:12px;opacity:.8;margin:0">${credit
+          ? `Baja la deuda de este documento. Saldo actual: <b>${money(r.balance)}</b>. Si devuelven productos, usa «Devolución» del documento en el POS.`
+          : `Sube la deuda de este documento (intereses, flete, algo que faltó cobrar). Saldo actual: <b>${money(r.balance)}</b>.`}</p>
+        <label style="font-size:12px;opacity:.8">Motivo
+          <select id="n-code" class="swal2-select" style="margin:6px 0 0;width:100%;display:block">${options}</select>
+        </label>
+        <label style="font-size:12px;opacity:.8">Valor${credit ? ` (máximo ${money(r.balance)})` : ""}
+          <input id="n-amount" class="swal2-input" inputmode="numeric" style="margin:6px 0 0;width:100%" />
+        </label>
+        <label style="font-size:12px;opacity:.8">Detalle (queda en el estado de cuenta y en auditoría)
+          <input id="n-reason" class="swal2-input" style="margin:6px 0 0;width:100%" placeholder="${credit ? "Ej: se cobró a $95.000 y era $75.000" : "Ej: domicilio del 20/11"}" />
+        </label>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: credit ? "Hacer nota crédito" : "Hacer nota débito",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: credit ? "#0ea5e9" : "#f59e0b",
+      didOpen: () => (document.getElementById("n-amount") as HTMLInputElement | null)?.focus(),
+      preConfirm: () => {
+        const amount = Number(String((document.getElementById("n-amount") as HTMLInputElement).value).replace(/\D/g, ""));
+        const reason = (document.getElementById("n-reason") as HTMLInputElement).value.trim();
+        if (!amount) return Swal.showValidationMessage("Escribe el valor.");
+        if (credit && amount > r.balance + 0.5) return Swal.showValidationMessage(`No puede ser mayor que el saldo (${money(r.balance)}).`);
+        if (reason.length < 5) return Swal.showValidationMessage("Describe el motivo (mínimo 5 letras).");
+        return { amount, reason, code: (document.getElementById("n-code") as HTMLSelectElement).value };
+      },
+    });
+    if (!res.isConfirmed) return;
+    const v = res.value as { amount: number; reason: string; code: string };
+    setBusy(true);
+    const { data: out, error: err } = await supabaseBrowser().rpc("erp_receivable_note", { p_receivable: r.id, p_kind: kind, p_amount: v.amount, p_reason_code: v.code, p_reason: v.reason });
+    setBusy(false);
+    const o = out as { ok: boolean; message?: string; number?: string; balance?: number } | null;
+    if (err || !o?.ok) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo hacer la nota", text: err ? noteRpcError(err) : o?.message });
+    void Swal.fire({ ...swal, icon: "success", title: `${o.number} registrada`, text: `Nuevo saldo de ${r.doc_number ?? "el documento"}: ${money(o.balance ?? 0)}`, timer: 2200, showConfirmButton: false });
+    await refresh();
+  }
+
+  async function voidNote(n: Note) {
+    const res = await Swal.fire({ ...swal, icon: "warning", title: `Anular ${n.number}`, text: n.kind === "credit" ? `La deuda vuelve a subir ${money(n.amount)}.` : `La deuda baja ${money(n.amount)}.`, input: "text", inputPlaceholder: "Motivo (obligatorio)", showCancelButton: true, confirmButtonText: "Anular", cancelButtonText: "Cancelar", confirmButtonColor: "#ef4444", inputValidator: (v) => (v.trim().length >= 5 ? null : "Escribe el motivo (mínimo 5 letras).") });
+    if (!res.isConfirmed) return;
+    const { data: out, error: err } = await supabaseBrowser().rpc("erp_receivable_note_void", { p_note: n.id, p_reason: res.value });
+    const o = out as { ok: boolean; message?: string } | null;
+    if (err || !o?.ok) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo anular", text: err ? noteRpcError(err) : o?.message });
+    await refresh();
+  }
+
+  /** Estado de cuenta para el cliente: enlace privado (30 días) que se abre, se imprime/PDF o se manda por WhatsApp. */
+  async function shareStatement(mode: "whatsapp" | "open" | "copy") {
+    if (!party || !data) return;
+    // La pestaña se abre ya (en el clic) para que el navegador no la bloquee; luego se le pone la dirección.
+    const win = mode === "copy" ? null : window.open("", "_blank");
+    const { data: out, error: err } = await supabaseBrowser().rpc("erp_statement_link", { p_customer: party.id });
+    const o = out as { ok: boolean; token?: string; message?: string } | null;
+    if (err || !o?.ok || !o.token) {
+      win?.close();
+      return void Swal.fire({ ...swal, icon: "error", title: "No se pudo crear el enlace", text: err ? noteRpcError(err) : o?.message });
+    }
+    const url = `${window.location.origin}/estado-cuenta/${o.token}`;
+    if (mode === "open") {
+      if (win) win.location.href = `${url}?imprimir=1`;
+      return;
+    }
+    const text = [
+      `Hola ${party.name.split(" ")[0]}, te compartimos tu estado de cuenta.`,
+      data.totals.open > 0 ? `Saldo pendiente: ${money(data.totals.open)}${data.state.overdue > 0 ? ` (vencido: ${money(data.state.overdue)})` : ""}.` : "¡Estás al día! 🎉",
+      `Míralo aquí: ${url}`,
+    ].join("\n");
+    if (mode === "copy") {
+      try {
+        await navigator.clipboard.writeText(url);
+        void Swal.fire({ ...swal, icon: "success", title: "Enlace copiado", text: "Vence en 30 días.", timer: 1500, showConfirmButton: false });
+      } catch {
+        void Swal.fire({ ...swal, title: "Copia el enlace", input: "text", inputValue: url });
+      }
+      return;
+    }
+    const wa = waLink(party.mobile, text) ?? `https://wa.me/?text=${encodeURIComponent(text)}`;
+    if (win) win.location.href = wa;
+    else window.open(wa, "_blank");
+  }
+
   async function voidPayment(p: Payment) {
     const res = await Swal.fire({ ...swal, icon: "warning", title: `Anular abono de ${money(p.amount)}`, input: "text", inputPlaceholder: "Motivo (obligatorio)", showCancelButton: true, confirmButtonText: "Anular", cancelButtonText: "Cancelar", confirmButtonColor: "#ef4444", inputValidator: (v) => (v.trim() ? null : "Escribe el motivo.") });
     if (!res.isConfirmed) return;
@@ -229,7 +340,7 @@ export function StatementDrawer({
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
-                <button type="button" onClick={() => window.print()} className="grid h-9 w-9 place-items-center rounded-full border print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Imprimir" title="Imprimir">
+                <button type="button" onClick={() => void shareStatement("open")} className="grid h-9 w-9 place-items-center rounded-full border print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Imprimir o guardar el estado de cuenta en PDF" title="Imprimir o PDF">
                   <Printer size={15} />
                 </button>
                 <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border transition hover:rotate-90 print:hidden" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar">
@@ -262,6 +373,30 @@ export function StatementDrawer({
                     ))}
                   </div>
 
+                  {noteList.some((n) => !n.voided) ? (
+                    <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                      Incluye notas crédito por <b className="text-sky-500">{money(noteList.filter((n) => !n.voided && n.kind === "credit").reduce((s, n) => s + Number(n.amount), 0))}</b>
+                      {" "}y notas débito por <b className="text-amber-500">{money(noteList.filter((n) => !n.voided && n.kind === "debit").reduce((s, n) => s + Number(n.amount), 0))}</b>.
+                    </p>
+                  ) : null}
+
+                  {/* Enviar el estado de cuenta al cliente */}
+                  <div className="rounded-2xl border p-3" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, transparent)", background: "color-mix(in oklab, var(--t-accent) 6%, transparent)" }}>
+                    <p className="text-sm font-black">📄 Estado de cuenta para el cliente</p>
+                    <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Un enlace privado con lo que debe, vencimientos, abonos y notas. Vence en 30 días.</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => void shareStatement("whatsapp")} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-white" style={{ background: "#16a34a" }}>
+                        <Send size={15} /> Enviar por WhatsApp
+                      </button>
+                      <button type="button" onClick={() => void shareStatement("open")} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                        <Printer size={15} /> Ver, imprimir o PDF
+                      </button>
+                      <button type="button" onClick={() => void shareStatement("copy")} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                        <Link2 size={15} /> Copiar enlace
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap gap-2 print:hidden">
                     {canPay && data.totals.open > 0 ? (
                       <button type="button" disabled={busy} onClick={() => void payGeneral()} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: "#16a34a" }}>
@@ -281,14 +416,46 @@ export function StatementDrawer({
                   </div>
 
                   <div className="flex gap-1 rounded-full border p-1 text-xs font-bold print:hidden" style={{ borderColor: "var(--t-card-border)" }}>
-                    {([["open", `Pendientes (${data.receivables.filter((r) => r.status === "open").length})`], ["all", "Todos los documentos"], ["payments", `Abonos (${data.payments.length})`]] as const).map(([k, l]) => (
+                    {([["open", `Pendientes (${data.receivables.filter((r) => r.status === "open").length})`], ["all", "Todos"], ["payments", `Abonos (${data.payments.length})`], ["notes", `Notas (${noteList.length})`]] as const).map(([k, l]) => (
                       <button key={k} type="button" onClick={() => setTab(k)} className="flex-1 rounded-full px-3 py-1.5 transition" style={tab === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>
                         {l}
                       </button>
                     ))}
                   </div>
 
-                  {tab !== "payments" ? (
+                  {tab === "notes" ? (
+                    noteList.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed p-6 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                        Aún no hay notas. Se hacen desde cada documento: «Nota crédito» baja la deuda y «Nota débito» la sube.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {noteList.map((n) => (
+                          <div key={n.id} className="flex flex-wrap items-start justify-between gap-2 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", opacity: n.voided ? 0.55 : 1 }}>
+                            <div className="min-w-0">
+                              <p className="flex flex-wrap items-center gap-2 text-sm font-bold" style={{ textDecoration: n.voided ? "line-through" : undefined }}>
+                                {n.kind === "credit" ? <FileMinus2 size={14} className="text-sky-500" /> : <FilePlus2 size={14} className="text-amber-500" />}
+                                {n.number} · {n.kind === "credit" ? "−" : "+"}{money(n.amount)}
+                                <span className="text-xs font-normal" style={{ color: "var(--t-muted)" }}>{n.doc_number ?? "documento"}</span>
+                              </p>
+                              <p className="text-xs" style={{ color: "var(--t-muted)" }}>
+                                {reasonLabel(n.kind, n.reason_code)} · {n.reason}
+                              </p>
+                              <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+                                {new Date(n.created_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })}{n.created_by_name ? ` · ${n.created_by_name}` : ""} · saldo {money(n.balance_before)} → {money(n.balance_after)}
+                              </p>
+                              {n.voided ? <p className="text-xs text-red-400">Anulada{n.voided_by_name ? ` por ${n.voided_by_name}` : ""}: {n.void_reason}</p> : null}
+                            </div>
+                            {canCredit && !n.voided ? (
+                              <button type="button" onClick={() => void voidNote(n)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-red-400 print:hidden" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }}>
+                                <Ban size={12} /> Anular
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : tab !== "payments" ? (
                     rows.length === 0 ? (
                       <p className="rounded-2xl border border-dashed p-6 text-center text-sm" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
                         {tab === "open" ? "🎉 No tiene saldos pendientes." : "Aún no tiene documentos a crédito."}
@@ -313,6 +480,11 @@ export function StatementDrawer({
                                     {shortDate(r.issue_date)} → vence {shortDate(r.due_date)}{r.point ? ` · ${r.point}` : ""}{r.description ? ` · ${r.description}` : ""}
                                   </p>
                                   {r.void_reason ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Motivo: {r.void_reason}</p> : null}
+                                  {noteList.filter((n) => n.receivable_id === r.id && !n.voided).map((n) => (
+                                    <p key={n.id} className="text-xs" style={{ color: n.kind === "credit" ? "#0ea5e9" : "#f59e0b" }}>
+                                      {n.number}: {n.kind === "credit" ? "−" : "+"}{money(n.amount)} · {reasonLabel(n.kind, n.reason_code)}
+                                    </p>
+                                  ))}
                                 </div>
                                 <div className="text-right">
                                   <p className="text-sm font-black tabular-nums">{money(r.balance)}</p>
@@ -323,6 +495,16 @@ export function StatementDrawer({
                                 {canPay && r.status === "open" ? (
                                   <button type="button" disabled={busy} onClick={() => void payOne(r)} className="rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "color-mix(in oklab, #22c55e 45%, transparent)", color: "#22c55e" }}>
                                     Abonar
+                                  </button>
+                                ) : null}
+                                {canCredit && r.status === "open" && r.balance > 0 ? (
+                                  <button type="button" disabled={busy} onClick={() => void addNote(r, "credit")} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-sky-500" style={{ borderColor: "color-mix(in oklab, #0ea5e9 45%, transparent)" }}>
+                                    <FileMinus2 size={12} /> Nota crédito
+                                  </button>
+                                ) : null}
+                                {canCredit && r.status !== "void" ? (
+                                  <button type="button" disabled={busy} onClick={() => void addNote(r, "debit")} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold text-amber-500" style={{ borderColor: "color-mix(in oklab, #f59e0b 45%, transparent)" }}>
+                                    <FilePlus2 size={12} /> Nota débito
                                   </button>
                                 ) : null}
                                 {r.order_token ? (

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRunOnChange } from "../inventario/shared";
-import { AlertTriangle, CalendarClock, Download, HandCoins, MessageCircle, RefreshCw, Search, TrendingUp, Users, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, Download, FileText, HandCoins, MessageCircle, RefreshCw, Search, TrendingUp, Users, Wallet } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
@@ -204,11 +204,11 @@ export function ReceivablesTab({
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--t-card-border)" }}>
-            <table className="rt w-full min-w-[760px] text-sm">
+            <table className="rt w-full min-w-[860px] text-sm">
               <thead style={{ color: "var(--t-muted)" }}>
                 <tr className="text-left text-xs uppercase tracking-wide">
                   <th className="px-3 py-2">Cliente</th><th className="px-3 py-2">Documento</th><th className="px-3 py-2">Vence</th>
-                  <th className="px-3 py-2">Estado</th><th className="px-3 py-2 text-right">Saldo</th><th className="px-3 py-2" />
+                  <th className="px-3 py-2">Estado</th><th className="px-3 py-2 text-right">Saldo</th><th className="px-3 py-2 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,6 +241,11 @@ export function ReceivablesTab({
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex justify-end gap-1.5">
+                          {party ? (
+                            <button type="button" onClick={() => onOpenStatement(party)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 45%, transparent)", color: "var(--t-accent)" }} title="Estado de cuenta: notas crédito y débito, enviar al cliente, imprimir">
+                              <FileText size={13} /> Estado de cuenta
+                            </button>
+                          ) : null}
                           {canPay ? (
                             <button type="button" onClick={() => void pay(i)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "color-mix(in oklab, #22c55e 45%, transparent)", color: "#22c55e" }}>
                               <HandCoins size={13} /> Abonar

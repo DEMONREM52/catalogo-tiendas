@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } fr
 import { AnimatePresence, m as motion } from "framer-motion";
 import Link from "next/link";
 import { Check, Copy, FileDown, Lock, MessageCircle, Minus, Plus, Printer, RotateCcw, Save, Share2 } from "lucide-react";
-import { PAY_LABEL, payLabel, type ReceiptPayment } from "./receipt-extras";
+import { PAY_LABEL, creditRows, payLabel, type ReceiptPayment } from "./receipt-extras";
 
 export type ScreenItem = { product_id: string; name: string; image_url: string | null; price: number; qty: number };
 export type PaymentMethodLite = { id: string; name: string; provider: string };
@@ -273,6 +273,21 @@ export function OrderScreen(props: {
                   </span>
                 ))}
               </div>
+              {p.payment.credit ? (
+                <div className="mt-3 rounded-2xl border p-3" style={{ borderColor: p.payment.credit.status === "overdue" ? "color-mix(in oklab, #ef4444 45%, transparent)" : p.payment.credit.status === "paid" ? "color-mix(in oklab, #22c55e 45%, transparent)" : "color-mix(in oklab, #f59e0b 45%, transparent)" }}>
+                  <p className="text-xs font-black uppercase tracking-wide" style={{ color: p.payment.credit.status === "overdue" ? "#ef4444" : p.payment.credit.status === "paid" ? "#22c55e" : "#f59e0b" }}>
+                    {p.payment.credit.status === "paid" ? "✅ Crédito pagado" : p.payment.credit.status === "overdue" ? "⏰ Crédito vencido" : "💳 Venta a crédito"}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    {creditRows(p.payment.credit, p.money).map(([k, v]) => (
+                      <div key={k} className="contents">
+                        <span style={{ color: "var(--t-muted)" }}>{k}</span>
+                        <span className={`text-right tabular-nums ${k.startsWith("Saldo") ? "font-black" : "font-semibold"}`}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {(p.payment.received ?? 0) > p.total || (p.payment.change ?? 0) > 0 ? (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)" }}>

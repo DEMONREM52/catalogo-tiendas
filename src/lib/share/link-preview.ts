@@ -21,6 +21,7 @@ export const PREVIEW_LABELS = {
   pedido_interno: "PEDIDO INTERNO",
   ingreso: "INGRESO DE MERCANCÍA",
   vale: "VALE PARA FIRMAR",
+  estado_cuenta: "ESTADO DE CUENTA",
   acceso: "ACCESO DEL EQUIPO",
   instalar: "INSTALA LA APP",
 } as const;

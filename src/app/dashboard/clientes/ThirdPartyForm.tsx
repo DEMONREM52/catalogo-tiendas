@@ -10,7 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { MoneyInput } from "../MoneyInput";
 import { WithDv } from "../nit";
 import { CreditMeter } from "./CreditMeter";
-import { DOC_TYPES, KINDS, TAX_REGIMES, errorText, normalizeThird, FULL_COLUMNS, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
+import { DOC_TYPES, KINDS, TAX_REGIMES, creditBlockReason, errorText, normalizeThird, FULL_COLUMNS, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 import { DateField } from "@/components/forms/Fields";
 import { CityInput, DepartmentInput } from "@/components/forms/ColombiaPlace";
 
@@ -449,7 +449,12 @@ export function ThirdPartyForm({
                         type="button"
                         role="switch"
                         aria-checked={draft.credit_enabled}
-                        onClick={() => patch({ credit_enabled: !draft.credit_enabled })}
+                        onClick={() => {
+                          // Consumidor final o sin cédula/NIT: no se le enciende el crédito (la base tampoco lo deja).
+                          const why = !draft.credit_enabled ? creditBlockReason({ name: draft.name, document_number: txt(draft.document_number) }) : null;
+                          if (why) return void Swal.fire({ icon: "info", title: "No se puede dar crédito", text: why, background: "var(--t-bg-base)", color: "var(--t-text)" });
+                          patch({ credit_enabled: !draft.credit_enabled });
+                        }}
                         className="relative h-7 w-12 rounded-full transition"
                         style={{ background: draft.credit_enabled ? "#22c55e" : "var(--t-card-border)" }}
                       >

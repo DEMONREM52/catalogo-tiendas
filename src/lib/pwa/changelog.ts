@@ -1313,6 +1313,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "El departamento se llena solo" },
     ],
   },
+  {
+    id: 127, date: "2026-11-20", title: "💳 Crédito completo: notas, estado de cuenta y comprobante",
+    summary: "La remisión o factura a crédito ahora dice «A crédito», con plazo, vencimiento, abonado, saldo y la firma del cliente. En el POS los documentos a crédito se marcan con su saldo. En Cartera cada cliente tiene «Estado de cuenta» para mandarlo por WhatsApp o guardarlo en PDF, y cada documento tiene «Nota crédito» (baja la deuda) y «Nota débito» (la sube), con número, motivo y auditoría. Consumidor final ya no puede comprar a crédito.",
+    paths: ["/dashboard/clientes", "/dashboard/pos"],
+    demo: [
+      { icon: "🧾", text: "REMISIÓN · A CRÉDITO" },
+      { icon: "➖", text: "NC-00001: −$20.000" },
+      { icon: "📤", text: "Estado de cuenta por WhatsApp" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

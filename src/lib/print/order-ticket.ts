@@ -8,7 +8,7 @@ import { ticketMoney, type TicketData } from "./ticket";
  * Tiquete de una venta ya registrada, con los mismos datos del comprobante en línea (/pedido/…):
  * número del punto o fiscal, emisor, resolución, CUFE y QR, forma de pago y vuelto.
  */
-const PAY: Record<string, string> = { efectivo: "Efectivo", transferencia: "Transferencia", nequi: "Nequi / Daviplata", tarjeta: "Tarjeta", mixto: "Mixto" };
+const PAY: Record<string, string> = { efectivo: "Efectivo", transferencia: "Transferencia", nequi: "Nequi / Daviplata", tarjeta: "Tarjeta", mixto: "Mixto", credito: "CRÉDITO" };
 const fmtDate = (v: string | null | undefined) =>
   v ? new Date(`${v.slice(0, 10)}T12:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 
@@ -36,7 +36,10 @@ export async function loadOrderTicket(token: string): Promise<TicketData | null>
   const order = data.order ?? {};
   const doc = (docRes.error ? null : docRes.data) as ErpDoc | null;
   const fiscal = (fiscalRes.error ? null : fiscalRes.data) as FiscalDoc | null;
-  const pay = (payRes.error ? null : payRes.data) as { method?: string; parts?: Array<{ method: string; amount: number }>; received?: number | null; change?: number | null } | null;
+  const pay = (payRes.error ? null : payRes.data) as {
+    method?: string; parts?: Array<{ method: string; amount: number }>; received?: number | null; change?: number | null;
+    credit?: { balance: number; paid: number; due_date: string | null; days: number | null; status: string } | null;
+  } | null;
   const point = doc?.point ?? null;
   const items = (data.items ?? []).map((i) => ({ name: String(i.name ?? "Producto"), qty: Number(i.qty), price: Number(i.price) }));
   const total = items.reduce((s, i) => s + i.qty * i.price, 0);
@@ -83,6 +86,20 @@ export async function loadOrderTicket(token: string): Promise<TicketData | null>
       payment.push(["Vuelto", ticketMoney(Number(pay.change ?? 0))]);
     }
   }
+  // Venta a crédito (20261334): plazo, vence, abonado y saldo, y la firma del cliente.
+  const credit = pay?.credit ?? null;
+  if (credit) {
+    if (credit.days) payment.push(["Plazo", `${credit.days} día${credit.days === 1 ? "" : "s"}`]);
+    payment.push(["Vence", fmtDate(credit.due_date)]);
+    if (Number(credit.paid) > 0) payment.push(["Abonado", ticketMoney(Number(credit.paid))]);
+    payment.push([credit.status === "paid" ? "Saldo (pagado)" : "Saldo", ticketMoney(Number(credit.balance))]);
+    if (order.status !== "cancelled") {
+      legal.push(`Recibí la mercancía y me comprometo a pagar ${ticketMoney(total)} a más tardar el ${fmtDate(credit.due_date)}.`);
+      legal.push("");
+      legal.push("Firma: ______________________");
+      legal.push("C.C.:  ______________________");
+    }
+  }
   const cash = Boolean(pay?.method === "efectivo" || pay?.parts?.some((p) => p.method === "efectivo" && Number(p.amount) > 0));
   const customer = String(order.customer_name ?? "CONSUMIDOR FINAL");
   const consulta = `${PRODUCTION_ORIGIN}/pedido/${encodeURIComponent(token)}`;
@@ -91,7 +108,7 @@ export async function loadOrderTicket(token: string): Promise<TicketData | null>
     docName: `${kind} ${number}`.trim(),
     header,
     title: `${kind}${number ? ` N.º ${number}` : ""}`,
-    subtitle: order.status === "cancelled" ? "ANULADO" : undefined,
+    subtitle: order.status === "cancelled" ? "ANULADO" : credit ? (credit.status === "paid" ? "CRÉDITO - PAGADO" : "*** A CRÉDITO ***") : undefined,
     info: [
       ["Fecha", new Date(String(order.created_at ?? Date.now())).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })],
       ...(point?.name ? ([["Punto", point.name]] as Array<[string, string]>) : []),
