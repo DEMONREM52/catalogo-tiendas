@@ -37,8 +37,8 @@ const DURATIONS: Array<{ label: string; days?: number; month?: boolean; none?: b
   { label: "Fin de mes", month: true }, { label: "Sin fecha de fin", none: true },
 ];
 const PROMO_TEXTS = ["2x1", "Lleva 3, paga 2", "10 % menos", "20 % menos", "Precio especial", "Últimas unidades", "Solo hoy", "Envío gratis"];
-/** «Antes» redondeado a mil hacia arriba para que hoy se vea con este descuento. */
-const beforeFor = (now: number, pct: number) => Math.ceil(now / (1 - pct / 100) / 1000) * 1000;
+/** «Antes» redondeado hacia arriba (a cien si el precio es bajo, a mil si no) para que hoy se vea con este descuento. */
+const beforeFor = (now: number, pct: number) => { const step = now < 20000 ? 100 : 1000; return Math.ceil(now / (1 - pct / 100) / step) * step; };
 const discountOf = (now: number, before: number) => Math.round(100 * (1 - now / before));
 
 const toast = (title: string, icon: "success" | "error" = "success", text?: string) =>
@@ -53,6 +53,8 @@ export function BadgesPanel({ storeId, productId, compact }: { storeId: string; 
   const [busy, setBusy] = useState<Kind | null>(null);
   // Precio de hoy en el catálogo principal: para sugerir el «antes» y avisar si no se verá.
   const [nowPrice, setNowPrice] = useState<{ price: number; catalog: string } | null>(null);
+  // Precios que de verdad tuvo (historial 20261333) y a cómo se vendió en ese catálogo.
+  const [past, setPast] = useState<{ history: Array<{ price: number; until: string }>; sold: Array<{ price: number; at: string }>; since: string | null } | null>(null);
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -64,10 +66,14 @@ export function BadgesPanel({ storeId, productId, compact }: { storeId: string; 
       if (!alive || !p) return;
       const list = ((cats ?? []) as Array<{ slug: string; name: string; price_level: number | null; active: boolean | null }>).filter((c) => c.active !== false);
       const main = list.find((c) => c.slug === "detal") ?? list[0];
-      const level = Number(main?.price_level ?? 3);
+      const raw = Number(main?.price_level ?? 3);
+      const level = raw >= 1 && raw <= 5 ? raw : 3;
       const row = p as Record<string, number | null>;
-      const price = Number(row[`price_${level >= 1 && level <= 5 ? level : 3}`] ?? 0);
+      const price = Number(row[`price_${level}`] ?? 0);
       if (price > 0) setNowPrice({ price, catalog: main?.name ?? "Detal" });
+      const { data } = await sb.rpc("product_price_before", { p_store: storeId, p_product: productId, p_level: level, p_catalog: main?.slug ?? null });
+      const d = data as { ok?: boolean; history?: Array<{ price: number; until: string }>; sold?: Array<{ price: number; at: string }>; tracking_since?: string | null } | null;
+      if (alive && d?.ok) setPast({ history: d.history ?? [], sold: d.sold ?? [], since: d.tracking_since ?? null });
     })();
     return () => { alive = false; };
   }, [storeId, productId]);
@@ -187,13 +193,36 @@ export function BadgesPanel({ storeId, productId, compact }: { storeId: string; 
                   ) : null}
                   {k.kind === "price_drop" && nowPrice ? (
                     <div className="space-y-1">
-                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Hoy en «{nowPrice.catalog}» se vende a <b style={{ color: "var(--t-text)" }}>{cop(nowPrice.price)}</b>. Para que se vea con descuento:</p>
+                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Hoy en «{nowPrice.catalog}» se vende a <b style={{ color: "var(--t-text)" }}>{cop(nowPrice.price)}</b>.</p>
+                      {past && (past.history.length || past.sold.length) ? (
+                        <>
+                          <p className="text-[11px] font-bold">✅ Precios que de verdad tuvo:</p>
+                          <div className="flex flex-wrap gap-1" aria-label="Precios que tuvo">
+                            {[
+                              ...past.history.map((h) => ({ key: `h${h.price}`, price: Number(h.price), note: `hasta el ${ddmmyyyy(dayOf(h.until))}` })),
+                              ...past.sold.filter((s) => !past.history.some((h) => Number(h.price) === Number(s.price)))
+                                .map((s) => ({ key: `s${s.price}`, price: Number(s.price), note: `vendido el ${ddmmyyyy(dayOf(s.at))}` })),
+                            ].filter((o) => o.price > nowPrice.price).map((o) => {
+                              const on = Number(e.before) === o.price;
+                              return (
+                                <button key={o.key} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, before: o.price } }))}
+                                  className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                                  style={{ borderColor: on ? k.color : `color-mix(in oklab, ${k.color} 45%, var(--t-card-border))`, background: on ? `color-mix(in oklab, ${k.color} 14%, transparent)` : undefined }}>
+                                  <s>{cop(o.price)}</s> · {o.note} · −{discountOf(nowPrice.price, o.price)} %
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : past ? (
+                        <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>Aún no hay un precio anterior guardado. Desde {past.since ? `el ${ddmmyyyy(dayOf(past.since))}` : "ahora"} RemHub guarda cada cambio de precio: la próxima vez que lo bajes, aquí saldrá el que tenía.</p>
+                      ) : null}
+                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>O calcula uno con el descuento que quieres mostrar:</p>
                       <div className="flex flex-wrap gap-1" aria-label="Sugerencias del precio de antes">
-                        {[10, 15, 20, 30].map((pct) => {
-                          const b = beforeFor(nowPrice.price, pct);
+                        {[...new Set([10, 15, 20, 30].map((pct) => beforeFor(nowPrice.price, pct)))].map((b) => {
                           const on = Number(e.before) === b;
                           return (
-                            <button key={pct} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, before: b } }))}
+                            <button key={b} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, before: b } }))}
                               className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
                               style={{ borderColor: on ? k.color : "var(--t-card-border)", background: on ? `color-mix(in oklab, ${k.color} 14%, transparent)` : undefined }}>
                               <s>{cop(b)}</s> · −{discountOf(nowPrice.price, b)} %

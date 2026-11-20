@@ -1293,6 +1293,16 @@ export const RELEASES: Release[] = [
       { icon: "🔥", text: "2x1 con un toque" },
     ],
   },
+  {
+    id: 125, date: "2026-11-20", title: "⬇️ «Bajó de precio» con el precio que de verdad tenía",
+    summary: "RemHub ahora guarda cada cambio de precio. Al poner «Bajó de precio», te sugiere el precio que tenía antes (y hasta qué día) y a cómo se vendió en el catálogo en los últimos 6 meses, con el % de descuento que se verá. Los productos que cambien de precio desde hoy ya tendrán su historial.",
+    paths: ["/dashboard/products", "/dashboard/products/radar"],
+    demo: [
+      { icon: "🕒", text: "Guarda el precio anterior" },
+      { icon: "⬇️", text: "$9.000 hasta el 15/11" },
+      { icon: "✅", text: "Un toque y queda" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
