@@ -10,6 +10,7 @@ import { Badge, Button, Card, Drawer, Field, Notice, Toggle, inputCls, inputStyl
 import { EntityFields, EstablishmentFields, emptyEntity, entityPayload, type EntityDraft, type EstDraft } from "../fiscal/EntitiesTab";
 import { loadTeam, memberName, type TeamMember } from "./shared";
 import { DateField } from "@/components/forms/Fields";
+import { CityInput } from "@/components/forms/ColombiaPlace";
 
 const STEPS = ["General", "Responsable", "Información fiscal", "Establecimiento", "Facturación electrónica", "Numeración", "Usuarios", "Revisión"];
 
@@ -148,7 +149,7 @@ export function PointWizard({ access, onClose, onCreated }: { access: FiscalAcce
                   </select>
                 </Field>
                 <Field label="Dirección" className="sm:col-span-2"><input className={inputCls} style={inputStyle} value={point.address} onChange={(e) => setPoint({ ...point, address: e.target.value })} /></Field>
-                <Field label="Ciudad"><input className={`${inputCls} uppercase`} style={inputStyle} value={point.city} onChange={(e) => setPoint({ ...point, city: e.target.value })} /></Field>
+                <Field label="Ciudad"><CityInput className={`${inputCls} uppercase`} style={inputStyle} value={point.city} onChange={(v) => setPoint({ ...point, city: v })} /></Field>
                 <Field label="Teléfono"><input className={inputCls} style={inputStyle} value={point.phone} onChange={(e) => setPoint({ ...point, phone: e.target.value })} /></Field>
                 <Field label="Descripción" className="sm:col-span-2"><input className={inputCls} style={inputStyle} value={point.description} onChange={(e) => setPoint({ ...point, description: e.target.value })} /></Field>
               </div>

@@ -8,6 +8,7 @@ import { ENTITY_DOC_TYPES, TAX_REGIME_OPTIONS, TAX_RESPONSIBILITY_SUGGESTIONS, t
 import type { FiscalAccess, FiscalOverview } from "./useFiscal";
 import { Badge, Button, Card, ChipsInput, Drawer, EmptyState, Field, Notice, SectionTitle, Toggle, askReasonDialog, inputCls, inputStyle, notify } from "./ui";
 import { DateField } from "@/components/forms/Fields";
+import { CityInput, DepartmentInput } from "@/components/forms/ColombiaPlace";
 
 export type EntityDraft = {
   id?: string; person_type: "natural" | "juridica"; legal_name: string; trade_name: string; document_type: string; document_number: string;
@@ -75,8 +76,8 @@ export function EntityFields({ value, onChange, locked = false }: { value: Entit
           <ChipsInput values={value.economic_activities} onChange={(v) => set({ economic_activities: v })} placeholder="Código de 4 dígitos, ej: 4755" normalize={(v) => v.replace(/\D/g, "")} validate={(v) => (/^\d{4}$/.test(v) ? null : "El código CIIU tiene 4 dígitos.")} />
         </Field>
         <Field label="Dirección fiscal" required className="sm:col-span-2"><input className={inputCls} style={inputStyle} value={value.fiscal_address} onChange={(e) => set({ fiscal_address: e.target.value })} /></Field>
-        <Field label="Ciudad / municipio" required><input className={`${inputCls} uppercase`} style={inputStyle} value={value.city} onChange={(e) => set({ city: e.target.value })} /></Field>
-        <Field label="Departamento" required><input className={`${inputCls} uppercase`} style={inputStyle} value={value.department} onChange={(e) => set({ department: e.target.value })} /></Field>
+        <Field label="Ciudad / municipio" required><CityInput className={`${inputCls} uppercase`} style={inputStyle} value={value.city} department={value.department} onChange={(v) => set({ city: v })} onPick={(m) => set({ city: m.name, department: m.dept })} /></Field>
+        <Field label="Departamento" required><DepartmentInput className={`${inputCls} uppercase`} style={inputStyle} value={value.department} onChange={(v) => set({ department: v })} /></Field>
         <Field label="Correo" required><input type="email" className={inputCls} style={inputStyle} value={value.email} onChange={(e) => set({ email: e.target.value })} /></Field>
         <Field label="Correo registrado en la DIAN (RUT)"><input type="email" className={inputCls} style={inputStyle} value={value.dian_email} onChange={(e) => set({ dian_email: e.target.value })} /></Field>
         <Field label="Teléfono"><input className={inputCls} style={inputStyle} value={value.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
@@ -119,8 +120,8 @@ export function EstablishmentFields({ value, onChange, points, entities }: { val
       <Field label="Nombre del establecimiento" required><input className={`${inputCls} uppercase`} style={inputStyle} value={value.name} onChange={(e) => set({ name: e.target.value })} /></Field>
       <Field label="Código" hint="Como figure en el RUT o lo indique el proveedor."><input className={`${inputCls} uppercase`} style={inputStyle} value={value.code} onChange={(e) => set({ code: e.target.value })} /></Field>
       <Field label="Dirección" required className="sm:col-span-2"><input className={inputCls} style={inputStyle} value={value.address} onChange={(e) => set({ address: e.target.value })} /></Field>
-      <Field label="Ciudad" required><input className={`${inputCls} uppercase`} style={inputStyle} value={value.city} onChange={(e) => set({ city: e.target.value })} /></Field>
-      <Field label="Departamento"><input className={`${inputCls} uppercase`} style={inputStyle} value={value.department} onChange={(e) => set({ department: e.target.value })} /></Field>
+      <Field label="Ciudad" required><CityInput className={`${inputCls} uppercase`} style={inputStyle} value={value.city} department={value.department} onChange={(v) => set({ city: v })} onPick={(m) => set({ city: m.name, department: m.dept })} /></Field>
+      <Field label="Departamento"><DepartmentInput className={`${inputCls} uppercase`} style={inputStyle} value={value.department} onChange={(v) => set({ department: v })} /></Field>
       <Field label="Teléfono"><input className={inputCls} style={inputStyle} value={value.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
       <Field label="Correo"><input type="email" className={inputCls} style={inputStyle} value={value.email} onChange={(e) => set({ email: e.target.value })} /></Field>
     </div>

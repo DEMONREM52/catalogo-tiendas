@@ -1303,6 +1303,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Un toque y queda" },
     ],
   },
+  {
+    id: 126, date: "2026-11-20", title: "📍 Ciudad y departamento con opciones",
+    summary: "Al escribir la ciudad o el departamento salen los 1.122 municipios y los 33 departamentos de Colombia (lista oficial del DANE), sin importar tildes. Al elegir la ciudad se llena solo el departamento. Si la ciudad no está en la lista, puedes dejarla escrita como antes.",
+    paths: ["/dashboard/clientes", "/dashboard/fiscal", "/dashboard/puntos"],
+    demo: [
+      { icon: "⌨️", text: "Escribe «villav»" },
+      { icon: "📍", text: "VILLAVICENCIO · META" },
+      { icon: "✅", text: "El departamento se llena solo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

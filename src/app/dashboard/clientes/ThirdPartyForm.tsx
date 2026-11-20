@@ -12,6 +12,7 @@ import { WithDv } from "../nit";
 import { CreditMeter } from "./CreditMeter";
 import { DOC_TYPES, KINDS, TAX_REGIMES, errorText, normalizeThird, FULL_COLUMNS, type Balance, type ThirdKind, type ThirdParty } from "./terceros";
 import { DateField } from "@/components/forms/Fields";
+import { CityInput, DepartmentInput } from "@/components/forms/ColombiaPlace";
 
 type Draft = Omit<ThirdParty, "id" | "store_id" | "created_at" | "credit_updated_at" | "credit_updated_by_name"> & { id?: string };
 type Seller = { user_id: string; name: string };
@@ -362,10 +363,10 @@ export function ThirdPartyForm({
                   <input className={field} style={fieldStyle} value={txt(draft.address)} onChange={(e) => patch({ address: e.target.value })} placeholder="Calle, número, barrio" />
                 </F>
                 <F label="Ciudad / municipio">
-                  <input className={field} style={fieldStyle} value={txt(draft.city)} onChange={(e) => patch({ city: e.target.value })} />
+                  <CityInput className={field} style={fieldStyle} value={draft.city} department={draft.department} onChange={(v) => patch({ city: v })} onPick={(m) => patch({ city: m.name, department: m.dept })} />
                 </F>
                 <F label="Departamento">
-                  <input className={field} style={fieldStyle} value={txt(draft.department)} onChange={(e) => patch({ department: e.target.value })} />
+                  <DepartmentInput className={field} style={fieldStyle} value={draft.department} onChange={(v) => patch({ department: v })} />
                 </F>
               </Section>
 
