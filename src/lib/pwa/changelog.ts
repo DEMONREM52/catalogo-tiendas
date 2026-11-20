@@ -1283,6 +1283,16 @@ export const RELEASES: Release[] = [
       { icon: "👀", text: "Ves el comprobante" },
     ],
   },
+  {
+    id: 124, date: "2026-11-20", title: "🏷️ Etiquetas con sugerencias",
+    summary: "Al poner una etiqueta en el producto ahora hay atajos: cuánto dura (3, 7, 15 o 30 días, fin de mes o sin fin), empezar hoy o mañana, precios de antes sugeridos según el precio de hoy (con el % que se verá) y textos listos para la promoción (2x1, Lleva 3 paga 2, Últimas unidades…).",
+    paths: ["/dashboard/products", "/dashboard/products/radar"],
+    demo: [
+      { icon: "⏱️", text: "Dura 7 días" },
+      { icon: "⬇️", text: "Antes $50.000 · −10 %" },
+      { icon: "🔥", text: "2x1 con un toque" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -28,6 +28,19 @@ const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00
 // Del instante guardado al día en Colombia («hasta» se guarda como el inicio del día siguiente).
 const dayOf = (iso: string, end = false) => new Date(Date.parse(iso) - 5 * 3600_000 - (end ? 1000 : 0)).toISOString().slice(0, 10);
 
+/** Fin del mes de una fecha (AAAA-MM-DD). */
+const endOfMonth = (iso: string) => { const [y, m] = iso.split("-").map(Number); return new Date(Date.UTC(y, m, 0, 12)).toISOString().slice(0, 10); };
+const cop = (n: number) => "$" + Math.round(n).toLocaleString("es-CO");
+/** Cuánto dura cada etiqueta (se suma al «desde»). */
+const DURATIONS: Array<{ label: string; days?: number; month?: boolean; none?: boolean }> = [
+  { label: "3 días", days: 3 }, { label: "7 días", days: 7 }, { label: "15 días", days: 15 }, { label: "30 días", days: 30 },
+  { label: "Fin de mes", month: true }, { label: "Sin fecha de fin", none: true },
+];
+const PROMO_TEXTS = ["2x1", "Lleva 3, paga 2", "10 % menos", "20 % menos", "Precio especial", "Últimas unidades", "Solo hoy", "Envío gratis"];
+/** «Antes» redondeado a mil hacia arriba para que hoy se vea con este descuento. */
+const beforeFor = (now: number, pct: number) => Math.ceil(now / (1 - pct / 100) / 1000) * 1000;
+const discountOf = (now: number, before: number) => Math.round(100 * (1 - now / before));
+
 const toast = (title: string, icon: "success" | "error" = "success", text?: string) =>
   void Swal.fire({ toast: true, position: "top", icon, title, text, timer: 2600, showConfirmButton: false, background: "var(--t-bg-base)", color: "var(--t-text)" });
 
@@ -38,6 +51,26 @@ export function BadgesPanel({ storeId, productId, compact }: { storeId: string; 
   const [saved, setSaved] = useState<Partial<Record<Kind, Saved>>>({});
   const [edit, setEdit] = useState<Partial<Record<Kind, Edit>>>({});
   const [busy, setBusy] = useState<Kind | null>(null);
+  // Precio de hoy en el catálogo principal: para sugerir el «antes» y avisar si no se verá.
+  const [nowPrice, setNowPrice] = useState<{ price: number; catalog: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const sb = supabaseBrowser();
+      const [{ data: p }, { data: cats }] = await Promise.all([
+        sb.from("products").select("price_1,price_2,price_3,price_4,price_5").eq("id", productId).maybeSingle(),
+        sb.from("store_catalogs").select("slug,name,price_level,active").eq("store_id", storeId).order("sort_order"),
+      ]);
+      if (!alive || !p) return;
+      const list = ((cats ?? []) as Array<{ slug: string; name: string; price_level: number | null; active: boolean | null }>).filter((c) => c.active !== false);
+      const main = list.find((c) => c.slug === "detal") ?? list[0];
+      const level = Number(main?.price_level ?? 3);
+      const row = p as Record<string, number | null>;
+      const price = Number(row[`price_${level >= 1 && level <= 5 ? level : 3}`] ?? 0);
+      if (price > 0) setNowPrice({ price, catalog: main?.name ?? "Detal" });
+    })();
+    return () => { alive = false; };
+  }, [storeId, productId]);
 
   const load = useCallback(async () => {
     const { data, error } = await supabaseBrowser().rpc("product_badges_get", { p_store: storeId, p_product: productId });
@@ -125,15 +158,74 @@ export function BadgesPanel({ storeId, productId, compact }: { storeId: string; 
                       <DateField value={e.ends} min={e.starts || today} onChange={(v) => setEdit((c) => ({ ...c, [k.kind]: { ...e, ends: v } }))} className="mt-1" ariaLabel={`${k.label}: hasta`} />
                     </label>
                   </div>
+                  <div className="flex flex-wrap gap-1" aria-label="Sugerencias de duración">
+                    <span className="self-center text-[10px] font-bold" style={{ color: "var(--t-muted)" }}>Dura:</span>
+                    {DURATIONS.map((d) => {
+                      const from = e.starts || today;
+                      const target = d.none ? "" : d.month ? endOfMonth(from) : addDays(from, d.days!);
+                      const on = e.ends === target;
+                      return (
+                        <button key={d.label} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, ends: target } }))}
+                          className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ borderColor: on ? k.color : "var(--t-card-border)", background: on ? `color-mix(in oklab, ${k.color} 14%, transparent)` : undefined }}
+                          title={target ? `Hasta el ${ddmmyyyy(target)}` : "Queda puesta hasta que la quites"}>
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                    {e.starts !== today ? (
+                      <button type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, starts: today } }))} className="rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Empezar hoy</button>
+                    ) : (
+                      <button type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, starts: addDays(today, 1), ends: e.ends && e.ends <= addDays(today, 1) ? "" : e.ends } }))} className="rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Empezar mañana</button>
+                    )}
+                  </div>
                   {k.kind === "price_drop" ? (
                     <label className="block text-[11px] font-bold">Precio de antes (se muestra tachado)
                       <MoneyInput value={e.before} allowEmpty onValueChange={(v) => setEdit((c) => ({ ...c, [k.kind]: { ...e, before: v ?? null } }))} placeholder="Ej: 45.000"
                         className="mt-1 w-full rounded-xl border px-3 py-2 text-sm font-bold" style={field} ariaLabel="Precio de antes" />
                     </label>
                   ) : null}
+                  {k.kind === "price_drop" && nowPrice ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>Hoy en «{nowPrice.catalog}» se vende a <b style={{ color: "var(--t-text)" }}>{cop(nowPrice.price)}</b>. Para que se vea con descuento:</p>
+                      <div className="flex flex-wrap gap-1" aria-label="Sugerencias del precio de antes">
+                        {[10, 15, 20, 30].map((pct) => {
+                          const b = beforeFor(nowPrice.price, pct);
+                          const on = Number(e.before) === b;
+                          return (
+                            <button key={pct} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, before: b } }))}
+                              className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                              style={{ borderColor: on ? k.color : "var(--t-card-border)", background: on ? `color-mix(in oklab, ${k.color} 14%, transparent)` : undefined }}>
+                              <s>{cop(b)}</s> · −{discountOf(nowPrice.price, b)} %
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {Number(e.before) > 0 ? (
+                        Number(e.before) > nowPrice.price
+                          ? <p className="text-[11px] font-semibold" style={{ color: k.color }}>Se verá: <s>{cop(Number(e.before))}</s> → {cop(nowPrice.price)} (−{discountOf(nowPrice.price, Number(e.before))} %)</p>
+                          : <p className="text-[11px] font-semibold" style={{ color: "#e5484d" }}>⚠️ Debe ser mayor que {cop(nowPrice.price)}; si no, no se muestra.</p>
+                      ) : null}
+                      <p className="text-[10px]" style={{ color: "var(--t-muted)" }}>Usa un precio que de verdad hayas tenido: un «antes» inventado puede traer reclamos ante la SIC.</p>
+                    </div>
+                  ) : null}
                   {k.kind === "promo" ? (
                     <input value={e.text} maxLength={30} onChange={(ev) => setEdit((c) => ({ ...c, [k.kind]: { ...e, text: ev.target.value } }))}
                       placeholder="Texto corto (opcional): 2x1, Lleva 3…" className="w-full rounded-xl border px-3 py-2 text-xs" style={field} aria-label="Texto de la promoción" />
+                  ) : null}
+                  {k.kind === "promo" ? (
+                    <div className="flex flex-wrap gap-1" aria-label="Sugerencias de texto">
+                      {PROMO_TEXTS.map((t) => {
+                        const on = e.text === t;
+                        return (
+                          <button key={t} type="button" onClick={() => setEdit((c) => ({ ...c, [k.kind]: { ...e, text: on ? "" : t } }))}
+                            className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                            style={{ borderColor: on ? k.color : "var(--t-card-border)", background: on ? `color-mix(in oklab, ${k.color} 14%, transparent)` : undefined }}>
+                            {t}
+                          </button>
+                        );
+                      })}
+                    </div>
                   ) : null}
                   <div className="flex gap-2">
                     <button type="button" disabled={busy === k.kind || (k.kind === "price_drop" && !(Number(e.before) > 0))} onClick={() => void save(k.kind, true)}
