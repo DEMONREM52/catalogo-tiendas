@@ -52,6 +52,47 @@ export const PAY_LABEL: Record<string, { label: string; emoji: string }> = {
   mixto: { label: "Pago mixto", emoji: "🔀" },
   credito: { label: "Crédito", emoji: "💳" },
 };
+/** Color de cada forma de pago: así se distingue de un vistazo una venta a crédito de una de contado. */
+export const PAY_COLOR: Record<string, string> = {
+  credito: "#f97316",
+  efectivo: "#16a34a",
+  transferencia: "#2563eb",
+  nequi: "#c026d3",
+  tarjeta: "#0891b2",
+  mixto: "#7c3aed",
+};
+export const OTHER_PAY_COLOR = "#64748b";
+export const payColor = (m: string) => PAY_COLOR[m] ?? OTHER_PAY_COLOR;
+
+export type PayTheme = { color: string; colors: string[]; emoji: string; label: string; detail: string | null };
+
+/**
+ * Tema del comprobante según cómo se pagó (null si no se sabe). Crédito: naranja (rojo si está vencido, verde si ya se pagó);
+ * efectivo verde, transferencia azul, Nequi/Daviplata fucsia, tarjeta cian, mixto violeta (con los colores de sus partes),
+ * pago en línea verde azulado y cualquier otra forma gris.
+ */
+export function payTheme(p: ReceiptPayment | null, online?: { paid: boolean; method: string | null }): PayTheme | null {
+  if (p?.credit) {
+    const c = p.credit;
+    if (c.status === "paid") return { color: "#16a34a", colors: ["#f97316", "#16a34a"], emoji: "✅", label: "Crédito pagado", detail: null };
+    const due = c.due_date ? `${c.due_date.slice(8, 10)}/${c.due_date.slice(5, 7)}/${c.due_date.slice(0, 4)}` : null;
+    if (c.status === "overdue") return { color: "#dc2626", colors: ["#f97316", "#dc2626"], emoji: "⏰", label: "Crédito vencido", detail: due ? `venció el ${due}` : null };
+    return { color: PAY_COLOR.credito, colors: [PAY_COLOR.credito, "#f59e0b"], emoji: "💳", label: "Venta a crédito", detail: due ? `vence el ${due}` : null };
+  }
+  if (p?.method) {
+    const color = payColor(p.method);
+    const parts = p.method === "mixto" ? p.parts.map((x) => payColor(x.method)) : [];
+    const meta = PAY_LABEL[p.method];
+    return {
+      color, colors: parts.length > 1 ? parts : [color, color], emoji: meta?.emoji ?? "💰",
+      label: p.method === "mixto" ? "Pago mixto" : `Pagado en ${(meta?.label ?? payLabel(p.method)).toLowerCase()}`,
+      detail: p.method === "mixto" ? p.parts.map((x) => payLabel(x.method)).join(" + ") : null,
+    };
+  }
+  if (online?.paid) return { color: "#0d9488", colors: ["#0d9488", "#14b8a6"], emoji: "🌐", label: "Pagado en línea", detail: online.method };
+  return null;
+}
+
 export const payLabel = (m: string) => PAY_LABEL[m]?.label ?? (m ? m[0].toUpperCase() + m.slice(1) : "—");
 
 export function normalizePayment(v: unknown): ReceiptPayment | null {

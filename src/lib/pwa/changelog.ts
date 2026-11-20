@@ -1333,6 +1333,16 @@ export const RELEASES: Release[] = [
       { icon: "🏬", text: "Vuelve a la bodega" },
     ],
   },
+  {
+    id: 129, date: "2026-11-20", title: "🎨 El comprobante se pinta según cómo se pagó",
+    summary: "Cada forma de pago tiene su color en el comprobante: crédito naranja (rojo si está vencido, verde cuando se paga), efectivo verde, transferencia azul, Nequi/Daviplata fucsia, tarjeta cian, pago mixto violeta y otras formas en gris. Arriba sale una etiqueta grande («💳 Venta a crédito · vence el 30/11/2026») y el total dice «Total a crédito» con el saldo.",
+    paths: ["/pedido"],
+    demo: [
+      { icon: "🟧", text: "Venta a crédito" },
+      { icon: "🟩", text: "Pagado en efectivo" },
+      { icon: "🟦", text: "Pagado en transferencia" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

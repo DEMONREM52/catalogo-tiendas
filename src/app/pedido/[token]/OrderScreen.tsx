@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } fr
 import { AnimatePresence, m as motion } from "framer-motion";
 import Link from "next/link";
 import { Check, Copy, FileDown, Lock, MessageCircle, Minus, Plus, Printer, RotateCcw, Save, Share2 } from "lucide-react";
-import { PAY_LABEL, creditRows, payLabel, type ReceiptPayment } from "./receipt-extras";
+import { PAY_LABEL, creditRows, payColor, payLabel, payTheme, type ReceiptPayment } from "./receipt-extras";
 
 export type ScreenItem = { product_id: string; name: string; image_url: string | null; price: number; qty: number };
 export type PaymentMethodLite = { id: string; name: string; provider: string };
@@ -133,6 +133,8 @@ export function OrderScreen(props: {
   const [pdfBusy, setPdfBusy] = useState(false);
   const paid = p.paymentStatus === "paid";
   const confirmed = p.status === "confirmed" || p.status === "completed";
+  // Color según la forma de pago (crédito, efectivo, transferencia, tarjeta…). Anulado: sin tema.
+  const pt = p.status === "cancelled" ? null : payTheme(p.payment, { paid, method: p.paymentMethodType });
   // Compartir nativo (celular): solo en el navegador, para que el servidor y el cliente pinten lo mismo.
   const canShare = useSyncExternalStore(() => () => {}, () => typeof navigator.share === "function", () => false);
 
@@ -171,8 +173,8 @@ export function OrderScreen(props: {
   return (
     <div className={`mx-auto w-full max-w-5xl lg:pb-0 ${mobileAction ? "pb-36" : "pb-6"}`}>
       {/* ===== Encabezado ===== */}
-      <motion.header initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="overflow-hidden rounded-3xl border" style={card}>
-        <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${st.color}, var(--t-accent))` }} />
+      <motion.header initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="overflow-hidden rounded-3xl border" style={pt ? { ...card, borderColor: `color-mix(in oklab, ${pt.color} 45%, var(--t-card-border))`, borderWidth: 2 } : card}>
+        <div className={pt ? "h-2.5" : "h-1.5"} style={{ background: pt ? `linear-gradient(90deg, ${pt.colors.join(", ")})` : `linear-gradient(90deg, ${st.color}, var(--t-accent))` }} />
         <div className="p-4 sm:p-6">
           <div className="flex items-center gap-3">
             <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-white sm:h-14 sm:w-14" style={{ borderColor: "var(--t-card-border)" }}>
@@ -196,11 +198,21 @@ export function OrderScreen(props: {
               <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>
                 {p.orderNumber ? `Pedido #${p.orderNumber} · ` : ""}{p.catalogLabel} · {st.hint}
               </p>
+              {pt ? (
+                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide text-white shadow-sm sm:text-sm"
+                  style={{ background: `linear-gradient(135deg, ${pt.colors.join(", ")})`, boxShadow: `0 8px 22px color-mix(in oklab, ${pt.color} 35%, transparent)` }}>
+                  <span className="text-base leading-none">{pt.emoji}</span> {pt.label}
+                  {pt.detail ? <span className="font-semibold normal-case opacity-90">· {pt.detail}</span> : null}
+                </span>
+              ) : null}
             </div>
             <div className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 sm:block sm:border-0 sm:p-0 sm:text-right"
-              style={{ borderColor: "color-mix(in oklab, var(--t-accent) 35%, var(--t-card-border))", background: "color-mix(in oklab, var(--t-accent) 8%, transparent)" }}>
-              <p className="text-xs font-bold" style={{ color: "var(--t-muted)" }}>Total{units ? ` · ${units} und.` : ""}</p>
+              style={{ borderColor: `color-mix(in oklab, ${pt?.color ?? "var(--t-accent)"} 35%, var(--t-card-border))`, background: `color-mix(in oklab, ${pt?.color ?? "var(--t-accent)"} 8%, transparent)` }}>
+              <p className="text-xs font-bold" style={{ color: pt?.color ?? "var(--t-muted)" }}>{pt?.color && p.payment?.credit && p.payment.credit.status !== "paid" ? "Total a crédito" : "Total"}{units ? ` · ${units} und.` : ""}</p>
               <motion.p key={p.total} initial={{ scale: 1.08 }} animate={{ scale: 1 }} className="text-3xl font-black tabular-nums sm:text-4xl">{p.money(p.total)}</motion.p>
+              {p.payment?.credit && p.payment.credit.status !== "paid" && p.payment.credit.balance !== p.total ? (
+                <p className="text-xs font-bold tabular-nums" style={{ color: pt?.color }}>Saldo {p.money(p.payment.credit.balance)}</p>
+              ) : null}
             </div>
           </div>
 
@@ -264,11 +276,11 @@ export function OrderScreen(props: {
           </motion.section>
 
           {p.payment ? (
-            <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border p-5" style={card}>
-              <p className="text-sm font-black">💰 Forma de pago</p>
+            <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-3xl border p-5" style={pt ? { ...card, borderColor: `color-mix(in oklab, ${pt.color} 45%, var(--t-card-border))`, background: `linear-gradient(180deg, color-mix(in oklab, ${pt.color} 9%, transparent), transparent 70%), var(--t-card-bg)` } : card}>
+              <p className="text-sm font-black" style={{ color: pt?.color }}>💰 Forma de pago</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(p.payment.method === "mixto" ? p.payment.parts : [{ method: p.payment.method, amount: p.total }]).map((x, i) => (
-                  <span key={i} className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+                  <span key={i} className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold" style={{ borderColor: `color-mix(in oklab, ${payColor(x.method)} 55%, transparent)`, background: `color-mix(in oklab, ${payColor(x.method)} 12%, transparent)`, color: payColor(x.method) }}>
                     <span className="text-lg">{PAY_LABEL[x.method]?.emoji ?? "💳"}</span> {payLabel(x.method)} <span className="tabular-nums">{p.money(x.amount)}</span>
                   </span>
                 ))}
