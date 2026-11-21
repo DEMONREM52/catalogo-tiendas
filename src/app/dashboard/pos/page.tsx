@@ -166,6 +166,10 @@ function cardProps() {
 
 const DEFAULT_CLIENT_NAME = "CONSUMIDOR FINAL";
 const DEFAULT_PRICE_LIST = 3;
+const foldName = (t?: string | null) => (t ?? "").normalize("NFD").replace(/\p{M}/gu, "").replace(/\s+/g, " ").trim().toLowerCase();
+/** El cliente registrado «Consumidor final» (por nombre o por el documento 222222222222). */
+const isFinalConsumerClient = (c: { name?: string | null; document_number?: string | null }) =>
+  foldName(c.name) === "consumidor final" || (c.document_number ?? "").replace(/\D/g, "") === "222222222222";
 
 type PointOption = { id: string; name: string; kind?: "point" | "warehouse"; is_default?: boolean; invoice_prefix: string; remision_prefix: string; next_invoice_number: number; next_remision_number: number };
 type SellerOption = { user_id: string; name: string; role: string; point_id?: string | null; sell_point_ids?: string[] | null };
@@ -301,9 +305,12 @@ export default function PosPage() {
     () => clients.find((client) => client.id === selectedClientId) ?? null,
     [clients, selectedClientId],
   );
+  // Consumidor final registrado: queda elegido por defecto, pero vende con la lista de mostrador (P3) aunque su ficha diga otra.
+  const cfClient = useMemo(() => clients.find((c) => c.active !== false && isFinalConsumerClient(c)) ?? null, [clients]);
+  const selectedIsCF = Boolean(selectedClient && isFinalConsumerClient(selectedClient));
 
   const effectiveClient = useMemo(() => {
-    if (selectedClient) return selectedClient;
+    if (selectedClient) return selectedIsCF ? { ...selectedClient, price_list: DEFAULT_PRICE_LIST } : selectedClient;
     const typed = customerName.trim();
     const named = Boolean(typed) && typed !== DEFAULT_CLIENT_NAME;
     return {
@@ -314,7 +321,7 @@ export default function PosPage() {
       document_number: named && customerDocument.trim() ? customerDocument.trim() : "CF",
       price_list: DEFAULT_PRICE_LIST,
     } as Client;
-  }, [selectedClient, customerName, customerDocument]);
+  }, [selectedClient, selectedIsCF, customerName, customerDocument]);
 
   const productMap = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
@@ -336,7 +343,7 @@ export default function PosPage() {
     });
   }, [clients, clientSearch]);
 
-  const currentPriceList = (listOverride ?? selectedClient?.price_list ?? customerPriceList) as PriceLevel;
+  const currentPriceList = (listOverride ?? (selectedIsCF ? DEFAULT_PRICE_LIST : selectedClient?.price_list) ?? customerPriceList) as PriceLevel;
   const siigoConfigured = billingSettings?.electronic_provider?.toLowerCase() === "siigo";
   // Facturación electrónica del punto (motor fiscal). Si el punto la tiene activa, «Factura» siempre es electrónica.
   const [fiscal, setFiscal] = useState<PointReadiness | null>(null);
@@ -554,7 +561,7 @@ export default function PosPage() {
       setCustomerEmail(selectedClient.email ?? "");
       setCustomerWhatsApp(selectedClient.mobile ?? "");
       setCustomerDocument(selectedClient.document_number ?? "");
-      setCustomerPriceList(selectedClient.price_list ?? DEFAULT_PRICE_LIST);
+      setCustomerPriceList(isFinalConsumerClient(selectedClient) ? DEFAULT_PRICE_LIST : selectedClient.price_list ?? DEFAULT_PRICE_LIST);
       if (selectedClient.credit_enabled && selectedClient.credit_days) setDueDays(selectedClient.credit_days);
     } else {
       // Al repetir un pedido de un cliente no registrado, se dejan sus datos en vez de «Consumidor final».
@@ -567,6 +574,34 @@ export default function PosPage() {
       setCustomerPriceList(DEFAULT_PRICE_LIST);
     }
   }, [selectedClient]);
+
+  // Sin cliente elegido (al abrir, al terminar una venta, «Volver a consumidor final»…): se elige el Consumidor final
+  // registrado. No si se está escribiendo un cliente sin registrar ni al editar un documento.
+  const cfArmed = useRef(false);
+  useEffect(() => {
+    if (!cfClient || selectedClientId || editingDoc || pendingCustomer.current) return;
+    const name = foldName(customerName);
+    const doc = customerDocument.replace(/\D/g, "");
+    if (name && name !== "consumidor final") return;
+    if (doc && doc !== "222222222222") return;
+    cfArmed.current = false;
+    setSelectedClientId(cfClient.id);
+  }, [cfClient, selectedClientId, editingDoc, customerName, customerDocument]);
+  // Con Consumidor final elegido, si escriben otro nombre o documento la venta pasa a «cliente sin registrar»
+  // (como antes) y la ficha de Consumidor final no se toca.
+  useEffect(() => {
+    if (!selectedIsCF || !selectedClient) { cfArmed.current = false; return; }
+    const name = foldName(customerName);
+    const doc = customerDocument.replace(/\D/g, "");
+    const synced = name === foldName(selectedClient.name) && doc === (selectedClient.document_number ?? "").replace(/\D/g, "");
+    if (!cfArmed.current) { if (synced) cfArmed.current = true; return; }
+    if (synced) return;
+    if ((name && name !== "consumidor final") || (doc && doc !== "222222222222")) {
+      cfArmed.current = false;
+      pendingCustomer.current = { name: customerName.trim() || DEFAULT_CLIENT_NAME, whatsapp: customerWhatsApp, doc: customerDocument };
+      setSelectedClientId("");
+    }
+  }, [selectedIsCF, selectedClient, customerName, customerDocument, customerWhatsApp]);
 
   useEffect(() => {
     if (documentKind !== "factura" && requestElectronicInvoice) {
@@ -2189,8 +2224,8 @@ export default function PosPage() {
           <div {...cardProps()}>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-black uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>👤 Cliente de esta venta</p>
-              {selectedClient && !clientPicking ? (
-                <button type="button" onClick={() => setSelectedClientId("")} className="inline-flex items-center gap-1 text-[11px] font-semibold underline" style={{ color: "var(--t-muted)" }}>
+              {selectedClient && !selectedIsCF && !clientPicking ? (
+                <button type="button" onClick={() => setSelectedClientId(cfClient?.id ?? "")} className="inline-flex items-center gap-1 text-[11px] font-semibold underline" style={{ color: "var(--t-muted)" }}>
                   <X size={12} /> Volver a consumidor final
                 </button>
               ) : null}
@@ -2249,7 +2284,7 @@ export default function PosPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
                   <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : effectiveClient.name !== DEFAULT_CLIENT_NAME ? `Cliente sin registrar${customerDocument.trim() ? ` · Doc ${docWithDv(customerDocument.trim())}` : ""} · Lista P3` : "Venta sin cliente registrado · Lista P3"}
+                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedIsCF ? DEFAULT_PRICE_LIST : selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : effectiveClient.name !== DEFAULT_CLIENT_NAME ? `Cliente sin registrar${customerDocument.trim() ? ` · Doc ${docWithDv(customerDocument.trim())}` : ""} · Lista P3` : "Venta sin cliente registrado · Lista P3"}
                   </span>
                 </span>
                 <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
@@ -2391,7 +2426,7 @@ export default function PosPage() {
             </button>
           ) : null}
  
-          {selectedClient ? (
+          {selectedClient && !selectedIsCF ? (
             <button
               type="button"
               onClick={updateClient}

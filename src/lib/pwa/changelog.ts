@@ -1353,6 +1353,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Igual que en el POS" },
     ],
   },
+  {
+    id: 131, date: "2026-11-21", title: "👤 El POS empieza siempre con Consumidor final",
+    summary: "Al abrir el POS y después de cada venta queda elegido el cliente Consumidor final (con su documento 222222222222), a precio de mostrador (lista 3). Si buscas otro cliente lo cambias; si escribes otro nombre o documento, la venta queda a ese cliente sin registrar y la ficha de Consumidor final no se modifica.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "👤", text: "CONSUMIDOR FINAL" },
+      { icon: "🏷️", text: "Lista P3" },
+      { icon: "🔁", text: "Vuelve solo tras cada venta" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
