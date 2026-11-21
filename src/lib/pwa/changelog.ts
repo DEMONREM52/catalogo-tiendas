@@ -1343,6 +1343,16 @@ export const RELEASES: Release[] = [
       { icon: "🟦", text: "Pagado en transferencia" },
     ],
   },
+  {
+    id: 130, date: "2026-11-21", title: "📍 Lista general con el precio de tu punto",
+    summary: "La lista general de productos ya no muestra el precio de la bodega principal a todos: cada usuario ve el precio de su punto, con la regla de ese punto (por ejemplo +15 %). El dueño ve el precio del punto que esté mirando y, debajo, el de la madre cuando cambia.",
+    paths: ["/dashboard/lista-productos"],
+    demo: [
+      { icon: "🏬", text: "Bodega: $52.000" },
+      { icon: "📍", text: "Cisneros: $59.800" },
+      { icon: "✅", text: "Igual que en el POS" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

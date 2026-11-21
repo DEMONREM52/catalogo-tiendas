@@ -30,7 +30,11 @@ type Item = {
   product_no?: number | null;
   image_url: string | null;
   active: boolean;
+  /** Precio 1 del punto (con su regla, 20261336); antes era el de la madre. */
   price: number | null;
+  /** Precio 1 de la madre y si el punto le cambia el precio (20261336). */
+  base_price?: number | null;
+  has_rule?: boolean;
   cost: number | null;
   here: number;
   elsewhere: number;
@@ -49,6 +53,9 @@ type BrowseResult = {
   categories: Array<{ id: string; name: string }>;
   my_point: string | null;
   point_id: string | null;
+  /** Punto cuyo precio se muestra (el que se mira, o el del usuario si ese no es suyo). */
+  price_point_id?: string | null;
+  price_point_name?: string | null;
   can_edit: boolean;
   can_request: boolean;
   show_cost: boolean;
@@ -417,6 +424,7 @@ export default function ProductListPage() {
               pointName={pointName}
               pointLabel={pointLabel}
               showCost={data.show_cost}
+              pricePoint={data.price_point_name ?? null}
               canEdit={data.can_edit}
               selectable={canRequest}
               selected={selected.has(item.id)}
@@ -534,8 +542,9 @@ function Chip({ active, onClick, children, count, title, tone, small = false }: 
   );
 }
 
-function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, selectable, selected, onToggle }: {
+function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint, canEdit, selectable, selected, onToggle }: {
   item: Item;
+  pricePoint: string | null;
   pointId: string;
   pointName: string;
   pointLabel: (id: string) => string;
@@ -560,7 +569,9 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, canEdit, s
         </div>
         <p className="mt-0.5 truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
           {[item.sku ? `Cód. ${item.sku}` : null, item.barcode].filter(Boolean).join(" · ") || "Sin código"}
-          {" · "}<span className="font-semibold" style={{ color: "var(--t-text)" }}>{fmtMoney(item.price)}</span>
+          {" · "}<span className="font-semibold" style={{ color: item.has_rule ? "var(--t-accent)" : "var(--t-text)" }} title={pricePoint ? `Precio en ${pricePoint}` : undefined}>{fmtMoney(item.price)}</span>
+          {pricePoint && item.has_rule ? <span style={{ color: "var(--t-muted)" }}> en {shortName(pricePoint)}</span> : null}
+          {canEdit && item.has_rule && item.base_price != null && Number(item.base_price) !== Number(item.price) ? <> · madre {fmtMoney(item.base_price)}</> : null}
           {showCost && item.cost != null ? <> · costo {fmtMoney(item.cost)}</> : null}
         </p>
         <div className="mt-1.5 flex gap-1 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible">
