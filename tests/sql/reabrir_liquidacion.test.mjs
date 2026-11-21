@@ -15,7 +15,7 @@ fs.writeFileSync(combined, ["fixtures/prod_ventas.sql", "migraciones/20261106_re
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); });
 const { db } = await makeDb(combined, { twice: false });
 fs.unlinkSync(combined);
-for (const f of ["20261337_reabrir_liquidacion.sql", "20261338_reabrir_liquidacion_anticipo_gemelo.sql"]) {
+for (const f of ["20261337_reabrir_liquidacion.sql", "20261338_reabrir_liquidacion_anticipo_gemelo.sql", "20261339_reabrir_liquidacion_reactivar_anticipo.sql"]) {
   const M = fs.readFileSync(path.join(here, "migraciones", f), "utf8");
   await db.exec(M);
   await db.exec(M);
@@ -117,6 +117,17 @@ ok(used.length === 1 && used[0].advance_id === a6, "Ahora descuenta el anticipo 
 await one(MADRE, "select public.erp_settlement_transition($1, 'discard', 'otra vez') r", [s4.id]);
 await one(APPROVER, "select public.erp_settlement_advance_void($1, 'Tampoco') r", [a6]);
 ok(/no hay otro igual/.test(await fails(() => one(APPROVER, "select public.erp_settlement_reopen($1, 'por error') r", [s4.id])) ?? ""), "Sin gemelo vigente no se reabre");
+
+// 20261339: reactivar el anticipo anulado por error y avisar del abono manual repetido en «Cuenta con puntos».
+await raw(`create table if not exists public.erp_internal_payments (id uuid primary key default gen_random_uuid(), store_id uuid, point_id uuid, amount numeric,
+  paid_at date default current_date, note text, reference text, voided boolean default false, settlement_id uuid)`);
+await raw("insert into erp_internal_payments (store_id, point_id, amount, note) values ($1, $2, 7000, 'Abono a mano del anticipo')", [A, Z]);
+const r5 = await one(APPROVER, "select public.erp_settlement_reopen($1, 'Anulé el anticipo por error', true) r", [s4.id]);
+const a6row = (await raw("select status, void_reason from erp_settlement_advances where id = $1", [a6]))[0];
+ok(r5.ok && r5.advance_swaps[0]?.restored && a6row.status === "approved" && a6row.void_reason === null, "Reactivando el anticipo, se reabre igual que como se calculó", { r5, a6row });
+ok(Number((await snap(s4.id)).cost_advances_total) === Number(b4.cost_advances_total), "Mismo anticipo descontado que en el cálculo original");
+ok(r5.duplicate_payments.length === 1 && Number(r5.duplicate_payments[0].amount) === 7000, "Avisa el abono manual del mismo valor en Cuenta con puntos para anularlo allá", r5.duplicate_payments);
+ok((await raw("select count(*)::int n from erp_audit_logs where action = 'settlement.advance_restored'"))[0].n === 1, "La reactivación queda en auditoría con el motivo anterior");
 
 console.log(`\n${pass} bien, ${fail} mal`);
 await db.close();

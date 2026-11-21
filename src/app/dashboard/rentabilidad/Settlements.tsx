@@ -373,12 +373,35 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
   async function reopen() {
     const note = await ask("¿Por qué la reabres? (vuelve exactamente como estaba, sin recalcular)");
     if (note === null) return;
-    const { data: out, error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note });
+    type Out = {
+      advance_swaps?: Array<{ voided?: number; replaced_by?: number; restored?: number; amount: number }>;
+      duplicate_payments?: Array<{ amount: number; paid_at: string; note: string | null }>;
+    };
+    let { data: out, error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note });
+    // 20261339: el anticipo se anuló y no tiene gemelo → se ofrece reactivarlo (si se anuló por error).
+    const m = e ? rpcError(e) : "";
+    if (e && /no hay otro igual/.test(m)) {
+      const num = m.match(/anticipo #(\d+)/)?.[1] ?? "";
+      const go = await Swal.fire({
+        ...swalTheme, icon: "question", title: `¿Reactivar el anticipo #${num}?`,
+        html: `El anticipo #${num} está anulado y no hay otro igual que lo reemplace.<br/><br/>Si lo anulaste por error (por ejemplo, porque ese dinero también lo registraste como abono en <b>Cuenta con puntos</b>), reactívalo: la liquidación queda <b>exactamente como se calculó</b>.<br/><br/><small>Al aprobarla, el costo completo de lo vendido se abona solo a la cuenta del punto; el abono que registraste a mano sobra y hay que anularlo allá.</small>`,
+        showCancelButton: true, confirmButtonText: "Reactivar y reabrir", cancelButtonText: "Cancelar", confirmButtonColor: "#16a34a",
+      });
+      if (!go.isConfirmed) return;
+      ({ data: out, error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note, p_restore_advances: true }));
+    }
     if (e) return fail(e);
-    // 20261338: si un anticipo se había anulado por estar repetido, se usó su gemelo vigente.
-    const swaps = ((out as { advance_swaps?: Array<{ voided: number; replaced_by: number }> } | null)?.advance_swaps ?? [])
-      .map((x) => `el anticipo #${x.voided} (anulado) se cambió por el #${x.replaced_by}`).join("; ");
-    void Swal.fire({ ...swalTheme, icon: "success", title: "Liquidación reabierta", text: `Quedó igual que cuando se calculó${swaps ? ` (${swaps})` : ""}. Ahora envíala a revisión o apruébala.`, showConfirmButton: true });
+    const o = (out ?? {}) as Out;
+    const swaps = (o.advance_swaps ?? [])
+      .map((x) => (x.restored ? `se reactivó el anticipo #${x.restored}` : `el anticipo #${x.voided} (anulado) se cambió por el #${x.replaced_by}`)).join("; ");
+    const dupes = o.duplicate_payments ?? [];
+    await Swal.fire({
+      ...swalTheme, icon: dupes.length ? "warning" : "success", title: "Liquidación reabierta",
+      html: `Quedó igual que cuando se calculó${swaps ? ` (${swaps})` : ""}. Ahora envíala a revisión o apruébala.${dupes.length
+        ? `<br/><br/><b>⚠️ Anula este abono en Inventario → Cuenta con puntos</b> (si no, el dinero queda contado dos veces cuando apruebes):<br/>${dupes.map((d) => `• ${cop(d.amount)} del ${d.paid_at.slice(8, 10)}/${d.paid_at.slice(5, 7)}/${d.paid_at.slice(0, 4)}${d.note ? ` · ${d.note.replace(/[<>&]/g, "")}` : ""}`).join("<br/>")}`
+        : ""}`,
+      showConfirmButton: true,
+    });
     await load();
     onChanged();
   }
