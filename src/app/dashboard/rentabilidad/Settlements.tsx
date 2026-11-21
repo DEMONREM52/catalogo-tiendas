@@ -373,9 +373,12 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
   async function reopen() {
     const note = await ask("¿Por qué la reabres? (vuelve exactamente como estaba, sin recalcular)");
     if (note === null) return;
-    const { error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note });
+    const { data: out, error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note });
     if (e) return fail(e);
-    void Swal.fire({ ...swalTheme, icon: "success", title: "Liquidación reabierta", text: "Quedó igual que cuando se calculó. Ahora envíala a revisión o apruébala.", timer: 2600, showConfirmButton: false });
+    // 20261338: si un anticipo se había anulado por estar repetido, se usó su gemelo vigente.
+    const swaps = ((out as { advance_swaps?: Array<{ voided: number; replaced_by: number }> } | null)?.advance_swaps ?? [])
+      .map((x) => `el anticipo #${x.voided} (anulado) se cambió por el #${x.replaced_by}`).join("; ");
+    void Swal.fire({ ...swalTheme, icon: "success", title: "Liquidación reabierta", text: `Quedó igual que cuando se calculó${swaps ? ` (${swaps})` : ""}. Ahora envíala a revisión o apruébala.`, showConfirmButton: true });
     await load();
     onChanged();
   }

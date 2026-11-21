@@ -1,4 +1,5 @@
-// Pruebas de 20261337: reabrir EXACTAMENTE una liquidación descartada por error, solo si nada suyo se usó después.
+// Pruebas de 20261337/20261338: reabrir EXACTAMENTE una liquidación descartada por error, solo si nada suyo se usó después;
+// si su anticipo se anuló por estar registrado dos veces, se usa su gemelo vigente.
 import { makeDb } from "./setup.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -14,9 +15,11 @@ fs.writeFileSync(combined, ["fixtures/prod_ventas.sql", "migraciones/20261106_re
 process.on("unhandledRejection", (e) => { console.error("FALLA:", e?.message, e?.where ?? ""); process.exit(2); });
 const { db } = await makeDb(combined, { twice: false });
 fs.unlinkSync(combined);
-const M = fs.readFileSync(path.join(here, "migraciones/20261337_reabrir_liquidacion.sql"), "utf8");
-await db.exec(M);
-await db.exec(M);
+for (const f of ["20261337_reabrir_liquidacion.sql", "20261338_reabrir_liquidacion_anticipo_gemelo.sql"]) {
+  const M = fs.readFileSync(path.join(here, "migraciones", f), "utf8");
+  await db.exec(M);
+  await db.exec(M);
+}
 
 const U = (n) => `f4000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const OWNER = U(1), MADRE = U(2), APPROVER = U(3), SELLER = U(7);
@@ -87,6 +90,33 @@ await one(APPROVER, "select public.erp_settlement_transition($1, 'approve', null
 ok(/Después se hizo la liquidación/.test(await fails(() => one(APPROVER, "select public.erp_settlement_reopen($1, 'por error') r", [s2.id])) ?? ""), "Con una posterior aprobada (que ya tomó esas ventas) no se reabre");
 await one(APPROVER, "select public.erp_settlement_transition($1, 'revert', 'Se aprobó mal') r", [s3.id]);
 ok((await one(APPROVER, "select public.erp_settlement_reopen($1, 'por error') r", [s2.id])).ok, "Si la posterior se revirtió, sí");
+
+// 20261338: anticipo anulado por estar registrado dos veces → se usa su gemelo vigente.
+await one(APPROVER, "select public.erp_settlement_transition($1, 'approve', null) r", [s2.id]);
+const advSave = async (amount, note) => {
+  const r = await one(MADRE, "select public.erp_settlement_advance_save($1, $2, 'advance', 'pool', null, null, $3, now() - interval '20 minutes', 'transfer', null, $4, null) r", [A, Z, amount, note]);
+  await one(APPROVER, "select public.erp_settlement_advance_decide($1, 'approve', null) r", [r.id]);
+  return r.id;
+};
+await sale(20000, 3);
+const a5 = await advSave(7000, "Se le entregó a JAVIER");
+const s4 = await one(MADRE, "select public.erp_settlement_calculate($1, $2, null, 'Cierre semanal') r", [A, Z]);
+const b4 = await snap(s4.id);
+await one(MADRE, "select public.erp_settlement_transition($1, 'discard', 'Por error') r", [s4.id]);
+const a6 = await advSave(7000, "Se le entregó a JAVIER (repetido)");
+await one(APPROVER, "select public.erp_settlement_advance_void($1, 'Se registró dos veces') r", [a5]);
+const a7 = await advSave(7000, "Otro igual");
+ok(/2 anticipos vigentes iguales/.test(await fails(() => one(APPROVER, "select public.erp_settlement_reopen($1, 'por error') r", [s4.id])) ?? ""), "Con dos gemelos posibles no adivina: pide anular el que sobra");
+await one(APPROVER, "select public.erp_settlement_advance_void($1, 'Sobra') r", [a7]);
+const r4 = await one(APPROVER, "select public.erp_settlement_reopen($1, 'La descarté por error') r", [s4.id]);
+const a4 = await snap(s4.id);
+ok(r4.ok && r4.advance_swaps.length === 1 && a4.status === "calculated", "Se reabre usando el gemelo del anticipo anulado", r4);
+ok(Number(a4.pool_total) === Number(b4.pool_total) && Number(a4.cost_advances_total) === Number(b4.cost_advances_total), "Mismos valores que antes", { b4, a4 });
+const used = await raw("select advance_id from erp_settlement_advance_uses where settlement_id = $1", [s4.id]);
+ok(used.length === 1 && used[0].advance_id === a6, "Ahora descuenta el anticipo vigente (el repetido)", used);
+await one(MADRE, "select public.erp_settlement_transition($1, 'discard', 'otra vez') r", [s4.id]);
+await one(APPROVER, "select public.erp_settlement_advance_void($1, 'Tampoco') r", [a6]);
+ok(/no hay otro igual/.test(await fails(() => one(APPROVER, "select public.erp_settlement_reopen($1, 'por error') r", [s4.id])) ?? ""), "Sin gemelo vigente no se reabre");
 
 console.log(`\n${pass} bien, ${fail} mal`);
 await db.close();
