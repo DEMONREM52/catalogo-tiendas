@@ -369,6 +369,17 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
     onChanged();
   }
 
+  /** Descartada o rechazada por error: vuelve a «calculada» exactamente como estaba (20261337). */
+  async function reopen() {
+    const note = await ask("¿Por qué la reabres? (vuelve exactamente como estaba, sin recalcular)");
+    if (note === null) return;
+    const { error: e } = await supabaseBrowser().rpc("erp_settlement_reopen", { p_id: id, p_note: note });
+    if (e) return fail(e);
+    void Swal.fire({ ...swalTheme, icon: "success", title: "Liquidación reabierta", text: "Quedó igual que cuando se calculó. Ahora envíala a revisión o apruébala.", timer: 2600, showConfirmButton: false });
+    await load();
+    onChanged();
+  }
+
   const [paying, setPaying] = useState<Detail["lines"][number] | null>(null);
   async function pay(line: Detail["lines"][number], p: { amount: number; method: string; ref: string; key: string }) {
     const { error: e } = await supabaseBrowser().rpc("erp_settlement_pay", { p_line: line.id, p_amount: p.amount, p_method: p.method, p_reference: p.ref || null, p_note: null, p_paid_at: null, p_idempotency_key: p.key });
@@ -469,6 +480,11 @@ function SettlementSheet({ id, can, onClose, onChanged, onBreakdown }: {
                   </>
                 ) : null}
                 {open && can.settle ? <button type="button" onClick={() => void act("discard")} className="rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>Descartar y recalcular después</button> : null}
+                {s.status === "rejected" && can.approve ? (
+                  <button type="button" onClick={() => void reopen()} className="inline-flex items-center gap-1 rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "color-mix(in oklab, #22c55e 50%, transparent)", color: "#16a34a" }} title="Vuelve a calculada exactamente como estaba, sin recalcular">
+                    <Undo2 size={14} /> Reabrir (la descarté por error)
+                  </button>
+                ) : null}
                 {s.status !== "rejected" && s.status !== "reverted" && !open && can.approve ? <button type="button" onClick={() => void act("revert")} className="inline-flex items-center gap-1 rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}><Undo2 size={14} /> Revertir</button> : null}
               </div>
 

@@ -1373,6 +1373,16 @@ export const RELEASES: Release[] = [
       { icon: "📦", text: "Existencias debajo" },
     ],
   },
+  {
+    id: 133, date: "2026-11-21", title: "↩️ Reabrir una liquidación descartada por error",
+    summary: "Si descartaste o rechazaste una liquidación por error, ábrela en el historial y toca «Reabrir (la descarté por error)»: vuelve exactamente como estaba (mismas ventas, anticipos, reparto y valores, sin recalcular) para enviarla a revisión y aprobarla. Solo se puede si después no se hizo otra liquidación de ese punto que ya tomó lo mismo. Pide el permiso de aprobar liquidaciones y queda en auditoría.",
+    paths: ["/dashboard/rentabilidad"],
+    demo: [
+      { icon: "🗂️", text: "Liquidación #12 descartada" },
+      { icon: "↩️", text: "Reabrir" },
+      { icon: "✅", text: "Igual que antes, lista para aprobar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
