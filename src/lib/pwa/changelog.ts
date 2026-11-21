@@ -1363,6 +1363,16 @@ export const RELEASES: Release[] = [
       { icon: "🔁", text: "Vuelve solo tras cada venta" },
     ],
   },
+  {
+    id: 132, date: "2026-11-21", title: "📱 Lista general legible en el celular",
+    summary: "En el celular cada producto de la lista general se ve completo: el nombre en hasta 3 líneas, el código y el precio en su propia línea (más grande), las existencias del punto a lo ancho debajo y los otros puntos bajando de línea en vez de cortarse.",
+    paths: ["/dashboard/lista-productos"],
+    demo: [
+      { icon: "📝", text: "Nombre completo" },
+      { icon: "💲", text: "Precio grande" },
+      { icon: "📦", text: "Existencias debajo" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

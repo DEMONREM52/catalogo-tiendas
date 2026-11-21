@@ -564,17 +564,26 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
       <Thumb src={item.image_url} size={48} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
-          <p className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-snug">{item.name}</p>
+          <p className="line-clamp-3 min-w-0 flex-1 break-words text-sm font-bold leading-snug sm:line-clamp-2">{item.name}</p>
           {!item.active ? <Badge tone="neutral" className="shrink-0">Inactivo</Badge> : null}
         </div>
-        <p className="mt-0.5 truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+        {/* Código: en celular puede bajar de línea (antes se cortaba con «…»). */}
+        <p className="mt-0.5 break-all text-[11px] sm:truncate sm:break-normal" style={{ color: "var(--t-muted)" }}>
           {[item.sku ? `Cód. ${item.sku}` : null, item.barcode].filter(Boolean).join(" · ") || "Sin código"}
-          {" · "}<span className="font-semibold" style={{ color: item.has_rule ? "var(--t-accent)" : "var(--t-text)" }} title={pricePoint ? `Precio en ${pricePoint}` : undefined}>{fmtMoney(item.price)}</span>
-          {pricePoint && item.has_rule ? <span style={{ color: "var(--t-muted)" }}> en {shortName(pricePoint)}</span> : null}
-          {canEdit && item.has_rule && item.base_price != null && Number(item.base_price) !== Number(item.price) ? <> · madre {fmtMoney(item.base_price)}</> : null}
-          {showCost && item.cost != null ? <> · costo {fmtMoney(item.cost)}</> : null}
         </p>
-        <div className="mt-1.5 flex gap-1 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible">
+        <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
+          <span className="text-sm font-black tabular-nums" style={{ color: item.has_rule ? "var(--t-accent)" : "var(--t-text)" }} title={pricePoint ? `Precio en ${pricePoint}` : undefined}>{fmtMoney(item.price)}</span>
+          {pricePoint && item.has_rule ? <span>en {shortName(pricePoint)}</span> : null}
+          {canEdit && item.has_rule && item.base_price != null && Number(item.base_price) !== Number(item.price) ? <span>· madre {fmtMoney(item.base_price)}</span> : null}
+          {showCost && item.cost != null ? <span>· costo {fmtMoney(item.cost)}</span> : null}
+        </p>
+        {/* Existencias: en celular van aquí, a lo ancho (a la derecha le quitaban casi la mitad de la fila). */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl border px-2 py-1 sm:hidden" style={{ borderColor: `color-mix(in oklab, ${hereTone} 35%, var(--t-card-border))`, background: `color-mix(in oklab, ${hereTone} 7%, transparent)` }}>
+          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>{shortName(pointName)}</span>
+          <b className="text-lg font-black tabular-nums leading-none" style={{ color: hereTone }}>{fmtNumber(here)}</b>
+          <span className="ml-auto text-[11px] tabular-nums" style={{ color: "var(--t-muted)" }}>total {fmtNumber(item.total)}</span>
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1">
           {elsewhere.length ? elsewhere.slice(0, 4).map(([wh, qty]) => (
             <span key={wh} className="shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>
               {shortName(pointLabel(wh))} <b className="tabular-nums">{fmtNumber(qty)}</b>
@@ -589,7 +598,7 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
           ) : null}
         </div>
       </div>
-      <div className="shrink-0 text-right">
+      <div className="hidden shrink-0 text-right sm:block">
         <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }} title={pointName}>{shortName(pointName).slice(0, 14)}</p>
         <p className="text-xl font-black tabular-nums leading-none" style={{ color: hereTone }}>{fmtNumber(here)}</p>
         <p className="mt-1 text-[10px] tabular-nums" style={{ color: "var(--t-muted)" }}>total {fmtNumber(item.total)}</p>
@@ -607,7 +616,7 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
       }}
     >
       {selectable ? (
-        <button type="button" onClick={onToggle} aria-pressed={selected} className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 text-left sm:gap-3 sm:p-3" title={selected ? "Quitar del pedido" : "Agregar al pedido"}>
+        <button type="button" onClick={onToggle} aria-pressed={selected} className="flex min-w-0 flex-1 items-start gap-2 p-2.5 text-left sm:items-center sm:gap-3 sm:p-3" title={selected ? "Quitar del pedido" : "Agregar al pedido"}>
           <span
             className="grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-black text-white transition"
             style={{ borderColor: selected ? "var(--t-accent)" : "var(--t-card-border)", background: selected ? "var(--t-accent)" : "transparent" }}
@@ -618,12 +627,12 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
           {body}
         </button>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 sm:gap-3 sm:p-3">{body}</div>
+        <div className="flex min-w-0 flex-1 items-start gap-2 p-2.5 sm:items-center sm:gap-3 sm:p-3">{body}</div>
       )}
       {canEdit ? (
         <Link
           href={`/dashboard/products/${item.id}`}
-          className="grid w-10 shrink-0 place-items-center rounded-r-2xl border-l opacity-60 transition hover:opacity-100"
+          className="grid w-9 shrink-0 place-items-center rounded-r-2xl border-l opacity-60 transition hover:opacity-100 sm:w-10"
           style={{ borderColor: "var(--t-card-border)" }}
           title="Editar producto"
           aria-label={`Editar ${item.name}`}
