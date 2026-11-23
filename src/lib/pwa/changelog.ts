@@ -1413,6 +1413,16 @@ export const RELEASES: Release[] = [
       { icon: "📝", text: "ZAMORA · conteo sin aplicar (8)" },
     ],
   },
+  {
+    id: 137, date: "2026-11-23", title: "📋 Pedidos internos más fáciles en el celular",
+    summary: "La lista de pedidos internos pone primero lo que te toca (revisar o confirmar que llegó), después lo urgente y lo que tiene mensajes sin leer. En el celular se ve en lista compacta, una fila por pedido, y caben muchos más; con el botón de al lado de actualizar cambias entre lista y tarjetas. Arriba hay filtros rápidos por estado (Enviados, Preparando, En camino, Urgentes, Sin leer) y por punto, para quien atiende a todos.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "👉", text: "Lo que te toca, arriba" },
+      { icon: "📋", text: "Una fila por pedido" },
+      { icon: "📍", text: "Filtra por estado o por punto" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { draftAge, onStockDraftChange, readStockDraft } from "@/lib/stock-request-draft";
 import { m as motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, BellRing, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
+import { ArrowRight, BellRing, LayoutGrid, List, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { smartFilter } from "@/lib/search";
 import { URL_CHANGE_EVENT } from "@/lib/url-intent";
@@ -19,6 +19,34 @@ import { SkeletonCards } from "@/components/ui/Skeleton";
 const UNREAD = "#ec4899";
 
 type Scope = "attend" | "mine" | "active" | "closed";
+type StatusFilter = "all" | "pending" | "preparing" | "dispatched" | "urgent" | "unread";
+type View = "compact" | "cards";
+
+/**
+ * Vista de la lista (por equipo): en el celular empieza compacta (una fila por pedido), en el computador en tarjetas.
+ * Se recuerda lo que elija cada quien.
+ */
+const VIEW_KEY = "remhub:sr-view";
+const VIEW_EVENT = "remhub:sr-view";
+function readView(): View {
+  try {
+    const v = window.localStorage.getItem(VIEW_KEY);
+    if (v === "compact" || v === "cards") return v;
+  } catch { /* sin almacenamiento */ }
+  return window.matchMedia("(max-width: 767px)").matches ? "compact" : "cards";
+}
+function onViewChange(cb: () => void) {
+  window.addEventListener(VIEW_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => { window.removeEventListener(VIEW_EVENT, cb); window.removeEventListener("storage", cb); };
+}
+function saveView(v: View) {
+  try { window.localStorage.setItem(VIEW_KEY, v); } catch { /* sin almacenamiento */ }
+  window.dispatchEvent(new Event(VIEW_EVENT));
+}
+
+/** Lo que espera una acción tuya: revisarlo (quien atiende) o confirmar que llegó (quien pidió). */
+const needsMeOf = (r: SrListItem) => (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
 
 /** Pedidos internos entre puntos y bodegas: bandeja, filtros, nuevo pedido y sala con chat. */
 export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; canRequest: boolean }) {
@@ -37,6 +65,9 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   // Desde el chat («Crear pedido con esto» o «Pedir a otro punto»): nota y producto ya puestos.
   const [prefill, setPrefill] = useState<{ note: string; lines: PrefillLine[] } | null>(null);
   const [sounds, setSounds] = useState(false);
+  const [statusF, setStatusF] = useState<StatusFilter>("all");
+  const [pointF, setPointF] = useState<string | null>(null);
+  const view = useSyncExternalStore(onViewChange, readView, () => "cards" as View);
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabaseBrowser().rpc("erp_stock_requests_list", { p_store: storeId });
@@ -107,13 +138,55 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   }), [rows]);
 
   const effectiveScope: Scope = scope ?? (counts.attend > 0 ? "attend" : counts.mine > 0 ? "mine" : "active");
+  // Lo de la pestaña elegida (antes de los filtros rápidos: con esto se cuentan los chips).
+  const scoped = useMemo(() => rows.filter((r) =>
+    effectiveScope === "attend" ? r.access.attend && (r.status === "pending" || r.status === "preparing" || r.status === "dispatched")
+      : effectiveScope === "mine" ? r.access.request && isOpen(r.status)
+        : effectiveScope === "active" ? isOpen(r.status) : !isOpen(r.status)), [rows, effectiveScope]);
+
+  const statusChips = useMemo(() => {
+    const open = scoped.filter((r) => isOpen(r.status));
+    return ([
+      ["pending", `${SR_STATUS.pending.icon} Enviados`, open.filter((r) => r.status === "pending").length, SR_STATUS.pending.color],
+      ["preparing", `${SR_STATUS.preparing.icon} Preparando`, open.filter((r) => r.status === "preparing").length, SR_STATUS.preparing.color],
+      ["dispatched", `${SR_STATUS.dispatched.icon} En camino`, open.filter((r) => r.status === "dispatched").length, SR_STATUS.dispatched.color],
+      ["urgent", "⚡ Urgentes", open.filter((r) => r.priority === "urgent").length, "#ef4444"],
+      ["unread", "💬 Sin leer", open.filter((r) => r.unread > 0).length, UNREAD],
+    ] as Array<[StatusFilter, string, number, string]>).filter(([, , n]) => n > 0);
+  }, [scoped]);
+
+  // Puntos de los pedidos de la pestaña. El que sale en todos (p. ej. la bodega que atiende) no sirve de filtro.
+  const pointChips = useMemo(() => {
+    const m = new Map<string, { name: string; n: number }>();
+    for (const r of scoped) {
+      for (const [id, name] of [[r.from_point_id, r.from_name], [r.to_point_id, r.to_name]] as const) {
+        const cur = m.get(id) ?? { name, n: 0 };
+        cur.n += 1;
+        m.set(id, cur);
+      }
+    }
+    const out = [...m.entries()].filter(([, v]) => v.n < scoped.length).map(([id, v]) => ({ id, ...v }));
+    out.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "es"));
+    return out;
+  }, [scoped]);
+
+  // Un filtro que ya no tiene pedidos (se atendieron) se suelta solo.
+  const activeStatus: StatusFilter = statusChips.some(([k]) => k === statusF) ? statusF : "all";
+  const activePoint = pointF && pointChips.some((p) => p.id === pointF) ? pointF : null;
+
   const list = useMemo(() => {
-    const base = rows.filter((r) =>
-      effectiveScope === "attend" ? r.access.attend && (r.status === "pending" || r.status === "preparing" || r.status === "dispatched")
-        : effectiveScope === "mine" ? r.access.request && isOpen(r.status)
-          : effectiveScope === "active" ? isOpen(r.status) : !isOpen(r.status));
-    return smartFilter(base, q, (r) => `#${r.number} ${r.from_name} ${r.to_name} ${r.requested_by_name ?? ""} ${r.handled_by_name ?? ""} ${r.note ?? ""}`, { keepOrder: true });
-  }, [rows, effectiveScope, q]);
+    const base = scoped.filter((r) =>
+      (activeStatus === "all" ? true
+        : activeStatus === "urgent" ? r.priority === "urgent" && isOpen(r.status)
+          : activeStatus === "unread" ? r.unread > 0 && isOpen(r.status)
+            : r.status === activeStatus)
+      && (!activePoint || r.from_point_id === activePoint || r.to_point_id === activePoint));
+    const found = smartFilter(base, q, (r) => `#${r.number} ${r.from_name} ${r.to_name} ${r.requested_by_name ?? ""} ${r.handled_by_name ?? ""} ${r.note ?? ""}`, { keepOrder: true });
+    if (effectiveScope === "closed") return found;
+    // Primero lo que te toca, luego lo urgente, luego lo que tiene mensajes sin leer; dentro de cada grupo, como venía.
+    const rank = (r: SrListItem) => (needsMeOf(r) ? 0 : 4) + (r.priority === "urgent" ? 0 : 2) + (r.unread > 0 ? 0 : 1);
+    return found.map((r, i) => ({ r, i, k: rank(r) })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.r);
+  }, [scoped, activeStatus, activePoint, q, effectiveScope]);
 
   return (
     <section className="space-y-3">
@@ -140,6 +213,11 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
           </div>
           <button type="button" onClick={() => { setLoading(true); void load(); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Actualizar" title="Actualizar">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button type="button" onClick={() => saveView(view === "compact" ? "cards" : "compact")}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }}
+            aria-label={view === "compact" ? "Ver en tarjetas" : "Ver en lista compacta"} title={view === "compact" ? "Ver en tarjetas" : "Ver en lista compacta (caben más)"}>
+            {view === "compact" ? <LayoutGrid size={14} /> : <List size={14} />}
           </button>
           <button type="button" onClick={() => setSounds(true)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border text-sm font-bold lg:w-auto lg:px-3" style={{ borderColor: "var(--t-card-border)" }} title="Sonidos y avisos" aria-label="Sonidos y avisos">
             <BellRing size={15} /> <span className="hidden lg:inline">Sonidos</span>
@@ -179,6 +257,38 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         </div>
       ) : null}
 
+      {statusChips.length > 1 || (statusChips.length && activeStatus !== "all") || pointChips.length > 1 ? (
+        <div className="space-y-1.5">
+          {statusChips.length ? (
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 text-xs font-bold [scrollbar-width:none]" role="group" aria-label="Filtrar por estado">
+              <button type="button" onClick={() => setStatusF("all")} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5"
+                style={activeStatus === "all" ? { background: "var(--t-text)", color: "var(--t-bg-base)", borderColor: "transparent" } : { borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+                Todos <span className="tabular-nums opacity-80">{scoped.length}</span>
+              </button>
+              {statusChips.map(([k, l, n, c]) => (
+                <button key={k} type="button" onClick={() => setStatusF(activeStatus === k ? "all" : k)} aria-pressed={activeStatus === k}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5"
+                  style={activeStatus === k ? { background: c, color: "#fff", borderColor: "transparent" } : { borderColor: `color-mix(in oklab, ${c} 45%, var(--t-card-border))`, color: c, background: `color-mix(in oklab, ${c} 8%, transparent)` }}>
+                  {l} <span className="tabular-nums opacity-90">{n}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {pointChips.length > 1 ? (
+            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 text-xs font-semibold [scrollbar-width:none]" role="group" aria-label="Filtrar por punto">
+              <span className="shrink-0 self-center text-[11px]" style={{ color: "var(--t-muted)" }}>📍 Punto:</span>
+              {pointChips.map((p) => (
+                <button key={p.id} type="button" onClick={() => setPointF(activePoint === p.id ? null : p.id)} aria-pressed={activePoint === p.id}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5"
+                  style={activePoint === p.id ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)", color: "var(--t-text)" }}>
+                  {p.name} <span className="tabular-nums opacity-70">{p.n}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {error ? (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">{error}</p>
       ) : loading && !rows.length ? (
@@ -186,15 +296,68 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
       ) : list.length === 0 ? (
         <div className="rounded-3xl border border-dashed p-10 text-center" style={{ borderColor: "var(--t-card-border)" }}>
           <p className="text-3xl">{effectiveScope === "attend" ? "🎉" : "📦"}</p>
-          <p className="mt-2 font-semibold">{effectiveScope === "attend" ? "No hay pedidos por atender" : "No hay pedidos aquí"}</p>
+          <p className="mt-2 font-semibold">{activeStatus !== "all" || activePoint || q ? "Ningún pedido con ese filtro" : effectiveScope === "attend" ? "No hay pedidos por atender" : "No hay pedidos aquí"}</p>
+          {activeStatus !== "all" || activePoint ? (
+            <button type="button" onClick={() => { setStatusF("all"); setPointF(null); }} className="mt-2 rounded-full border px-3 py-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Quitar filtros</button>
+          ) : null}
           {canRequest ? <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>¿Se te acabó algo? Toca “Pedir mercancía” y pídelo a otro punto o a la bodega.</p> : null}
         </div>
       ) : (
         <>
+          {view === "compact" ? (
+            <div className="grid gap-1.5 lg:grid-cols-2">
+              {list.map((r) => {
+                const st = SR_STATUS[r.status];
+                const needsMe = needsMeOf(r);
+                const urgent = r.priority === "urgent" && isOpen(r.status);
+                const unread = r.unread > 0 && isOpen(r.status);
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setOpenId(r.id)}
+                    className="relative flex min-h-[60px] w-full items-center gap-2.5 overflow-hidden rounded-xl border py-2 pl-3.5 pr-2.5 text-left transition active:scale-[.99]"
+                    style={{
+                      borderColor: `color-mix(in oklab, ${st.color} ${needsMe ? 70 : 30}%, var(--t-card-border))`,
+                      background: `color-mix(in oklab, ${st.color} ${needsMe ? 11 : 4}%, var(--t-card-bg))`,
+                    }}
+                  >
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: urgent ? `linear-gradient(180deg, #ef4444 0 45%, ${st.color} 45%)` : st.color }} />
+                    <span className="w-11 shrink-0 text-center">
+                      <span className="block text-sm font-black tabular-nums leading-tight">#{r.number}</span>
+                      <span className="block text-base leading-tight" title={st.label}>{st.icon}</span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex min-w-0 items-center gap-1 text-sm font-bold">
+                        <ArrowRight size={13} className="shrink-0" style={{ color: st.color }} />
+                        <span className="truncate" title={`Recibe: ${r.from_name}`}>{r.from_name}</span>
+                      </span>
+                      <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                        <b style={{ color: st.color }}>{st.short}</b> · {r.units} und. · de {r.to_name}
+                      </span>
+                      {unread && r.last_message?.kind === "message" ? (
+                        <span className="block truncate text-[11px]" style={{ color: UNREAD }}>💬 <b>{r.last_message.user_name}:</b> {r.last_message.body}</span>
+                      ) : null}
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="flex items-center gap-1">
+                        {urgent ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white" title="Urgente">⚡</span> : null}
+                        {unread ? <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: UNREAD }} title={`${r.unread} mensajes sin leer`}>💬 {r.unread}</span> : null}
+                        <span className="text-[10px]" style={{ color: "var(--t-muted)" }}>{timeAgo(r.updated_at)}</span>
+                      </span>
+                      {needsMe ? (
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: st.color }}>👉 {r.status === "pending" ? "Revisar" : "Confirmar"}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
           <div className="grid gap-2 md:grid-cols-2 md:gap-3">
             {list.map((r, i) => {
               const st = SR_STATUS[r.status];
-              const needsMe = (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
+              const needsMe = needsMeOf(r);
               const urgent = r.priority === "urgent" && isOpen(r.status);
               const unread = r.unread > 0 && isOpen(r.status);
               return (
@@ -248,6 +411,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
               );
             })}
           </div>
+          )}
           {/* Guía de colores plegada al final: se consulta una vez, no tiene que ocupar espacio arriba. */}
           <details className="text-[11px]" style={{ color: "var(--t-muted)" }}>
             <summary className="cursor-pointer select-none font-semibold">🎨 ¿Qué significa cada color?</summary>
