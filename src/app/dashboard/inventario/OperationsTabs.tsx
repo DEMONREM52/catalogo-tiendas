@@ -315,7 +315,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
               <span className="w-full text-[11px]" style={{ color: "var(--t-muted)" }}>Trae todos los productos de esa categoría con lo que dice el sistema. Solo se ajustan los que cambies; si alguien vende mientras cuentas, te avisamos al aplicar.</span>
             </div>
           ) : null}
-          {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} editorRef={editorRef} /></div> : null}
+          {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} editorRef={editorRef} canEditProducts={ctx.can("products")} /></div> : null}
           {scanning && warehouse ? (
             <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
               zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />

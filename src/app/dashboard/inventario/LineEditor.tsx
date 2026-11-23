@@ -1038,7 +1038,7 @@ export function LineEditor({
   editingPurchaseId?: string | null;
   /** Crear un producto nuevo desde la búsqueda (solo en ingresos). */
   onCreateProduct?: (name: string) => void;
-  /** Ingresos: puede activar/inactivar y usar el editor rápido de cada producto (permiso de Productos). */
+  /** Puede activar/inactivar (permiso de Productos). En ingresos también abre el editor rápido de cada producto. */
   canEditProducts?: boolean;
   storeId: string;
   /** Si viene, cada producto tiene su «% venta» (solo en ingresos y con permiso de precios). */
@@ -1066,10 +1066,10 @@ export function LineEditor({
 
   useImperativeHandle(editorRef, () => ({ openPicker: () => setModalOpen(true) }), []);
 
-  // Ingresos: también se agregan productos inactivos («volvió a llegar») y se pueden activar aquí mismo.
-  const [status, setStatus] = useActiveStatus(storeId, lines.map((l) => l.product_id), isPurchase);
+  // También se agregan productos inactivos (ingresos: «volvió a llegar»; conteo: está en la bodega) y se pueden activar aquí mismo.
+  const [status, setStatus] = useActiveStatus(storeId, lines.map((l) => l.product_id), true);
   const [activating, setActivating] = useState<string | null>(null);
-  const manualOff = isPurchase ? lines.filter((l) => status[l.product_id] && !status[l.product_id].active && !status[l.product_id].auto) : [];
+  const manualOff = lines.filter((l) => status[l.product_id] && !status[l.product_id].active && !status[l.product_id].auto);
   const autoOff = isPurchase ? lines.filter((l) => status[l.product_id] && !status[l.product_id].active && status[l.product_id].auto) : [];
   async function activate(ids: string[], key: string) {
     setActivating(key);
@@ -1079,7 +1079,7 @@ export function LineEditor({
     if (error && !done.length) return void toast("No se pudo activar", "error", error);
     // Una sola ventanita a la vez: si faltaron algunos, se avisa eso (sin «Deshacer»).
     if (error) return void toast(`Se activaron ${done.length} de ${ids.length}`, "warning", error);
-    const one = done.length === 1 ? lines.find((l) => l.product_id === done[0])?.name : null;
+    const one = done.length === 1 ? latest.current.find((l) => l.product_id === done[0])?.name : null;
     undoToast(one ? `✅ Activaste «${one}»: ya se vende y sale en los catálogos` : `✅ Activaste ${done.length} productos: ya se venden y salen en los catálogos`, async () => {
       const back = await activateProducts(storeId, done, false);
       if (back.done.length) setStatus((cur) => ({ ...cur, ...Object.fromEntries(back.done.map((id) => [id, { active: false, auto: false }])) }));
@@ -1199,6 +1199,11 @@ export function LineEditor({
   function addHit(hit: ProductHit) {
     const exists = lines.some((l) => l.product_id === hit.id);
     if (exists && !isPurchase) return void addMoreCounted(hit);
+    if (typeof hit.active === "boolean") {
+      setStatus((cur) => ({ ...cur, [hit.id]: { active: hit.active !== false, auto: Boolean(hit.auto_inactive) } }));
+    }
+    // Conteo: si está inactivo a mano, se avisa y se ofrece activarlo antes de contarlo.
+    if (!exists && !isPurchase && isManualInactive(hit)) return void addInactiveCounted(hit);
     pendingFocus.current = hit.id;
     if (isPurchase && typeof hit.active === "boolean") {
       setStatus((cur) => ({ ...cur, [hit.id]: { active: hit.active !== false, auto: Boolean(hit.auto_inactive) } }));
@@ -1220,6 +1225,24 @@ export function LineEditor({
     if (select) cells.current.get(`${id}:qty`)?.select();
     setFlashId(id);
     window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1400);
+  }
+
+  /** Conteo: el producto está inactivo → ¿activarlo y contarlo, o contarlo así? */
+  async function addInactiveCounted(hit: ProductHit) {
+    const name = hit.name.replace(/[<>&]/g, "");
+    const r = await Swal.fire({
+      icon: "warning",
+      title: "Este producto está inactivo",
+      html: `<b>${name}</b><br/>No se vende ni sale en los catálogos.${canEditProducts ? " ¿Quieres activarlo?" : "<br/><small>Para activarlo se necesita el permiso de Productos: pídeselo a quien lo tenga.</small>"}<br/><br/><small>Puedes contarlo igual: el conteo se ajusta aunque siga inactivo.</small>`,
+      showConfirmButton: Boolean(canEditProducts), showDenyButton: true, showCancelButton: true,
+      confirmButtonText: "✅ Activar y contar", denyButtonText: canEditProducts ? "Contar sin activar" : "Contarlo igual", cancelButtonText: "Cancelar",
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#10b981", denyButtonColor: "#64748b",
+    });
+    if (!r.isConfirmed && !r.isDenied) return;
+    if (latest.current.some((l) => l.product_id === hit.id)) return flashQty(hit.id, true);
+    pendingFocus.current = hit.id;
+    onChange([...latest.current, lineFromHit(hit, mode, warehouseId)]);
+    if (r.isConfirmed) void activate([hit.id], hit.id);
   }
 
   /** Conteo: el producto ya está → «¿cuántas más encontraste?» y se suman a lo contado. */
@@ -1306,7 +1329,7 @@ export function LineEditor({
         warehouseId={isPurchase ? null : warehouseId}
         addedQty={addedQty}
         addedHint={isPurchase ? undefined : "Elegir para sumar más"}
-        includeInactive={isPurchase}
+        includeInactive
         inputRef={searchRef}
         placeholder={lines.length ? "🔎 Buscar otro producto (nombre, SKU o código de barras)…" : "🔎 Busca el primer producto: nombre, SKU o código de barras…"}
         onPick={addHit}
@@ -1323,9 +1346,9 @@ export function LineEditor({
               style={{ borderColor: "color-mix(in oklab, #e5484d 40%, var(--t-card-border))", background: "color-mix(in oklab, #e5484d 7%, transparent)" }}>
               <span className="text-lg" aria-hidden>🙈</span>
               <span className="min-w-0 flex-1">
-                <b>{manualOff.length === 1 ? `«${manualOff[0].name}» está inactivo` : `${manualOff.length} productos de esta factura están inactivos`}.</b>{" "}
+                <b>{manualOff.length === 1 ? `«${manualOff[0].name}» está inactivo` : `${manualOff.length} productos de ${isPurchase ? "esta factura" : "este conteo"} están inactivos`}.</b>{" "}
                 <span style={{ color: "var(--t-muted)" }}>
-                  Las unidades entran igual al inventario, pero no se venden ni salen en los catálogos hasta que {manualOff.length === 1 ? "lo actives" : "los actives"}.
+                  {isPurchase ? "Las unidades entran igual al inventario" : "El conteo se ajusta igual"}, pero no se {manualOff.length === 1 ? "vende ni sale" : "venden ni salen"} en los catálogos hasta que {manualOff.length === 1 ? "lo actives" : "los actives"}.
                   {canEditProducts ? "" : " Pídele a alguien con permiso de Productos que los active."}
                 </span>
               </span>
@@ -1389,7 +1412,7 @@ export function LineEditor({
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold" title={line.name}>{line.name}</div>
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
-                      {isPurchase && status[line.product_id] && !status[line.product_id].active ? (
+                      {status[line.product_id] && !status[line.product_id].active && (isPurchase || !status[line.product_id].auto) ? (
                         status[line.product_id].auto ? (
                           <div className="text-[11px] font-bold" style={{ color: "#0ea5e9" }} title="Se apagó solo al quedarse sin unidades">💤 Se activa solo al registrar</div>
                         ) : (
@@ -1574,7 +1597,7 @@ export function LineEditor({
         warehouseId={isPurchase ? null : warehouseId}
         addedQty={addedQty}
         addedHint={isPurchase ? undefined : "Elegir para sumar más"}
-        includeInactive={isPurchase}
+        includeInactive
         title={isPurchase ? "Agregar producto a la factura" : "Agregar producto al conteo"}
         onPick={addHit}
         onCreate={isPurchase ? onCreateProduct : undefined}

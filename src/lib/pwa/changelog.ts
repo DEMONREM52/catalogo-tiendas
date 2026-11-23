@@ -1423,6 +1423,16 @@ export const RELEASES: Release[] = [
       { icon: "📍", text: "Filtra por estado o por punto" },
     ],
   },
+  {
+    id: 138, date: "2026-11-23", title: "🙈 Contar productos inactivos y activarlos ahí mismo",
+    summary: "En los ajustes de inventario, el buscador ahora también muestra los productos inactivos, marcados «🙈 Inactivo». Al elegir uno te avisa y te pregunta si quieres activarlo: «Activar y contar» o «Contar sin activar». En la lista del conteo siguen marcados, con su botón «Activar». Activar pide el permiso de Productos.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔎", text: "Buscas un producto inactivo" },
+      { icon: "🙈", text: "«Este producto está inactivo»" },
+      { icon: "✅", text: "Activar y contar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
