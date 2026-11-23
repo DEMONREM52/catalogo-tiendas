@@ -1403,6 +1403,16 @@ export const RELEASES: Release[] = [
       { icon: "💾", text: "Siguen ahí · F2 agrega otro" },
     ],
   },
+  {
+    id: 136, date: "2026-11-23", title: "🏬 Un conteo guardado por cada bodega",
+    summary: "En los ajustes de inventario, si cambias de bodega ya no se pierde lo contado: el conteo de la anterior queda guardado y, al volver a elegirla, sigue ahí. En la lista de bodegas se ve cuáles tienen un conteo sin aplicar.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔢", text: "Cuentas en SEDE ZAMORA" },
+      { icon: "🏬", text: "Cambias a Bodega principal" },
+      { icon: "📝", text: "ZAMORA · conteo sin aplicar (8)" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

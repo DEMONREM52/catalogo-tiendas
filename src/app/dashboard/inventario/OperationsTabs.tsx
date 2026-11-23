@@ -38,52 +38,105 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   const [scanning, setScanning] = useState(false);
   const editorRef = useRef<LineEditorHandle>(null);
 
-  // Borrador local: se recupera al volver y se guarda solo mientras cuentas.
-  const draftKey = `remhub:adjust-draft:v1:${ctx.storeId}`;
+  // Borrador local, uno por bodega: cambiar de bodega guarda el conteo de la anterior y trae el de la nueva.
+  const draftBase = `remhub:adjust-draft:v1:${ctx.storeId}`;
+  const keyFor = useCallback((wh: string) => `${draftBase}:wh:${wh}`, [draftBase]);
+  const lastKey = `${draftBase}:last`;
   const [draftReady, setDraftReady] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [pending, setPending] = useState<Record<string, number>>({});
   const [, setTick] = useState(0);
   const whLoaded = warehouses.length > 0;
+  const allowedWh = useCallback(
+    (wh: string | null | undefined) => Boolean(wh) && (!ctx.pointId || wh === ctx.pointId) && warehouses.some((w) => w.id === wh && w.active),
+    [ctx.pointId, warehouses],
+  );
+  /** Bodegas con un conteo sin aplicar (se marcan en la lista). */
+  const refreshPending = useCallback(() => {
+    const out: Record<string, number> = {};
+    for (const w of warehouses) {
+      const d = readDraft<AdjustDraft>(keyFor(w.id));
+      if (d && (d.lines?.length || d.notes)) out[w.id] = d.lines?.length ?? 0;
+    }
+    setPending(out);
+  }, [warehouses, keyFor]);
   useEffect(() => {
     // Se espera a que lleguen las bodegas: antes de eso el guardado no debe borrar el borrador.
     if (!whLoaded) return;
-    const d = readDraft<AdjustDraft>(draftKey);
-    const okWh = d && d.warehouse && (!ctx.pointId || d.warehouse === ctx.pointId) && warehouses.some((w) => w.id === d.warehouse && w.active);
-    if (d && okWh && (d.lines?.length || d.notes)) {
-      if (!ctx.pointId) setWarehouse(d.warehouse);
+    // Borrador de la versión anterior (uno solo por tienda) → pasa a su bodega.
+    const old = readDraft<AdjustDraft>(draftBase);
+    if (old?.warehouse) {
+      if (!readDraft<AdjustDraft>(keyFor(old.warehouse))) writeDraft(keyFor(old.warehouse), old);
+      writeDraft(lastKey, old.warehouse);
+      clearDraft(draftBase);
+    }
+    const last = readDraft<string>(lastKey);
+    const wh = ctx.pointId ?? (allowedWh(last) ? last! : "");
+    const d = wh ? readDraft<AdjustDraft>(keyFor(wh)) : null;
+    if (wh && d && (d.lines?.length || d.notes)) {
+      if (!ctx.pointId) setWarehouse(wh);
       setReason(d.reason || "count");
       setNotes(d.notes ?? "");
       setLines(d.lines ?? []);
       setSavedAt(d.savedAt);
       void toast("Seguiste tu conteo donde lo dejaste", "success", `${d.lines?.length ?? 0} productos del borrador (${timeAgo(d.savedAt)}).`);
     }
+    refreshPending();
     setDraftReady(true);
     // Solo al abrir (y cuando ya llegaron las bodegas).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftKey, whLoaded]);
+  }, [draftBase, whLoaded]);
+
+  /** Guarda (o borra, si está vacío) el conteo de una bodega. */
+  function saveFor(wh: string, data: { reason: string; notes: string; lines: Line[] }) {
+    if (!wh) return null;
+    if (!data.lines.length && !data.notes.trim()) {
+      clearDraft(keyFor(wh));
+      return null;
+    }
+    const at = new Date().toISOString();
+    return writeDraft(keyFor(wh), { v: 1, savedAt: at, warehouse: wh, ...data } satisfies AdjustDraft) ? at : null;
+  }
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || !warehouse) return;
     const timer = window.setTimeout(() => {
-      if (!warehouse || (!lines.length && !notes.trim())) {
-        clearDraft(draftKey);
-        setSavedAt(null);
-        return;
-      }
-      const at = new Date().toISOString();
-      if (writeDraft(draftKey, { v: 1, savedAt: at, warehouse, reason, notes, lines } satisfies AdjustDraft)) setSavedAt(at);
+      setSavedAt(saveFor(warehouse, { reason, notes, lines }));
+      writeDraft(lastKey, warehouse);
+      refreshPending();
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [draftReady, draftKey, warehouse, reason, notes, lines]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftReady, warehouse, reason, notes, lines]);
   useEffect(() => {
     const timer = window.setInterval(() => setTick((t) => t + 1), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  /** Cambiar de bodega: el conteo de la anterior queda guardado y, si la nueva tenía uno, vuelve. */
+  function changeWarehouse(next: string) {
+    if (next === warehouse) return;
+    if (draftReady && warehouse) saveFor(warehouse, { reason, notes, lines });
+    const kept = lines.length;
+    const from = names.get(warehouse);
+    const d = next ? readDraft<AdjustDraft>(keyFor(next)) : null;
+    setWarehouse(next);
+    setLines(d?.lines ?? []);
+    setNotes(d?.notes ?? "");
+    setReason(d?.reason || "count");
+    setSavedAt(d?.savedAt ?? null);
+    if (next) writeDraft(lastKey, next);
+    refreshPending();
+    if (d?.lines?.length) void toast(`Seguiste el conteo de ${names.get(next) ?? "esa bodega"}`, "success", `${d.lines.length} productos (${timeAgo(d.savedAt)}).${kept && from ? ` El de ${from} quedó guardado.` : ""}`);
+    else if (kept && from) void toast(`El conteo de ${from} quedó guardado`, "success", `${kept} productos. Vuelve a elegir ${from} para seguirlo.`);
+  }
+
   async function discardDraft() {
     if (!(await confirmAction("Descartar el conteo", "Se borra lo que llevas contado en este borrador. El inventario no cambia."))) return;
-    clearDraft(draftKey);
+    clearDraft(keyFor(warehouse));
     setLines([]);
     setNotes("");
     setSavedAt(null);
+    refreshPending();
   }
 
   // F2: buscar y agregar otro producto al conteo.
@@ -218,8 +271,9 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     if (error) return void toast("No se pudo aplicar el ajuste", "error", errorMessage(error));
     setLines([]);
     setNotes("");
-    clearDraft(draftKey);
+    clearDraft(keyFor(warehouse));
     setSavedAt(null);
+    refreshPending();
     void toast("Ajuste aplicado");
     void load();
   }
@@ -237,9 +291,11 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
             </div>
           ) : null}>
           <div className="grid gap-2 sm:grid-cols-3">
-            <select className={inputClass} style={inputStyle} value={warehouse} onChange={(e) => { setWarehouse(e.target.value); setLines([]); }}>
+            <select className={inputClass} style={inputStyle} value={warehouse} onChange={(e) => changeWarehouse(e.target.value)}>
               <option value="">Bodega…</option>
-              {active.filter((w) => !ctx.pointId || w.id === ctx.pointId).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {active.filter((w) => !ctx.pointId || w.id === ctx.pointId).map((w) => (
+                <option key={w.id} value={w.id}>{w.name}{pending[w.id] && w.id !== warehouse ? ` · 📝 conteo sin aplicar (${pending[w.id]})` : ""}</option>
+              ))}
             </select>
             <select className={inputClass} style={inputStyle} value={reason} onChange={(e) => setReason(e.target.value)}>
               {ADJUST_REASONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
