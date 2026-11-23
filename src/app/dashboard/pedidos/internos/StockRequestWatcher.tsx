@@ -8,7 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { isOwnRecent, loadStoreSoundConfig, soundFor } from "@/lib/sounds/notify";
 import { getStoreConfigCache, statusEvent } from "@/lib/sounds/prefs";
 import { unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
-import { OPEN_REQUEST_EVENT, SR_STATUS, emitStockRequestsChanged, type SrStatus } from "./types";
+import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, emitStockRequestsChanged, srNeedsMe, type SrListItem, type SrStatus } from "./types";
 
 type Inbox = {
   incoming: Array<{ id: string; number: number; from_name: string; to_name: string; priority: string; items: number }>;
@@ -158,6 +158,48 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
       void sb.removeChannel(channel);
     };
   }, [storeId, check, onStatus]);
+
+  // Número en el ícono de la app instalada (como WhatsApp): cuántos pedidos te tocan (revisar o confirmar que llegó).
+  // Solo donde el navegador lo permite (app instalada: Android/Chrome/Edge, iPhone 16.4+). Con la app cerrada del
+  // todo se queda el último número hasta que se vuelve a abrir.
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (typeof nav.setAppBadge !== "function") return;
+    let alive = true;
+    let last = 0;
+    let trailing: number | null = null;
+    const update = async () => {
+      last = Date.now();
+      const { data, error } = await supabaseBrowser().rpc("erp_stock_requests_list", { p_store: storeId });
+      if (!alive || error || !Array.isArray(data)) return;
+      const n = (data as SrListItem[]).filter(srNeedsMe).length;
+      try {
+        if (n > 0) await nav.setAppBadge?.(n);
+        else await nav.clearAppBadge?.();
+      } catch { /* sin permiso o no instalada: no pasa nada */ }
+    };
+    // Cada mensaje también avisa «cambió»: se agrupa para no consultar de más (como mucho cada 8 s).
+    const soon = () => {
+      if (trailing !== null) return;
+      const wait = Math.max(0, 8000 - (Date.now() - last));
+      trailing = window.setTimeout(() => { trailing = null; void update(); }, wait);
+    };
+    const first = window.setTimeout(() => void update(), 2500);
+    const onVisible = () => { if (document.visibilityState === "visible") soon(); };
+    window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, soon);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") soon(); }, 60000);
+    return () => {
+      alive = false;
+      window.clearTimeout(first);
+      if (trailing !== null) window.clearTimeout(trailing);
+      window.clearInterval(timer);
+      window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, soon);
+      document.removeEventListener("visibilitychange", onVisible);
+      // Al salir del panel (o cerrar sesión) no se deja un número viejo.
+      void nav.clearAppBadge?.().catch(() => {});
+    };
+  }, [storeId]);
 
   // Los mensajes se ocultan solos; los pedidos nuevos se quedan hasta que los veas.
   useEffect(() => {

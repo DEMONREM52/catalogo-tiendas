@@ -1433,6 +1433,36 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Activar y contar" },
     ],
   },
+  {
+    id: 139, date: "2026-11-23", title: "👉 El siguiente paso del pedido, siempre a la mano",
+    summary: "Dentro de cada pedido interno hay un botón grande con lo que te toca: «Firmar Preparó» (con cuántos llevas empacados), «Firmar Revisó», «Enviar», «Confirmar lo que llegó» o «Firmar y confirmar recibido». Está siempre abajo en Productos y, en el celular, también arriba del chat: ya no hay que bajar hasta las firmas. Si falta chulear algo, te avisa y te deja ver los que faltan.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "📦", text: "12/14 empacados" },
+      { icon: "👉", text: "Te toca: Firmar «Preparó»" },
+      { icon: "🚚", text: "Luego: Enviar" },
+    ],
+  },
+  {
+    id: 140, date: "2026-11-23", title: "🧺 Sacar varios pedidos a la vez (opcional)",
+    summary: "En «Por atender», si tienes dos o más pedidos por preparar, toca «Sacar varios pedidos a la vez», elige los que salen del mismo lugar y «Armar lista»: ves una sola lista con el total de cada producto y cuánto va para cada punto. Al chulear un producto se marca empacado en todos esos pedidos. Después firmas y envías cada pedido como siempre, desde los botones de abajo. Es solo una opción: si no la usas, todo sigue igual.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🧺", text: "Eliges #54 y #56" },
+      { icon: "📋", text: "VGR V172 · 6 → VITRINA 2 · SAN ROQUE 4" },
+      { icon: "✅", text: "Chuleas una vez, queda en los dos" },
+    ],
+  },
+  {
+    id: 141, date: "2026-11-23", title: "🔴 Número en el ícono de RemHub",
+    summary: "Si tienes RemHub instalado en el celular o el computador, el ícono de la app muestra cuántos pedidos internos te tocan (revisar o confirmar que llegó), como WhatsApp. Se actualiza solo mientras RemHub está abierto o en segundo plano.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "📱", text: "RemHub instalado" },
+      { icon: "🔴", text: "Ícono con un 3" },
+      { icon: "👉", text: "3 pedidos te tocan" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

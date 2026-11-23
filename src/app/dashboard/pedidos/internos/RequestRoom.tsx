@@ -463,6 +463,64 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     && !data.signatures?.some((x) => x.step === "sent" || x.step === "delivered" || x.step === "received"));
   const readyToSend = Boolean(data?.signatures?.some((s) => s.step === "packed") && data?.signatures?.some((s) => s.step === "sent"));
 
+  // El siguiente paso que te toca, siempre a la mano (abajo en «Productos» y arriba del chat en el celular).
+  type NextKey = "packed" | "sent" | "dispatch" | "delivered" | "receive-open" | "receive";
+  const signedSteps = new Set((data?.signatures ?? []).map((s) => s.step));
+  const totalItems = data?.items.length ?? 0;
+  const nextStep: { key: NextKey; label: string; sub?: string; color: string } | null = !data || !r ? null
+    : canAttend
+      ? !signedSteps.has("packed")
+        ? { key: "packed", label: "✍️ Firmar «Preparó»", sub: showChecklist ? `${doneCount}/${totalItems} empacados` : undefined, color: "var(--t-accent)" }
+        : !signedSteps.has("sent")
+          ? { key: "sent", label: "🔍 Firmar «Revisó»", sub: showChecklist ? `${doneCount}/${totalItems} empacados` : undefined, color: "#8b5cf6" }
+          : { key: "dispatch", label: "🚚 Enviar (va en camino)", color: "#0ea5e9" }
+      : canReceive
+        ? receiving
+          ? { key: "receive", label: signedSteps.has("received") ? "✅ Confirmar recibido" : "✅ Firmar y confirmar recibido", sub: showChecklist ? `${doneCount}/${totalItems} contados` : undefined, color: "#16a34a" }
+          : { key: "receive-open", label: "📥 Confirmar lo que llegó", sub: showChecklist ? `${doneCount}/${totalItems} contados` : undefined, color: "#16a34a" }
+        : r.status === "dispatched" && data.access.attend && !signedSteps.has("delivered")
+          ? { key: "delivered", label: "🚚 Firmar «En camino»", sub: "Quien lleva la mercancía", color: "#0ea5e9" }
+          : null;
+
+  async function runNext() {
+    if (!nextStep || busy) return;
+    const k = nextStep.key;
+    // Si falta chulear algo, se avisa antes de firmar (se puede firmar igual).
+    if ((k === "packed" || k === "receive") && showChecklist && doneCount < totalItems) {
+      const missing = totalItems - doneCount;
+      const res = await Swal.fire({
+        ...swal, icon: "question",
+        title: `Faltan ${missing} por ${k === "packed" ? "empacar" : "contar"}`,
+        text: `${doneCount} de ${totalItems} productos están chuleados.`,
+        showDenyButton: true, showCancelButton: true,
+        confirmButtonText: k === "packed" ? "Firmar igual" : "Confirmar igual", denyButtonText: "Ver los que faltan", cancelButtonText: "Volver",
+        denyButtonColor: "#f59e0b",
+      });
+      if (res.isDenied) { setOnlyPending(true); setMobileTab("items"); itemsScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); return; }
+      if (!res.isConfirmed) return;
+    }
+    if (k === "packed" || k === "sent" || k === "delivered") return setAutoSign(k);
+    if (k === "dispatch") return void dispatch();
+    if (k === "receive-open") {
+      setReceiving({});
+      setMobileTab("items");
+      return;
+    }
+    void receive();
+  }
+
+  const nextButton = (slim: boolean) => nextStep ? (
+    <button type="button" onClick={() => void runNext()} disabled={busy}
+      className={`pointer-events-auto flex w-full items-center justify-between gap-3 text-left font-black text-white shadow-[0_12px_30px_-10px_rgba(0,0,0,.55)] transition active:scale-[.98] disabled:opacity-60 ${slim ? "rounded-xl px-3 py-2 text-sm" : "max-w-md rounded-2xl px-4 py-3 text-base"}`}
+      style={{ background: `linear-gradient(135deg, ${nextStep.color}, color-mix(in oklab, ${nextStep.color} 70%, #000))` }}>
+      <span className="min-w-0">
+        <span className={`block ${slim ? "text-[10px]" : "text-[11px]"} font-bold uppercase tracking-wide opacity-80`}>👉 Te toca</span>
+        <span className="block truncate">{nextStep.label}</span>
+      </span>
+      {nextStep.sub ? <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold tabular-nums">{nextStep.sub}</span> : <span aria-hidden className="shrink-0 text-lg">→</span>}
+    </button>
+  ) : null;
+
   const itemsPanel = data && r ? (
     <div className="space-y-3">
       {showChecklist ? (
@@ -714,8 +772,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Todo queda en el chat y el kardex.</p> : null}
       {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” (con eso el pedido queda tomado y en preparación) → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
 
-      {/* Barra flotante: siempre a la mano para subir, agregar otro producto o bajar a las firmas. */}
-      <div className="pointer-events-none sticky bottom-0 z-20 -mx-1 flex items-center justify-center gap-2 pb-1 pt-2">
+      {/* Barra flotante: el siguiente paso que te toca y, debajo, subir, agregar otro producto o bajar a las firmas. */}
+      <div className="pointer-events-none sticky bottom-0 z-20 -mx-1 pb-1 pt-2">
+      {nextStep ? <div className="mb-2 flex justify-center px-1">{nextButton(false)}</div> : null}
+      <div className="flex items-center justify-center gap-2">
         <button type="button" onClick={() => itemsScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Subir al inicio" title="Subir al inicio"
           className="pointer-events-auto grid h-11 w-11 shrink-0 place-items-center rounded-full border shadow-lg backdrop-blur transition hover:-translate-y-0.5"
           style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 88%, transparent)" }}>
@@ -734,6 +794,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           <ArrowDown size={18} />
         </button>
       </div>
+      </div>
     </div>
   ) : null;
 
@@ -744,6 +805,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
       onDrop={(e) => { if (!data.access.chat) return; e.preventDefault(); setDragging(false); void addFiles(e.dataTransfer.files); }}
     >
+      {nextStep ? <div className="mb-1.5 md:hidden">{nextButton(true)}</div> : null}
       {dragging ? (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-2xl border-2 border-dashed text-sm font-bold" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-bg-base) 80%, transparent)", color: "var(--t-accent)" }}>
           Suelta aquí fotos, videos o audios

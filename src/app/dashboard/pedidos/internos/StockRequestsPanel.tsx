@@ -12,8 +12,12 @@ import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
-import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrListItem } from "./types";
+import { GroupPicking } from "./GroupPicking";
+import Swal from "@/lib/swal";
+import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, srNeedsMe, timeAgo, type SrListItem } from "./types";
 import { SkeletonCards } from "@/components/ui/Skeleton";
+
+const swalToast = { background: "var(--t-bg-base)", color: "var(--t-text)", toast: true, position: "top" as const, timer: 2800, showConfirmButton: false };
 
 /** Color de los mensajes sin leer (distinto de todos los estados). */
 const UNREAD = "#ec4899";
@@ -45,8 +49,7 @@ function saveView(v: View) {
   window.dispatchEvent(new Event(VIEW_EVENT));
 }
 
-/** Lo que espera una acción tuya: revisarlo (quien atiende) o confirmar que llegó (quien pidió). */
-const needsMeOf = (r: SrListItem) => (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
+const needsMeOf = srNeedsMe;
 
 /** Pedidos internos entre puntos y bodegas: bandeja, filtros, nuevo pedido y sala con chat. */
 export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; canRequest: boolean }) {
@@ -65,6 +68,10 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   // Desde el chat («Crear pedido con esto» o «Pedir a otro punto»): nota y producto ya puestos.
   const [prefill, setPrefill] = useState<{ note: string; lines: PrefillLine[] } | null>(null);
   const [sounds, setSounds] = useState(false);
+  // Opcional: sacar varios pedidos a la vez (una sola lista para alistar).
+  const [picking, setPicking] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [group, setGroup] = useState<{ ids: string[]; visible: boolean } | null>(null);
   const [statusF, setStatusF] = useState<StatusFilter>("all");
   const [pointF, setPointF] = useState<string | null>(null);
   const view = useSyncExternalStore(onViewChange, readView, () => "cards" as View);
@@ -174,6 +181,22 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   const activeStatus: StatusFilter = statusChips.some(([k]) => k === statusF) ? statusF : "all";
   const activePoint = pointF && pointChips.some((p) => p.id === pointF) ? pointF : null;
 
+  /** Se puede alistar en grupo: lo atiendes y está enviado o en preparación. */
+  const pickable = (r: SrListItem) => r.access.attend && (r.status === "pending" || r.status === "preparing");
+  const pickableCount = scoped.filter(pickable).length;
+  function tapRow(r: SrListItem) {
+    if (!picking) return setOpenId(r.id);
+    if (!pickable(r)) return void Swal.fire({ ...swalToast, icon: "info", title: "Ese pedido no se puede alistar ahora", text: "Solo los que te toca preparar (enviados o en preparación)." });
+    if (selected.includes(r.id)) return setSelected((cur) => cur.filter((x) => x !== r.id));
+    const first = rows.find((x) => x.id === selected[0]);
+    if (first && first.to_point_id !== r.to_point_id) {
+      return void Swal.fire({ ...swalToast, icon: "warning", title: "Sale de otro lugar", text: `Elige pedidos que salgan del mismo lugar (${first.to_name}).` });
+    }
+    navigator.vibrate?.(12);
+    setSelected((cur) => [...cur, r.id]);
+  }
+  function stopPicking() { setPicking(false); setSelected([]); }
+
   const list = useMemo(() => {
     const base = scoped.filter((r) =>
       (activeStatus === "all" ? true
@@ -257,6 +280,34 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         </div>
       ) : null}
 
+      {effectiveScope === "attend" && pickableCount >= 2 && !picking ? (
+        <button type="button" onClick={() => { setPicking(true); setSelected([]); }}
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}
+          title="Opcional: una sola lista con el total de cada producto de varios pedidos, para sacarlos de una vez">
+          🧺 Sacar varios pedidos a la vez <span className="font-normal">(opcional)</span>
+        </button>
+      ) : null}
+      {picking ? (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 text-sm backdrop-blur" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-bg-base) 92%, transparent)" }}>
+          <span className="min-w-0 flex-1 font-bold">🧺 Toca los pedidos que vas a sacar juntos · <span style={{ color: "var(--t-accent)" }}>{selected.length} elegidos</span></span>
+          <button type="button" onClick={stopPicking} className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
+          <button type="button" disabled={selected.length < 2} onClick={() => { setGroup({ ids: selected, visible: true }); setPicking(false); setSelected([]); }}
+            className="rounded-full px-4 py-1.5 text-xs font-black text-white disabled:opacity-50" style={{ background: "var(--t-accent)" }}>
+            Armar lista{selected.length >= 2 ? ` (${selected.length})` : ""}
+          </button>
+        </div>
+      ) : null}
+      {group && !group.visible ? (
+        <button type="button" onClick={() => setGroup({ ...group, visible: true })}
+          className="flex w-full items-center justify-between gap-2 rounded-2xl border px-3 py-2 text-left text-sm font-bold" style={{ borderColor: "var(--t-accent)" }}>
+          <span>🧺 Volver a la lista de {group.ids.length} pedidos</span>
+          <span className="flex items-center gap-2">
+            <span onClick={(e) => { e.stopPropagation(); setGroup(null); }} role="button" className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>Cerrar</span>
+            <span style={{ color: "var(--t-accent)" }}>→</span>
+          </span>
+        </button>
+      ) : null}
+
       {statusChips.length > 1 || (statusChips.length && activeStatus !== "all") || pointChips.length > 1 ? (
         <div className="space-y-1.5">
           {statusChips.length ? (
@@ -315,7 +366,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => setOpenId(r.id)}
+                    onClick={() => tapRow(r)}
                     className="relative flex min-h-[60px] w-full items-center gap-2.5 overflow-hidden rounded-xl border py-2 pl-3.5 pr-2.5 text-left transition active:scale-[.99]"
                     style={{
                       borderColor: `color-mix(in oklab, ${st.color} ${needsMe ? 70 : 30}%, var(--t-card-border))`,
@@ -323,6 +374,12 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                     }}
                   >
                     <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: urgent ? `linear-gradient(180deg, #ef4444 0 45%, ${st.color} 45%)` : st.color }} />
+                    {picking ? (
+                      <span aria-hidden className=" grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 text-xs font-black"
+                        style={selected.includes(r.id) ? { background: "var(--t-accent)", borderColor: "var(--t-accent)", color: "#fff" } : { borderColor: pickable(r) ? "var(--t-accent)" : "var(--t-card-border)", opacity: pickable(r) ? 1 : 0.4 }}>
+                        {selected.includes(r.id) ? "✓" : ""}
+                      </span>
+                    ) : null}
                     <span className="w-11 shrink-0 text-center">
                       <span className="block text-sm font-black tabular-nums leading-tight">#{r.number}</span>
                       <span className="block text-base leading-tight" title={st.label}>{st.icon}</span>
@@ -367,7 +424,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(i, 10) * 0.025 }}
-                  onClick={() => setOpenId(r.id)}
+                  onClick={() => tapRow(r)}
                   className="relative flex flex-col overflow-hidden rounded-2xl border p-3 pl-4 text-left transition hover:-translate-y-0.5 hover:shadow-xl sm:p-4 sm:pl-5"
                   style={{
                     borderColor: `color-mix(in oklab, ${st.color} ${needsMe ? 80 : 40}%, transparent)`,
@@ -378,6 +435,12 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                   {/* Franja del estado (roja arriba si es urgente). */}
                   <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: urgent ? `linear-gradient(180deg, #ef4444 0 35%, ${st.color} 35%)` : st.color }} />
                   <div className="flex items-center gap-1.5">
+                    {picking ? (
+                      <span aria-hidden className=" grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 text-xs font-black"
+                        style={selected.includes(r.id) ? { background: "var(--t-accent)", borderColor: "var(--t-accent)", color: "#fff" } : { borderColor: pickable(r) ? "var(--t-accent)" : "var(--t-card-border)", opacity: pickable(r) ? 1 : 0.4 }}>
+                        {selected.includes(r.id) ? "✓" : ""}
+                      </span>
+                    ) : null}
                     <span className="text-sm font-black">#{r.number}</span>
                     <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: st.color }} title={st.label}>{st.icon} {st.short}</span>
                     {urgent ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white" title="Urgente">⚡<span className="hidden sm:inline"> Urgente</span></span> : null}
@@ -446,7 +509,11 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         />
       ) : null}
       <NotificationSettings open={sounds} onClose={() => setSounds(false)} storeId={storeId} points={points} />
-      <RequestRoom requestId={openId} onClose={() => { setOpenId(null); void load(); }} onChanged={() => void load()} />
+      <RequestRoom requestId={openId} onClose={() => { setOpenId(null); void load(); setGroup((g) => (g ? { ...g, visible: true } : g)); }} onChanged={() => void load()} />
+      {group?.visible ? (
+        <GroupPicking key={group.ids.join(",")} ids={group.ids} onClose={() => setGroup(null)} onChanged={() => void load()}
+          onOpen={(id) => { setGroup((g) => (g ? { ...g, visible: false } : g)); setOpenId(id); }} />
+      ) : null}
     </section>
   );
 }

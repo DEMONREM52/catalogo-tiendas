@@ -12,6 +12,9 @@ export const SR_STATUS: Record<SrStatus, { label: string; short: string; color: 
 export const SR_STEPS: SrStatus[] = ["pending", "preparing", "dispatched", "received"];
 export const isOpen = (s: SrStatus) => s === "pending" || s === "preparing" || s === "dispatched";
 
+/** Lo que espera una acción tuya: revisarlo (quien atiende) o confirmar que llegó (quien pidió). */
+export const srNeedsMe = (r: { status: SrStatus; access: SrAccess }) => (r.access.attend && r.status === "pending") || (r.access.request && r.status === "dispatched");
+
 export type SrListItem = {
   id: string; number: number; status: SrStatus; priority: "normal" | "urgent"; note: string | null; needed_by: string | null;
   from_point_id: string; from_name: string; to_point_id: string; to_name: string;
