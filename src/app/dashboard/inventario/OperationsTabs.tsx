@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { LineEditor, ProductPicker, type Line } from "./LineEditor";
+import { LineEditor, ProductPicker, type Line, type LineEditorHandle } from "./LineEditor";
+import { clearDraft, readDraft, timeAgo, writeDraft } from "./draft";
 import {
   ADJUST_REASONS, Btn, Empty, MOVEMENT_LABELS, Panel, confirmAction, dateTime, errorMessage,
   inputClass, inputStyle, tableWrap, td, th, toast, useRunOnChange, type ErpCtx, type Warehouse,
@@ -16,6 +17,9 @@ type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
   erp_adjustment_items: Array<{ product_id: string; products: { name: string } | { name: string }[] | null; qty_before: number; qty_after: number; diff: number }>;
 };
+
+/** Borrador del conteo: vive en este equipo hasta aplicarlo o descartarlo (sobrevive a recargas y cierres). */
+type AdjustDraft = { v: 1; savedAt: string; warehouse: string; reason: string; notes: string; lines: Line[] };
 
 export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   const active = warehouses.filter((w) => w.active);
@@ -32,6 +36,67 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   const [countCat, setCountCat] = useState("");
   const [loadingCount, setLoadingCount] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const editorRef = useRef<LineEditorHandle>(null);
+
+  // Borrador local: se recupera al volver y se guarda solo mientras cuentas.
+  const draftKey = `remhub:adjust-draft:v1:${ctx.storeId}`;
+  const [draftReady, setDraftReady] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  const whLoaded = warehouses.length > 0;
+  useEffect(() => {
+    // Se espera a que lleguen las bodegas: antes de eso el guardado no debe borrar el borrador.
+    if (!whLoaded) return;
+    const d = readDraft<AdjustDraft>(draftKey);
+    const okWh = d && d.warehouse && (!ctx.pointId || d.warehouse === ctx.pointId) && warehouses.some((w) => w.id === d.warehouse && w.active);
+    if (d && okWh && (d.lines?.length || d.notes)) {
+      if (!ctx.pointId) setWarehouse(d.warehouse);
+      setReason(d.reason || "count");
+      setNotes(d.notes ?? "");
+      setLines(d.lines ?? []);
+      setSavedAt(d.savedAt);
+      void toast("Seguiste tu conteo donde lo dejaste", "success", `${d.lines?.length ?? 0} productos del borrador (${timeAgo(d.savedAt)}).`);
+    }
+    setDraftReady(true);
+    // Solo al abrir (y cuando ya llegaron las bodegas).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, whLoaded]);
+  useEffect(() => {
+    if (!draftReady) return;
+    const timer = window.setTimeout(() => {
+      if (!warehouse || (!lines.length && !notes.trim())) {
+        clearDraft(draftKey);
+        setSavedAt(null);
+        return;
+      }
+      const at = new Date().toISOString();
+      if (writeDraft(draftKey, { v: 1, savedAt: at, warehouse, reason, notes, lines } satisfies AdjustDraft)) setSavedAt(at);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftReady, draftKey, warehouse, reason, notes, lines]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick((t) => t + 1), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  async function discardDraft() {
+    if (!(await confirmAction("Descartar el conteo", "Se borra lo que llevas contado en este borrador. El inventario no cambia."))) return;
+    clearDraft(draftKey);
+    setLines([]);
+    setNotes("");
+    setSavedAt(null);
+  }
+
+  // F2: buscar y agregar otro producto al conteo.
+  useEffect(() => {
+    if (!canAdjust || !warehouse) return;
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key !== "F2" || scanning || Swal.isVisible()) return;
+      e.preventDefault();
+      editorRef.current?.openPicker();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canAdjust, warehouse, scanning]);
 
   /** Conteo escaneando (opcional): lo escaneado es lo que hay; lo demás de la lista queda igual (o en 0 si se pide). */
   async function applyScan(counts: ScanCount[], zeroOthers: boolean) {
@@ -153,6 +218,8 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     if (error) return void toast("No se pudo aplicar el ajuste", "error", errorMessage(error));
     setLines([]);
     setNotes("");
+    clearDraft(draftKey);
+    setSavedAt(null);
     void toast("Ajuste aplicado");
     void load();
   }
@@ -160,7 +227,15 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   return (
     <div className="space-y-5">
       {canAdjust ? (
-        <Panel title="Nuevo ajuste de inventario" subtitle="Indica la cantidad real contada; el sistema calcula la diferencia y la registra en el kardex.">
+        <Panel title="Nuevo ajuste de inventario" subtitle="Indica la cantidad real contada; el sistema calcula la diferencia y la registra en el kardex."
+          actions={savedAt && (lines.length || notes.trim()) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border px-3 py-1 text-xs" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }} title="Se guarda solo en este equipo mientras cuentas, hasta que apliques el ajuste">
+                💾 Borrador guardado {timeAgo(savedAt)}
+              </span>
+              <Btn variant="danger" onClick={() => void discardDraft()}>Descartar borrador</Btn>
+            </div>
+          ) : null}>
           <div className="grid gap-2 sm:grid-cols-3">
             <select className={inputClass} style={inputStyle} value={warehouse} onChange={(e) => { setWarehouse(e.target.value); setLines([]); }}>
               <option value="">Bodega…</option>
@@ -180,10 +255,11 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
               </select>
               <Btn variant="ghost" onClick={() => void loadCategory()} disabled={!countCat || loadingCount}>{loadingCount ? "Cargando…" : "Traer productos para contar"}</Btn>
               <Btn variant="ghost" onClick={() => setScanning(true)}><span title="Opcional: con la cámara del celular o un lector de códigos">📷 Contar escaneando</span></Btn>
+              <Btn variant="ghost" onClick={() => editorRef.current?.openPicker()}><span title="Atajo: F2">➕ Agregar producto <kbd className="ml-1 rounded border px-1 text-[10px]" style={{ borderColor: "var(--t-card-border)" }}>F2</kbd></span></Btn>
               <span className="w-full text-[11px]" style={{ color: "var(--t-muted)" }}>Trae todos los productos de esa categoría con lo que dice el sistema. Solo se ajustan los que cambies; si alguien vende mientras cuentas, te avisamos al aplicar.</span>
             </div>
           ) : null}
-          {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} /></div> : null}
+          {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} editorRef={editorRef} /></div> : null}
           {scanning && warehouse ? (
             <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
               zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />

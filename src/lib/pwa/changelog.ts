@@ -1393,6 +1393,16 @@ export const RELEASES: Release[] = [
       { icon: "➕", text: "Sumar 3 → ahora 10" },
     ],
   },
+  {
+    id: 135, date: "2026-11-23", title: "💾 El conteo de ajustes se guarda como borrador",
+    summary: "Lo que vas contando en un ajuste de inventario se guarda solo en este equipo: si recargas, cierras la pestaña o se va el internet, al volver sigues donde ibas. Se borra al aplicar el ajuste o con «Descartar borrador». Si hubo ventas o traslados mientras tanto, al aplicar te avisa como siempre. Además, F2 abre la búsqueda para agregar otro producto.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔢", text: "Cuentas 8 productos" },
+      { icon: "🔄", text: "Recargas la página" },
+      { icon: "💾", text: "Siguen ahí · F2 agrega otro" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
