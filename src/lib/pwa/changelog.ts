@@ -1383,6 +1383,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Igual que antes, lista para aprobar" },
     ],
   },
+  {
+    id: 134, date: "2026-11-23", title: "🔢 Contar en desorden en los ajustes",
+    summary: "En un ajuste de inventario, si buscas un producto que ya contaste, sale en verde con «Ya está en la lista» y lo que llevas. Al elegirlo te pregunta cuántas más encontraste y las suma a lo contado. Así cuentas por donde vayas, sin unir cantidades a mano. Si prefieres, «Cambiar el total» te lleva a la cantidad para escribirla.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔎", text: "Buscas «philip» otra vez" },
+      { icon: "✓", text: "Ya está en la lista: 7" },
+      { icon: "➕", text: "Sumar 3 → ahora 10" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

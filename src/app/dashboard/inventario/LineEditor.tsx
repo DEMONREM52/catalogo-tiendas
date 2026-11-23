@@ -233,6 +233,7 @@ function HitRow({
   flash,
   showWarehouse,
   added,
+  addedHint,
   onPick,
   onHover,
   big,
@@ -251,16 +252,19 @@ function HitRow({
   /** Texto propio para la existencia (ej. "Hay 5 allá"). */
   stockLabel?: (hit: ProductHit) => string;
   added?: number;
+  /** Debajo de «Ya está en la lista» (por defecto «Elegir para cambiar»). */
+  addedHint?: string;
   onPick: () => void;
   onHover: () => void;
   big?: boolean;
 }) {
+  const isAdded = added !== undefined && added !== null;
   // Lo que ya está en la lista se ve (en verde) en vez de esconderse: al elegirlo se va a su cantidad.
   const bg = flash
     ? "color-mix(in oklab, #22c55e 18%, transparent)"
     : active
-      ? added ? "color-mix(in oklab, #22c55e 20%, transparent)" : "color-mix(in oklab, var(--t-accent) 16%, transparent)"
-      : added ? "color-mix(in oklab, #22c55e 8%, transparent)" : "transparent";
+      ? isAdded ? "color-mix(in oklab, #22c55e 20%, transparent)" : "color-mix(in oklab, var(--t-accent) 16%, transparent)"
+      : isAdded ? "color-mix(in oklab, #22c55e 8%, transparent)" : "transparent";
   return (
     <button
       type="button"
@@ -289,10 +293,10 @@ function HitRow({
       </span>
       <span className="shrink-0 text-right text-xs" style={{ color: "var(--t-muted)" }}>
         {stockLabel ? stockLabel(hit) : showWarehouse ? `Aquí: ${hit.wh_qty}` : `Stock: ${hit.stock}`}
-        {added ? (
+        {isAdded ? (
           <span className="mt-0.5 block font-bold" style={{ color: "#22c55e" }}>
             ✓ Ya está en la lista: {added}
-            <span className="block text-[10px] font-semibold opacity-80">{flash ? "Listo" : "Elegir para cambiar"}</span>
+            <span className="block text-[10px] font-semibold opacity-80">{flash ? "Listo" : addedHint ?? "Elegir para cambiar"}</span>
           </span>
         ) : (
           <span className="mt-0.5 block font-bold" style={{ color: "var(--t-accent)" }}>+ Agregar</span>
@@ -333,6 +337,7 @@ export function ProductPicker({
   includeInactive,
   excludeIds,
   addedQty,
+  addedHint,
   keepOpen,
   inputRef,
   placeholder = "Buscar por nombre, SKU o código de barras…",
@@ -349,6 +354,7 @@ export function ProductPicker({
   excludeIds?: string[];
   /** Productos ya agregados: se muestran con su cantidad en vez de ocultarse. */
   addedQty?: Record<string, number>;
+  addedHint?: string;
   /** Mantiene la lista abierta tras elegir, para agregar varios productos seguidos. */
   keepOpen?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
@@ -445,6 +451,7 @@ export function ProductPicker({
               flash={flash === hit.id}
               showWarehouse={Boolean(warehouseId)}
               added={addedQty?.[hit.id]}
+              addedHint={addedHint}
               hideCost={Boolean(pricePoints)}
               prices={pricePoints ? prices.get(hit.id) : undefined}
               onPick={() => pick(hit)}
@@ -467,6 +474,7 @@ export function ProductSearchModal({
   includeInactive,
   excludeIds,
   addedQty,
+  addedHint,
   title = "Agregar producto",
   onPick,
   stockLabel,
@@ -486,6 +494,7 @@ export function ProductSearchModal({
   inStockOnly?: boolean;
   excludeIds?: string[];
   addedQty?: Record<string, number>;
+  addedHint?: string;
   title?: string;
   onPick: (product: ProductHit) => void;
   stockLabel?: (hit: ProductHit) => string;
@@ -623,6 +632,7 @@ export function ProductSearchModal({
                   showWarehouse={Boolean(warehouseId)}
                   stockLabel={stockLabel}
                   added={addedQty?.[hit.id]}
+                  addedHint={addedHint}
                   hideCost={Boolean(pricePoints)}
                   prices={pricePoints ? prices.get(hit.id) : undefined}
                   onPick={() => pick(hit)}
@@ -1184,9 +1194,11 @@ export function LineEditor({
   }, [lines]);
 
   // Producto nuevo: se agrega una línea. Si ya estaba, NO se suma nada: se lleva el cursor a su cantidad
-  // (resaltada) para que la cambies tú.
+  // (resaltada) para que la cambies tú. En el conteo (ajuste) se pregunta cuántas más encontraste y se suman:
+  // así se cuenta en desorden, por donde vayas, sin unir las cantidades a mano.
   function addHit(hit: ProductHit) {
     const exists = lines.some((l) => l.product_id === hit.id);
+    if (exists && !isPurchase) return void addMoreCounted(hit);
     pendingFocus.current = hit.id;
     if (isPurchase && typeof hit.active === "boolean") {
       setStatus((cur) => ({ ...cur, [hit.id]: { active: hit.active !== false, auto: Boolean(hit.auto_inactive) } }));
@@ -1201,6 +1213,41 @@ export function LineEditor({
       setFlashId(hit.id);
       window.setTimeout(() => setFlashId((cur) => (cur === hit.id ? null : cur)), 1400);
     }
+  }
+
+  function flashQty(id: string, select = false) {
+    if (!focusCell(id, "qty")) return;
+    if (select) cells.current.get(`${id}:qty`)?.select();
+    setFlashId(id);
+    window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1400);
+  }
+
+  /** Conteo: el producto ya está → «¿cuántas más encontraste?» y se suman a lo contado. */
+  async function addMoreCounted(hit: ProductHit) {
+    const line = latest.current.find((l) => l.product_id === hit.id);
+    if (!line) return;
+    const r = await Swal.fire({
+      title: "Ya está en la lista",
+      html: `<b>${hit.name.replace(/[<>&]/g, "")}</b><br/>Llevas <b>${line.qty}</b> contadas. ¿Cuántas más encontraste?`,
+      input: "number", inputValue: "", inputPlaceholder: "Ej. 3",
+      inputAttributes: { min: "0", step: "1", inputmode: "numeric" },
+      showCancelButton: true, showDenyButton: true,
+      confirmButtonText: "➕ Sumar", denyButtonText: "Cambiar el total", cancelButtonText: "Cancelar",
+      background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#16a34a", denyButtonColor: "#8b5cf6",
+      inputValidator: (v) => {
+        const n = Number(v);
+        return v === "" || !Number.isFinite(n) || n <= 0 || !Number.isInteger(n) ? "Escribe cuántas más (un número entero mayor que 0)." : null;
+      },
+    });
+    if (r.isDenied) return flashQty(hit.id, true);
+    if (!r.isConfirmed) return;
+    const more = Number(r.value);
+    const cur = latest.current.find((l) => l.product_id === hit.id);
+    if (!cur) return;
+    const next = cur.qty + more;
+    onChange(latest.current.map((l) => (l.product_id === hit.id ? { ...l, qty: next } : l)));
+    void toast(`Sumaste ${more}: «${hit.name}» ahora tiene ${next}`);
+    window.setTimeout(() => flashQty(hit.id), 60);
   }
 
   function patch(index: number, change: Partial<Line>) {
@@ -1257,8 +1304,8 @@ export function LineEditor({
       <ProductPicker
         storeId={storeId}
         warehouseId={isPurchase ? null : warehouseId}
-        excludeIds={isPurchase ? undefined : lines.map((l) => l.product_id)}
-        addedQty={isPurchase ? addedQty : undefined}
+        addedQty={addedQty}
+        addedHint={isPurchase ? undefined : "Elegir para sumar más"}
         includeInactive={isPurchase}
         inputRef={searchRef}
         placeholder={lines.length ? "🔎 Buscar otro producto (nombre, SKU o código de barras)…" : "🔎 Busca el primer producto: nombre, SKU o código de barras…"}
@@ -1525,8 +1572,8 @@ export function LineEditor({
         onClose={() => setModalOpen(false)}
         storeId={storeId}
         warehouseId={isPurchase ? null : warehouseId}
-        excludeIds={isPurchase ? undefined : lines.map((l) => l.product_id)}
-        addedQty={isPurchase ? addedQty : undefined}
+        addedQty={addedQty}
+        addedHint={isPurchase ? undefined : "Elegir para sumar más"}
         includeInactive={isPurchase}
         title={isPurchase ? "Agregar producto a la factura" : "Agregar producto al conteo"}
         onPick={addHit}
