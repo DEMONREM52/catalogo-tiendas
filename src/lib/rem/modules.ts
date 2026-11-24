@@ -215,6 +215,14 @@ export const MODULES: ModuleInfo[] = [
     howto: [{
       id: "orders.internal", goal: "hacer un pedido interno", keywords: "pedido interno pedir mercancia solicitar bodega",
       steps: [], href: "/dashboard/pedidos?tab=internos&nuevo=1", voice: "Toca «Nuevo pedido» y dime «quiero hacer un pedido interno»: te sigo por voz.", verified: true,
+    }, {
+      id: "orders.by_product", goal: "buscar los pedidos que llevan un producto", keywords: "buscar pedido producto nombre codigo quien compro que pedidos llevan",
+      steps: [
+        "Abre Pedidos, pestaña «Pedidos de clientes».",
+        "En «Buscar» escribe el nombre del producto o su código. No importan las tildes ni el orden de las palabras.",
+        "Salen los pedidos que lo llevan, con el producto debajo. Si no aparece, toca «Ver en Todos» o «Buscar en todo el historial».",
+      ],
+      href: "/dashboard/pedidos?tab=clientes", verified: true,
     }],
   },
   {

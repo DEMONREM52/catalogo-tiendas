@@ -1503,6 +1503,16 @@ export const RELEASES: Release[] = [
       { icon: "⏳", text: "Pendientes por contar" },
     ],
   },
+  {
+    id: 146, date: "2026-11-24", title: "📦 Buscar pedidos por producto",
+    summary: "En Pedidos de clientes escribe el nombre o el código de un producto y salen los pedidos que lo llevan, con el producto debajo. No importan las tildes ni el orden de las palabras. Si no aparece, puedes verlo en Todos o en todo el historial.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "🔎", text: "bolso pequeño" },
+      { icon: "📦", text: "BOLSO PEQUEÑO CUERO" },
+      { icon: "🧾", text: "#335 · SEDE ZAMORA" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

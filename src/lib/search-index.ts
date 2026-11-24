@@ -91,7 +91,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/categories", emoji: "🗂️", label: "Categorías", keywords: "grupos familias", perms: ["categories"] },
 
   // ------------------------------------------------------------ Ventas, clientes y pedidos
-  { href: "/dashboard/pedidos?tab=clientes", emoji: "🧾", label: "Pedidos de clientes", hint: "Pedidos", keywords: "pedidos catalogo whatsapp ventas en linea", perms: ["orders"] },
+  { href: "/dashboard/pedidos?tab=clientes", emoji: "🧾", label: "Pedidos de clientes", hint: "Pedidos", keywords: "pedidos catalogo whatsapp ventas en linea buscar pedido por producto", perms: ["orders"] },
   { href: "/dashboard/pedidos?tab=internos", emoji: "📨", label: "Pedidos internos", hint: "Pedidos", keywords: "pedidos entre puntos solicitudes", perms: REQ },
   { href: "/dashboard/clientes?tab=terceros", emoji: "👥", label: "Clientes y terceros", keywords: "clientes proveedores directorio", perms: ["clients", "receivables", "credit"] },
   { href: "/dashboard/clientes?tab=cartera", emoji: "💰", label: "Cartera", hint: "Clientes", keywords: "deudas clientes cobrar credito fiado estado de cuenta extracto nota credito nota debito ajuste abono", perms: ["receivables", "credit"] },

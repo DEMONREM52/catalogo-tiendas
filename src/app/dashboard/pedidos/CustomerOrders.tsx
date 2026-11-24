@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore } from "@/lib/store-utils";
-import { ilikeTokenFilters, searchTokens, smartFilter } from "@/lib/search";
+import { ilikeTokenFilters, matchesSearch, searchTokens, smartFilter } from "@/lib/search";
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
@@ -167,6 +167,45 @@ function sinceOf(p: Period) {
   return d.toISOString();
 }
 
+/**
+ * Pedidos que llevan un producto → nombres de los productos que coinciden.
+ * Con 20261341 lo resuelve la base en una consulta (sin tildes, por código, con un error de escritura y solo
+ * los pedidos que el usuario puede ver). Sin esa migración, como antes: productos por nombre/código y sus renglones.
+ */
+async function ordersByProduct(storeId: string, term: string, since: string | null, alive: () => boolean): Promise<Map<string, string[]>> {
+  const sb = supabaseBrowser();
+  const names = new Map<string, string[]>();
+  const { data, error } = await sb.rpc("erp_orders_by_product", { p_store: storeId, p_q: term, p_since: since });
+  if (!error) {
+    const r = data as { ok?: boolean; items?: Array<{ order_id: string; names: string[] }> } | null;
+    for (const it of r?.ok ? r.items ?? [] : []) names.set(it.order_id, it.names ?? []);
+    return names;
+  }
+  if (!/Could not find the function|schema cache/i.test(error.message)) throw error;
+  if (/^\d{1,6}$/.test(term)) return names;
+  let pq = sb.from("products").select("id,name").eq("store_id", storeId);
+  for (const filter of ilikeTokenFilters(["name", "sku", "barcode"], term)) pq = pq.or(filter);
+  const { data: prods } = await pq.limit(300);
+  const nameOf = new Map(((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]));
+  const pids = [...nameOf.keys()];
+  for (let i = 0; i < pids.length && alive(); i += 100) {
+    const chunk = pids.slice(i, i + 100);
+    // De a 1.000 filas (la base no entrega más por consulta); tope de 20.000 renglones.
+    for (let from = 0; from < 20_000; from += PAGE) {
+      const { data: rows, error: e } = await sb.from("order_items").select("order_id,product_id").in("product_id", chunk).order("id").range(from, from + PAGE - 1);
+      if (e || !rows) break;
+      for (const r of rows as Array<{ order_id: string; product_id: string }>) {
+        const list = names.get(r.order_id) ?? [];
+        const n = nameOf.get(r.product_id);
+        if (n && !list.includes(n)) list.push(n);
+        names.set(r.order_id, list);
+      }
+      if (rows.length < PAGE) break;
+    }
+  }
+  return names;
+}
+
 /** Cuánto lleva el pedido sin cerrarse (solo pendientes): texto y color. */
 function age(o: { created_at: string; status: string }, now: number) {
   const h = (now - Date.parse(o.created_at)) / 3_600_000;
@@ -313,7 +352,7 @@ export function CustomerOrders() {
 
   useEffect(() => {
     const term = q.trim();
-    if (!storeId || term.length < 3 || /^\d{1,6}$/.test(term) || !searchTokens(term).length) {
+    if (!storeId || term.length < 3 || !searchTokens(term).length) {
       setByProduct({ q: "", names: new Map(), loading: false });
       return;
     }
@@ -321,43 +360,41 @@ export function CustomerOrders() {
     setByProduct((cur) => ({ ...cur, loading: true }));
     const timer = window.setTimeout(async () => {
       try {
-        const sb = supabaseBrowser();
-        let pq = sb.from("products").select("id,name").eq("store_id", storeId);
-        for (const filter of ilikeTokenFilters(["name", "sku", "barcode"], term)) pq = pq.or(filter);
-        const { data: prods } = await pq.limit(300);
-        const nameOf = new Map(((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]));
-        const names = new Map<string, string[]>();
-        const pids = [...nameOf.keys()];
-        for (let i = 0; i < pids.length && alive; i += 100) {
-          const chunk = pids.slice(i, i + 100);
-          // De a 1.000 filas (la base no entrega más por consulta); tope de 20.000 renglones.
-          for (let from = 0; from < 20_000; from += PAGE) {
-            const { data, error } = await sb.from("order_items").select("order_id,product_id").in("product_id", chunk).order("id").range(from, from + PAGE - 1);
-            if (error || !data) break;
-            for (const r of data as Array<{ order_id: string; product_id: string }>) {
-              const list = names.get(r.order_id) ?? [];
-              const n = nameOf.get(r.product_id);
-              if (n && !list.includes(n)) list.push(n);
-              names.set(r.order_id, list);
-            }
-            if (data.length < PAGE) break;
-          }
-        }
+        const names = await ordersByProduct(storeId, term, sinceOf(period), () => alive);
         if (alive) setByProduct({ q: term, names, loading: false });
       } catch {
         if (alive) setByProduct({ q: "", names: new Map(), loading: false });
       }
-    }, 400);
+    }, 350);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [q, storeId]);
+  }, [q, storeId, period]);
+
+  // Búsqueda: número, cliente, vendedor… o un producto que lleve el pedido (sin tildes, por código o con un error).
+  const search = useMemo(() => {
+    const term = q.trim();
+    const prod = byProduct.q === term ? byProduct.names : null;
+    const textOf = (o: Row) => `${o.receipt_no ?? ""} ${o.doc_number ?? ""} ${statusLabel(o.status)} ${paymentStatusLabel(o.payment_status)} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""} ${o.point_name} ${o.seller_name ?? ""} ${o.source} ${(prod?.get(o.id) ?? []).join(" ")}`;
+    return (list: Row[]): Row[] => {
+      if (!searchTokens(term).length) return list;
+      const byText = list.filter((o) => matchesSearch(textOf(o), term));
+      // Solo números: primero el número del pedido; si ninguno es, los que llevan un producto con ese código.
+      if (/^\d+$/.test(term) && byText.length) return byText;
+      const hits = prod?.size ? list.filter((o) => prod.has(o.id) || byText.includes(o)) : byText;
+      if (hits.length || byProduct.loading) return hits;
+      return smartFilter(list, term, textOf, { keepOrder: true });
+    };
+  }, [q, byProduct]);
 
   const filtered = useMemo(() => {
-    const base = orders.filter((o) => inView(o.status, view) && (point === "all" || (o.point_id ?? NO_POINT) === point));
-    const hits = smartFilter(base, q,
-      (o) => `${o.receipt_no ?? ""} ${o.doc_number ?? ""} ${statusLabel(o.status)} ${paymentStatusLabel(o.payment_status)} ${o.customer_name ?? ""} ${o.customer_whatsapp ?? ""} ${o.customer_note ?? ""} ${o.point_name} ${o.seller_name ?? ""} ${o.source} ${(byProduct.names.get(o.id) ?? []).join(" ")}`,
-      { keepOrder: true });
+    const hits = search(orders.filter((o) => inView(o.status, view) && (point === "all" || (o.point_id ?? NO_POINT) === point)));
     return oldFirst ? [...hits].reverse() : hits;
-  }, [orders, q, view, point, oldFirst, byProduct]);
+  }, [orders, view, point, oldFirst, search]);
+
+  // Sin resultados en este estado: cuántos hay en los demás (para ofrecer «Ver en Todos»).
+  const elsewhere = useMemo(() => {
+    if (filtered.length || !q.trim() || view === "all") return 0;
+    return search(orders.filter((o) => point === "all" || (o.point_id ?? NO_POINT) === point)).length;
+  }, [filtered, q, view, orders, point, search]);
 
   const counts = useMemo(() => {
     const inPoint = orders.filter((o) => point === "all" || (o.point_id ?? NO_POINT) === point);
@@ -481,6 +518,9 @@ export function CustomerOrders() {
             <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className="shrink-0 rounded-xl border px-3 text-xs font-bold sm:hidden"
               style={showFilters || point !== "all" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>⚙️ Filtros</button>
           </div>
+          {q.trim() && byProduct.loading ? (
+            <p className="text-xs sm:col-span-4" style={{ color: "var(--t-muted)" }} aria-live="polite">🔎 Buscando también en los productos de cada pedido…</p>
+          ) : null}
           <select className={`${selectBase()} ${showFilters ? "" : "hidden"} sm:block`} value={point} onChange={(e) => setPoint(e.target.value)} aria-label="Punto">
             <option value="all">Todos los puntos</option>
             {board.map((b) => <option key={b.key} value={b.key}>{b.name}</option>)}
@@ -509,8 +549,21 @@ export function CustomerOrders() {
       {/* Lista */}
       {loading ? <SkeletonList rows={4} avatar={false} label="Cargando pedidos…" /> : !filtered.length ? (
         <div className={`${tokenCard()} p-6 text-center`}>
-          <p className="font-semibold">{view === "pending" ? "🎉 No hay pedidos pendientes" : "No hay pedidos con estos filtros"}</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{view === "pending" ? "Todo está confirmado y completado en este periodo." : "Prueba con otro estado, punto o periodo."}</p>
+          {q.trim() ? (
+            <>
+              <p className="font-semibold">{byProduct.loading ? "🔎 Buscando…" : `Ningún pedido coincide con «${q.trim()}»`}</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>Busca por número, cliente, vendedor o el nombre o código de un producto que lleve el pedido.</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {elsewhere ? <button type="button" className={btnSoft()} onClick={() => { setView("all"); setPicked(new Set()); }}>Ver en Todos ({elsewhere})</button> : null}
+                {period !== "all" ? <button type="button" className={btnSoft()} onClick={() => { setPeriod("all"); void load("all"); }}>Buscar en todo el historial</button> : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold">{view === "pending" ? "🎉 No hay pedidos pendientes" : "No hay pedidos con estos filtros"}</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--t-muted)" }}>{view === "pending" ? "Todo está confirmado y completado en este periodo." : "Prueba con otro estado, punto o periodo."}</p>
+            </>
+          )}
         </div>
       ) : (
         <ul className="space-y-2">
