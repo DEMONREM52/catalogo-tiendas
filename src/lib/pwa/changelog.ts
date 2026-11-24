@@ -1513,6 +1513,16 @@ export const RELEASES: Release[] = [
       { icon: "🧾", text: "#335 · SEDE ZAMORA" },
     ],
   },
+  {
+    id: 147, date: "2026-11-24", title: "✏️ Editar productos más rápido",
+    summary: "En la lista de productos toca el nombre y se abre la edición rápida: foto, nombre, código de barras, categorías y descripción. Mientras editas un producto, «🔎 Otro producto» o F2 te deja buscar el siguiente; si tienes cambios sin guardar te pregunta si guardas y cambias, cambias sin guardar o sigues editando.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "👆", text: "Toca el nombre → edición rápida" },
+      { icon: "⌨️", text: "F2 · Otro producto" },
+      { icon: "💾", text: "Guardar y cambiar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

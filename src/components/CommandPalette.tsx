@@ -48,7 +48,7 @@ const isTyping = (el: EventTarget | null) => {
 export const SHORTCUTS: Array<{ keys: string; text: string; where: string }> = [
   { keys: "Ctrl + K", text: "Buscar cualquier cosa (páginas, productos, traslados, clientes…)", where: "En todo el panel" },
   { keys: "?", text: "Ver esta lista de atajos", where: "En todo el panel" },
-  { keys: "F2", text: "Abrir la búsqueda de productos con fotos", where: "POS, ingreso de factura, traslados, corregir traslado, ajustes de inventario" },
+  { keys: "F2", text: "Abrir la búsqueda de productos con fotos", where: "POS, ingreso de factura, traslados, corregir traslado, ajustes de inventario, productos y editar producto" },
   { keys: "Enter", text: "Pasar a la siguiente cantidad o volver al buscador", where: "Ingreso de factura y traslados" },
   { keys: "↑ ↓", text: "Cambiar de producto en la tabla de cantidades", where: "Traslados" },
   { keys: "Ctrl + Enter", text: "Guardar el ingreso de factura", where: "Ingreso de factura" },

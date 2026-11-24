@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `3d1deec2` · 118 capacidades · 32 módulos.
+Versión del catálogo: `e09894b2` · 118 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -18,7 +18,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Garantías y devoluciones | `/dashboard/garantias` | Para registrar garantías, cambios y devoluciones de lo vendido. | registrar una garantía o devolución (4 pasos) |
 | Factura electrónica | `/dashboard/fiscal` | Para la facturación electrónica ante la DIAN: los documentos enviados, los que están pendientes o rechazados y la numeración con sus resoluciones. | — |
 | Datos de facturación | `/dashboard/store/billing` | Son los datos de facturación de la tienda. Solo los ve el dueño o el administrador. | — |
-| Productos | `/dashboard/products` | Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame. En cada producto, en Precios, eliges qué etiquetas se ven en el catálogo y desde/hasta cuándo: Llegó nuevo, Bajó de precio (con el precio de antes que escribas), En promoción y Destacado. | crear un producto (5 pasos); subir productos desde Excel (sin pasos) |
+| Productos | `/dashboard/products` | Es la lista de productos de la tienda: los buscas, los filtras, los editas, cambias fotos y precios, los activas o inactivas y los marcas para publicar en redes con Publícame. Si tocas el nombre de un producto en la lista se abre la edición rápida (foto, nombre, código de barras, categorías y descripción). Con F2 buscas otro producto para editar, también desde la pantalla de editar; si tienes cambios sin guardar te pregunta si guardas antes de cambiar. En cada producto, en Precios, eliges qué etiquetas se ven en el catálogo y desde/hasta cuándo: Llegó nuevo, Bajó de precio (con el precio de antes que escribas), En promoción y Destacado. | crear un producto (5 pasos); subir productos desde Excel (sin pasos) |
 | Radar de productos | `/dashboard/products/radar` | Revisa los productos y te dice qué les falta: sin foto, sin precio, quietos o sin ventas, o con un código metido en el nombre. También arma el plan del día para publicar en redes con recordatorio, muestra lo que llegó o volvió en los últimos 7 días (y lo que llegó sin foto o sin categoría), y desde ahí puedes inactivar los que ya no hay. | — |
 | Lista general de productos | `/dashboard/lista-productos` | Es para consultar productos y precios sin poder cambiarlos. | — |
 | Categorías | `/dashboard/categories` | Agrupa los productos para ordenar el catálogo y los informes. | crear una categoría (3 pasos) |

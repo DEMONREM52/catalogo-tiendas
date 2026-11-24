@@ -12,6 +12,8 @@ import { getDashboardStore } from "@/lib/store-utils";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { buildProductShareText, hasProductLanding, normalizeProductDetails } from "@/lib/product-details";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { ProductFinder } from "@/components/product-finder/ProductFinder";
 import { PhotoIndexStatus, PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
 import { DateField } from "@/components/forms/Fields";
@@ -28,6 +30,9 @@ import { PublishButton, toState } from "@/components/products/PublishButton";
 import type { PublishState } from "@/lib/products/radar";
 
 type Category = { id: string; name: string; active?: boolean };
+
+// Editor rápido (el mismo del Radar): se carga solo al tocar el nombre de un producto.
+const QuickEdit = dynamic(() => import("./radar/QuickEdit").then((m) => m.QuickEdit), { ssr: false });
 
 type Product = {
   id: string;
@@ -226,6 +231,19 @@ export default function ProductsListPage() {
   const canImport = useCan("products_import");
   const canCreate = useCan("products_create");
   const [cleaning, setCleaning] = useState(false);
+  // Tocar el nombre abre el editor rápido; F2 abre el buscador para editar otro producto.
+  const canEditProducts = useCan("products");
+  const [quickId, setQuickId] = useState<string | null>(null);
+  const [finderOpen, setFinderOpen] = useState(false);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "F2" || Swal.isVisible()) return;
+      e.preventDefault();
+      setFinderOpen(true);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // paginación normal
   const [cursor, setCursor] = useState<Cursor>(null);
@@ -854,6 +872,13 @@ export default function ProductsListPage() {
   });
   useProductsVoice(voiceApi, Boolean(storeId));
 
+  // Después de guardar en el editor rápido: trae de nuevo nombre, foto, descripción y categoría de esa fila.
+  async function afterQuickSave(id: string) {
+    const { data } = await supabaseBrowser().from("products").select("name,description,image_url,category_id").eq("id", id).maybeSingle();
+    if (data) setProducts((cur) => cur.map((p) => (p.id === id ? { ...p, ...(data as Partial<Product>) } : p)));
+  }
+  const quickRow = quickId ? products.find((p) => p.id === quickId) ?? null : null;
+
   function clearFilters() {
     setQ("");
     setStatusFilter("all");
@@ -1135,7 +1160,10 @@ export default function ProductsListPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="min-w-0 whitespace-normal break-words text-sm font-semibold leading-snug [overflow-wrap:anywhere] sm:text-base">
-                          {p.name}
+                          <button type="button" onClick={() => setQuickId(p.id)} title="Edición rápida: foto, nombre, código de barras, categorías y descripción"
+                            className="cursor-pointer text-left decoration-dotted underline-offset-4 hover:text-[color:var(--t-accent)] hover:underline">
+                            {p.name}
+                          </button>
                           {p.sku ? <span className="ml-1.5 whitespace-nowrap rounded-md bg-[color:var(--t-card-bg-soft)] px-1.5 py-0.5 align-middle text-[10px] font-bold text-[color:var(--t-muted)]">Cód. {p.sku}</span> : null}
                         </p>
 
@@ -1268,6 +1296,16 @@ export default function ProductsListPage() {
           </div>
         )}
       </div>
+      {quickId && storeId ? (
+        <QuickEdit storeId={storeId} productId={quickId} categories={categories.filter((c) => c.active !== false)}
+          active={quickRow?.active ?? true} canToggle={Boolean(canEditProducts) && Boolean(quickRow)} toggling={updatingProductStatusId === quickId}
+          onToggleActive={() => { if (quickRow) void toggleProductStatus(quickRow); }}
+          onClose={() => setQuickId(null)} onSaved={() => void afterQuickSave(quickId)}
+          onOpenFull={() => router.push(`/dashboard/products/${quickId}`)} />
+      ) : null}
+      <ProductFinder open={finderOpen} onClose={() => setFinderOpen(false)} source={finderSource} initialMode="text"
+        title="Editar un producto" subtitle="Escribe el nombre o el código, o toma una foto." pickLabel="Editar"
+        onPick={(hit) => { setFinderOpen(false); router.push(`/dashboard/products/${hit.id}`); }} />
       {cleaning && storeId ? <CleanupProductsSheet storeId={storeId} onClose={() => setCleaning(false)} onChanged={() => void reloadAll()} /> : null}
     </main>
   );

@@ -28,6 +28,8 @@ import { useCan } from "@/lib/permission-runtime";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { BadgeDollarSign, FileText, Images, ListChecks, Package, Store, Warehouse } from "lucide-react";
 import { Field, ProductEditorLayout, ProductPreviewCard, inputCls, inputStyle, type EditorSection } from "../ProductEditorLayout";
+import { ProductFinder, type FinderHit } from "@/components/product-finder/ProductFinder";
+import { useErpFinderSource } from "../../useErpFinder";
 
 type Category = { id: string; name: string };
 
@@ -107,6 +109,19 @@ export default function EditProductPage() {
   // Todas las categorías del producto (la primera es la principal).
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [savedCategoryIds, setSavedCategoryIds] = useState<string[]>([]);
+
+  // Buscar otro producto para editar (botón o F2). Si hay cambios sin guardar, pregunta antes de cambiar.
+  const [finderOpen, setFinderOpen] = useState(false);
+  const finderSource = useErpFinderSource(storeId);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "F2" || Swal.isVisible()) return;
+      e.preventDefault();
+      setFinderOpen(true);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const isDirty = useMemo(() => {
     if (!product || !draft) return false;
@@ -243,8 +258,9 @@ export default function EditProductPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function save() {
-    if (!draft || !storeId || savingNow.current) return;
+  /** true si quedó guardado. */
+  async function save(): Promise<boolean> {
+    if (!draft || !storeId || savingNow.current) return false;
     savingNow.current = true;
 
     setSaving(true);
@@ -280,12 +296,13 @@ export default function EditProductPage() {
       setSavedCategoryIds(categoryIds);
       if (categoryWarning) {
         await Swal.fire({ icon: "warning", title: "Producto guardado", text: categoryWarning, background: "var(--t-bg-base)", color: "var(--t-text)" });
-        return;
+        return true;
       }
 
       // Confirmación sin ventana: «Guardado ✓» en la barra de arriba.
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 2200);
+      return true;
     } catch (e: any) {
       await Swal.fire({
         icon: "error",
@@ -294,10 +311,37 @@ export default function EditProductPage() {
         background: "var(--t-bg-base)",
         color: "var(--t-text)",
       });
+      return false;
     } finally {
       setSaving(false);
       savingNow.current = false;
     }
+  }
+
+  /** Abre otro producto. Con cambios sin guardar: «Guardar y cambiar», «Cambiar sin guardar» o seguir editando. */
+  async function switchTo(hit: FinderHit) {
+    setFinderOpen(false);
+    if (hit.id === id) return;
+    if (isDirty) {
+      const res = await Swal.fire({
+        icon: "warning",
+        title: "Tienes cambios sin guardar",
+        text: `Vas a abrir «${hit.name}». ¿Qué hago con los cambios de este producto?`,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: "💾 Guardar y cambiar",
+        denyButtonText: "Cambiar sin guardar",
+        cancelButtonText: "Seguir editando",
+        confirmButtonColor: "#10b981",
+        denyButtonColor: "#ef4444",
+        background: "var(--t-bg-base)",
+        color: "var(--t-text)",
+      });
+      if (res.isConfirmed) {
+        if (!(await save())) return;
+      } else if (!res.isDenied) return;
+    }
+    router.push(`/dashboard/products/${hit.id}`);
   }
 
   async function goBack() {
@@ -457,6 +501,7 @@ export default function EditProductPage() {
         onSave={() => void save()}
         onBack={() => void goBack()}
         actions={<>
+          <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => setFinderOpen(true)} title="Buscar otro producto para editar (F2)">🔎 Otro producto <kbd className="hidden rounded border px-1 sm:inline text-[10px] font-semibold opacity-70" style={{ borderColor: "var(--t-card-border)" }}>F2</kbd></button>
           <PublishButton storeId={storeId} productId={d.id} productName={d.name} />
           <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
           <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">🏷️ Etiqueta</button>
@@ -464,6 +509,8 @@ export default function EditProductPage() {
         sections={sections}
         preview={<ProductPreviewCard name={d.name} image={d.image_url} price={prices[2] || prices[0]} active={!!d.active} highlights={det.highlights} category={mainCategory} />}
       />
+      <ProductFinder open={finderOpen} onClose={() => setFinderOpen(false)} source={finderSource} initialMode="text"
+        title="Editar otro producto" subtitle="Escribe el nombre o el código, o toma una foto." pickLabel="Editar" onPick={(hit) => void switchTo(hit)} />
       <MobileActionBar show={isDirty} hint="Tienes cambios sin guardar">
         <button type="button" className="rounded-xl px-4 py-2 text-sm font-black text-white" style={{ background: "var(--t-accent)" }} disabled={saving} onClick={() => void save()}>
           {saving ? "Guardando…" : "💾 Guardar cambios"}
