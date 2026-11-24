@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `76068288` · 118 capacidades · 32 módulos.
+Versión del catálogo: `e910c026` · 118 capacidades · 32 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
@@ -11,7 +11,7 @@ Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo 
 | Módulo | Ruta | Para qué sirve | Cómo se hace (pasos verificados) |
 |---|---|---|---|
 | Inicio e informes | `/dashboard` | Es la primera pantalla: tus pendientes, las ventas de hoy de tus puntos comparadas con ayer, lo más vendido de la semana, las metas del mes y el cierre del día. | — |
-| POS / Vender | `/dashboard/pos` | Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. Debajo del carrito sugiere lo que más se vende junto con lo que llevas («también llevan»). | hacer una venta (por voz) |
+| POS / Vender | `/dashboard/pos` | Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. Debajo del carrito sugiere lo que más se vende junto con lo que llevas («también llevan»). Antes de cobrar dice en una frase qué se va a crear (remisión o factura electrónica, número, punto y si va a la DIAN); al terminar muestra el número, el vuelto, si la DIAN la aceptó y botones para imprimir, mandarla por WhatsApp o empezar otra venta. En el celular se cobra en una sola hoja. | hacer una venta (por voz) |
 | Caja | `/dashboard/caja` | Sirve para abrir y cerrar la caja de cada punto, contar el efectivo y ver si hay diferencias. | abrir la caja (3 pasos); cerrar la caja (3 pasos) |
 | Apartados y cotizaciones | `/dashboard/apartados` | Para separar productos a un cliente que va abonando, y para hacer cotizaciones. | hacer un apartado (3 pasos); hacer una cotización (3 pasos) |
 | Promociones y combos | `/dashboard/promociones` | Para crear descuentos, ofertas y combos de productos. | crear una promoción (5 pasos) |

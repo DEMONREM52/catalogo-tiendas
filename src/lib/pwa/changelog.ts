@@ -1463,6 +1463,36 @@ export const RELEASES: Release[] = [
       { icon: "👉", text: "3 pedidos te tocan" },
     ],
   },
+  {
+    id: 142, date: "2026-11-24", title: "💰 Cobrar en una sola hoja (celular)",
+    summary: "En el celular, «💰 Cobrar» abre una hoja con solo lo necesario: el total, el cliente, Remisión o Factura, de contado o a crédito y cómo paga, con el vuelto. El vendedor, la impresión y la nota quedan en «Más opciones».",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🛒", text: "Toca «💰 Cobrar»" },
+      { icon: "🧾", text: "Remisión o Factura" },
+      { icon: "💵", text: "Efectivo · vuelto $15.000" },
+    ],
+  },
+  {
+    id: 143, date: "2026-11-24", title: "📋 El POS te dice qué va a pasar",
+    summary: "Encima del botón de cobrar sale una frase con lo que hace la venta: qué documento se crea y con qué número, a quién, de qué punto se descuenta y si va a la DIAN. Si algo falla, sale en rojo con qué hacer. El «?» muestra el detalle.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "🧾", text: "Factura electrónica FE1234" },
+      { icon: "📍", text: "Se descuentan 3 und. de tu punto" },
+      { icon: "🏛️", text: "Se envía a la DIAN" },
+    ],
+  },
+  {
+    id: 144, date: "2026-11-24", title: "✅ Pantalla de «Listo» al vender",
+    summary: "Al terminar la venta ves el número grande, el vuelto grande y si la DIAN la aceptó, en palabras. Tres botones: imprimir, mandarla por WhatsApp y nueva venta.",
+    paths: ["/dashboard/pos"],
+    demo: [
+      { icon: "✅", text: "REM-00045 creada" },
+      { icon: "💵", text: "Vuelto $15.000" },
+      { icon: "💬", text: "Mandar por WhatsApp" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

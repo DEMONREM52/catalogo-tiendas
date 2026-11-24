@@ -46,6 +46,9 @@ import { CashStatusChip } from "../caja/CashStatusChip";
 import { checkStockNow, friendlyStockError, shortListHtml, useLiveStock } from "@/lib/stock/live-stock";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { PosToolbar, requestPasses, usePromotions, type Passes } from "./PosExtras";
+import { PosCheckoutSheet } from "./PosCheckoutSheet";
+import { PosDoneSheet, type DoneSale } from "./PosDoneSheet";
+import { SaleSummary, ddmmyyyy, type SaleSummaryInput } from "./PosSaleSummary";
 
 // La ventana de «Cliente nuevo» se descarga aparte, cuando el navegador queda libre: el POS abre antes y la
 // ventana igual queda guardada para cuando no haya internet.
@@ -120,6 +123,8 @@ type CartItem = {
   /** El vendedor cambió el precio a mano: el cambio de lista no lo pisa. */
   manual?: boolean;
 };
+
+const PAY_LABEL: Record<PayMethod, string> = { efectivo: "💵 Efectivo", transferencia: "🏦 Transferencia", nequi: "📱 Nequi / Daviplata", tarjeta: "💳 Tarjeta", mixto: "🔀 Mixto" };
 
 function money(n: number) {
   return `$${Number(n || 0).toLocaleString("es-CO")}`;
@@ -237,6 +242,10 @@ export default function PosPage() {
   const [clientPicking, setClientPicking] = useState(false);
   // Celular: el carrito se abre encima (hoja de abajo) sin perder la búsqueda.
   const [cartSheet, setCartSheet] = useState(false);
+  // Celular: cobrar en una sola hoja; al terminar, la pantalla de «Listo» (en todos los equipos).
+  const [checkout, setCheckout] = useState(false);
+  const [sheetClientPicking, setSheetClientPicking] = useState(false);
+  const [doneSale, setDoneSale] = useState<DoneSale | null>(null);
   // Celular: producto al que se le está escogiendo la cantidad; y si se ven todos los productos sin buscar.
   const [picking, setPicking] = useState<Product | null>(null);
   const [browseAll, setBrowseAll] = useState(false);
@@ -1617,7 +1626,8 @@ export default function PosPage() {
       forgetCurrentSale();
  
       let docNumber = "";
-      let fiscalNote = "";
+      let dian: DoneSale["dian"] = null;
+      const notes: DoneSale["notes"] = [];
       const electronic = documentKind === "factura" && fiscalOn;
       if (electronic) {
         idemKey.current ??= newIdempotencyKey("pos");
@@ -1649,9 +1659,9 @@ export default function PosPage() {
               const { data: tag, error: tagError } = await sb.rpc("erp_tag_order", { p_store: store.id, p_token: token, p_point: pointId || null, p_seller: sellerId || null, p_kind: "remision" });
               if (tagError) throw tagError;
               docNumber = (tag as { doc_number?: string } | null)?.doc_number ?? "";
-              fiscalNote = "<br/><small>Se guardó como remisión: aparece en Centro fiscal → «Por facturar».</small>";
+              dian = { tone: "warn", text: "📄 Se guardó como remisión: queda en «Por facturar»", fix: { href: "/dashboard/fiscal?tab=pendientes", label: "Ver" } };
             } else {
-              fiscalNote = "<br/><small style=\"color:#f59e0b\">La venta quedó creada sin documento fiscal. Factúrala desde el Centro fiscal.</small>";
+              dian = { tone: "bad", text: "⚠️ Quedó sin factura electrónica: factúrala en «Por facturar»", fix: { href: "/dashboard/fiscal?tab=pendientes", label: "Ir" } };
             }
             break;
           }
@@ -1659,9 +1669,16 @@ export default function PosPage() {
         if (issued) {
           docNumber = issued.document.full_number;
           const env = issued.document.environment === "production" ? "" : " · 🧪 pruebas";
-          fiscalNote = issued.send?.ok
-            ? `<br/><b>Factura electrónica:</b> ${issued.send.status === "ACCEPTED" ? "✅ aceptada" : "enviada"}${env}`
-            : `<br/><small style="color:#f59e0b">⚠️ ${issued.send?.message ?? "Quedó en cola: se enviará automáticamente."}</small>`;
+          const look = { href: `/dashboard/fiscal?tab=documentos&q=${encodeURIComponent(issued.document.full_number)}` };
+          dian = !issued.send
+            ? { tone: "warn", text: `⏳ En cola: se envía sola a la DIAN${env}` }
+            : issued.send.status === "ACCEPTED"
+              ? { tone: "ok", text: `✅ Aceptada por la DIAN${env}` }
+              : issued.send.status === "SENT"
+                ? { tone: "ok", text: `📤 Enviada · la DIAN responde en unos minutos${env}` }
+                : issued.send.status === "REJECTED"
+                  ? { tone: "bad", text: `⛔ Rechazada: ${issued.send.message}`, fix: { ...look, label: "Arreglar" } }
+                  : { tone: "warn", text: `⏳ ${issued.send.message}${env}`, fix: { ...look, label: "Ver" } };
         }
         idemKey.current = null;
         if (customerDocument.trim()) await sb.rpc("erp_pos_set_customer_doc", { p_token: token, p_doc: customerDocument.trim() });
@@ -1694,7 +1711,7 @@ export default function PosPage() {
             confirmButtonColor: "#8b5cf6",
           });
           if (!retry.isConfirmed) {
-            fiscalNote += "<br/><small style=\"color:#f59e0b\">⚠️ Quedó sin punto ni vendedor: revísala en Pedidos.</small>";
+            notes.push({ tone: "warn", text: "⚠️ Quedó sin punto ni vendedor: revísala en Pedidos." });
             break;
           }
         }
@@ -1709,7 +1726,6 @@ export default function PosPage() {
         await sb.rpc("erp_pos_set_payment", { p_token: token, p_payment: pay }).then(() => null, () => null);
       }
 
-      let creditNote = "";
       if (registerCredit && selectedClient) {
         const { data: reg, error: regError } = await sb.rpc("erp_credit_register", {
           p_store: store.id,
@@ -1719,10 +1735,10 @@ export default function PosPage() {
           p_override: creditOverride,
         });
         if (regError) {
-          creditNote = `<br/><small style="color:#f59e0b">⚠️ El documento se creó, pero no se registró en cartera: ${regError.message}</small>`;
+          notes.push({ tone: "warn", text: `⚠️ El documento se creó, pero no se registró en cartera: ${regError.message}` });
         } else {
           const due = (reg as { due_date?: string } | null)?.due_date;
-          creditNote = due ? `<br/><b>Crédito:</b> vence el ${new Date(`${due}T12:00:00`).toLocaleDateString("es-CO")}` : "";
+          if (due) notes.push({ tone: "info", text: `💳 A crédito: vence el ${ddmmyyyy(new Date(`${due}T12:00:00`))}` });
           setCreditState(null);
         }
       }
@@ -1794,18 +1810,18 @@ export default function PosPage() {
       }
 
       const kindLabel = documentKind === "factura" ? "Factura" : "Remisión";
-      const done = await Swal.fire({
-        icon: "success",
-        title: `${kindLabel} creada`,
-        html: `${kindLabel} generada con éxito.${docNumber ? `<br/><b>N.º:</b> ${docNumber}` : ""}${fiscalNote}${sellerId ? `<br/><b>Vendedor:</b> ${sellers.find((r) => r.user_id === sellerId)?.name ?? ""}` : ""}${siigoTrackingWarning ? `<br/><small>${siigoTrackingWarning}</small>` : ""}<br/><b>Cliente:</b> ${customerName.replace(/[<>&]/g, "")}<br/><b>Total:</b> ${money(total)}${paymentType === "contado" && pay.change > 0 ? `<br/><b style="color:#22c55e">💵 Vuelto: ${money(pay.change)}</b>` : ""}${creditNote}`,
-        background: "#0b0b0b",
-        color: "#fff",
-        confirmButtonText: "Ver comprobante",
-        confirmButtonColor: "#22c55e",
-        ...(directPrinter ? { showDenyButton: true, denyButtonText: printer.autoPrint ? "🖨️ Reimprimir" : "🖨️ Imprimir", denyButtonColor: "#8b5cf6" } : {}),
+      if (siigoTrackingWarning) notes.push({ tone: "info", text: siigoTrackingWarning });
+      // Pantalla de «Listo»: el número, el vuelto grande, la DIAN en palabras e imprimir / WhatsApp / nueva venta.
+      setCheckout(false);
+      setDoneSale({
+        kindLabel, docNumber, total, dian, notes, token,
+        change: paymentType === "contado" ? pay.change : 0,
+        payLabel: paymentType === "credito" ? "💳 Crédito" : payment.method === "efectivo" ? PAY_LABEL.efectivo : PAY_LABEL[payment.method],
+        customerName: customerName.trim(),
+        customerPhone: customerWhatsApp.trim() || selectedClient?.mobile || "",
+        sellerName: sellerId ? sellers.find((r) => r.user_id === sellerId)?.name ?? null : null,
+        receiptUrl: invoiceUrl, direct: directPrinter, autoPrint: printer.autoPrint, printSize, storeName: store.name,
       });
-      if (directPrinter && done.isConfirmed) window.open(invoiceUrl, "_blank");
-      if (directPrinter && done.isDenied) void reprintOrder(token, printSize);
 
       // Apartado entregado / cotización vendida: queda ligado a la venta (y la caja se compensa con los abonos).
       if (createdToken && layawayRef.current) {
@@ -1972,6 +1988,170 @@ export default function PosPage() {
     };
   });
   const voice = useListVoice(voiceAdapter, Boolean(storeId));
+
+  // La frase «qué va a pasar» (abajo, junto al botón de cobrar).
+  const pointNow = points.find((x) => x.id === pointId) ?? null;
+  const nextDocNumber = !pointNow
+    ? null
+    : documentKind === "factura" && fiscalOn
+      ? fiscal?.range ? `${fiscal.range.prefix}${fiscal.range.next_number}` : null
+      : `${documentKind === "factura" ? pointNow.invoice_prefix : pointNow.remision_prefix}-${String(documentKind === "factura" ? pointNow.next_invoice_number : pointNow.next_remision_number).padStart(5, "0")}`;
+  const payNow = paymentSummary(payment, total);
+  const printerNow = getPrinterSettings();
+  const sizeName = printSize === "carta" ? "carta" : "tirilla";
+  const summaryInput: SaleSummaryInput = {
+    editing: editingDoc ? editingDoc.doc_number ?? `#${editingDoc.receipt_no}` : null,
+    documentKind, fiscalOn, fiscal,
+    siigo: documentKind === "factura" && !fiscalOn && requestElectronicInvoice && siigoConfigured,
+    pointName: pointNow?.name ?? null,
+    nextNumber: nextDocNumber,
+    clientName: effectiveClient.name,
+    clientDoc: effectiveClient.document_number ? docWithDv(effectiveClient.document_number) : null,
+    units, total, paymentType, dueDays,
+    payLabel: payment.method === "efectivo"
+      ? `${PAY_LABEL.efectivo}${payNow.change > 0 ? ` · vuelto ${money(payNow.change)}` : payNow.missing > 0 ? ` · faltan ${money(payNow.missing)}` : " exacto"}`
+      : payment.method === "mixto" ? `${PAY_LABEL.mixto} (${payNow.parts.length} formas)` : PAY_LABEL[payment.method],
+    sellerName: sellerId ? sellers.find((r) => r.user_id === sellerId)?.name ?? null : null,
+    printLabel: isDirect(printerNow)
+      ? printerNow.autoPrint ? `🖨️ Se imprime solo (${sizeName})` : `🖨️ Impresora directa (${sizeName}): toca «Imprimir» al terminar`
+      : `📄 Se abre el comprobante (${sizeName})`,
+    offline: !net.online ? "internet" : net.db === "down" ? "base de datos" : null,
+    contingencyLeft,
+    money,
+  };
+  const chargeLabel = `${!net.online || net.db === "down" ? "💾 Guardar" : documentKind === "factura" ? (fiscalOn ? "✅ Facturar electrónica" : "✅ Crear factura") : "✅ Crear remisión"}${paymentType === "credito" ? " a crédito" : ""} · ${money(total)}`;
+  // Se vació el carrito (venta guardada sin conexión, apartado, etc.) o se pasó a editar: la hoja de cobro no vuelve a salir sola.
+  if (checkout && (cart.length === 0 || editingDoc)) setCheckout(false);
+  function openCheckout() {
+    setCartSheet(false);
+    setClientPicking(false);
+    setSheetClientPicking(false);
+    setClientSearch("");
+    setCheckout(true);
+  }
+  function closeDone() {
+    setDoneSale(null);
+    if (window.matchMedia("(min-width: 1024px)").matches) goSearch();
+  }
+
+  const clientBlock = (picking: boolean, setPick: (v: boolean) => void) => (
+    picking ? (
+              <div className="mt-2">
+                <div className="relative">
+                  <UserRound size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
+                  <input
+                    {...inputProps()}
+                    style={{ ...inputProps().style, paddingLeft: 34, borderColor: "var(--t-accent)" }}
+                    autoFocus
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); setPick(false); }
+                      if (e.key === "Escape") { setClientSearch(""); setPick(false); }
+                    }}
+                    placeholder="Nombre, cédula/NIT o teléfono del cliente"
+                    aria-label="Buscar cliente"
+                  />
+                </div>
+                <div className="mt-1 max-h-64 overflow-y-auto rounded-2xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
+                  {filteredClients.slice(0, 8).map((client) => (
+                    <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); setPick(false); }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }}>
+                        {client.name.slice(0, 1)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold">{client.name}</span>
+                        <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                          {client.document_number ? docWithDv(client.document_number) : "Sin documento"}{client.mobile ? ` · 📱 ${client.mobile}` : ""} · P{client.price_list}{client.credit_enabled ? (client.credit_blocked ? " · 🔒" : " · 💳") : ""}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredClients.length === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                      <span>No encontramos ese cliente.</span>
+                      <button type="button" onClick={() => { prefillNewClient(); setPick(false); }} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}>
+                        ➕ Crear cliente
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <button type="button" onClick={() => { setClientSearch(""); setPick(false); }} className="mt-2 w-full rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+                  Cancelar · seguir con {effectiveClient.name}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setPick(true)} title="Elegir el cliente de esta venta"
+                className="mt-2 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition hover:-translate-y-0.5"
+                style={{ borderColor: selectedClient ? "var(--t-accent)" : "var(--t-card-border)", background: selectedClient ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : "transparent" }}>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: "color-mix(in oklab, var(--t-accent) 20%, transparent)" }}><UserRound size={17} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
+                  <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedIsCF ? DEFAULT_PRICE_LIST : selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : effectiveClient.name !== DEFAULT_CLIENT_NAME ? `Cliente sin registrar${customerDocument.trim() ? ` · Doc ${docWithDv(customerDocument.trim())}` : ""} · Lista P3` : "Venta sin cliente registrado · Lista P3"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
+              </button>
+    )
+  );
+
+  const creditBox = (idp: string) => (
+                  <div className="mt-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
+                    <p className="mb-2 text-xs font-black">💳 Venta a crédito{selectedClient ? ` · ${selectedClient.name}` : ""}</p>
+                      {paymentType === "credito" ? (
+                        <div className="space-y-2">
+                          {!selectedClient ? (
+                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                              💳 Para vender a crédito elige un <b>cliente registrado</b> (nunca Consumidor final). La deuda quedará en su cartera.
+                            </p>
+                          ) : creditBlockReason(selectedClient) ? (
+                            <p className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">⛔ {creditBlockReason(selectedClient)}</p>
+                          ) : creditUnavailable ? (
+                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
+                          ) : creditState?.for === selectedClient.id ? (
+                            <div
+                              className="rounded-xl border p-3"
+                              style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
+                            >
+                              <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
+                              <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
+                                {creditState.can_sell
+                                  ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
+                                  : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
+                          )}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="text-sm font-semibold" htmlFor={`${idp}-due-days`}>¿En cuántos días paga?</label>
+                            {dueDays > 0 ? <span className="text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>Vence el {new Date(Date.now() + dueDays * 86400000).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}</span> : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {[8, 15, 30, 60].map((d) => (
+                              <button key={d} type="button" onClick={() => setDueDays(d)} className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
+                                style={dueDays === d ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
+                                {d} días
+                              </button>
+                            ))}
+                            <input
+                              id={`${idp}-due-days`}
+                              {...inputProps()}
+                              type="number"
+                              min={1}
+                              value={dueDays}
+                              onChange={(e) => setDueDays(Number(e.target.value))}
+                              placeholder="Otro"
+                              aria-label="Otro número de días"
+                              className={`${inputProps().className ?? ""} !mt-0 !w-24`}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                  </div>
+  );
 
   return (
     <main className="space-y-3 pb-20 lg:pb-0">
@@ -2230,66 +2410,7 @@ export default function PosPage() {
                 </button>
               ) : null}
             </div>
-            {clientPicking ? (
-              <div className="mt-2">
-                <div className="relative">
-                  <UserRound size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" />
-                  <input
-                    {...inputProps()}
-                    style={{ ...inputProps().style, paddingLeft: 34, borderColor: "var(--t-accent)" }}
-                    autoFocus
-                    value={clientSearch}
-                    onChange={(e) => setClientSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); setClientPicking(false); }
-                      if (e.key === "Escape") { setClientSearch(""); setClientPicking(false); }
-                    }}
-                    placeholder="Nombre, cédula/NIT o teléfono del cliente"
-                    aria-label="Buscar cliente"
-                  />
-                </div>
-                <div className="mt-1 max-h-64 overflow-y-auto rounded-2xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
-                  {filteredClients.slice(0, 8).map((client) => (
-                    <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); setClientPicking(false); }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }}>
-                        {client.name.slice(0, 1)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold">{client.name}</span>
-                        <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                          {client.document_number ? docWithDv(client.document_number) : "Sin documento"}{client.mobile ? ` · 📱 ${client.mobile}` : ""} · P{client.price_list}{client.credit_enabled ? (client.credit_blocked ? " · 🔒" : " · 💳") : ""}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                  {filteredClients.length === 0 ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
-                      <span>No encontramos ese cliente.</span>
-                      <button type="button" onClick={() => { prefillNewClient(); setClientPicking(false); }} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "var(--t-cta)", color: "var(--t-cta-text, #0b0b0b)" }}>
-                        ➕ Crear cliente
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                <button type="button" onClick={() => { setClientSearch(""); setClientPicking(false); }} className="mt-2 w-full rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
-                  Cancelar · seguir con {effectiveClient.name}
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setClientPicking(true)} title="Elegir el cliente de esta venta"
-                className="mt-2 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition hover:-translate-y-0.5"
-                style={{ borderColor: selectedClient ? "var(--t-accent)" : "var(--t-card-border)", background: selectedClient ? "color-mix(in oklab, var(--t-accent) 12%, transparent)" : "transparent" }}>
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: "color-mix(in oklab, var(--t-accent) 20%, transparent)" }}><UserRound size={17} /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-black">{effectiveClient.name}</span>
-                  <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                    {selectedClient ? `Doc ${selectedClient.document_number ? docWithDv(selectedClient.document_number) : "—"} · Lista P${selectedIsCF ? DEFAULT_PRICE_LIST : selectedClient.price_list}${selectedClient.credit_enabled ? (selectedClient.credit_blocked ? " · 🔒 crédito bloqueado" : " · 💳 tiene crédito") : ""}` : effectiveClient.name !== DEFAULT_CLIENT_NAME ? `Cliente sin registrar${customerDocument.trim() ? ` · Doc ${docWithDv(customerDocument.trim())}` : ""} · Lista P3` : "Venta sin cliente registrado · Lista P3"}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>{selectedClient ? "Cambiar" : "Elegir cliente"}</span>
-              </button>
-            )}
+            {clientBlock(clientPicking, setClientPicking)}
         <details className="mt-3 border-t pt-3" style={{ borderColor: "var(--t-card-border)" }}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
           <span className="min-w-0">
@@ -2674,63 +2795,12 @@ export default function PosPage() {
                   <p className="mt-2 text-[11px]" style={{ color: "var(--t-muted)" }}>💡 {selectedClient.name} tiene crédito. Si se lo vas a fiar, toca <b>«💳 A crédito»</b>.</p>
                 ) : null}
                 {paymentType === "contado" ? <PosPayment total={total} value={payment} onChange={setPayment} /> : (
-                  <div className="mt-3 rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 90%, transparent)" }}>
-                    <p className="mb-2 text-xs font-black">💳 Venta a crédito{selectedClient ? ` · ${selectedClient.name}` : ""}</p>
-                      {paymentType === "credito" ? (
-                        <div className="space-y-2">
-                          {!selectedClient ? (
-                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                              💳 Para vender a crédito elige un <b>cliente registrado</b> (nunca Consumidor final). La deuda quedará en su cartera.
-                            </p>
-                          ) : creditBlockReason(selectedClient) ? (
-                            <p className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">⛔ {creditBlockReason(selectedClient)}</p>
-                          ) : creditUnavailable ? (
-                            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">Ejecuta la migración de cartera (20261018_terceros_cartera.sql) para controlar cupos.</p>
-                          ) : creditState?.for === selectedClient.id ? (
-                            <div
-                              className="rounded-xl border p-3"
-                              style={{ borderColor: creditState.can_sell ? "color-mix(in oklab, #22c55e 40%, transparent)" : "color-mix(in oklab, #ef4444 45%, transparent)", background: creditState.can_sell ? "color-mix(in oklab, #22c55e 7%, transparent)" : "color-mix(in oklab, #ef4444 7%, transparent)" }}
-                            >
-                              <CreditMeter enabled={creditState.enabled} blocked={creditState.blocked} limit={creditState.limit} used={creditState.used} overdue={creditState.overdue} overdueCount={creditState.overdue_count} />
-                              <p className="mt-2 text-xs font-semibold" style={{ color: creditState.can_sell ? "#22c55e" : "#ef4444" }}>
-                                {creditState.can_sell
-                                  ? `✅ Aprobado: esta venta de ${money(total)} cabe en el cupo.`
-                                  : `⛔ ${creditState.reason}${creditState.can_override ? " Puedes autorizarla con tu permiso de Créditos." : " Necesita autorización de un usuario con permiso de Créditos."}`}
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="text-xs" style={{ color: "var(--t-muted)" }}>Consultando cupo…</p>
-                          )}
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <label className="text-sm font-semibold" htmlFor="pos-due-days">¿En cuántos días paga?</label>
-                            {dueDays > 0 ? <span className="text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>Vence el {new Date(Date.now() + dueDays * 86400000).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}</span> : null}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {[8, 15, 30, 60].map((d) => (
-                              <button key={d} type="button" onClick={() => setDueDays(d)} className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
-                                style={dueDays === d ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
-                                {d} días
-                              </button>
-                            ))}
-                            <input
-                              id="pos-due-days"
-                              {...inputProps()}
-                              type="number"
-                              min={1}
-                              value={dueDays}
-                              onChange={(e) => setDueDays(Number(e.target.value))}
-                              placeholder="Otro"
-                              aria-label="Otro número de días"
-                              className={`${inputProps().className ?? ""} !mt-0 !w-24`}
-                            />
-                          </div>
-                        </div>
-                      ) : null}
-                  </div>
+                  creditBox("pos")
                 )}
               </div>
             ) : null}
 
+            {cart.length ? <SaleSummary input={summaryInput} className="mt-3" /> : null}
             <button
               onClick={createInvoice}
               disabled={saving}
@@ -2788,9 +2858,14 @@ export default function PosPage() {
                   <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>{cart.length} producto{cart.length === 1 ? "" : "s"} · ver</span>
                 </span>
               </button>
-              <button type="button" onClick={() => void createInvoice()} disabled={saving}
-                className="shrink-0 rounded-2xl px-4 text-sm font-black text-white shadow-[0_14px_40px_rgba(0,0,0,.35)] active:scale-95 disabled:opacity-60" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
-                {saving ? "Creando…" : editingDoc ? "💾 Guardar" : documentKind === "factura" ? "⚡ Facturar" : "⚡ Crear remisión"}
+              <button type="button" onClick={() => (editingDoc ? void createInvoice() : openCheckout())} disabled={saving}
+                className="shrink-0 rounded-2xl px-4 text-left font-black leading-tight text-white shadow-[0_14px_40px_rgba(0,0,0,.35)] active:scale-95 disabled:opacity-60" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
+                {saving ? <span className="text-sm">Creando…</span> : editingDoc ? <span className="text-sm">💾 Guardar</span> : (
+                  <>
+                    <span className="block text-sm">💰 Cobrar</span>
+                    <span className="block text-[10px] font-bold opacity-85">{documentKind === "factura" ? (fiscalOn ? "factura electrónica" : "factura") : "remisión"}</span>
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
@@ -2828,14 +2903,15 @@ export default function PosPage() {
               <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: "var(--t-card-border)" }}>
                 {listTotal > total ? <p className="flex justify-between text-xs text-amber-400"><span>🏷️ Descuento</span><span className="tabular-nums">−{money(listTotal - total)}</span></p> : null}
                 <p className="flex items-end justify-between"><span className="font-bold">Total</span><span className="text-2xl font-black tabular-nums">{money(total)}</span></p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${editingDoc ? "grid-cols-1" : "grid-cols-2"}`}>
                   <button type="button" onClick={() => { setCartSheet(false); goSearch(); }} className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>➕ Agregar otro</button>
-                  <button type="button" onClick={() => { setCartSheet(false); window.setTimeout(() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 220); }}
-                    className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>👤 Cliente y pago</button>
+                  {!editingDoc ? (
+                    <button type="button" onClick={() => { setCartSheet(false); holdSale(); }} className="rounded-2xl border px-3 py-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>⏸️ En espera</button>
+                  ) : null}
                 </div>
-                <button type="button" disabled={saving} onClick={() => { setCartSheet(false); void createInvoice(); }}
+                <button type="button" disabled={saving} onClick={() => { if (editingDoc) { setCartSheet(false); void createInvoice(); } else openCheckout(); }}
                   className="w-full rounded-2xl px-3 py-3.5 text-base font-black text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#ec4899,#8b5cf6 55%,#6366f1)" }}>
-                  {saving ? "Creando…" : editingDoc ? "💾 Guardar cambios" : documentKind === "factura" ? "⚡ Crear factura" : "⚡ Crear remisión"} · {money(total)}
+                  {saving ? "Creando…" : editingDoc ? "💾 Guardar cambios" : "💰 Cobrar"} · {money(total)}
                 </button>
                 <p className="text-center text-[10px]" style={{ color: "var(--t-muted)" }}>Cliente: {effectiveClient.name}{paymentType === "contado" ? " · contado" : " · crédito"}</p>
               </div>
@@ -2843,6 +2919,75 @@ export default function PosPage() {
           </>
         ) : null}
       </AnimatePresence>
+      <PosCheckoutSheet
+        open={checkout && cart.length > 0 && !editingDoc}
+        onClose={() => setCheckout(false)}
+        onConfirm={() => void createInvoice()}
+        saving={saving}
+        total={total}
+        listTotal={listTotal}
+        money={money}
+        client={(
+          <div>
+            {clientBlock(sheetClientPicking, setSheetClientPicking)}
+            {selectedClient && !selectedIsCF && !sheetClientPicking ? (
+              <button type="button" onClick={() => setSelectedClientId(cfClient?.id ?? "")} className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold underline" style={{ color: "var(--t-muted)" }}>
+                <X size={12} /> Volver a consumidor final
+              </button>
+            ) : null}
+          </div>
+        )}
+        documentKind={documentKind}
+        onDocumentKind={setDocumentKind}
+        electronic={fiscalOn}
+        paymentType={paymentType}
+        onPaymentType={setPaymentType}
+        creditLocked={!posPerms.credit}
+        pay={paymentType === "contado" ? (
+          <>
+            {selectedClient?.credit_enabled && !selectedClient.credit_blocked ? (
+              <p className="mt-3 text-[11px]" style={{ color: "var(--t-muted)" }}>💡 {selectedClient.name} tiene crédito. Si se lo vas a fiar, toca <b>«💳 A crédito»</b>.</p>
+            ) : null}
+            <PosPayment total={total} value={payment} onChange={setPayment} />
+          </>
+        ) : creditBox("pos-sheet")}
+        summary={<SaleSummary input={summaryInput} />}
+        moreHint={`${summaryInput.sellerName ? `🧑‍💼 ${summaryInput.sellerName}` : "Sin vendedor"} · 🖨️ ${sizeName}${customerNote.trim() ? " · 📝 con nota" : ""}`}
+        more={(
+          <>
+            <div>
+              <label className="text-xs font-semibold" htmlFor="pos-sheet-seller">Vendedor</label>
+              <select id="pos-sheet-seller" {...inputProps()} value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+                <option value="">Sin vendedor</option>
+                {sellersForPoint(sellers, pointId).map((r) => (
+                  <option key={r.user_id} value={r.user_id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <p className="text-xs font-semibold">Impresión</p>
+              <div className="mt-1 flex gap-1.5">
+                {(["tirilla", "carta"] as const).map((v) => (
+                  <button key={v} type="button" onClick={() => setPrintSize(v)} className="rounded-full border px-3 py-1.5 text-xs font-bold"
+                    style={printSize === v ? { background: "var(--t-accent)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--t-card-border)" }}>
+                    {v === "tirilla" ? "🧾 Tirilla" : "📄 Carta"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold" htmlFor="pos-sheet-note">Nota</label>
+              <textarea id="pos-sheet-note" {...inputProps()} className="min-h-[70px] w-full rounded-2xl border px-3 py-2 text-sm outline-none" value={customerNote} onChange={(e) => setCustomerNote(e.target.value)} placeholder="Por ejemplo: entrega inmediata" />
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+              Punto: <b>{pointNow?.name ?? "sin punto"}</b>. El punto, el correo y los demás datos del cliente están en «⚙️ Detalles de la venta».{" "}
+              <button type="button" className="font-semibold underline" style={{ color: "var(--t-accent)" }} onClick={() => { setCheckout(false); window.setTimeout(() => cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 220); }}>Ir allá</button>
+            </p>
+          </>
+        )}
+        confirmLabel={chargeLabel}
+      />
+      <PosDoneSheet sale={doneSale} onClose={closeDone} money={money} />
       <QtyPicker
         product={picking}
         price={picking ? priceOf(picking, currentPriceList) : 0}

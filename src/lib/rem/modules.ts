@@ -49,7 +49,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "pos", name: "POS / Vender", path: "/dashboard/pos",
     aliases: "pos punto de venta vender venta facturar remision cobrar caja registradora", keys: "pos|punto de venta|vender",
-    about: "Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. Debajo del carrito sugiere lo que más se vende junto con lo que llevas («también llevan»).",
+    about: "Es donde se vende en el mostrador: buscas los productos, también con la cámara, armas la venta, eliges el cliente y la forma de pago y cobras. La venta descuenta las existencias del punto. Debajo del carrito sugiere lo que más se vende junto con lo que llevas («también llevan»). Antes de cobrar dice en una frase qué se va a crear (remisión o factura electrónica, número, punto y si va a la DIAN); al terminar muestra el número, el vuelto, si la DIAN la aceptó y botones para imprimir, mandarla por WhatsApp o empezar otra venta. En el celular se cobra en una sola hoja.",
     howto: [{
       id: "pos.sell", goal: "hacer una venta", keywords: "venta vender facturar cobrar remision",
       // Pasos manuales del POS sin revisar todavía: REM ofrece hacerla por voz o abrir el POS.
