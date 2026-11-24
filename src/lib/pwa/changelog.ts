@@ -1493,6 +1493,16 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "Mandar por WhatsApp" },
     ],
   },
+  {
+    id: 145, date: "2026-11-24", title: "🔎 Auditoría del conteo físico",
+    summary: "En Ajustes, con el motivo «Conteo físico», ves cuántos llevas contados y qué falta de lo que el sistema dice que hay. Antes de aplicar sale el resumen: cuadran, sobran, faltan y sin contar. Lo que no cuentes no se toca y queda en «Pendientes por contar». El informe queda guardado, con Excel e Imprimir.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "📋", text: "111 contados · faltan 229" },
+      { icon: "➖", text: "Faltan 19 (−40 und.)" },
+      { icon: "⏳", text: "Pendientes por contar" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -168,7 +168,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "inventory", name: "Inventario", path: "/dashboard/inventario",
     aliases: "inventario stock existencias bodega bodegas traslados ajustes kardex conteos compras facturas de compra proveedores cuentas por pagar", keys: "inventario|stock|existencias|traslados|kardex|compras|cuentas por pagar",
-    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes, conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra.",
+    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes y auditorías de conteo (qué cuadra, qué sobra, qué falta y qué quedó sin contar), conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra.",
     howto: [{
       id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura de compra ingreso mercancia ingresar xml",
       steps: [
@@ -197,6 +197,15 @@ export const MODULES: ModuleInfo[] = [
     }, {
       id: "inventory.count", goal: "hacer un conteo", keywords: "conteo contar inventario fisico",
       steps: [], href: "/dashboard/inventario?tab=conteos", voice: "Abre o empieza un conteo y dime «quiero hacer un conteo»: te sigo por voz.", verified: true,
+    }, {
+      id: "inventory.audit", goal: "hacer una auditoría del inventario", keywords: "auditoria auditar rectificar cuadrar inventario conteo fisico que falta contar pendientes por contar faltantes sobrantes",
+      steps: [
+        "Abre Inventario y luego Ajustes. Elige la bodega y deja el motivo «Conteo físico».",
+        "Arriba sale cuántos llevas contados y cuántos faltan de lo que el sistema dice que hay. Con «🔎 Ver lo que falta contar» ves esa lista: en cada producto toca «Contar» y escribe lo que contaste, o «No está» para que entre en 0.",
+        "Toca «✅ Aplicar conteo y ver la auditoría». Te muestra cuántos cuadran, cuántos sobran, cuántos faltan y cuántos quedan sin contar. Confirma con «Aplicar y guardar auditoría».",
+        "Solo se ajusta lo que sobra o falta. Lo que no contaste no se toca y queda en «Pendientes por contar» hasta que lo cuentes. El informe queda en «🔎 Auditorías de conteo», con Excel e Imprimir.",
+      ],
+      href: "/dashboard/inventario?tab=adjustments", verified: true,
     }],
   },
   {

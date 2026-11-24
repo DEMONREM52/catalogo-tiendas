@@ -12,6 +12,7 @@ import { DateField } from "@/components/forms/Fields";
 import Swal from "@/lib/swal";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { AUDIT_MIGRATION, AuditHistory, AuditProgress, AuditReport, auditSummaryHtml, splitMissing, useStockForCount, type StockItem } from "./CountAudit";
 
 type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
@@ -37,6 +38,18 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   const [loadingCount, setLoadingCount] = useState(false);
   const [scanning, setScanning] = useState(false);
   const editorRef = useRef<LineEditorHandle>(null);
+  // Auditoría del conteo físico (20261340): lo que hay según el sistema, lo que falta contar y el informe al aplicar.
+  const isCount = reason === "count";
+  const stock = useStockForCount(ctx.storeId, warehouse, canAdjust && isCount);
+  const [auditOpen, setAuditOpen] = useState<string | null>(null);
+  const [auditKey, setAuditKey] = useState(0);
+  const closeAudit = useCallback(() => setAuditOpen(null), []);
+  function addFromAudit(item: StockItem, qty: number) {
+    setLines((cur) => (cur.some((l) => l.product_id === item.product_id) ? cur : [...cur, {
+      product_id: item.product_id, name: item.name, sku: item.sku, current: item.qty, qty, unit_cost: 0, tax_rate: 0, warehouse_id: warehouse,
+    }]));
+    void toast(qty === 0 ? "Entró al conteo en 0 (no está)" : `Contado: ${qty}`, "success", item.name);
+  }
 
   // Borrador local, uno por bodega: cambiar de bodega guarda el conteo de la anterior y trae el de la nueva.
   const draftBase = `remhub:adjust-draft:v1:${ctx.storeId}`;
@@ -232,8 +245,10 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
 
   async function post() {
     if (!warehouse) return void toast("Elige la bodega", "warning");
-    let changed = lines.filter((l) => l.qty !== l.current);
-    if (!changed.length) return void toast("No hay diferencias para ajustar", "warning");
+    // Conteo físico con auditoría: va TODO lo contado (también lo que cuadra); sin la migración, como antes.
+    const audit = isCount && stock.ready;
+    let changed = audit ? [...lines] : lines.filter((l) => l.qty !== l.current);
+    if (!changed.length) return void toast(audit ? "Agrega lo que contaste" : "No hay diferencias para ajustar", "warning");
     // ¿Se vendió o trasladó algo mientras contabas? Se revisa lo que dice la base ahora mismo.
     const now = new Map<string, number>();
     const ids = changed.map((l) => l.product_id);
@@ -258,8 +273,37 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       } else {
         changed = changed.map((l) => (moved.includes(l) ? { ...l, current: now.get(l.product_id) ?? 0 } : l));
       }
-      changed = changed.filter((l) => l.qty !== l.current);
+      if (!audit) changed = changed.filter((l) => l.qty !== l.current);
       if (!changed.length) return void toast("Con esos movimientos ya no queda diferencia", "success");
+    }
+    if (audit) {
+      const { missing, recent, units } = splitMissing(stock.items, changed);
+      const go = await Swal.fire({
+        title: "🔎 Resumen de la auditoría", html: auditSummaryHtml(changed, missing.length, units, recent.length),
+        showCancelButton: true, confirmButtonText: "Aplicar y guardar auditoría", cancelButtonText: "Seguir contando",
+        background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+      });
+      if (!go.isConfirmed) return;
+      setBusy(true);
+      const { data, error } = await supabaseBrowser().rpc("erp_count_audit_post", {
+        p_store: ctx.storeId, p_warehouse: warehouse, p_notes: notes,
+        p_counted: changed.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+      });
+      setBusy(false);
+      const r = data as { ok: boolean; message?: string; audit_id?: string } | null;
+      if (error || !r?.ok || !r.audit_id) {
+        return void toast("No se pudo aplicar el conteo", "error", error ? (/Could not find the function|schema cache/i.test(error.message) ? AUDIT_MIGRATION : errorMessage(error)) : r?.message);
+      }
+      setLines([]);
+      setNotes("");
+      clearDraft(keyFor(warehouse));
+      setSavedAt(null);
+      refreshPending();
+      void load();
+      void stock.reload();
+      setAuditKey((k) => k + 1);
+      setAuditOpen(r.audit_id);
+      return;
     }
     if (!(await confirmAction("Aplicar ajuste", `Se modificará el inventario de ${changed.length} producto(s) y quedará registrado con tu usuario.`))) return;
     setBusy(true);
@@ -315,14 +359,22 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
               <span className="w-full text-[11px]" style={{ color: "var(--t-muted)" }}>Trae todos los productos de esa categoría con lo que dice el sistema. Solo se ajustan los que cambies; si alguien vende mientras cuentas, te avisamos al aplicar.</span>
             </div>
           ) : null}
+          {warehouse && isCount && canAdjust && !stock.missing ? (
+            <AuditProgress items={stock.items} lines={lines} warehouseName={names.get(warehouse) ?? "la bodega"} error={stock.error}
+              onAdd={addFromAudit} onReload={() => void stock.reload()} />
+          ) : null}
+          {warehouse && isCount && stock.missing ? <p className="mt-3 text-[11px]" style={{ color: "var(--t-muted)" }}>🔎 Para ver lo que falta contar y guardar la auditoría: {AUDIT_MIGRATION}</p> : null}
           {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} editorRef={editorRef} canEditProducts={ctx.can("products")} /></div> : null}
           {scanning && warehouse ? (
             <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
               zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />
           ) : null}
-          <div className="mt-3"><Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : "✅ Aplicar ajuste"}</Btn></div>
+          <div className="mt-3"><Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : isCount && stock.ready ? "✅ Aplicar conteo y ver la auditoría" : "✅ Aplicar ajuste"}</Btn></div>
         </Panel>
       ) : null}
+
+      <AuditHistory storeId={ctx.storeId} refreshKey={auditKey} onOpen={setAuditOpen} />
+      <AuditReport auditId={auditOpen} onClose={closeAudit} />
 
       <Panel title="Historial de ajustes">
         {rows.length === 0 ? <Empty icon="🛠️" title="Aún no hay ajustes" text="Cuando cuentes la mercancía y algo no cuadre, ajústalo arriba. Con «Contar por partes» puedes contar una categoría a la vez." /> : (
