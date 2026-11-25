@@ -1553,6 +1553,16 @@ export const RELEASES: Release[] = [
       { icon: "📍", text: "P. LA VITRINA 514 · igual" },
     ],
   },
+  {
+    id: 151, date: "2026-11-25", title: "📦 Llegó algo que no venía",
+    summary: "Al recibir un pedido interno, si llegó un producto que no estaba en el envío, toca «📦 Llegó algo más», búscalo y escribe cuántas llegaron y qué pasó. Se suma al traslado (sale de la bodega y entra a tu punto al confirmar) y queda en el chat para revisarlo.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "📦", text: "Llegó algo más" },
+      { icon: "🔎", text: "1 × MÁQUINA (no venía)" },
+      { icon: "💬", text: "Queda en el chat: ⚠️ Revisen" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

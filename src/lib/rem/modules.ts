@@ -211,7 +211,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "orders", name: "Pedidos", path: "/dashboard/pedidos",
     aliases: "pedidos pedidos de clientes pedidos internos solicitudes whatsapp ventas en linea", keys: "pedido|pedidos|pedidos internos|pedidos de clientes",
-    about: "Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega.",
+    about: "Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. Al recibir un pedido interno, si llegó un producto que no venía en el envío, se toca «📦 Llegó algo más»: se suma al traslado y queda en el chat para revisarlo.",
     howto: [{
       id: "orders.internal", goal: "hacer un pedido interno", keywords: "pedido interno pedir mercancia solicitar bodega",
       steps: [], href: "/dashboard/pedidos?tab=internos&nuevo=1", voice: "Toca «Nuevo pedido» y dime «quiero hacer un pedido interno»: te sigo por voz.", verified: true,

@@ -55,7 +55,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const [dragging, setDragging] = useState(false);
   const [typing, setTyping] = useState<string | null>(null);
   const [productPick, setProductPick] = useState(false);
-  const [itemPick, setItemPick] = useState(false);
+  // Buscador de productos: «add» agrega al pedido o al envío; «extra» anota algo que llegó sin venir en el envío.
+  const [itemPick, setItemPick] = useState<false | "add" | "extra">(false);
   // Lista de chequeo (20261277): lo empacado (quien despacha) y lo contado al recibir (quien recibe).
   const [checks, setChecks] = useState<Array<{ item_id: string; side: "pack" | "receive"; by: string | null; at: string }>>([]);
   const [onlyPending, setOnlyPending] = useState(false);
@@ -308,6 +309,42 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     if (!res.isConfirmed) return;
     const note = canAttend ? await Swal.fire({ ...swal, title: "¿Por qué se agrega? (opcional)", input: "text", inputPlaceholder: "Ej: van de regalo, pidieron por chat…", showCancelButton: true, confirmButtonText: "Listo", cancelButtonText: "Sin motivo" }) : null;
     await run("erp_sr_item_add", { p_request: data.request.id, p_product: p.id, p_qty: Math.floor(Number(res.value)), p_note: note?.isConfirmed ? String(note.value ?? "") : null }, "Producto agregado (quedó en el chat)");
+  }
+
+  /** Llegó un producto que no venía en el envío (20261343): entra al traslado, al pedido y al chat para revisarlo. */
+  async function receiveExtra(p: { id: string; name: string; wh_qty?: number }) {
+    if (!data) return;
+    setItemPick(false);
+    if (data.items.some((i) => i.product_id === p.id)) {
+      void Swal.fire({ ...swal, icon: "info", title: "Ese producto ya viene en el envío", text: "Escribe en «Llegó» cuántas llegaron: pueden ser más de las enviadas." });
+      if (!receiving) setReceiving({});
+      return;
+    }
+    const res = await Swal.fire({
+      ...swal, title: `📦 ${p.name}`,
+      html: `<p style="font-size:13px;opacity:.85">Llegó y <b>no venía en el envío</b>. Se descuenta de <b>${data.request.to_name}</b>${typeof p.wh_qty === "number" ? ` (tiene <b>${p.wh_qty}</b>)` : ""} y entra a tu punto al confirmar el recibido. Queda en el chat para revisarlo.</p>`,
+      input: "number", inputValue: "1", inputAttributes: { min: "1", step: "1" }, inputLabel: "¿Cuántas unidades llegaron?",
+      showCancelButton: true, confirmButtonText: "Siguiente", cancelButtonText: "Cancelar",
+      inputValidator: (v) => (Number(v) >= 1 ? null : "Escribe al menos 1."),
+    });
+    if (!res.isConfirmed) return;
+    const why = await Swal.fire({ ...swal, title: "¿Qué pasó? (queda en el chat)", input: "text", inputPlaceholder: "Ej: venía en la misma caja sin anotar", showCancelButton: true, confirmButtonText: "Anotar", cancelButtonText: "Sin nota" });
+    if (why.isDismissed && why.dismiss !== Swal.DismissReason.cancel) return;
+    setBusy(true);
+    if (requestId) markOwnAction(requestId);
+    const { error: err } = await supabaseBrowser().rpc("erp_sr_receive_extra", {
+      p_request: data.request.id, p_product: p.id, p_qty: Math.floor(Number(res.value)), p_note: why.isConfirmed ? String(why.value ?? "") || null : null,
+    });
+    setBusy(false);
+    if (err) {
+      const missing = /Could not find the function|schema cache/i.test(err.message ?? "");
+      void Swal.fire({ ...swal, icon: "error", title: "No se pudo anotar", text: missing ? "Falta correr en Supabase la migración 20261343_pedido_llego_algo_mas.sql." : srError(err) });
+      return;
+    }
+    void Swal.fire({ ...swal, icon: "success", title: "Anotado: quedó en el chat para revisar", text: "Revisa la cantidad en «Llegó» y confirma el recibido.", timer: 2200, showConfirmButton: false });
+    if (!receiving) setReceiving({});
+    await load();
+    onChanged();
   }
 
   /** «Necesito N más» desde los comentarios: suma esas unidades al pedido (queda en el chat). */
@@ -769,7 +806,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           </button>
         ) : null}
       </div>
-      {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Todo queda en el chat y el kardex.</p> : null}
+      {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Si llegó un producto que no venía, toca «📦 Llegó algo más». Todo queda en el chat y el kardex.</p> : null}
       {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” (con eso el pedido queda tomado y en preparación) → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
 
       {/* Barra flotante: el siguiente paso que te toca y, debajo, subir, agregar otro producto o bajar a las firmas. */}
@@ -782,10 +819,16 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           <ArrowUp size={18} />
         </button>
         {canEditItems ? (
-          <button type="button" onClick={() => setItemPick(true)} disabled={busy}
+          <button type="button" onClick={() => setItemPick("add")} disabled={busy}
             className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-[0_10px_28px_-8px_var(--t-accent)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>
             <PackagePlus size={18} /> <span className="sm:hidden">Agregar</span><span className="hidden sm:inline">{canAttend ? "Agregar producto al envío" : "Agregar producto al pedido"}</span>
+          </button>
+        ) : canReceive && data.transfer?.status === "in_transit" ? (
+          <button type="button" onClick={() => setItemPick("extra")} disabled={busy} title="Anota un producto que llegó y no venía en el envío: queda en el chat para revisarlo"
+            className="pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-black shadow-lg backdrop-blur transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+            style={{ borderColor: "color-mix(in oklab, #f59e0b 55%, var(--t-card-border))", color: "#d97706", background: "color-mix(in oklab, var(--t-bg-base) 90%, transparent)" }}>
+            <PackagePlus size={18} /> Llegó algo más
           </button>
         ) : null}
         <button type="button" onClick={() => { const el = itemsScrollRef.current; el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" }); }} aria-label="Bajar al final (firmas y botones)" title="Bajar al final: firmas y botones"
@@ -1065,9 +1108,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             ) : !error ? (
               <div className="m-5 h-64 animate-pulse rounded-3xl" style={{ background: "var(--t-card-bg)" }} />
             ) : null}
-            {data ? <ProductSearchModal open={itemPick} onClose={() => setItemPick(false)} storeId={data.request.store_id} warehouseId={data.request.to_point_id}
-              title={canAttend ? `Agregar al envío desde ${data.request.to_name}` : "Agregar al pedido"} stockLabel={(h) => `En ${data.request.to_name}: ${h.wh_qty}`}
-              onPick={(p) => void addItem(p)} /> : null}
+            {data ? <ProductSearchModal open={Boolean(itemPick)} onClose={() => setItemPick(false)} storeId={data.request.store_id} warehouseId={data.request.to_point_id}
+              title={itemPick === "extra" ? "📦 ¿Qué llegó que no venía en el envío?" : canAttend ? `Agregar al envío desde ${data.request.to_name}` : "Agregar al pedido"} stockLabel={(h) => `En ${data.request.to_name}: ${h.wh_qty}`}
+              onPick={(p) => void (itemPick === "extra" ? receiveExtra(p) : addItem(p))} /> : null}
             {data ? (() => {
               const it = commentItem ? data.items.find((x) => x.id === commentItem) ?? null : null;
               return (

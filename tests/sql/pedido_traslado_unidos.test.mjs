@@ -173,6 +173,51 @@ const twelve = await requestWithTransfer(12);
 await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [twelve.T, JSON.stringify([{ product_id: P, received_qty: 5 }, { product_id: Q, received_qty: 3 }])]);
 ok((await raw("select status from erp_stock_requests where id = $1", [twelve.R]))[0].status === "received", "Recibir sigue cerrando el pedido como «Recibido»");
 
+// 13) 20261343: llegó algo que no venía en el envío.
+await raw("alter table erp_stock_request_items add column if not exists source_qty_at_request integer");
+await raw("alter table erp_stock_request_items add column if not exists dest_qty_at_request integer");
+await db.exec(`create or replace function public.erp__sr_system(p_request uuid, p_body text) returns void language sql security definer set search_path = public as $$
+  insert into public.erp_stock_request_messages (request_id, user_id, kind, body) values (p_request, auth.uid(), 'system', p_body);
+$$;`);
+const M43 = fs.readFileSync(path.join(MIG, "20261343_pedido_llego_algo_mas.sql"), "utf8");
+await db.exec(M43);
+await db.exec(M43);
+const ZU = U(5);
+await raw("insert into store_users (store_id, user_id, role, permissions, point_id, display_name) values ($1, $2, 'seller', '{stock_requests}', $3, 'MARIA')", [A, ZU, Z]).catch(async () =>
+  raw("insert into store_users (store_id, user_id, role, permissions, point_id) values ($1, $2, 'seller', '{stock_requests}', $3)", [A, ZU, Z]));
+const X = await prod("MAQUINA");
+await raw("select public.erp__move($1, $2, $3, 10, 'purchase', 'test', null, 1000, 'carga', null, true)", [A, B1, X]);
+const addExtra = (u, R, p, q, note) => as(u, "select public.erp_sr_receive_extra($1, $2, $3, $4) r", [R, p, q, note]).then((x) => x[0].r).catch((e) => e.message);
+const t13 = await requestWithTransfer(13);
+const bX = await qty(B1, X);
+const e1 = await addExtra(ZU, t13.R, X, 1, "venía en la caja grande");
+ok(e1?.ok === true, "Quien recibe anota una máquina que no venía", e1);
+ok(await qty(B1, X) === bX - 1, "Sale del origen ya (como al despachar)", { antes: bX, ahora: await qty(B1, X) });
+const ti13 = await raw("select qty from erp_transfer_items where transfer_id = $1 and product_id = $2", [t13.T, X]);
+ok(ti13.length === 1 && ti13[0].qty === 1, "Entra al traslado", ti13);
+const it13 = await raw("select qty_requested, qty_approved, note from erp_stock_request_items where request_id = $1 and product_id = $2", [t13.R, X]);
+ok(it13.length === 1 && it13[0].qty_approved === 1 && /Llegó sin estar en el envío/.test(it13[0].note) && /caja grande/.test(it13[0].note), "Queda en el pedido marcado para revisar", it13);
+const m13 = await raw("select body from erp_stock_request_messages where request_id = $1 and body like '📦%'", [t13.R]);
+ok(m13.length === 1 && /1 × MAQUINA/.test(m13[0].body) && /NO venía/.test(m13[0].body) && /caja grande/.test(m13[0].body), "Y en el chat, con el motivo", m13);
+ok(/ya viene en el envío/.test(await addExtra(ZU, t13.R, X, 1, null)), "Si ya está, pide escribirlo en «Llegó»");
+ok(/ya viene en el envío/.test(await addExtra(ZU, t13.R, P, 1, null)), "Lo que venía en el envío no se agrega aparte");
+const Y = await prod("SIN EXISTENCIAS");
+ok(/no tiene registradas/.test(await addExtra(ZU, t13.R, Y, 1, null)), "Si el origen no lo tiene registrado, no deja y explica");
+ok(/no es de la tienda|válida/.test(await addExtra(ZU, t13.R, X, 0, null)), "Cantidad 0 no se acepta");
+ok(/Solo quien recibe/.test(await addExtra(STRANGER, t13.R, Y, 1, null)), "Alguien ajeno al pedido no puede");
+const zX = await qty(Z, X);
+await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, null)", [t13.T, JSON.stringify([{ product_id: P, received_qty: 5 }, { product_id: Q, received_qty: 3 }, { product_id: X, received_qty: 1 }])]);
+ok(await qty(Z, X) === zX + 1, "Al confirmar el recibido, la máquina entra al punto");
+ok((await raw("select qty_received from erp_stock_request_items where request_id = $1 and product_id = $2", [t13.R, X]))[0].qty_received === 1, "El pedido guarda que llegó");
+ok(/mientras el pedido va en camino/.test(await addExtra(ZU, t13.R, Y, 1, null)), "Después de recibir ya no se anota");
+const t14 = await requestWithTransfer(14);
+const bX14 = await qty(B1, X);
+await addExtra(ZU, t14.R, X, 2, null);
+await as(OWNER, "select public.erp_confirm_transfer($1, $2::jsonb, 'no era')", [t14.T, JSON.stringify([{ product_id: P, received_qty: 5 }, { product_id: Q, received_qty: 3 }, { product_id: X, received_qty: 0 }])]);
+ok(await qty(B1, X) === bX14, "Si al final no llegó (Llegó = 0), vuelve al origen", { antes: bX14, ahora: await qty(B1, X) });
+ok((await raw("select has_function_privilege('anon', 'public.erp_sr_receive_extra(uuid, uuid, integer, text)', 'execute') r"))[0].r === false, "Sin sesión no se puede");
+
+console.log(`\n${pass} bien, ${fail} mal`);
 process.exit(fail ? 1 : 0);
 
 console.log(`\n${pass} bien, ${fail} mal`);
