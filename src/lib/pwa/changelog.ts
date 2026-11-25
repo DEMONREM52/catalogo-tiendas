@@ -1543,6 +1543,16 @@ export const RELEASES: Release[] = [
       { icon: "🤝", text: "Debe $100.000 → queda $90.000" },
     ],
   },
+  {
+    id: 150, date: "2026-11-24", title: "🏪 Precio en los puntos",
+    summary: "Al editar un producto, en Precios abre «Precio en los puntos» y ves lo que cobra el POS de cada punto en los 5 precios, con la regla que lo cambia (por ejemplo +15 % en todo el punto) y la diferencia con el precio de la tienda.",
+    paths: ["/dashboard/products"],
+    demo: [
+      { icon: "🏬", text: "Tienda · P3 $80.000" },
+      { icon: "📍", text: "SEDE ZAMORA · +15 % · $92.000" },
+      { icon: "📍", text: "P. LA VITRINA 514 · igual" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

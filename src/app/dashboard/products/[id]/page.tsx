@@ -5,6 +5,7 @@ import { AuditSpyButton } from "@/components/audit/AuditSpyButton";
 import { PublishButton } from "@/components/products/PublishButton";
 import { OfferPanel } from "../OfferPanel";
 import { SupplierCodesPanel } from "../SupplierCodesPanel";
+import { PointPricesPanel } from "../PointPricesPanel";
 import { BadgesPanel } from "../BadgesPanel";
 import { RichTextEditor } from "@/components/forms/RichTextEditor";
 import { MobileActionBar } from "@/components/ui/MobileActionBar";
@@ -450,6 +451,10 @@ export default function EditProductPage() {
               </p>
             </div>
           )}
+          {storeId && product ? (
+            <PointPricesPanel storeId={storeId} productId={d.id} active={!!product.active} dirty={isDirty}
+              basePrices={[product.price_1, product.price_2, product.price_3, product.price_4, product.price_5].map((x) => clampNum(x, 0))} />
+          ) : null}
           {storeId ? <OfferPanel storeId={storeId} productId={d.id} normalPrice={prices[2] || prices[0]} /> : null}
           {storeId ? <BadgesPanel storeId={storeId} productId={d.id} /> : null}
           <Field label="Desde cuántas unidades es precio mayorista" icon="📦" help="Si un cliente lleva esta cantidad o más, se le cobra el precio al por mayor.">
