@@ -1563,6 +1563,17 @@ export const RELEASES: Release[] = [
       { icon: "💬", text: "Queda en el chat: ⚠️ Revisen" },
     ],
   },
+  {
+    id: 152, date: "2026-11-25", title: "🚩 Inventario inicial y diferencias en plata",
+    summary: "En Ajustes → Conteo físico ahora eliges «📋 Conteo normal» (lo que no cuentes no se toca) o «🚩 Inventario inicial» (la lista es todo lo que hay: lo demás queda en 0, en rojo y con confirmación). Antes de aplicar ves cuánto sobra, falta y se saca en unidades y en plata, y desde el informe puedes «↩️ Revertir» si te arrepientes.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🚩", text: "Elige «Inventario inicial»" },
+      { icon: "🧹", text: "En rojo: lo que se va a sacar" },
+      { icon: "💰", text: "Informe: sobran +$ · faltan −$ · neta" },
+      { icon: "↩️", text: "¿Te arrepentiste? Revertir" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

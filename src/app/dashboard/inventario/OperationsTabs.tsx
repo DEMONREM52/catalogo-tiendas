@@ -13,7 +13,10 @@ import Swal from "@/lib/swal";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { debtAfterText, debtPreviewHtml } from "./PointDebtAdjust";
-import { AUDIT_MIGRATION, AuditHistory, AuditProgress, AuditReport, auditSummaryHtml, splitMissing, useStockForCount, type StockItem } from "./CountAudit";
+import {
+  AUDIT_MIGRATION, START_MIGRATION, AuditHistory, AuditProgress, AuditReport, auditSummaryHtml, confirmStartMode, countPreviewHtml, loadCountPreview,
+  splitMissing, useStockForCount, type CountMode, type StockItem,
+} from "./CountAudit";
 
 type AdjustmentRow = {
   id: string; number: number; reason: string; notes: string | null; created_at: string; created_by_name: string | null; warehouse_id: string;
@@ -21,7 +24,7 @@ type AdjustmentRow = {
 };
 
 /** Borrador del conteo: vive en este equipo hasta aplicarlo o descartarlo (sobrevive a recargas y cierres). */
-type AdjustDraft = { v: 1; savedAt: string; warehouse: string; reason: string; notes: string; lines: Line[] };
+type AdjustDraft = { v: 1; savedAt: string; warehouse: string; reason: string; notes: string; lines: Line[]; mode?: CountMode };
 
 export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: Warehouse[] }) {
   const active = warehouses.filter((w) => w.active);
@@ -42,6 +45,9 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   // Auditoría del conteo físico (20261340): lo que hay según el sistema, lo que falta contar y el informe al aplicar.
   const isCount = reason === "count";
   const stock = useStockForCount(ctx.storeId, warehouse, canAdjust && isCount);
+  // «Inventario inicial» (20261344): la lista es todo lo que hay; lo demás queda en 0.
+  const [countMode, setCountMode] = useState<CountMode>("count");
+  const isStart = isCount && countMode === "start" && stock.ready;
   const [auditOpen, setAuditOpen] = useState<string | null>(null);
   const [auditKey, setAuditKey] = useState(0);
   const closeAudit = useCallback(() => setAuditOpen(null), []);
@@ -92,6 +98,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       setReason(d.reason || "count");
       setNotes(d.notes ?? "");
       setLines(d.lines ?? []);
+      setCountMode(d.mode === "start" ? "start" : "count");
       setSavedAt(d.savedAt);
       void toast("Seguiste tu conteo donde lo dejaste", "success", `${d.lines?.length ?? 0} productos del borrador (${timeAgo(d.savedAt)}).`);
     }
@@ -102,7 +109,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   }, [draftBase, whLoaded]);
 
   /** Guarda (o borra, si está vacío) el conteo de una bodega. */
-  function saveFor(wh: string, data: { reason: string; notes: string; lines: Line[] }) {
+  function saveFor(wh: string, data: { reason: string; notes: string; lines: Line[]; mode: CountMode }) {
     if (!wh) return null;
     if (!data.lines.length && !data.notes.trim()) {
       clearDraft(keyFor(wh));
@@ -114,13 +121,13 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   useEffect(() => {
     if (!draftReady || !warehouse) return;
     const timer = window.setTimeout(() => {
-      setSavedAt(saveFor(warehouse, { reason, notes, lines }));
+      setSavedAt(saveFor(warehouse, { reason, notes, lines, mode: countMode }));
       writeDraft(lastKey, warehouse);
       refreshPending();
     }, 400);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftReady, warehouse, reason, notes, lines]);
+  }, [draftReady, warehouse, reason, notes, lines, countMode]);
   useEffect(() => {
     const timer = window.setInterval(() => setTick((t) => t + 1), 30000);
     return () => window.clearInterval(timer);
@@ -129,7 +136,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   /** Cambiar de bodega: el conteo de la anterior queda guardado y, si la nueva tenía uno, vuelve. */
   function changeWarehouse(next: string) {
     if (next === warehouse) return;
-    if (draftReady && warehouse) saveFor(warehouse, { reason, notes, lines });
+    if (draftReady && warehouse) saveFor(warehouse, { reason, notes, lines, mode: countMode });
     const kept = lines.length;
     const from = names.get(warehouse);
     const d = next ? readDraft<AdjustDraft>(keyFor(next)) : null;
@@ -137,6 +144,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     setLines(d?.lines ?? []);
     setNotes(d?.notes ?? "");
     setReason(d?.reason || "count");
+    setCountMode(d?.mode === "start" ? "start" : "count");
     setSavedAt(d?.savedAt ?? null);
     if (next) writeDraft(lastKey, next);
     refreshPending();
@@ -149,6 +157,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     clearDraft(keyFor(warehouse));
     setLines([]);
     setNotes("");
+    setCountMode("count");
     setSavedAt(null);
     refreshPending();
   }
@@ -277,28 +286,53 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       if (!audit) changed = changed.filter((l) => l.qty !== l.current);
       if (!changed.length) return void toast("Con esos movimientos ya no queda diferencia", "success");
     }
-    // Punto con crédito (20261342): cuánto baja o sube su deuda con la bodega.
-    const debtHtml = await debtPreviewHtml(ctx.storeId, warehouse, changed.map((l) => ({ product_id: l.product_id, qty_after: l.qty })));
+    const items = changed.map((l) => ({ product_id: l.product_id, qty_after: l.qty }));
     if (audit) {
-      const { missing, recent, units } = splitMissing(stock.items, changed);
+      // El informe de diferencias en unidades y en plata (20261344); sin esa migración, el resumen de antes.
+      const counted = changed.map((l) => ({ product_id: l.product_id, qty: l.qty }));
+      const { pv, missing: noPreview, error: pvError } = await loadCountPreview(ctx.storeId, warehouse, counted, isStart ? "start" : "count");
+      if (!pv && (isStart || !noPreview)) {
+        return void toast(isStart ? "No se pudo preparar el inventario inicial" : "No se pudo preparar el informe", "error", noPreview ? START_MIGRATION : pvError ?? undefined);
+      }
+      const removedItems = pv?.removed_items ?? [];
+      // Punto con crédito (20261342): cuánto baja o sube su deuda (en inventario inicial, también por lo que se saca).
+      const debtHtml = await debtPreviewHtml(ctx.storeId, warehouse, [...items, ...removedItems.map((r) => ({ product_id: r.product_id, qty_after: 0 }))]);
+      const whName = names.get(warehouse) ?? "la bodega";
+      let html: string;
+      if (pv) html = countPreviewHtml(pv, whName) + debtHtml;
+      else {
+        const { missing, recent, units } = splitMissing(stock.items, changed);
+        html = auditSummaryHtml(changed, missing.length, units, recent.length) + debtHtml;
+      }
+      const mustTick = isStart && Boolean(pv?.removed);
       const go = await Swal.fire({
-        title: "🔎 Resumen de la auditoría", html: auditSummaryHtml(changed, missing.length, units, recent.length) + debtHtml,
-        showCancelButton: true, confirmButtonText: "Aplicar y guardar auditoría", cancelButtonText: "Seguir contando",
-        background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+        title: isStart ? `🚩 Inventario inicial de ${whName}` : "🔎 Informe del conteo", html, width: "44rem",
+        ...(mustTick && pv ? {
+          input: "checkbox" as const, inputValue: 0,
+          inputPlaceholder: `Entiendo: ${pv.removed.toLocaleString("es-CO")} productos (${pv.removed_units.toLocaleString("es-CO")} und.) que no están en mi lista quedan en 0 en ${whName}`,
+          inputValidator: (v: unknown) => (v ? null : "Marca la casilla para confirmar que entiendes qué se saca"),
+        } : {}),
+        showCancelButton: true, confirmButtonText: isStart ? "🚩 Aplicar inventario inicial" : "Aplicar y guardar auditoría", cancelButtonText: "Seguir contando",
+        background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: isStart ? "#ef4444" : "#8b5cf6",
       });
       if (!go.isConfirmed) return;
       setBusy(true);
-      const { data, error } = await supabaseBrowser().rpc("erp_count_audit_post", {
-        p_store: ctx.storeId, p_warehouse: warehouse, p_notes: notes,
-        p_counted: changed.map((l) => ({ product_id: l.product_id, qty: l.qty })),
-      });
+      const sb = supabaseBrowser();
+      const { data, error } = isStart && pv
+        ? await sb.rpc("erp_count_start_post", { p_store: ctx.storeId, p_warehouse: warehouse, p_notes: notes, p_counted: counted, p_expect_removed: pv.removed })
+        : await sb.rpc("erp_count_audit_post", { p_store: ctx.storeId, p_warehouse: warehouse, p_notes: notes, p_counted: counted });
       setBusy(false);
-      const r = data as { ok: boolean; message?: string; audit_id?: string; adjustment_id?: string | null } | null;
+      const r = data as { ok: boolean; message?: string; changed?: boolean; audit_id?: string; adjustment_id?: string | null } | null;
+      if (r?.changed) {
+        void stock.reload();
+        return void toast("La bodega cambió mientras confirmabas", "warning", r.message);
+      }
       if (error || !r?.ok || !r.audit_id) {
-        return void toast("No se pudo aplicar el conteo", "error", error ? (/Could not find the function|schema cache/i.test(error.message) ? AUDIT_MIGRATION : errorMessage(error)) : r?.message);
+        return void toast("No se pudo aplicar el conteo", "error", error ? (/Could not find the function|schema cache/i.test(error.message) ? (isStart ? START_MIGRATION : AUDIT_MIGRATION) : errorMessage(error)) : r?.message);
       }
       setLines([]);
       setNotes("");
+      setCountMode("count");
       clearDraft(keyFor(warehouse));
       setSavedAt(null);
       refreshPending();
@@ -309,6 +343,8 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       if (r.adjustment_id) void debtAfterText(r.adjustment_id).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
       return;
     }
+    // Punto con crédito (20261342): cuánto baja o sube su deuda con la bodega.
+    const debtHtml = await debtPreviewHtml(ctx.storeId, warehouse, items);
     const sure = debtHtml
       ? (await Swal.fire({
           icon: "question", title: "Aplicar ajuste",
@@ -320,8 +356,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     if (!sure) return;
     setBusy(true);
     const { data: adjId, error } = await supabaseBrowser().rpc("erp_post_adjustment", {
-      p_store: ctx.storeId, p_warehouse: warehouse, p_reason: reason, p_notes: notes,
-      p_items: changed.map((l) => ({ product_id: l.product_id, qty_after: l.qty })),
+      p_store: ctx.storeId, p_warehouse: warehouse, p_reason: reason, p_notes: notes, p_items: items,
     });
     setBusy(false);
     if (error) return void toast("No se pudo aplicar el ajuste", "error", errorMessage(error));
@@ -334,6 +369,42 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     if (typeof adjId === "string") void debtAfterText(adjId).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
     void load();
   }
+
+  /** Elegir «Inventario inicial»: primero explica qué hace. */
+  async function chooseStart() {
+    if (countMode === "start") return;
+    if (await confirmStartMode(names.get(warehouse) ?? "esta bodega", stock.items, lines)) setCountMode("start");
+  }
+
+  /** El informe de diferencias (unidades y plata) sin aplicar nada. */
+  async function showReport() {
+    if (!warehouse || !lines.length) return void toast("Agrega lo que contaste", "warning");
+    setBusy(true);
+    const { pv, missing, error } = await loadCountPreview(ctx.storeId, warehouse, lines.map((l) => ({ product_id: l.product_id, qty: l.qty })), isStart ? "start" : "count");
+    setBusy(false);
+    if (!pv) return void toast("No se pudo preparar el informe", "error", missing ? START_MIGRATION : error ?? undefined);
+    await Swal.fire({
+      title: isStart ? "🚩 Así quedaría el inventario inicial" : "📊 Diferencias del conteo", width: "44rem",
+      html: countPreviewHtml(pv, names.get(warehouse) ?? "la bodega")
+        + `<p style="font-size:12px;opacity:.75;margin-top:8px;text-align:left">Esto es solo para ver: todavía no se aplica nada.</p>`,
+      confirmButtonText: "Seguir contando", background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+    });
+  }
+
+  // Cuánto sobra y falta en la lista mientras cuentas (en unidades; la plata sale en el informe).
+  const tally = useMemo(() => {
+    let over = 0, overU = 0, short = 0, shortU = 0;
+    for (const l of lines) {
+      if (l.qty > l.current) { over++; overU += l.qty - l.current; } else if (l.qty < l.current) { short++; shortU += l.current - l.qty; }
+    }
+    return { over, overU, short, shortU, matched: lines.length - over - short };
+  }, [lines]);
+  const removeCount = useMemo(() => {
+    if (!isStart) return null;
+    const { missing, recent } = splitMissing(stock.items, lines);
+    return { n: missing.length + recent.length, units: [...missing, ...recent].reduce((s, i) => s + i.qty, 0) };
+  }, [isStart, stock.items, lines]);
+  const whName = names.get(warehouse) ?? "la bodega";
 
   return (
     <div className="space-y-5">
@@ -372,8 +443,32 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
               <span className="w-full text-[11px]" style={{ color: "var(--t-muted)" }}>Trae todos los productos de esa categoría con lo que dice el sistema. Solo se ajustan los que cambies; si alguien vende mientras cuentas, te avisamos al aplicar.</span>
             </div>
           ) : null}
+          {warehouse && isCount && canAdjust && stock.ready ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Tipo de conteo">
+              {([
+                ["count", "📋 Conteo normal", "Ajusta lo que cuentes. Lo que no cuentes no se toca y queda en «Pendientes por contar»."],
+                ["start", "🚩 Inventario inicial", `Para empezar de cero: la lista es todo lo que hay en ${whName}. Lo que no esté en la lista queda en 0.`],
+              ] as const).map(([k, title, text]) => {
+                const on = (k === "start") === isStart;
+                const color = k === "start" ? "#ef4444" : "var(--t-accent)";
+                return (
+                  <button key={k} type="button" role="radio" aria-checked={on} onClick={() => (k === "start" ? void chooseStart() : setCountMode("count"))}
+                    className="rounded-2xl border-2 p-3 text-left transition"
+                    style={{ borderColor: on ? color : "var(--t-card-border)", background: on ? `color-mix(in oklab, ${color} 9%, transparent)` : "transparent" }}>
+                    <span className="flex items-center gap-2 text-sm font-bold">
+                      <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full border-2" style={{ borderColor: on ? color : "var(--t-card-border)" }}>
+                        {on ? <span className="h-2 w-2 rounded-full" style={{ background: color }} /> : null}
+                      </span>
+                      {title}
+                    </span>
+                    <span className="mt-1 block text-[11px]" style={{ color: on && k === "start" ? color : "var(--t-muted)" }}>{text}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {warehouse && isCount && canAdjust && !stock.missing ? (
-            <AuditProgress items={stock.items} lines={lines} warehouseName={names.get(warehouse) ?? "la bodega"} error={stock.error}
+            <AuditProgress items={stock.items} lines={lines} warehouseName={whName} error={stock.error} mode={isStart ? "start" : "count"}
               onAdd={addFromAudit} onReload={() => void stock.reload()} />
           ) : null}
           {warehouse && isCount && stock.missing ? <p className="mt-3 text-[11px]" style={{ color: "var(--t-muted)" }}>🔎 Para ver lo que falta contar y guardar la auditoría: {AUDIT_MIGRATION}</p> : null}
@@ -382,12 +477,30 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
             <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
               zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />
           ) : null}
-          <div className="mt-3"><Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : isCount && stock.ready ? "✅ Aplicar conteo y ver la auditoría" : "✅ Aplicar ajuste"}</Btn></div>
+          {warehouse && lines.length ? (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
+              <span>Diferencias:</span>
+              <span className="text-emerald-500">✅ {tally.matched.toLocaleString("es-CO")} cuadran</span>
+              <span className="text-sky-500">➕ {tally.over.toLocaleString("es-CO")} sobran (+{tally.overU.toLocaleString("es-CO")} und.)</span>
+              <span className="text-red-500">➖ {tally.short.toLocaleString("es-CO")} faltan (−{tally.shortU.toLocaleString("es-CO")} und.)</span>
+              {removeCount ? <span className="text-red-500">🧹 {removeCount.n.toLocaleString("es-CO")} se sacan (−{removeCount.units.toLocaleString("es-CO")} und.)</span> : null}
+              {isCount && stock.ready ? (
+                <button type="button" onClick={() => void showReport()} disabled={busy} className="ml-auto rounded-full border px-3 py-1 text-xs font-bold" style={{ borderColor: "var(--t-card-border)", color: "var(--t-accent)" }}>
+                  📊 Ver cuánto es en plata
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="mt-3">
+            {isStart
+              ? <Btn variant="danger" onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : "🚩 Aplicar inventario inicial y ver el informe"}</Btn>
+              : <Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : isCount && stock.ready ? "✅ Aplicar conteo y ver la auditoría" : "✅ Aplicar ajuste"}</Btn>}
+          </div>
         </Panel>
       ) : null}
 
       <AuditHistory storeId={ctx.storeId} refreshKey={auditKey} onOpen={setAuditOpen} />
-      <AuditReport auditId={auditOpen} onClose={closeAudit} />
+      <AuditReport auditId={auditOpen} onClose={closeAudit} onChanged={() => { void load(); void stock.reload(); setAuditKey((k) => k + 1); }} />
 
       <Panel title="Historial de ajustes">
         {rows.length === 0 ? <Empty icon="🛠️" title="Aún no hay ajustes" text="Cuando cuentes la mercancía y algo no cuadre, ajústalo arriba. Con «Contar por partes» puedes contar una categoría a la vez." /> : (

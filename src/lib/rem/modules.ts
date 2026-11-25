@@ -168,7 +168,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "inventory", name: "Inventario", path: "/dashboard/inventario",
     aliases: "inventario stock existencias bodega bodegas traslados ajustes kardex conteos compras facturas de compra proveedores cuentas por pagar", keys: "inventario|stock|existencias|traslados|kardex|compras|cuentas por pagar",
-    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes y auditorías de conteo (qué cuadra, qué sobra, qué falta y qué quedó sin contar), conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. En un punto con crédito, cada ajuste mueve su deuda con la bodega: lo que falta la baja y lo que sobra la sube, a precio de bodega (antes de aplicar te muestra cuánto). En el ingreso y en los ajustes, quien tiene permiso de Productos toca el nombre de un producto para editarlo rápido (foto, nombre, código de barras, categorías y descripción).",
+    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes y auditorías de conteo (qué cuadra, qué sobra, qué falta y qué quedó sin contar, en unidades y en plata al costo), el «Inventario inicial» (la lista es todo lo que hay en esa bodega y lo demás queda en 0, con «↩️ Revertir» si te arrepientes), conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. En un punto con crédito, cada ajuste mueve su deuda con la bodega: lo que falta la baja y lo que sobra la sube, a precio de bodega (antes de aplicar te muestra cuánto). En el ingreso y en los ajustes, quien tiene permiso de Productos toca el nombre de un producto para editarlo rápido (foto, nombre, código de barras, categorías y descripción).",
     howto: [{
       id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura de compra ingreso mercancia ingresar xml",
       steps: [
@@ -202,8 +202,19 @@ export const MODULES: ModuleInfo[] = [
       steps: [
         "Abre Inventario y luego Ajustes. Elige la bodega y deja el motivo «Conteo físico».",
         "Arriba sale cuántos llevas contados y cuántos faltan de lo que el sistema dice que hay. Con «🔎 Ver lo que falta contar» ves esa lista: en cada producto toca «Contar» y escribe lo que contaste, o «No está» para que entre en 0.",
-        "Toca «✅ Aplicar conteo y ver la auditoría». Te muestra cuántos cuadran, cuántos sobran, cuántos faltan y cuántos quedan sin contar. Confirma con «Aplicar y guardar auditoría».",
+        "Debajo de la lista ves cuántos cuadran, sobran y faltan. Con «📊 Ver cuánto es en plata» ves el informe al costo sin aplicar nada.",
+        "Toca «✅ Aplicar conteo y ver la auditoría». Te muestra cuántos cuadran, cuántos sobran, cuántos faltan y cuántos quedan sin contar, con la diferencia neta en plata. Confirma con «Aplicar y guardar auditoría».",
         "Solo se ajusta lo que sobra o falta. Lo que no contaste no se toca y queda en «Pendientes por contar» hasta que lo cuentes. El informe queda en «🔎 Auditorías de conteo», con Excel e Imprimir.",
+      ],
+      href: "/dashboard/inventario?tab=adjustments", verified: true,
+    }, {
+      id: "inventory.start", goal: "hacer un inventario inicial", keywords: "inventario inicial partida inicial punto de partida empezar de cero arrancar con lo contado lo que no este en la lista en cero sacar lo que no esta revertir conteo deshacer ajuste",
+      steps: [
+        "Abre Inventario y luego Ajustes. Elige la bodega y deja el motivo «Conteo físico».",
+        "Elige «🚩 Inventario inicial». Te explica qué hace: la lista es todo lo que hay en esa bodega y lo que no esté en la lista queda en 0. Confirma con «Sí, es inventario inicial».",
+        "Agrega lo que contaron. Arriba sale en rojo lo que se va a sacar; con «🧹 Ver lo que se va a sacar» lo revisas y, si algo sí está, tocas «Sí está: contar».",
+        "Toca «🚩 Aplicar inventario inicial y ver el informe». Te muestra qué sobra, qué falta y qué se saca, en unidades y en plata. Marca la casilla «Entiendo…» y confirma.",
+        "Si te arrepientes, abre ese informe en «🔎 Auditorías de conteo» y toca «↩️ Revertir»: todo vuelve como estaba, respetando lo que se haya vendido después. Solo se revierte el último conteo de esa bodega, una vez.",
       ],
       href: "/dashboard/inventario?tab=adjustments", verified: true,
     }],
