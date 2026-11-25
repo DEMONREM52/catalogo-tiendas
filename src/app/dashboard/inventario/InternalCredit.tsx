@@ -46,7 +46,7 @@ type Statement = {
 
 const KIND: Record<string, string> = {
   transfer: "🚚 Traslado recibido", opening: "🧾 Deuda inicial", charge: "➕ Cargo", return: "↩️ Devolución a la bodega",
-  transfer_out: "➡️ Pasó a otro punto", loss: "💔 Novedad aprobada", credit: "➖ Nota crédito", payment: "💵 Abono",
+  transfer_out: "➡️ Pasó a otro punto", loss: "💔 Novedad o faltante", credit: "➖ Nota crédito", payment: "💵 Abono",
 };
 const REASONS: Array<[string, string]> = [["damaged", "💔 Dañado"], ["lost", "🔍 Perdido"], ["expired", "⌛ Vencido"], ["stolen", "🚨 Robo"], ["other", "📝 Otro"]];
 const REASON = Object.fromEntries(REASONS);

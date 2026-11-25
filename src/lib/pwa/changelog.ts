@@ -1533,6 +1533,16 @@ export const RELEASES: Release[] = [
       { icon: "📋", text: "El conteo sigue igual" },
     ],
   },
+  {
+    id: 149, date: "2026-11-24", title: "🤝 Los ajustes mueven la deuda del punto",
+    summary: "En un punto con crédito, cada ajuste o conteo actualiza su deuda con la bodega: lo que falta la baja (la pérdida la asume la bodega) y lo que sobra la sube, a precio de bodega. Antes de aplicar ves cuánto baja o sube y cómo queda; la nota queda en Cuenta con puntos.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "➖", text: "Faltan 3 und.: baja $30.000" },
+      { icon: "➕", text: "Sobran 2 und.: sube $20.000" },
+      { icon: "🤝", text: "Debe $100.000 → queda $90.000" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

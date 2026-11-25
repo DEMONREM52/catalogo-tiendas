@@ -12,6 +12,7 @@ import { DateField } from "@/components/forms/Fields";
 import Swal from "@/lib/swal";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { debtAfterText, debtPreviewHtml } from "./PointDebtAdjust";
 import { AUDIT_MIGRATION, AuditHistory, AuditProgress, AuditReport, auditSummaryHtml, splitMissing, useStockForCount, type StockItem } from "./CountAudit";
 
 type AdjustmentRow = {
@@ -276,10 +277,12 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       if (!audit) changed = changed.filter((l) => l.qty !== l.current);
       if (!changed.length) return void toast("Con esos movimientos ya no queda diferencia", "success");
     }
+    // Punto con crédito (20261342): cuánto baja o sube su deuda con la bodega.
+    const debtHtml = await debtPreviewHtml(ctx.storeId, warehouse, changed.map((l) => ({ product_id: l.product_id, qty_after: l.qty })));
     if (audit) {
       const { missing, recent, units } = splitMissing(stock.items, changed);
       const go = await Swal.fire({
-        title: "🔎 Resumen de la auditoría", html: auditSummaryHtml(changed, missing.length, units, recent.length),
+        title: "🔎 Resumen de la auditoría", html: auditSummaryHtml(changed, missing.length, units, recent.length) + debtHtml,
         showCancelButton: true, confirmButtonText: "Aplicar y guardar auditoría", cancelButtonText: "Seguir contando",
         background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
       });
@@ -290,7 +293,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
         p_counted: changed.map((l) => ({ product_id: l.product_id, qty: l.qty })),
       });
       setBusy(false);
-      const r = data as { ok: boolean; message?: string; audit_id?: string } | null;
+      const r = data as { ok: boolean; message?: string; audit_id?: string; adjustment_id?: string | null } | null;
       if (error || !r?.ok || !r.audit_id) {
         return void toast("No se pudo aplicar el conteo", "error", error ? (/Could not find the function|schema cache/i.test(error.message) ? AUDIT_MIGRATION : errorMessage(error)) : r?.message);
       }
@@ -303,11 +306,20 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       void stock.reload();
       setAuditKey((k) => k + 1);
       setAuditOpen(r.audit_id);
+      if (r.adjustment_id) void debtAfterText(r.adjustment_id).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
       return;
     }
-    if (!(await confirmAction("Aplicar ajuste", `Se modificará el inventario de ${changed.length} producto(s) y quedará registrado con tu usuario.`))) return;
+    const sure = debtHtml
+      ? (await Swal.fire({
+          icon: "question", title: "Aplicar ajuste",
+          html: `Se modificará el inventario de ${changed.length} producto(s) y quedará registrado con tu usuario.${debtHtml}`,
+          showCancelButton: true, confirmButtonText: "Confirmar", cancelButtonText: "Cancelar",
+          background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6",
+        })).isConfirmed
+      : await confirmAction("Aplicar ajuste", `Se modificará el inventario de ${changed.length} producto(s) y quedará registrado con tu usuario.`);
+    if (!sure) return;
     setBusy(true);
-    const { error } = await supabaseBrowser().rpc("erp_post_adjustment", {
+    const { data: adjId, error } = await supabaseBrowser().rpc("erp_post_adjustment", {
       p_store: ctx.storeId, p_warehouse: warehouse, p_reason: reason, p_notes: notes,
       p_items: changed.map((l) => ({ product_id: l.product_id, qty_after: l.qty })),
     });
@@ -319,6 +331,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     setSavedAt(null);
     refreshPending();
     void toast("Ajuste aplicado");
+    if (typeof adjId === "string") void debtAfterText(adjId).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
     void load();
   }
 
