@@ -1523,6 +1523,16 @@ export const RELEASES: Release[] = [
       { icon: "💾", text: "Guardar y cambiar" },
     ],
   },
+  {
+    id: 148, date: "2026-11-24", title: "✏️ Editar rápido en ajustes y conteos",
+    summary: "En Ajustes de inventario (y en el ingreso de factura) toca el nombre de un producto y se abre la edición rápida al lado: foto, nombre, código de barras, categorías y descripción, sin perder lo que llevas contado.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "👆", text: "Toca el nombre del producto" },
+      { icon: "📸", text: "Foto · nombre · código de barras" },
+      { icon: "📋", text: "El conteo sigue igual" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

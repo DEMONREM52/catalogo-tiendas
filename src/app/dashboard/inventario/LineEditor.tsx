@@ -1410,7 +1410,13 @@ export function LineEditor({
                     <span className="hidden w-5 shrink-0 text-center text-xs tabular-nums md:block" style={{ color: "var(--t-muted)" }}>{index + 1}</span>
                     <Thumb src={line.product_id in thumbFix ? thumbFix[line.product_id] : lineThumbs[line.product_id]} size={44} zoom alt={line.name} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-semibold" title={line.name}>{line.name}</div>
+                      {canEditProducts ? (
+                        <button type="button" onClick={() => void openQuick(line.product_id)}
+                          className="block w-full truncate text-left font-semibold decoration-dotted underline-offset-4 hover:text-[color:var(--t-accent)] hover:underline"
+                          title={`${line.name} · Toca para editar rápido (foto, nombre, código de barras, categorías y descripción)`}>
+                          {line.name}
+                        </button>
+                      ) : <div className="truncate font-semibold" title={line.name}>{line.name}</div>}
                       {line.sku ? <div className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{line.sku}</div> : null}
                       {status[line.product_id] && !status[line.product_id].active && (isPurchase || !status[line.product_id].auto) ? (
                         status[line.product_id].auto ? (

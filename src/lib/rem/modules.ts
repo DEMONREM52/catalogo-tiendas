@@ -168,7 +168,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "inventory", name: "Inventario", path: "/dashboard/inventario",
     aliases: "inventario stock existencias bodega bodegas traslados ajustes kardex conteos compras facturas de compra proveedores cuentas por pagar", keys: "inventario|stock|existencias|traslados|kardex|compras|cuentas por pagar",
-    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes y auditorías de conteo (qué cuadra, qué sobra, qué falta y qué quedó sin contar), conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra.",
+    about: "Aquí se maneja la mercancía: existencias por punto y bodega, traslados entre puntos, ajustes y auditorías de conteo (qué cuadra, qué sobra, qué falta y qué quedó sin contar), conteos, kardex, facturas de compra, proveedores, cuentas por pagar, la cuenta con los puntos y los vencimientos. El costo y las existencias entran con la factura de compra. En el ingreso y en los ajustes, quien tiene permiso de Productos toca el nombre de un producto para editarlo rápido (foto, nombre, código de barras, categorías y descripción).",
     howto: [{
       id: "inventory.purchase", goal: "ingresar una factura de compra", keywords: "compra factura de compra ingreso mercancia ingresar xml",
       steps: [
