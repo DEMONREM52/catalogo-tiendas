@@ -93,6 +93,76 @@ Lo que ya estaba bien, verificado y sin tocar:
 - **Login:** sin caché (privado), TTFB ~0,51 s.
 - **Región:** funciones en `iad1` (EE. UU. este; `vercel.json` no fija región). La región de la base no se ve desde el código; el Supabase de la ronda 1 respondía bien desde ahí (catálogos de 40–67 ms en la base). Mirarla en Supabase → Settings → General; si no es `us-east-1`, ver «Requiere autorización».
 
+### Base de datos en producción (consulta 4, 2026-11-26)
+
+Las estadísticas vienen acumuladas desde el 18/01/2026, así que mezclan versiones viejas de las funciones (de antes de la ronda 1). Para ver el estado actual hay que reiniciarlas después de desplegar y medir de nuevo (ver «Requiere configuración o autorización»). La consulta corta el texto a 300 caracteres, así que las funciones se identificaron por sus parámetros y por quién las llama en el código.
+
+- **Salud:**
+  - 100 % de aciertos en memoria (tablas e índices).
+  - 41 de 60 conexiones ocupadas: 31 en reposo y 2 activas (PostgREST usa 21).
+  - Ningún índice de más de 1 MB sin uso.
+- **Aislamiento:** ✅ ninguna tabla de `public` sin RLS que `anon` o `authenticated` puedan leer, y ninguna función `security definer` sin `search_path`.
+- **Lo que más tiempo de base consume (en total):**
+
+| Función | Quién la llama | Llamadas | Promedio | Total |
+|---|---|---:|---:|---:|
+| `catalog_public_products` | catálogo público | 70.164 | 225 ms | 15.806 s |
+| `erp_stock_requests_list` | pedidos internos y número del ícono | 29.453 | 331 ms | 9.760 s |
+| `store_public_offers` (por su firma) | precios y ofertas del catálogo | 24.839 | 132 ms | 3.269 s |
+| misma firma del catálogo (otra versión) | catálogo público | 7.934 | 383 ms | 3.036 s |
+| `erp_alerts` | campana de avisos | 51.801 | 57 ms | 2.927 s |
+| `erp_stock_inbox` | bandeja de pedidos internos | 91.842 | 27 ms | 2.489 s |
+| `catalog_public` (por su firma) | catálogo público | 29.169 | 84 ms | 2.458 s |
+| `erp_extra_alerts` | campana de avisos | 49.828 | 31 ms | 1.531 s |
+
+- **Lo más lento por llamada (lo que espera la persona):**
+  - `store_public_search`, el buscador de la tienda pública: 0,9 a 2,0 s.
+  - `erp_stock_browse` (Inventario → existencias): 1,4 s.
+  - `catalog_admin_summary` (Catálogos): 0,85 s.
+  - `erp_product_finder` (buscador del panel): 0,64 s.
+  - `erp_point_valuation`: 0,43 s, y la pantalla pide 5 niveles a la vez.
+  - Búsquedas por foto: ~0,4 s.
+  - `product_radar`: 0,31 s.
+  - `erp_product_catalog_browse`: 0,30 s.
+- **Tablas que se recorren enteras:**
+  - `products`: 11.244 veces, 143 millones de filas leídas así.
+  - `product_image_vectors`: 25.920 veces. La búsqueda por foto compara contra todas las fotos, lo esperado con 2.717 filas. Pero esas búsquedas no llegan a 4.000, así que el resto viene de otra función, probablemente `product_image_pending`.
+  - `erp_purchase_items`: 28.778 veces. Ya tiene índice por `product_id`, así que la función que la recorre no filtra por producto.
+- **Tamaño:**
+  - `erp_audit_logs` y `products`: 29 MB cada una.
+  - Firmas de traslados: 11 MB en 438 filas (~25 KB por firma, imágenes guardadas en la base).
+  - Firmas de pedidos: 4,7 MB.
+  - Cuatro copias de respaldo viejas suman ~6 MB: `backup_inventario_inicial_100`, `backup_precios_20261013`, `backup_ingreso_1_bodega` y `backup_costos_ingreso_1`. Borrarlas no tiene vuelta atrás: solo si el dueño lo decide.
+- `SELECT name FROM pg_timezone_names` (333 ms) lo pide el panel de Supabase (SQL Editor), no RemHub.
+
+#### Cambios hechos con esa evidencia
+
+- **`src/lib/net/poll.ts` (nuevo):** revisiones con estas reglas:
+  - solo con la pestaña a la vista;
+  - al volver a la ventana revisan como mucho una vez por su mínimo;
+  - el reloj de respaldo se salta su turno si un evento en vivo acaba de revisar;
+  - se limpian al salir.
+  
+  Pruebas en `tests/perf/poll.test.ts`. Lo usan la campana, los pedidos internos, los mensajes del equipo, «Autorizar precio», «productos sin ingreso» y cuentas por pagar.
+- **Campana de avisos (8 funciones):** la campana y el inicio comparten la misma consulta. Antes el inicio la pedía dos veces.
+- **Pedidos internos:**
+  - Al entrar al panel, una sola consulta de la lista sirve para dos cosas: los estados que hacen sonar y el número del ícono. Antes eran dos.
+  - El número del ícono se recalcula solo cuando cambia un estado o llega un pedido. Antes se recalculaba con cada mensaje del chat.
+  - El respaldo del número pasó de 60 s a 5 min.
+  - La pantalla de pedidos junta en una sola consulta los dos avisos de un cambio de estado.
+
+Revisiones por hora con una pestaña del panel a la vista y sin eventos (calculado del código, no medido en producción):
+
+| Revisión | Antes | Ahora |
+|---|---|---|
+| Bandeja de pedidos internos (`erp_stock_inbox`) | 180 | 120 |
+| Lista de pedidos para el número del ícono (`erp_stock_requests_list`, 331 ms) | 60, más 1 por mensaje del chat (máx. 1 cada 8 s), más 1 extra al entrar | 12, más 1 por cambio de estado |
+| Campana (8 funciones) | 96; el doble en el inicio | 96, también en el inicio |
+| Mensajes del equipo (`erp_dm_list`) | 60, también con la pestaña oculta | 60, solo a la vista |
+| Al volver a la ventana | 13 consultas cada vez (21 en el inicio) | cada una como mucho una vez por su mínimo (4 s a 60 s) |
+
+**Sin hacer todavía: reescribir las funciones lentas y decidir índices.** `erp_stock_requests_list`, `erp_stock_inbox` y otras no están en el repositorio. Para acelerarlas sin cambiar lo que devuelven hace falta su código actual: `supabase/scripts/consulta_rendimiento_5.sql`, de solo lectura, lo trae junto con los índices de cada tabla.
+
 ### Estado de las 25 optimizaciones
 
 Clasificación: ✅ correcta · 🟡 parcial · ❌ no implementada · ➖ no aplica · 🔎 pendiente de verificar. Prioridad: C crítica · A alta · M media · B baja.
@@ -101,7 +171,7 @@ Clasificación: ✅ correcta · 🟡 parcial · ❌ no implementada · ➖ no ap
 |---|---|---|---|---|
 | 01 | Esqueletos de carga | ✅ | B | `SkeletonList` en 69 archivos, `dashboard/loading.tsx`. Las páginas públicas llegan armadas del servidor. |
 | 02 | Imágenes WebP/AVIF | 🟡 | A | WebP de 1.600 px al subir (ronda 1). Esta ronda: miniaturas de 480 px, listas para activar. `next/image` solo en el inicio. AVIF no: el lienzo del navegador no lo genera en todos los equipos. |
-| 03 | Llamadas duplicadas | 🟡 | M | Caché de funciones públicas (`CartExtras`), una sola conexión de Realtime, `unstable_cache` del catálogo. Sin librería de caché global (no se justificó). |
+| 03 | Llamadas duplicadas | 🟡 | M | Caché de funciones públicas (`CartExtras`), una sola conexión de Realtime, `unstable_cache` del catálogo. Con la consulta 4: campana compartida con el inicio, una sola lista de pedidos al entrar y revisiones con mínimo entre una y otra (`poll.ts`). Sin librería de caché global (no se justificó). |
 | 04 | Espera en búsquedas | ✅ | — | `search-timing.ts` en 20 buscadores; ignora respuestas viejas; lector de códigos casi al instante. |
 | 05 | Paginación | 🟡 | M | Productos, catálogo (30 + «cargar más»), kardex (500), historiales con `limit`. Falta revisar una por una las listas del panel que traen todo. |
 | 06 | Estáticos por CDN | ✅ | — | Vercel: `/_next/static` inmutable 1 año; íconos ahora con 1 día; fotos de Storage con 1 año. |
@@ -109,7 +179,7 @@ Clasificación: ✅ correcta · 🟡 parcial · ❌ no implementada · ➖ no ap
 | 08 | Consultas N+1 | 🟡 | M | 6 bucles pasados a paralelo con límite. Quedan en serie: las ventas sin conexión (a propósito: el orden importa) y, sin revisar a fondo en esta ronda, borrar productos e importar de Excel (avanzan con progreso por fila) y las rutas de cron que envían avisos. |
 | 09 | Brotli/Gzip | ✅ | — | Verificado en producción (`Content-Encoding: br`). |
 | 10 | Peticiones en paralelo | 🟡 | M | `Promise.all` en general; `mapLimit` nuevo para listas. |
-| 11 | Índices | 🔎 | A | Ronda 1: índices duplicados y sin uso quitados (20261203, 20261274) e índices de FK. Esta ronda: sin datos nuevos; correr `consulta_rendimiento_4.sql`. |
+| 11 | Índices | 🔎 | A | Ronda 1: índices duplicados y sin uso quitados (20261203, 20261274) e índices de FK. Consulta 4: no hay índices sin uso; `products`, `product_image_vectors` y `erp_purchase_items` se recorren enteras. El índice que sirve depende de cómo filtra cada función: falta su código (consulta 5). |
 | 12 | Monitoreo | 🟡 | M | Speed Insights en lo público; `pg_stat_statements` con la consulta 4. No hay trazas del servidor ni errores del navegador centralizados (ver «Requiere autorización»). |
 | 13 | Cercanía servidor-base | 🔎 | M | Funciones en `iad1`; falta confirmar la región de Supabase. |
 | 14 | SSR/SSG | ✅ | — | Catálogo armado en el servidor (ronda 1), inicio en caché, metadatos y píxel en `unstable_cache`. El panel sigue en el cliente, a propósito. |
@@ -148,7 +218,11 @@ Clasificación: ✅ correcta · 🟡 parcial · ❌ no implementada · ➖ no ap
    - `npm run images:thumbs` para mirar.
    - `npm run images:thumbs -- --aplicar` para crearlas. Usa la llave de servicio de `.env.local`, lee una vez cada foto y sube ~2.500 archivos pequeños.
    - Después, `NEXT_PUBLIC_IMAGE_THUMBS=1` en Vercel y desplegar de nuevo.
-2. **Diagnóstico de la base:** correr `supabase/scripts/consulta_rendimiento_4.sql` y mandar el resultado, para decidir índices y las funciones más lentas. Después de desplegar, se puede reiniciar las estadísticas con `select pg_stat_statements_reset();`.
+2. **Diagnóstico de la base:**
+   - ✅ `consulta_rendimiento_4.sql` corrida (ver «Base de datos en producción»).
+   - Sigue `supabase/scripts/consulta_rendimiento_5.sql`, que trae el código actual de las funciones lentas y los índices, para reescribirlas en una migración nueva.
+   - Después de desplegar, reiniciar las estadísticas con `select pg_stat_statements_reset();`. Solo borra los contadores, no datos.
+   - Repetir la consulta 4 a la semana: así se ven las cifras de las versiones actuales y no las de enero.
 3. **Región:** confirmar la de Supabase. Si no es `us-east-1`, mover las funciones de Vercel a la misma región (`"regions"` en `vercel.json`): es un cambio de infraestructura.
 4. **Límite global de peticiones** con varias instancias: haría falta un almacén compartido (Vercel KV/Upstash, de pago).
 5. **Errores del navegador y trazas del servidor centralizados:** Sentry o similar, de pago, o una tabla propia con muestreo.

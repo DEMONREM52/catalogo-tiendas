@@ -6,6 +6,7 @@ import { m as motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, BellRing, LayoutGrid, List, MessageCircle, MessageCirclePlus, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { smartFilter } from "@/lib/search";
 import { URL_CHANGE_EVENT } from "@/lib/url-intent";
 import { useRunOnChange } from "../../inventario/shared";
@@ -122,15 +123,22 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     window.addEventListener(URL_CHANGE_EVENT, checkNew);
     const onOpen = (e: Event) => setOpenId(String((e as CustomEvent<string>).detail));
     window.addEventListener(OPEN_REQUEST_EVENT, onOpen);
-    // Cambios en vivo: aviso de la conexión única del panel (StockRequestWatcher) + respaldo cada 30 s.
-    const onChange = () => void load();
+    // Cambios en vivo: aviso de la conexión única del panel (StockRequestWatcher). Un cambio de estado llega con su
+    // mensaje del sistema (dos avisos): se juntan en una sola consulta. Respaldo cada 60 s con la pestaña a la vista
+    // y, al volver a la ventana, como mucho cada 15 s (src/lib/net/poll.ts).
+    const poll = startPoll(load, { every: 60_000, minGap: 15_000, firstDelay: null });
+    let pending = 0;
+    const onChange = () => {
+      window.clearTimeout(pending);
+      pending = window.setTimeout(() => poll.run(), 700);
+    };
     window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
     return () => {
       window.removeEventListener(URL_CHANGE_EVENT, checkNew);
       window.removeEventListener(OPEN_REQUEST_EVENT, onOpen);
       window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
-      window.clearInterval(timer);
+      window.clearTimeout(pending);
+      poll.stop();
     };
   }, [storeId, load]);
 

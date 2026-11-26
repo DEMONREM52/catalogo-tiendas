@@ -5,6 +5,7 @@ import { AnimatePresence, m as motion } from "framer-motion";
 import { Check, ShieldCheck, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 
 type Req = {
@@ -36,11 +37,9 @@ export function PriceApprovalWatcher({ storeId }: { storeId: string }) {
 
   useEffect(() => {
     unlockAudioOnFirstTouch();
-    const first = window.setTimeout(() => void check(), 2500);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 8000);
-    const onFocus = () => void check();
-    window.addEventListener("focus", onFocus);
-    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+    // El vendedor espera en la caja: cada 8 s con la pestaña a la vista; al volver a la ventana, como mucho cada 4 s.
+    const poll = startPoll(check, { every: 8000, minGap: 4000, firstDelay: 2500 });
+    return () => poll.stop();
   }, [check]);
 
   async function decide(r: Req, approve: boolean) {

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { soundFor } from "@/lib/sounds/notify";
 
 /**
@@ -26,13 +27,15 @@ export function DmWatcher({ storeId, onUnread }: { storeId: string; onUnread: (n
       report.current(((data ?? []) as Array<{ unread?: number }>).reduce((s, x) => s + Number(x.unread || 0), 0));
     };
     void supabaseBrowser().auth.getUser().then(({ data }) => { me.current = data.user?.id ?? null; });
-    void count();
+    // Al entrar, respaldo cada 60 s con la pestaña a la vista (antes también con la pestaña oculta) y, al volver a
+    // la ventana, como mucho cada 15 s. Lo de al instante llega por el evento en vivo de abajo.
+    const poll = startPoll(count, { every: 60_000, minGap: 15_000, firstDelay: 0 });
     const ch = supabaseBrowser()
       .channel(`dm-watch-${storeId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_dm_messages", filter: `store_id=eq.${storeId}` }, (msg) => {
         const m = msg.new as { id: string; thread_id: string; user_id: string | null; user_name: string | null; body: string; kind: string };
         window.clearTimeout(t);
-        t = window.setTimeout(() => void count(), 400);
+        t = window.setTimeout(() => poll.run(), 400);
         if (m.kind !== "message" || !m.user_id || m.user_id === me.current) return;
         if ((window as Window & { __remhubOpenChat?: string | null }).__remhubOpenChat === m.thread_id && document.visibilityState === "visible") return;
         void (async () => {
@@ -55,10 +58,7 @@ export function DmWatcher({ storeId, onUnread }: { storeId: string; onUnread: (n
         })();
       })
       .subscribe();
-    const onFocus = () => void count();
-    window.addEventListener("focus", onFocus);
-    const every = window.setInterval(() => void count(), 60000);
-    return () => { alive = false; window.clearTimeout(t); window.clearInterval(every); window.removeEventListener("focus", onFocus); void supabaseBrowser().removeChannel(ch); };
+    return () => { alive = false; window.clearTimeout(t); poll.stop(); void supabaseBrowser().removeChannel(ch); };
   }, [storeId]);
   return null;
 }

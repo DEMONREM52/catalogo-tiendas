@@ -28,6 +28,7 @@ Historial, mediciones y lo pendiente: docs/PERFORMANCE_AUDIT.md. Lo que se mide 
   - Pagina con `range`: PostgREST corta en 1.000 filas.
   - Búsquedas con `useSearchValue`/`searchDelay` (src/lib/search-timing.ts). El lector de códigos va casi al instante; no le pongas espera.
 - **Efectos:** todo `setInterval`, `addEventListener`, canal de Realtime o `setTimeout` largo se limpia en el `return` del efecto. Realtime: una sola conexión en el panel (StockRequestWatcher reparte el evento); no abras canales nuevos sin necesidad.
+- **Revisiones periódicas del panel:** con `startPoll` (src/lib/net/poll.ts), nunca `setInterval` + `focus` sueltos. Solo revisan con la pestaña a la vista y, al volver a la ventana, como mucho una vez por su mínimo. Lo que llega por Realtime llama `poll.run()`. Las revisiones eran lo más llamado de la base (docs/PERFORMANCE_AUDIT.md).
 - **Caché:** lo privado nunca va en cachés compartidas (`/api/*` privadas con `private, no-store`, ver next.config.ts). Existencias, saldos y precios para vender o cobrar se leen de la base en el momento (el POS ya revisa contra la base antes de guardar); la caché del navegador es solo para mostrar.
 - **Base de datos:**
   - Índices nuevos solo con evidencia: pg_stat_statements con supabase/scripts/consulta_rendimiento_4.sql, que es una sola consulta de solo lectura.

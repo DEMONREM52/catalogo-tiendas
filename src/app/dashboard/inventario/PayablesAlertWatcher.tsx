@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { BellRing, ChevronDown, ChevronUp, Wallet, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 import { dueColor, dueText, type PayablesBoard, type PayableRow } from "./payables-shared";
 
@@ -43,13 +44,11 @@ export function PayablesAlertWatcher({ storeId }: { storeId: string }) {
 
   useEffect(() => {
     unlockAudioOnFirstTouch();
-    const first = window.setTimeout(() => void check(), 6000);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, POLL_MS);
-    const onFocus = () => void check();
-    const onChanged = () => void check();
-    window.addEventListener("focus", onFocus);
+    // Al volver a la ventana revisa como mucho una vez por minuto; tras un cambio propio, al instante.
+    const poll = startPoll(check, { every: POLL_MS, minGap: 60_000, firstDelay: 6000 });
+    const onChanged = () => poll.run();
     window.addEventListener("remhub:payables-changed", onChanged);
-    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener("focus", onFocus); window.removeEventListener("remhub:payables-changed", onChanged); };
+    return () => { poll.stop(); window.removeEventListener("remhub:payables-changed", onChanged); };
   }, [check]);
 
   async function ack(ids: string[], minutes: number | null) {

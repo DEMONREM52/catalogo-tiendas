@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { AnimatePresence, m as motion } from "framer-motion";
@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll, type Poll } from "@/lib/net/poll";
 import type { AlertSeverity, StoreAlert } from "@/lib/reports";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -59,75 +60,89 @@ export const SEVERITY: Record<AlertSeverity, { label: string; color: string; ord
   good: { label: "Buenas noticias", color: "#0ca30c", order: 4 },
 };
 
+/**
+ * Avisos de la tienda, compartidos: la campana y el inicio usan la misma consulta (antes cada uno pedía las 8
+ * funciones por su lado). Se revisan cada 5 min con la pestaña a la vista y, al volver a la ventana, como mucho
+ * una vez por minuto (src/lib/net/poll.ts).
+ */
+type AlertsHub = { alerts: StoreAlert[]; subs: Set<(rows: StoreAlert[]) => void>; poll: Poll | null };
+const alertHubs = new Map<string, AlertsHub>();
+
 export function useStoreAlerts(storeId: string | null | undefined) {
-  const [alerts, setAlerts] = useState<StoreAlert[]>([]);
-  const load = useCallback(async () => {
-    if (!storeId) return;
-    const sb = supabaseBrowser();
-    // Alertas del ERP + fiscales, de seguridad y de usuarios (si la migración fiscal no está, se ignoran)
-    // + trabajo sin conexión: contingencias por transmitir y ventas por revisar (20261243).
-    // + pedidos sin confirmar y sin completar (20261303).
-    // + productos a los que ya les toca publicarse (20261305).
-    // + tareas de productos asignadas a la persona (20261306).
-    // + carritos abandonados y «avísame» que ya llegó (20261312, solo si están encendidos).
-    const [base, extra, offline, orders, publish, tasks, sell, ops] = await Promise.all([
-      sb.rpc("erp_alerts", { p_store: storeId }),
-      sb.rpc("erp_extra_alerts", { p_store: storeId }),
-      sb.rpc("erp_offline_alerts", { p_store: storeId }),
-      sb.rpc("erp_order_alerts", { p_store: storeId }),
-      sb.rpc("erp_publish_alerts", { p_store: storeId }),
-      sb.rpc("erp_product_task_alerts", { p_store: storeId }),
-      sb.rpc("vm_alerts", { p_store: storeId }),
-      sb.rpc("vm_ops_alerts", { p_store: storeId }),
-    ]);
-    const opsData = !ops.error && ops.data ? (ops.data as { ok?: boolean; counts_pending?: number }) : null;
-    const vm = !sell.error && sell.data ? (sell.data as { ok?: boolean; carts?: number; waitlist_ready?: number }) : null;
-    const sellAlerts: StoreAlert[] = [];
-    if (vm?.ok && Number(vm.carts) > 0) sellAlerts.push({
-      key: `vm-carts-${vm.carts}`, severity: "info", icon: "shopping-bag", count: Number(vm.carts),
-      title: `🛒 ${vm.carts} carrito${Number(vm.carts) === 1 ? "" : "s"} sin terminar`,
-      body: "Clientes que dejaron su WhatsApp y no enviaron el pedido. Escríbeles con un toque.",
-      href: "/dashboard/vender-mas?ver=carritos",
-    });
-    if (opsData?.ok && Number(opsData.counts_pending) > 0) sellAlerts.push({
-      key: `vm-counts-${opsData.counts_pending}`, severity: "warning", icon: "box", count: Number(opsData.counts_pending),
-      title: `📷 ${opsData.counts_pending} conteo${Number(opsData.counts_pending) === 1 ? "" : "s"} por aprobar`,
-      body: "Revisa las diferencias y aprueba para que se ajusten las existencias.",
-      href: "/dashboard/inventario?tab=conteos",
-    });
-    if (vm?.ok && Number(vm.waitlist_ready) > 0) sellAlerts.push({
-      key: `vm-waitlist-${vm.waitlist_ready}`, severity: "good", icon: "megaphone", count: Number(vm.waitlist_ready),
-      title: `🔔 Ya llegó lo que ${vm.waitlist_ready} cliente${Number(vm.waitlist_ready) === 1 ? "" : "s"} esperaba${Number(vm.waitlist_ready) === 1 ? "" : "n"}`,
-      body: "Entró mercancía de productos que pidieron con «Avísame». Avísales por WhatsApp.",
-      href: "/dashboard/vender-mas?ver=avisame",
-    });
-    const ordersOk = !orders.error && Array.isArray(orders.data);
-    const rows = [
-      // Con los avisos nuevos de pedidos, el viejo («sin confirmar hace más de un día») sobra.
-      ...(!base.error && Array.isArray(base.data) ? (base.data as StoreAlert[]).filter((a) => !(ordersOk && a.key.startsWith("orders-pending-"))) : []),
-      ...(ordersOk ? (orders.data as StoreAlert[]) : []),
-      ...(!extra.error && Array.isArray(extra.data) ? (extra.data as StoreAlert[]) : []),
-      ...(!offline.error && Array.isArray(offline.data) ? (offline.data as StoreAlert[]) : []),
-      ...(!publish.error && Array.isArray(publish.data) ? (publish.data as StoreAlert[]) : []),
-      ...(!tasks.error && Array.isArray(tasks.data) ? (tasks.data as StoreAlert[]) : []),
-      ...sellAlerts,
-    ].filter((a) => SEVERITY[a.severity]);
-    if (!base.error || !extra.error) {
-      setAlerts(rows.sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order));
-    }
-  }, [storeId]);
+  const [alerts, setAlerts] = useState<StoreAlert[]>(() => (storeId ? alertHubs.get(storeId)?.alerts ?? [] : []));
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-    const timer = window.setInterval(() => void load(), 5 * 60 * 1000);
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
+    if (!storeId) return;
+    let hub = alertHubs.get(storeId);
+    if (!hub) { hub = { alerts: [], subs: new Set(), poll: null }; alertHubs.set(storeId, hub); }
+    const h = hub;
+    h.subs.add(setAlerts);
+    if (h.poll) h.poll.poke();
+    else h.poll = startPoll(async () => {
+      const rows = await fetchStoreAlerts(storeId);
+      if (!rows) return;
+      h.alerts = rows;
+      h.subs.forEach((s) => s(rows));
+    }, { every: 5 * 60_000, minGap: 60_000, firstDelay: 0 });
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
+      h.subs.delete(setAlerts);
+      if (!h.subs.size) { h.poll?.stop(); h.poll = null; }
     };
-  }, [load]);
+  }, [storeId]);
   return alerts;
+}
+
+async function fetchStoreAlerts(storeId: string): Promise<StoreAlert[] | null> {
+  const sb = supabaseBrowser();
+  // Alertas del ERP + fiscales, de seguridad y de usuarios (si la migración fiscal no está, se ignoran)
+  // + trabajo sin conexión: contingencias por transmitir y ventas por revisar (20261243).
+  // + pedidos sin confirmar y sin completar (20261303).
+  // + productos a los que ya les toca publicarse (20261305).
+  // + tareas de productos asignadas a la persona (20261306).
+  // + carritos abandonados y «avísame» que ya llegó (20261312, solo si están encendidos).
+  const [base, extra, offline, orders, publish, tasks, sell, ops] = await Promise.all([
+    sb.rpc("erp_alerts", { p_store: storeId }),
+    sb.rpc("erp_extra_alerts", { p_store: storeId }),
+    sb.rpc("erp_offline_alerts", { p_store: storeId }),
+    sb.rpc("erp_order_alerts", { p_store: storeId }),
+    sb.rpc("erp_publish_alerts", { p_store: storeId }),
+    sb.rpc("erp_product_task_alerts", { p_store: storeId }),
+    sb.rpc("vm_alerts", { p_store: storeId }),
+    sb.rpc("vm_ops_alerts", { p_store: storeId }),
+  ]);
+  const opsData = !ops.error && ops.data ? (ops.data as { ok?: boolean; counts_pending?: number }) : null;
+  const vm = !sell.error && sell.data ? (sell.data as { ok?: boolean; carts?: number; waitlist_ready?: number }) : null;
+  const sellAlerts: StoreAlert[] = [];
+  if (vm?.ok && Number(vm.carts) > 0) sellAlerts.push({
+    key: `vm-carts-${vm.carts}`, severity: "info", icon: "shopping-bag", count: Number(vm.carts),
+    title: `🛒 ${vm.carts} carrito${Number(vm.carts) === 1 ? "" : "s"} sin terminar`,
+    body: "Clientes que dejaron su WhatsApp y no enviaron el pedido. Escríbeles con un toque.",
+    href: "/dashboard/vender-mas?ver=carritos",
+  });
+  if (opsData?.ok && Number(opsData.counts_pending) > 0) sellAlerts.push({
+    key: `vm-counts-${opsData.counts_pending}`, severity: "warning", icon: "box", count: Number(opsData.counts_pending),
+    title: `📷 ${opsData.counts_pending} conteo${Number(opsData.counts_pending) === 1 ? "" : "s"} por aprobar`,
+    body: "Revisa las diferencias y aprueba para que se ajusten las existencias.",
+    href: "/dashboard/inventario?tab=conteos",
+  });
+  if (vm?.ok && Number(vm.waitlist_ready) > 0) sellAlerts.push({
+    key: `vm-waitlist-${vm.waitlist_ready}`, severity: "good", icon: "megaphone", count: Number(vm.waitlist_ready),
+    title: `🔔 Ya llegó lo que ${vm.waitlist_ready} cliente${Number(vm.waitlist_ready) === 1 ? "" : "s"} esperaba${Number(vm.waitlist_ready) === 1 ? "" : "n"}`,
+    body: "Entró mercancía de productos que pidieron con «Avísame». Avísales por WhatsApp.",
+    href: "/dashboard/vender-mas?ver=avisame",
+  });
+  const ordersOk = !orders.error && Array.isArray(orders.data);
+  const rows = [
+    // Con los avisos nuevos de pedidos, el viejo («sin confirmar hace más de un día») sobra.
+    ...(!base.error && Array.isArray(base.data) ? (base.data as StoreAlert[]).filter((a) => !(ordersOk && a.key.startsWith("orders-pending-"))) : []),
+    ...(ordersOk ? (orders.data as StoreAlert[]) : []),
+    ...(!extra.error && Array.isArray(extra.data) ? (extra.data as StoreAlert[]) : []),
+    ...(!offline.error && Array.isArray(offline.data) ? (offline.data as StoreAlert[]) : []),
+    ...(!publish.error && Array.isArray(publish.data) ? (publish.data as StoreAlert[]) : []),
+    ...(!tasks.error && Array.isArray(tasks.data) ? (tasks.data as StoreAlert[]) : []),
+    ...sellAlerts,
+  ].filter((a) => SEVERITY[a.severity]);
+  if (base.error && extra.error) return null;
+  return rows.sort((a, b) => SEVERITY[a.severity].order - SEVERITY[b.severity].order);
 }
 
 export function AlertRow({ alert, onNavigate, unseen, compact }: { alert: StoreAlert; onNavigate?: () => void; unseen?: boolean; compact?: boolean }) {

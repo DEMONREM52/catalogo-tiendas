@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { MessageCircle, PackagePlus, Repeat, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { isOwnRecent, loadStoreSoundConfig, soundFor } from "@/lib/sounds/notify";
 import { getStoreConfigCache, statusEvent } from "@/lib/sounds/prefs";
 import { unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
-import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, emitStockRequestsChanged, srNeedsMe, type SrListItem, type SrStatus } from "./types";
+import { OPEN_REQUEST_EVENT, SR_STATUS, emitStockRequestsChanged, srNeedsMe, type SrListItem, type SrStatus } from "./types";
 
 type Inbox = {
   incoming: Array<{ id: string; number: number; from_name: string; to_name: string; priority: string; items: number }>;
@@ -124,47 +125,49 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
     return () => navigator.serviceWorker?.removeEventListener("message", onSw);
   }, [storeId, check, onStatus, router]);
 
+  // Avisa al número del ícono que cambió un estado (lo pone el efecto del número, más abajo).
+  const badgeSoon = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const sb = supabaseBrowser();
-    const first = window.setTimeout(() => void check(), 1500);
-    // Estados actuales, para saber cuándo cambian.
-    void sb.rpc("erp_stock_requests_list", { p_store: storeId }).then(({ data }) => {
-      for (const r of (data ?? []) as Array<{ id: string; status: string }>) if (!statusKnown.current.has(r.id)) statusKnown.current.set(r.id, r.status);
-    });
+    // Bandeja (pedidos nuevos y mensajes sin leer): al instante con los eventos en vivo; respaldo cada 30 s con la
+    // pestaña a la vista y, al volver a la ventana, como mucho cada 10 s (src/lib/net/poll.ts).
+    const poll = startPoll(check, { every: 30_000, minGap: 10_000, firstDelay: 1500 });
     const channel = sb
       .channel(`sr-watch-${storeId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => {
         const row = p.new as ReqRow;
         if (row.id && row.status) statusKnown.current.set(row.id, row.status);
         emitStockRequestsChanged(row.id);
-        void check();
+        poll.run();
+        badgeSoon.current?.();
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "erp_stock_request_messages", filter: `store_id=eq.${storeId}` }, (p) => {
         emitStockRequestsChanged((p.new as { request_id?: string }).request_id);
-        void check();
+        poll.run();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "erp_stock_requests", filter: `store_id=eq.${storeId}` }, (p) => {
-        emitStockRequestsChanged((p.new as ReqRow).id);
-        void onStatus(p.new as ReqRow);
+        const row = p.new as ReqRow;
+        // Cada mensaje también actualiza el pedido: el número del ícono solo cambia si cambió el estado.
+        const moved = !!row.id && statusKnown.current.get(row.id) !== row.status;
+        emitStockRequestsChanged(row.id);
+        void onStatus(row);
+        if (moved) badgeSoon.current?.();
       })
       .subscribe();
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 20000);
-    const onFocus = () => void check();
-    window.addEventListener("focus", onFocus);
     return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
+      poll.stop();
       void sb.removeChannel(channel);
     };
   }, [storeId, check, onStatus]);
 
-  // Número en el ícono de la app instalada (como WhatsApp): cuántos pedidos te tocan (revisar o confirmar que llegó).
-  // Solo donde el navegador lo permite (app instalada: Android/Chrome/Edge, iPhone 16.4+). Con la app cerrada del
-  // todo se queda el último número hasta que se vuelve a abrir.
+  // Estados actuales (para saber cuándo cambian y sonar) y número en el ícono de la app instalada (como WhatsApp):
+  // cuántos pedidos te tocan (revisar o confirmar que llegó). Una sola consulta de la lista al entrar sirve para
+  // las dos cosas. El número solo existe donde el navegador lo permite (app instalada: Android/Chrome/Edge,
+  // iPhone 16.4+); con la app cerrada del todo se queda el último número hasta que se vuelve a abrir.
   useEffect(() => {
     const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-    if (typeof nav.setAppBadge !== "function") return;
+    const badge = typeof nav.setAppBadge === "function";
     let alive = true;
     let last = 0;
     let trailing: number | null = null;
@@ -172,30 +175,31 @@ export function StockRequestWatcher({ storeId }: { storeId: string }) {
       last = Date.now();
       const { data, error } = await supabaseBrowser().rpc("erp_stock_requests_list", { p_store: storeId });
       if (!alive || error || !Array.isArray(data)) return;
+      for (const r of data as SrListItem[]) if (!statusKnown.current.has(r.id)) statusKnown.current.set(r.id, r.status);
+      if (!badge) return;
       const n = (data as SrListItem[]).filter(srNeedsMe).length;
       try {
         if (n > 0) await nav.setAppBadge?.(n);
         else await nav.clearAppBadge?.();
       } catch { /* sin permiso o no instalada: no pasa nada */ }
     };
-    // Cada mensaje también avisa «cambió»: se agrupa para no consultar de más (como mucho cada 8 s).
+    const first = window.setTimeout(() => void update(), 1200);
+    if (!badge) return () => { alive = false; window.clearTimeout(first); };
+    // Varios cambios seguidos se agrupan: como mucho una consulta cada 8 s.
     const soon = () => {
       if (trailing !== null) return;
       const wait = Math.max(0, 8000 - (Date.now() - last));
       trailing = window.setTimeout(() => { trailing = null; void update(); }, wait);
     };
-    const first = window.setTimeout(() => void update(), 2500);
-    const onVisible = () => { if (document.visibilityState === "visible") soon(); };
-    window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, soon);
-    document.addEventListener("visibilitychange", onVisible);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") soon(); }, 60000);
+    badgeSoon.current = soon;
+    // Respaldo por si se pierde un evento en vivo: cada 5 min a la vista y al volver (como mucho cada minuto).
+    const poll = startPoll(soon, { every: 5 * 60_000, minGap: 60_000, firstDelay: null });
     return () => {
       alive = false;
       window.clearTimeout(first);
       if (trailing !== null) window.clearTimeout(trailing);
-      window.clearInterval(timer);
-      window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, soon);
-      document.removeEventListener("visibilitychange", onVisible);
+      poll.stop();
+      badgeSoon.current = null;
       // Al salir del panel (o cerrar sesión) no se deja un número viejo.
       void nav.clearAppBadge?.().catch(() => {});
     };

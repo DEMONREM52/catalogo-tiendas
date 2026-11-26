@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { BellRing, ChevronDown, ChevronUp, Receipt, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { playTone, unlockAudioOnFirstTouch } from "@/lib/sounds/tones";
 
 type Pending = { id: string; name: string; sku: string | null; image_url: string | null; created_at: string; hours: number };
@@ -56,11 +57,9 @@ export function InventoryAlertWatcher({ storeId }: { storeId: string }) {
 
   useEffect(() => {
     unlockAudioOnFirstTouch();
-    const first = window.setTimeout(() => void check(), 4000);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, POLL_MS);
-    const onFocus = () => void check();
-    window.addEventListener("focus", onFocus);
-    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+    // Al volver a la ventana revisa como mucho una vez por minuto (src/lib/net/poll.ts).
+    const poll = startPoll(check, { every: POLL_MS, minGap: 60_000, firstDelay: 4000 });
+    return () => poll.stop();
   }, [check]);
 
   const later = () => { write(snoozeKey, Date.now() + RING_MS); setHidden(true); };
