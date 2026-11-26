@@ -161,7 +161,24 @@ Revisiones por hora con una pestaña del panel a la vista y sin eventos (calcula
 | Mensajes del equipo (`erp_dm_list`) | 60, también con la pestaña oculta | 60, solo a la vista |
 | Al volver a la ventana | 13 consultas cada vez (21 en el inicio) | cada una como mucho una vez por su mínimo (4 s a 60 s) |
 
-**Sin hacer todavía: reescribir las funciones lentas y decidir índices.** `erp_stock_requests_list`, `erp_stock_inbox` y otras no están en el repositorio. Para acelerarlas sin cambiar lo que devuelven hace falta su código actual: `supabase/scripts/consulta_rendimiento_5.sql`, de solo lectura, lo trae junto con los índices de cada tabla.
+#### Funciones reescritas con el código de producción (consulta 5, migración 20261345)
+
+`supabase/scripts/consulta_rendimiento_5.sql` trajo el código que corre hoy y los índices. En casi todas las lentas el patrón era el mismo: algo que vale igual para toda la consulta (los permisos de quien pregunta, si la tienda tiene promociones) se recalculaba por cada fila. La migración lo calcula una vez y deja todo lo demás igual. `tests/sql/funciones_rapidas.test.mjs` compara, para 7 usuarios distintos y con y sin promociones, la versión de producción (`tests/sql/fixtures/prod_rendimiento_5.sql`) con la nueva: 378 comprobaciones, resultados idénticos.
+
+| Función | Qué se repetía | Revisiones de permiso por llamada (prueba) |
+|---|---|---|
+| `erp_stock_requests_list`, `erp_stock_inbox` | `erp__sr_access` por pedido: 1 + 4 revisiones de permiso, cada una con 3 consultas | 312–624 → 4 |
+| `erp_alerts` (pedidos internos) | lo mismo, y `erp_sr_can_view` por cada mensaje sin leer | 178–331 → 6–12 |
+| `erp_stock_browse` | «¿ve costos?» por producto; la categoría con una función por producto | 69 → 2 (48 productos) |
+| `catalog_admin_summary` | la lista de cada catálogo se armaba 3 veces | — (1 vez en vez de 3) |
+| `erp_product_finder` | el texto buscado se partía por cada producto (lo mismo que 20261204) | — |
+| `catalog__items` (catálogo público, ofertas, categorías) | promociones por producto aunque la tienda no tenga ninguna vigente | — |
+| `store_public_offers` | `erp__badges_now` llamada por producto (ahora la misma consulta en línea) | — |
+| `erp_order_alerts`, `erp_offline_alerts` | el punto de quien pregunta por cada fila | — |
+
+- **Índices:** ninguno nuevo. Las tablas de pedidos internos, etiquetas y ofertas ya tienen índice por llave; lo lento eran las llamadas por fila. `products` se seguirá leyendo entera en el catálogo y los buscadores: cada consulta revisa todos los productos de la tienda (precio, existencias, coincidencia de texto). Con 13.350 filas es lo esperado. Un índice de texto (pg_trgm está instalada) solo vale la pena si la consulta 4 de después lo muestra.
+- **Sin medir en producción:** las cifras de la tabla son de la prueba. Para confirmar, correr la migración, `select pg_stat_statements_reset();` y repetir la consulta 4 a la semana.
+- **No se tocaron:** `store_public_search` (ya prepara el texto una vez desde 20261204; su promedio viejo mezcla la versión anterior), `product_image_pending`, `erp_point_valuation`, `product_radar`, `erp_extra_alerts` (sus llamadas por fila son pocas).
 
 ### Estado de las 25 optimizaciones
 
@@ -179,7 +196,7 @@ Clasificación: ✅ correcta · 🟡 parcial · ❌ no implementada · ➖ no ap
 | 08 | Consultas N+1 | 🟡 | M | 6 bucles pasados a paralelo con límite. Quedan en serie: las ventas sin conexión (a propósito: el orden importa) y, sin revisar a fondo en esta ronda, borrar productos e importar de Excel (avanzan con progreso por fila) y las rutas de cron que envían avisos. |
 | 09 | Brotli/Gzip | ✅ | — | Verificado en producción (`Content-Encoding: br`). |
 | 10 | Peticiones en paralelo | 🟡 | M | `Promise.all` en general; `mapLimit` nuevo para listas. |
-| 11 | Índices | 🔎 | A | Ronda 1: índices duplicados y sin uso quitados (20261203, 20261274) e índices de FK. Consulta 4: no hay índices sin uso; `products`, `product_image_vectors` y `erp_purchase_items` se recorren enteras. El índice que sirve depende de cómo filtra cada función: falta su código (consulta 5). |
+| 11 | Índices | 🔎 | A | Ronda 1: índices duplicados y sin uso quitados (20261203, 20261274) e índices de FK. Consulta 4: no hay índices sin uso; `products`, `product_image_vectors` y `erp_purchase_items` se recorren enteras. Con el código de la consulta 5: lo lento eran llamadas por fila, no índices que faltaran; 20261345 reescribe 9 funciones sin índices nuevos. Falta medir después de correrla. |
 | 12 | Monitoreo | 🟡 | M | Speed Insights en lo público; `pg_stat_statements` con la consulta 4. No hay trazas del servidor ni errores del navegador centralizados (ver «Requiere autorización»). |
 | 13 | Cercanía servidor-base | 🔎 | M | Funciones en `iad1`; falta confirmar la región de Supabase. |
 | 14 | SSR/SSG | ✅ | — | Catálogo armado en el servidor (ronda 1), inicio en caché, metadatos y píxel en `unstable_cache`. El panel sigue en el cliente, a propósito. |
