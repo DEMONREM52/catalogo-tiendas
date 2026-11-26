@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ArrowRight, Ban, Bell, BellOff, Check, ListChecks, PackagePlus, Trash, Camera, Phone, Search, Video, CheckCircle2, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRight, Ban, Bell, BellOff, Check, ListChecks, PackagePlus, Trash, Camera, Phone, Search, Video, ExternalLink, Image as ImageIcon, Loader2, Lock, MessageCircle, Mic, Music, Package, Paperclip, Send, Trash2, Truck, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useThumbs } from "../../inventario/LineEditor";
@@ -515,7 +515,6 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   // Agregar o quitar: quien atiende, o quien pidió mientras nadie lo toma; nunca después de «Revisó».
   const canEditItems = Boolean(data && r && (r.status === "pending" || r.status === "preparing") && (canAttend || (data.access.request && r.status === "pending"))
     && !data.signatures?.some((x) => x.step === "sent" || x.step === "delivered" || x.step === "received"));
-  const readyToSend = Boolean(data?.signatures?.some((s) => s.step === "packed") && data?.signatures?.some((s) => s.step === "sent"));
 
   // El siguiente paso que te toca, siempre a la mano (abajo en «Productos» y arriba del chat en el celular).
   type NextKey = "packed" | "sent" | "dispatch" | "delivered" | "receive-open" | "receive";
@@ -768,7 +767,6 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         onCancel={() => { pendingReceive.current = false; }}
         autoOpen={autoSign}
         onAutoOpenDone={() => setAutoSign(null)}
-        onDispatch={canAttend && !busy ? () => void dispatch() : undefined}
       />
 
       {data.transfer ? (
@@ -798,23 +796,9 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             💾 Confirmar cantidades
           </button>
         ) : null}
-        {canAttend ? (
-          <button type="button" disabled={busy || !readyToSend} onClick={() => void dispatch()} title={readyToSend ? "Enviar" : "Primero firma Preparó y Revisó"} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: "#0ea5e9" }}>
-            <Truck size={15} /> Enviar (va en camino)
-          </button>
-        ) : null}
-        {canReceive && !receiving ? (
-          <button type="button" onClick={() => setReceiving({})} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white" style={{ background: "#16a34a" }}>
-            <Package size={15} /> Confirmar lo que llegó
-          </button>
-        ) : null}
+        {/* Enviar y confirmar lo recibido van en el botón «👉 Te toca» de abajo (antes estaban repetidos aquí). */}
         {canReceive && receiving ? (
-          <>
-            <button type="button" disabled={busy} onClick={() => void receive()} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: "#16a34a" }}>
-              <CheckCircle2 size={15} /> {data.signatures?.some((x) => x.step === "received") ? "Confirmar recibido" : "Firmar y confirmar recibido"}
-            </button>
-            <button type="button" onClick={() => setReceiving(null)} className="rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
-          </>
+          <button type="button" onClick={() => setReceiving(null)} className="rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar conteo</button>
         ) : null}
         {canAttend ? (
           <button type="button" disabled={busy} onClick={() => void close("reject")} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-semibold text-red-400" style={{ borderColor: "color-mix(in oklab, #ef4444 40%, transparent)" }}>
@@ -833,7 +817,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
         ) : null}
       </div>
       {canReceive && receiving ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Escribe lo que realmente llegó (puede ser menos o más de lo enviado). Si falta, vuelve a {r.to_name}; si llegó de más, se descuenta de {r.to_name}. Si llegó un producto que no venía, toca «📦 Llegó algo más». Todo queda en el chat y el kardex.</p> : null}
-      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Pasos: ajusta “Enviar” según lo que vas a mandar → firma “Preparó” (con eso el pedido queda tomado y en preparación) → firma “Revisó” → toca “Enviar” y quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
+      {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Ajusta “Enviar” si hace falta (se guarda solo) y sigue el botón «👉 Te toca»: Preparó → Revisó → Enviar → quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
 
       {/* Barra flotante: el siguiente paso que te toca y, debajo, subir, agregar otro producto o bajar a las firmas. */}
       <div className="pointer-events-none sticky bottom-0 z-20 -mx-1 pb-1 pt-2">

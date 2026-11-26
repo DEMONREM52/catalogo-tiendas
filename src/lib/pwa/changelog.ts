@@ -1596,6 +1596,16 @@ export const RELEASES: Release[] = [
       { icon: "↩️", text: "Deshacer lote: nada se pierde" },
     ],
   },
+  {
+    id: 155, date: "2026-11-26", title: "✍️ Firmas en una sola línea",
+    summary: "En el pedido interno las firmas ya no ocupan un recuadro grande: se ve en una línea quién firmó cada paso y el botón «Compartir pedido» por si alguien tiene que firmar desde su celular. Para firmar, enviar o confirmar lo recibido se usa el botón «👉 Te toca» de abajo. Las firmas hechas se ven en «Ver firmas».",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "👉", text: "Te toca: Firmar «Preparó»" },
+      { icon: "✅", text: "Preparó · JAVIER  ·  Revisó" },
+      { icon: "🔗", text: "Compartir pedido (si hace falta)" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

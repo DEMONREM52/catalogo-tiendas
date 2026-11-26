@@ -3,7 +3,7 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { Check, Link2, PenLine, Share2, X } from "lucide-react";
+import { Check, PenLine, Share2, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { SignaturePad, type SignaturePadHandle } from "@/app/traslado/[token]/SignaturePad";
@@ -62,122 +62,76 @@ async function shareSignLink(data: SrDetail, step: (typeof SIGN_STEPS)[number] |
   }
 }
 
-/** Quién puede firmar cada paso ahora mismo. */
-function canSign(data: SrDetail, step: (typeof SIGN_STEPS)[number]) {
-  const s = data.request.status;
-  if (s === "rejected" || s === "cancelled") return false;
-  const sideOk = step.side === "both" ? data.access.attend || data.access.request : step.side === "attend" ? data.access.attend : data.access.request;
-  if (!sideOk) return false;
-  if (step.key === "packed") return s === "pending" || s === "preparing";
-  if (step.key === "sent") return s === "preparing" && (data.signatures ?? []).some((x) => x.step === "packed");
-  if (step.key === "delivered") return s === "dispatched";
-  return s === "dispatched" || s === "received";
-}
-
-/** Por qué un paso todavía no se puede firmar aquí (para que nadie se quede sin saber qué hacer). */
-function lockReason(data: SrDetail, step: (typeof SIGN_STEPS)[number]) {
-  const s = data.request.status;
-  const r = data.request;
-  if (s === "rejected" || s === "cancelled") return "El pedido se cerró.";
-  if (step.key === "packed" || step.key === "sent") {
-    if (!data.access.attend) return `Lo firma quien atiende en ${r.to_name}.`;
-    if (step.key === "sent") return "Primero firma «Preparó».";
-    return step.who;
-  }
-  if (step.key === "delivered") return s === "received" ? step.who : "Primero firma «Revisó».";
-  if (!data.access.request) return `Lo firma quien recibe en ${r.from_name}.`;
-  return `Se firma cuando llegue a ${r.from_name}.`;
-}
-
-/** Firmas del pedido: nombre, cédula y firma de cada responsable (se sincronizan con el seguimiento del traslado). */
-export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, onCancel, onDispatch }: { data: SrDetail; onSigned: (step: SrSignStep) => void; autoOpen?: SrSignStep | null; onAutoOpenDone?: () => void; onCancel?: () => void; onDispatch?: () => void }) {
+/**
+ * Firmas del pedido, compactas: los 4 pasos en una línea (quién firmó) y el enlace para compartir el pedido.
+ * Para firmar se usa el botón «👉 Te toca» de abajo, que abre aquí la ventana de firma del paso que sigue.
+ * Las firmas hechas (nombre, cédula, imagen) quedan plegadas en «Ver firmas».
+ */
+export function RequestSignatures({ data, onSigned, autoOpen, onAutoOpenDone, onCancel }: { data: SrDetail; onSigned: (step: SrSignStep) => void; autoOpen?: SrSignStep | null; onAutoOpenDone?: () => void; onCancel?: () => void }) {
   const signed = new Map((data.signatures ?? []).map((s) => [s.step, s]));
-  const [signing, setSigning] = useState<SrSignStep | null>(null);
-  const current = signing ?? (autoOpen && !signed.has(autoOpen) ? autoOpen : null);
-  // Por enlace: «Preparó» y «Revisó» antes de salir; «En camino» y «Recibió» cuando ya salió.
+  const current = autoOpen && !signed.has(autoOpen) ? autoOpen : null;
+  // El enlace sirve mientras el pedido no se haya cerrado (antes de salir lleva a las firmas; después, al seguimiento).
   const st = data.request.status;
   const linkOpen = st === "pending" || st === "preparing" || st === "dispatched";
-  const byLink = (step: SrSignStep) => !signed.has(step) && ((step === "packed" || step === "sent") ? st === "pending" || st === "preparing" : st === "dispatched");
 
   return (
-    <section className="rounded-2xl border p-3" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-bold"><PenLine size={15} /> Firmas de responsables</p>
-        <span className="flex items-center gap-2">
-          {linkOpen && signed.size < 4 ? (
-            <button type="button" onClick={() => void shareSignLink(data, null)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
-              <Share2 size={12} /> Enviar enlace
-            </button>
-          ) : null}
-          <span className="text-xs" style={{ color: "var(--t-muted)" }}>{signed.size}/4</span>
-        </span>
-      </div>
-      <ol className="mt-2 grid gap-2 sm:grid-cols-2">
-        {SIGN_STEPS.map((step, i) => {
+    <section className="rounded-2xl border p-2.5" style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 60%, transparent)" }}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 text-xs font-bold"><PenLine size={13} /> Firmas {signed.size}/4</span>
+        {SIGN_STEPS.map((step) => {
           const sig = signed.get(step.key);
-          const can = !sig && canSign(data, step);
-          // «En camino» antes de salir: se envía y enseguida se abre la firma de quien lo lleva.
-          const sendAndSign = !sig && step.key === "delivered" && st === "preparing" && data.access.attend && Boolean(onDispatch)
-            && signed.has("packed") && signed.has("sent");
           return (
-            <li key={step.key} className="rounded-xl border p-2.5" style={{ borderColor: sig ? "color-mix(in oklab, #22c55e 45%, transparent)" : can ? "var(--t-accent)" : "var(--t-card-border)", background: sig ? "color-mix(in oklab, #22c55e 7%, transparent)" : "transparent" }}>
-              <p className="flex items-center gap-1.5 text-xs font-bold">
-                <span className="grid h-5 w-5 place-items-center rounded-full text-[10px]" style={sig ? { background: "#22c55e", color: "#fff" } : { background: "var(--t-card-border)" }}>{sig ? <Check size={11} strokeWidth={3} /> : i + 1}</span>
-                {step.icon} {step.title}
-              </p>
-              {sig ? (
-                <div className="mt-1">
+            <span key={step.key} title={sig ? `${step.title}: ${sig.signer_name}` : `${step.title}: ${step.who}`}
+              className="inline-flex max-w-[11rem] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+              style={sig ? { borderColor: "color-mix(in oklab, #22c55e 45%, transparent)", background: "color-mix(in oklab, #22c55e 10%, transparent)", color: "#22c55e" } : { borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
+              {sig ? <Check size={11} strokeWidth={3} className="shrink-0" /> : <span aria-hidden>{step.icon}</span>}
+              <span className="truncate">{step.title}{sig ? ` · ${sig.signer_name.split(" ")[0]}` : ""}</span>
+            </span>
+          );
+        })}
+        {linkOpen ? (
+          <button type="button" onClick={() => void shareSignLink(data, null)} title="Para que alguien vea el pedido y firme desde su celular, sin cuenta"
+            className="ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
+            <Share2 size={12} /> Compartir pedido
+          </button>
+        ) : null}
+      </div>
+      {signed.size ? (
+        <details className="mt-1.5 text-xs">
+          <summary className="cursor-pointer select-none font-semibold" style={{ color: "var(--t-muted)" }}>Ver firmas</summary>
+          <ul className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+            {SIGN_STEPS.filter((s) => signed.has(s.key)).map((step) => {
+              const sig = signed.get(step.key)!;
+              return (
+                <li key={step.key} className="rounded-xl border p-2" style={{ borderColor: "color-mix(in oklab, #22c55e 35%, transparent)" }}>
+                  <p className="text-[11px] font-bold">{step.icon} {step.title}</p>
                   <p className="truncate text-sm font-black tracking-wide" title={sig.signer_name}>{sig.signer_name}</p>
                   <p className="text-[11px]" style={{ color: "var(--t-muted)" }}>
                     {sig.signer_doc ? `CC ${sig.signer_doc} · ` : ""}{new Date(sig.signed_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}{sig.via === "link" ? " · por enlace" : ""}
                   </p>
                   {sig.signature ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={sig.signature} alt={`Firma de ${sig.signer_name}`} className="mt-1.5 h-12 w-auto rounded-md border bg-white" style={{ borderColor: "var(--t-card-border)" }} />
+                    <img src={sig.signature} alt={`Firma de ${sig.signer_name}`} loading="lazy" className="mt-1 h-12 w-auto rounded-md border bg-white" style={{ borderColor: "var(--t-card-border)" }} />
                   ) : null}
-                </div>
-              ) : sendAndSign ? (
-                <div className="mt-1.5">
-                  <button type="button" onClick={onDispatch} className="w-full rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: "#0ea5e9" }}>
-                    🚚 Enviar y firmar aquí
-                  </button>
-                  <p className="mt-1 text-[10px]" style={{ color: "var(--t-muted)" }}>Sale el traslado y firma quien lo lleva.</p>
-                </div>
-              ) : can || byLink(step.key) ? (
-                <div className="mt-1.5 flex gap-1.5">
-                  {can ? (
-                    <button type="button" onClick={() => setSigning(step.key)} className="flex-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: "var(--t-accent)" }}>
-                      ✍️ Firmar aquí
-                    </button>
-                  ) : null}
-                  {byLink(step.key) ? (
-                    <button type="button" onClick={() => void shareSignLink(data, step)} title="Que firme desde su celular, sin cuenta" className={`${can ? "" : "flex-1"} inline-flex items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-bold`} style={{ borderColor: "var(--t-accent)", color: "var(--t-accent)" }}>
-                      <Link2 size={13} /> {can ? "Enlace" : "Enviar enlace"}
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
-                <>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{step.who}</p>
-                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: "#f59e0b" }}>🔒 {lockReason(data, step)}</p>
-                </>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ) : null}
       {current ? (
         <SignModal
           key={current}
           data={data}
           step={SIGN_STEPS.find((s) => s.key === current)!}
-          onClose={() => { setSigning(null); onAutoOpenDone?.(); onCancel?.(); }}
-          onDone={() => { setSigning(null); onAutoOpenDone?.(); onSigned(current); }}
+          onClose={() => { onAutoOpenDone?.(); onCancel?.(); }}
+          onDone={() => { onAutoOpenDone?.(); onSigned(current); }}
         />
       ) : null}
     </section>
   );
 }
+
 
 function SignModal({ data, step, onClose, onDone }: { data: SrDetail; step: (typeof SIGN_STEPS)[number]; onClose: () => void; onDone: () => void }) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
