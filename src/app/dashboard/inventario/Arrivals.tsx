@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { fetchPublicItems } from "@/lib/catalog/public-prices";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import { toast } from "./shared";
+import { mapLimit } from "@/lib/net/map-limit";
 
 type CatalogOption = { slug: string; name: string; access_key: string | null };
 
@@ -91,9 +92,11 @@ export function ArrivalsBanner({ storeId, title, items, canBadge, onClose }: {
     setBusy(true);
     const ends = new Date(Date.now() - 5 * 3600_000 + 15 * 86400_000).toISOString().slice(0, 10);
     let ok = 0, failed = 0, message = "";
-    for (const i of items) {
-      const { data, error } = await supabaseBrowser().rpc("product_badge_save", { p_store: storeId, p_product: i.product_id, p_kind: "new", p_on: true, p_starts: null, p_ends: ends, p_before: null, p_text: null });
-      const d = data as { ok?: boolean; message?: string } | null;
+    // Varios a la vez (antes uno tras otro).
+    const res = await mapLimit(items, 4, (i) => supabaseBrowser().rpc("product_badge_save", { p_store: storeId, p_product: i.product_id, p_kind: "new", p_on: true, p_starts: null, p_ends: ends, p_before: null, p_text: null }));
+    for (const one of res) {
+      const error = one.ok ? one.value.error : { message: String((one.error as Error)?.message ?? one.error) };
+      const d = (one.ok ? one.value.data : null) as { ok?: boolean; message?: string } | null;
       if (error || !d?.ok) { failed++; message = d?.message ?? (error && /Could not find the function|schema cache/i.test(error.message) ? "Falta correr la migración 20261329 en Supabase." : error?.message ?? ""); }
       else ok++;
     }

@@ -9,7 +9,7 @@ import { InstallButton } from "@/components/pwa/InstallButton";
 import { AnimatePresence, m as motion } from "framer-motion";
 import Swal from "@/lib/swal";
 
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
 import { ShareProductButton } from "@/components/ShareProductButton";
 import { buildProductShareText, hasProductLanding } from "@/lib/product-details";
@@ -33,6 +33,7 @@ import { SmartLogo } from "@/components/ui/SmartLogo";
 import { endsInText, fetchPublicDeals, fetchPublicItems, type PublicDeal, type PublicItem } from "@/lib/catalog/public-prices";
 import { BestSellersStrip } from "@/components/catalog/BestSellers";
 import { NotifyMe } from "@/components/catalog/NotifyMe";
+import { ThumbImg } from "@/components/ui/ThumbImg";
 
 function normalizeStoreSlug(value: string) {
   return value
@@ -253,7 +254,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     reorderDone.current = true;
     const storeId = store.id;
     void (async () => {
-      const sb = supabaseBrowser();
+      const sb = await supabaseLazy();
       const clean = new URLSearchParams(window.location.search);
       clean.delete("reorder");
       window.history.replaceState(null, "", window.location.pathname + (clean.toString() ? `?${clean}` : ""));
@@ -302,7 +303,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     window.history.replaceState(null, "", window.location.pathname + (clean.toString() ? `?${clean}` : ""));
     const storeRef = { id: store.id, slug: store.slug };
     void (async () => {
-      const items = await fetchPublicItems(supabaseBrowser(), storeRef, catalog?.slug ?? safeMode, key, [pid]);
+      const items = await fetchPublicItems(await supabaseLazy(), storeRef, catalog?.slug ?? safeMode, key, [pid]);
       const it = items.get(pid);
       if (!it) {
         await Swal.fire({ icon: "info", title: "Ese producto ya no está disponible", text: "Mira los demás productos del catálogo.", background: "var(--t-bg-base)", color: "var(--t-text)" });
@@ -342,7 +343,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     let alive = true;
     const storeRef = { id: store.id, slug: store.slug };
     void (async () => {
-      const sb = supabaseBrowser();
+      const sb = await supabaseLazy();
       let res = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12, p_catalog: catalog?.slug ?? safeMode });
       // Sin 20261311 todavía: la versión sin catálogo.
       if (res.error && /Could not find the function|schema cache/i.test(res.error.message)) res = await sb.rpc("store_public_best_sellers", { p_store: storeRef.slug, p_limit: 12 });
@@ -382,7 +383,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
     const storeRef = { id: store.id, slug: store.slug };
     const cat = catalog?.slug ?? safeMode;
     void (async () => {
-      const sb = supabaseBrowser();
+      const sb = await supabaseLazy();
       const map = await fetchPublicDeals(sb, storeRef.slug, cat, key);
       if (!alive || !map.size) return;
       setDeals(map);
@@ -546,7 +547,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
       setOtherCatalogs([]);
 
       try {
-        const sb = supabaseBrowser();
+        const sb = await supabaseLazy();
 
         if (!slug || !isCatalogSlugLike(mode)) {
           if (!cancelled) setMsg("❌ Ruta inválida.");
@@ -808,7 +809,7 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
   async function fetchProducts(opts: { reset: boolean; nextPage?: number }) {
     if (!store?.id) return;
 
-    const sb = supabaseBrowser();
+    const sb = await supabaseLazy();
     const req = opts.reset ? ++productsReq.current : productsReq.current;
     const stale = () => req !== productsReq.current;
 
@@ -1634,11 +1635,12 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                       aria-label={`Ver ${product.name} de la campaña ${slide.campaign.name}`}
                     >
                       <span className="flex min-h-0 flex-1 items-center justify-center p-2 sm:p-4">
-                        <img
+                        <ThumbImg
                           src={product.image_url ?? ""}
                           alt={product.name}
                           className="max-h-full max-w-full object-contain object-center transition duration-500 group-hover:scale-[1.025]"
                           loading="lazy"
+                          decoding="async"
                         />
                       </span>
                       <span className="shrink-0 bg-gradient-to-r from-black/95 via-black/85 to-black/70 px-3 py-2.5 text-white sm:px-5 sm:py-3">
@@ -1868,9 +1870,10 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                     style={{ width: 150, borderColor: "var(--t-border)", background: glassBg }}
                   >
                     {c.image_url ? (
-                      <img
+                      <ThumbImg
                         src={c.image_url}
                         alt={c.name}
+                        decoding="async"
                         className="aspect-square w-full rounded-xl border object-cover"
                         style={{ borderColor: "var(--t-border)" }}
                         loading="lazy"
@@ -2054,19 +2057,21 @@ export default function StoreCatalogPage({ initial = null, storeHost = false }: 
                         className="mb-3 block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500"
                         aria-label={`Ver más sobre ${p.name}`}
                       >
-                        <img
+                        <ThumbImg
                           src={p.image_url}
                           alt={p.name}
                           loading="lazy"
+                          decoding="async"
                           className="aspect-square w-full rounded-2xl border object-cover"
                           style={{ borderColor: "var(--t-border)" }}
                         />
                       </Link>
                     ) : (
-                      <img
+                      <ThumbImg
                         src={p.image_url}
                         alt={p.name}
                         loading="lazy"
+                        decoding="async"
                         className="mb-3 aspect-square w-full rounded-2xl border object-cover"
                         style={{ borderColor: "var(--t-border)" }}
                       />

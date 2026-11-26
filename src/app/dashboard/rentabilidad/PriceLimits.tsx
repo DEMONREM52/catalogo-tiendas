@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { NumberField } from "@/components/forms/Fields";
 import { cardStyle, esc, rpcError, swalTheme } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { mapLimit } from "@/lib/net/map-limit";
 
 type Mode = "list" | "mother" | "margin" | "cost";
 type PointRow = { point_id: string; name: string; kind: string; mode: Mode | null; margin_pct: number | null; updated_by_name: string | null };
@@ -80,9 +81,15 @@ export function PriceLimits({ storeId }: { storeId: string }) {
     if (!data || !mode) return;
     const go = await Swal.fire({ icon: "question", title: "¿Aplicar a todos los puntos?", html: `Los <b>${data.points.length}</b> puntos y bodegas quedarán en <b>${esc(modeText(mode, pct))}</b>.<br/><small>Las excepciones por usuario se mantienen.</small>`, showCancelButton: true, confirmButtonText: "Aplicar", cancelButtonText: "Cancelar", ...swalTheme });
     if (!go.isConfirmed) return;
-    for (const p of data.points) {
-      const { error: e } = await supabaseBrowser().rpc("erp_price_limit_save", { p_store: storeId, p_point: p.point_id, p_user: null, p_mode: mode, p_margin_pct: pct });
-      if (e) return void Swal.fire({ icon: "error", title: `No se pudo guardar ${esc(p.name)}`, html: esc(e.message), ...swalTheme });
+    // Un punto por consulta, varios a la vez; si alguno falla se dice cuál (los demás quedan guardados).
+    const res = await mapLimit(data.points, 4, (p) => supabaseBrowser().rpc("erp_price_limit_save", { p_store: storeId, p_point: p.point_id, p_user: null, p_mode: mode, p_margin_pct: pct }));
+    const failed = res.flatMap((one, i) => {
+      const msg = !one.ok ? String((one.error as Error)?.message ?? one.error) : one.value.error?.message;
+      return msg ? [`<b>${esc(data.points[i].name)}</b>: ${esc(msg)}`] : [];
+    });
+    if (failed.length) {
+      load();
+      return void Swal.fire({ icon: "error", title: `No se pudo guardar en ${failed.length} punto(s)`, html: failed.join("<br>"), ...swalTheme });
     }
     void Swal.fire({ icon: "success", title: "Listo para todos los puntos", timer: 1300, showConfirmButton: false, ...swalTheme });
     setOpen(null);

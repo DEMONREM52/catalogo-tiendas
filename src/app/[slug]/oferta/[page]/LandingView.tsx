@@ -3,7 +3,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { track } from "@/lib/tracking";
 import { CO_DEPARTMENTS, SOLD_WINDOWS, VIEWERS_WINDOWS, deliveryWindow, discounted, normalizeLanding, optionDims, payPct, type LandingBundle, type LandingPayment, type SectionKey } from "@/lib/landing/config";
 import { BOLD_LABEL, boldReturn, openBold, waitBold, type BoldCheckoutClient, type BoldStatus } from "@/lib/payments/bold-client";
@@ -114,10 +114,11 @@ export function LandingView({ data, preview = false, editMode = false }: { data:
   const ping = useCallback((event: string) => {
     if (preview || !session.current) return;
     const m = metrics.current;
-    void supabaseBrowser().rpc("landing_ping", {
-      p_store: data.store.slug, p_slug: data.page.slug, p_session: session.current, p_event: event,
+    const sess = session.current;
+    void supabaseLazy().then((sb) => sb.rpc("landing_ping", {
+      p_store: data.store.slug, p_slug: data.page.slug, p_session: sess, p_event: event,
       p_ref: { ...ref.current, scroll: m.scroll, seconds: Math.round((Date.now() - m.start) / 1000), cta: m.cta, started: m.started },
-    }).then(({ data: r }) => {
+    })).then(({ data: r }) => {
       const res = r as (LandingSocial & { ok?: boolean }) | null;
       if (res?.ok) setSocial({ live: Number(res.live) || 0, sold_week: Number(res.sold_week) || 0, live_window: res.live_window, sold_window: res.sold_window, recent: res.recent ?? [] });
     }, () => undefined);
@@ -936,7 +937,8 @@ function OrderSheet({ data, cfg, startIdx, preview, exit, onClose, session, refI
     if (preview || !/^3\d{9}$/.test(wa) || leadSent.current === wa) return;
     leadSent.current = wa;
     const selection = `${b.qty} × ${chosen.map((id) => items.find((i) => i.id === id)?.option).join(", ")}`;
-    void supabaseBrowser().rpc("landing_lead", { p_store: data.store.slug, p_slug: data.page.slug, p_session: session.current, p: { name: f.name, whatsapp: wa, city: f.city, selection } }).then(() => undefined, () => undefined);
+    const sess = session.current;
+    void supabaseLazy().then((sb) => sb.rpc("landing_lead", { p_store: data.store.slug, p_slug: data.page.slug, p_session: sess, p: { name: f.name, whatsapp: wa, city: f.city, selection } })).then(() => undefined, () => undefined);
   }, [f.whatsapp, f.name, f.city, preview, b.qty, chosen, items, data.store.slug, data.page.slug, session]);
 
   function check(): boolean {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import type { ShippingCfg } from "./ShippingBar";
 
 /**
@@ -16,7 +16,7 @@ const cache = new Map<string, Promise<PublicFeatures>>();
 export function fetchPublicFeatures(storeSlug: string, catalogSlug: string | null): Promise<PublicFeatures> {
   const k = `${storeSlug}:${catalogSlug ?? ""}`;
   if (!cache.has(k)) {
-    cache.set(k, Promise.resolve(supabaseBrowser().rpc("store_public_features", { p_store: storeSlug, p_catalog: catalogSlug }))
+    cache.set(k, supabaseLazy().then((sb) => sb.rpc("store_public_features", { p_store: storeSlug, p_catalog: catalogSlug }))
       .then(({ data, error }) => (error || !data ? OFF : { ...OFF, ...(data as Partial<PublicFeatures>) }))
       .catch(() => OFF));
   }
@@ -78,10 +78,10 @@ export function useLeadAutosave(opts: {
     if (sig === last.current) return;
     const t = window.setTimeout(() => {
       last.current = sig;
-      void supabaseBrowser().rpc("catalog_cart_lead_save", {
+      void supabaseLazy().then((sb) => sb.rpc("catalog_cart_lead_save", {
         p_store: storeSlug, p_catalog: catalog.slug, p_key: catalog.key, p_session: session,
         p_name: name.trim(), p_phone: validPhone(phone) ? phone : "", p_items: items.map((i) => ({ product_id: i.productId, qty: i.qty })),
-      });
+      })).catch(() => undefined);
     }, 1500);
     return () => window.clearTimeout(t);
   }, [on, paused, storeSlug, catalog, session, sig, name, phone, items]);
@@ -102,7 +102,7 @@ export function CouponBox({ storeSlug, catalog, items, applied, onApplied, disab
   const check = useCallback(async (c: string, quiet = false) => {
     if (!c.trim()) return;
     setBusy(true);
-    const { data, error } = await supabaseBrowser().rpc("catalog_coupon_check", {
+    const { data, error } = await (await supabaseLazy()).rpc("catalog_coupon_check", {
       p_store: storeSlug, p_catalog: catalog.slug, p_key: catalog.key, p_code: c.trim(), p_items: items.map((i) => ({ product_id: i.productId, qty: i.qty })),
     });
     setBusy(false);

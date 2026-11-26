@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { BadgePercent, Flame, ShoppingCart, Star, TrendingUp } from "lucide-react";
 import type { PublicDeal, PublicItem } from "@/lib/catalog/public-prices";
+import { ThumbImg } from "@/components/ui/ThumbImg";
 
 /**
  * Franja que se desliza con productos: «Lo más vendido» (con #1, #2…), «Ofertas especiales» (antes/ahora y %)
@@ -42,7 +43,7 @@ export function BestSellersStrip({ items, money, hrefFor, onAdd, title = "Lo má
           const href = hrefFor(it.id);
           const deal = deals?.get(it.id);
           const now = deal?.now && deal.now > 0 ? deal.now : it.price;
-          const img = it.image_url ? <img src={it.image_url} alt={it.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /> : <span className="grid h-full place-items-center text-4xl">🛍️</span>;
+          const img = it.image_url ? <ThumbImg src={it.image_url} alt={it.name} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /> : <span className="grid h-full place-items-center text-4xl">🛍️</span>;
           const top = variant === "best" && i < 3;
           return (
             <li key={it.id} className="best-card group relative w-[44vw] max-w-[220px] shrink-0 snap-start overflow-hidden rounded-[22px] border sm:w-52"

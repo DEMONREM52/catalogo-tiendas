@@ -10,6 +10,7 @@ import { Chip, Field, Modal, Toggle } from "./dialog";
 import { PointValuationModal } from "./PointValuation";
 import { Btn, Empty, Kpi, Panel, confirmAction, errorMessage, inputClass, inputStyle, money, toast, useRunOnChange, type ErpCtx, type ProductHit } from "./shared";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { mapLimit } from "@/lib/net/map-limit";
 
 /* ----------------------------- tipos ----------------------------- */
 
@@ -72,11 +73,13 @@ export function InternalCreditPreview({ storeId, from, legs, compact }: { storeI
     const timer = window.setTimeout(async () => {
       const parsed = JSON.parse(key) as [string, typeof legs];
       const out: Preview[] = [];
-      for (const leg of parsed[1]) {
-        if (!leg.items.length) continue;
-        const { data, error } = await supabaseBrowser().rpc("erp_internal_preview", { p_store: storeId, p_from: parsed[0], p_to: leg.to, p_items: leg.items });
-        if (error) return; // sin la migración: no se muestra nada
-        if ((data as Preview)?.applies) out.push(data as Preview);
+      // Un destino por consulta, varios a la vez (antes iban uno tras otro).
+      const withItems = parsed[1].filter((leg) => leg.items.length);
+      const res = await mapLimit(withItems, 4, (leg) => supabaseBrowser().rpc("erp_internal_preview", { p_store: storeId, p_from: parsed[0], p_to: leg.to, p_items: leg.items }));
+      for (const one of res) {
+        if (!one.ok || one.value.error) return; // sin la migración: no se muestra nada
+        const data = one.value.data as Preview | null;
+        if (data?.applies) out.push(data);
       }
       if (alive) setRows(out);
     }, 450);

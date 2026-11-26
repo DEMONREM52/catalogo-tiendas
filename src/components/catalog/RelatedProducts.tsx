@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { Flame, Plus, Sparkles } from "lucide-react";
 import type { PublicItem } from "@/lib/catalog/public-prices";
+import { ThumbImg } from "@/components/ui/ThumbImg";
 
 /**
  * Recomendaciones en la página del producto (se arma en el servidor, sin JavaScript extra):
@@ -31,7 +32,7 @@ export function RelatedProducts({ title, kind, items, productHref, addHref }: {
               </span>
             ) : null}
             <Link href={productHref(it.id)} prefetch={false} className="block aspect-square overflow-hidden" aria-label={`Ver ${it.name}`}>
-              {it.image_url ? <img src={it.image_url} alt={it.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /> : <span className="grid h-full place-items-center text-4xl">🛍️</span>}
+              {it.image_url ? <ThumbImg src={it.image_url} alt={it.name} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /> : <span className="grid h-full place-items-center text-4xl">🛍️</span>}
             </Link>
             <div className="p-2.5">
               <Link href={productHref(it.id)} prefetch={false} className="line-clamp-2 min-h-[2.5em] text-[13px] font-extrabold leading-tight hover:underline">{it.name}</Link>

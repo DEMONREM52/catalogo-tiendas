@@ -11,6 +11,7 @@ import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";
 import { DROP_BLOCKED_MSG, dragHasImage, imageFileFrom, imageFromDrop } from "@/lib/image-drop";
 import { searchDelay, useSearchValue } from "@/lib/search-timing";
 import { SearchTimer } from "@/components/ui/SearchTimer";
+import { ThumbImg } from "@/components/ui/ThumbImg";
 
 export type FinderHit = {
   id: string;
@@ -647,8 +648,7 @@ function Hint({ icon, text }: { icon: ReactNode; text: string }) {
 
 function Thumb({ src, size }: { src: string | null; size: number }) {
   return src ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" loading="lazy" style={{ width: size, height: size }} className="shrink-0 rounded-xl object-cover" />
+    <ThumbImg src={src} alt="" loading="lazy" decoding="async" style={{ width: size, height: size }} className="shrink-0 rounded-xl object-cover" />
   ) : (
     <span style={{ width: size, height: size, background: "color-mix(in oklab, var(--t-text) 6%, transparent)" }} className="grid shrink-0 place-items-center rounded-xl text-xl" aria-hidden>📦</span>
   );
@@ -697,8 +697,7 @@ function PhotoCard({ hit, index, pickLabel, onPick, extra }: { hit: FinderHit; i
       >
         <span className="relative block aspect-square w-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--t-text) 5%, transparent)" }}>
           {hit.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={hit.image_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+            <ThumbImg src={hit.image_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
           ) : (
             <span className="grid h-full w-full place-items-center text-3xl">📦</span>
           )}

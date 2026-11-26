@@ -8,6 +8,7 @@ import { ilikeTokenFilters, matchesSearch, searchTokens, smartFilter } from "@/l
 import { VoidSaleDialog, useSaleVoidRights, type VoidTarget } from "../pos/VoidSaleDialog";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
+import { mapLimit } from "@/lib/net/map-limit";
 
 /** =========================
  * Helpers (UI)
@@ -428,10 +429,18 @@ export function CustomerOrders() {
     if (!ok.isConfirmed) return;
     const failed: string[] = [];
     const done = new Set<string>();
-    for (const [i, o] of list.entries()) {
-      setBusy(`Completando ${i + 1} de ${list.length}…`);
-      const { error } = await supabaseBrowser().rpc("store_team_set_order_status", { p_order_id: o.id, p_status: "completed" });
-      if (error) failed.push(`#${o.receipt_no ?? "—"}: ${error.message}`); else done.add(o.id);
+    // Varios a la vez (antes uno tras otro); el contador avanza con cada uno que termina.
+    let finished = 0;
+    setBusy(`Completando 0 de ${list.length}…`);
+    const res = await mapLimit(list, 4, async (o) => {
+      const r = await supabaseBrowser().rpc("store_team_set_order_status", { p_order_id: o.id, p_status: "completed" });
+      setBusy(`Completando ${++finished} de ${list.length}…`);
+      return r;
+    });
+    for (const [i, one] of res.entries()) {
+      const o = list[i];
+      const msg = !one.ok ? String((one.error as Error)?.message ?? one.error) : one.value.error?.message;
+      if (msg) failed.push(`#${o.receipt_no ?? "—"}: ${msg}`); else done.add(o.id);
     }
     setBusy(null);
     setOrders((prev) => prev.map((x) => (done.has(x.id) ? { ...x, status: "completed" } : x)));

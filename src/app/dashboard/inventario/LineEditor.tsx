@@ -16,6 +16,7 @@ import { searchDelay } from "@/lib/search-timing";
 import { ProductPhotoButton } from "../PhotoSearchControls";
 import type { FinderHit } from "@/components/product-finder/ProductFinder";
 import type { PickerCategory } from "../products/CategoryPicker";
+import { mapLimit } from "@/lib/net/map-limit";
 
 // El mismo editor rápido del Radar (se carga solo al abrirlo: trae el editor de texto).
 const QuickEdit = dynamic(() => import("../products/radar/QuickEdit").then((m) => m.QuickEdit), { ssr: false });
@@ -205,9 +206,12 @@ function usePickPrices(storeId: string, points: PricePoint[] | undefined, ids: s
       const pts = pointsKey.split("|").map((s) => { const i = s.indexOf(":"); return { id: s.slice(0, i), name: s.slice(i + 1) }; });
       const out = new Map<string, PickPrice>();
       let missing = false;
-      for (const pt of pts) {
-        const { data, error } = await sb.rpc("erp_transfer_pick_prices", { p_store: storeId, p_point: pt.id, p_ids: list });
-        if (error || !Array.isArray(data)) { missing = true; break; }
+      // Un punto por consulta, varias a la vez (antes iban una tras otra).
+      const res = await mapLimit(pts, 4, (pt) => sb.rpc("erp_transfer_pick_prices", { p_store: storeId, p_point: pt.id, p_ids: list }));
+      for (const [i, one] of res.entries()) {
+        const pt = pts[i];
+        const data = one.ok && !one.value.error ? one.value.data : null;
+        if (!Array.isArray(data)) { missing = true; break; }
         for (const r of data as Array<{ product_id: string; price_2: number; point_price_2: number }>) {
           const cur = out.get(r.product_id) ?? { p2: Number(r.price_2 ?? 0), at: [] };
           cur.at.push({ name: pt.name, price: Number(r.point_price_2 ?? 0) });

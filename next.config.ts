@@ -76,6 +76,13 @@ const nextConfig: NextConfig = {
         source: `/api/${p}/:path*`,
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       })),
+      // Íconos y tarjetas de vista previa de public/ (sin versión en el nombre): 1 día en caché y, mientras se revisan,
+      // se siguen usando hasta 1 semana. Antes se volvían a pedir en cada visita. Un ícono cambiado se ve al día siguiente.
+      // (Lo de /_next/static ya va con caché de 1 año: cada build cambia el nombre.)
+      ...["/:file(remhub-icon-[0-9]+[.]png|apple-touch-icon[.]png|remhub-favicon[.]ico|og-image[.]jpg|og-image[.]png|og-default[.]png)", "/icons/:file*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      })),
     ];
   },
 };

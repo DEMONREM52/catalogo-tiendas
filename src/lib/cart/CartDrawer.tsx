@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { ArrowRight, Minus, Plus, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
 import { StoreContactIcon } from "@/components/StoreContactIcon";
 import Swal from "@/lib/swal";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { cartUsesMinimums, useCart } from "./CartProvider";
 import { track } from "@/lib/tracking";
 import { CouponBox, useCartSession, useLeadAutosave, usePublicFeatures, validPhone, type AppliedCoupon } from "./CartExtras";
@@ -197,7 +197,7 @@ export function CartDrawer() {
     const ids = cart.items.map((x) => x.productId);
     if (ids.length === 0) return { ok: false, reason: "EMPTY" };
 
-    const sb = supabaseBrowser();
+    const sb = await supabaseLazy();
 
     // En un catálogo con punto asignado manda el inventario de ese punto.
     const { data, error } = cart.catalog
@@ -463,7 +463,7 @@ export function CartDrawer() {
         price: i.price,
       }));
 
-      const sb = supabaseBrowser();
+      const sb = await supabaseLazy();
 
       // Los catálogos de RemHub Social calculan precios y existencias en el servidor.
       const phone = validPhone(cart.customerWhatsapp ?? "") ? (cart.customerWhatsapp ?? "").replace(/D/g, "") : null;

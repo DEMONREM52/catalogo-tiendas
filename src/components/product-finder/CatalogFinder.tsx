@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { IMAGE_MODEL } from "@/lib/image-search/embed";
 import { ProductFinder, type FinderHit, type FinderMode, type FinderSource } from "./ProductFinder";
 import { storeHref } from "@/lib/share/store-path";
@@ -21,7 +21,7 @@ type CatalogItem = { id: string; name: string; image_url: string | null; price: 
 
 async function storeProducts(storeId: string, ids: string[]) {
   if (!ids.length) return new Map<string, StoreProduct>();
-  const sb = supabaseBrowser();
+  const sb = await supabaseLazy();
   let res = await sb.from("products").select("id,name,image_url,price_retail,price_wholesale,sku").eq("store_id", storeId).in("id", ids);
   // Sin permiso para ver el código (falta 20261101_codigo_publico.sql): se busca igual, sin código.
   if (res.error) res = (await sb.from("products").select("id,name,image_url,price_retail,price_wholesale").eq("store_id", storeId).in("id", ids)) as typeof res;
@@ -32,8 +32,8 @@ async function storeProducts(storeId: string, ids: string[]) {
 export function useCatalogFinderSource(ctx: CatalogFinderContext): FinderSource {
   const { storeId, storeSlug, catalogSlug, accessKey, wholesale } = ctx;
   return useMemo<FinderSource>(() => {
-    // Se pide al buscar (no al dibujar la página en el servidor).
-    const sb = { rpc: (fn: string, args: Record<string, unknown>) => supabaseBrowser().rpc(fn, args) };
+    // Se pide al buscar (no al dibujar la página en el servidor). Supabase llega aparte (no frena el catálogo).
+    const sb = { rpc: async (fn: string, args: Record<string, unknown>) => (await supabaseLazy()).rpc(fn, args) };
     const fromStore = (p: StoreProduct, score?: number, match?: FinderHit["match"]): FinderHit => ({
       id: p.id,
       name: p.name,

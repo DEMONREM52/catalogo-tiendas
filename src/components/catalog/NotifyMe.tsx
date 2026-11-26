@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Bell } from "lucide-react";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { usePublicFeatures, validPhone } from "@/lib/cart/CartExtras";
 
 const SAVED = "remhub:notify-me:contact";
@@ -46,7 +46,7 @@ function NotifyDialog({ storeSlug, catalogSlug, accessKey, productId, productNam
   async function send() {
     if (!validPhone(phone)) return setMsg("Escribe tu WhatsApp (10 números).");
     setBusy(true);
-    const { data, error } = await supabaseBrowser().rpc("catalog_notify_me", {
+    const { data, error } = await (await supabaseLazy()).rpc("catalog_notify_me", {
       p_store: storeSlug, p_catalog: catalogSlug, p_key: accessKey, p_product: productId, p_name: name.trim(), p_phone: phone,
     });
     setBusy(false);

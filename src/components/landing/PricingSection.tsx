@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { m as motion, useInView, useReducedMotion } from "framer-motion";
 import { Check, Minus } from "lucide-react";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 
 /**
  * Planes de la página principal, leídos de la base (saas_public_plans): un solo lugar para precios y límites.
@@ -85,10 +85,11 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
   const [addons, setAddons] = useState<Addon[]>([]);
 
   useEffect(() => {
-    const sb = supabaseBrowser();
-    void sb.rpc("saas_public_plans").then(({ data, error }) => setPlans(error ? [] : ((data ?? []) as Plan[])));
-    void sb.rpc("saas_public_addons").then(({ data, error }) => setAddons(error ? [] : ((data ?? []) as Addon[])));
-    void sb.rpc("saas_track", { p_kind: "pricing_view", p_store: null, p_detail: { from: "inicio" } });
+    void supabaseLazy().then((sb) => {
+      void sb.rpc("saas_public_plans").then(({ data, error }) => setPlans(error ? [] : ((data ?? []) as Plan[])));
+      void sb.rpc("saas_public_addons").then(({ data, error }) => setAddons(error ? [] : ((data ?? []) as Addon[])));
+      void sb.rpc("saas_track", { p_kind: "pricing_view", p_store: null, p_detail: { from: "inicio" } });
+    }, () => setPlans([]));
   }, []);
 
   const savings = useMemo(() => {
@@ -152,7 +153,7 @@ export function PricingSection({ waLink, fallback }: { waLink: (message: string)
                 {/* Registro en la web; el plan pagado se contrata después desde «Mi plan» (con Wompi de RemHub). */}
                 <Link
                   href={`/registro?plan=${encodeURIComponent(p.id)}`}
-                  onClick={() => void supabaseBrowser().rpc("saas_track", { p_kind: "plan_click", p_store: null, p_detail: { plan: p.id, period } })}
+                  onClick={() => void supabaseLazy().then((sb) => sb.rpc("saas_track", { p_kind: "plan_click", p_store: null, p_detail: { plan: p.id, period } })).catch(() => undefined)}
                   className={`${p.highlight ? "rh-sweep " : ""}mt-6 inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold transition hover:-translate-y-0.5`}
                   style={p.highlight ? { background: "var(--t-cta)", color: "#fff" } : { border: "1px solid var(--t-card-border)", background: "var(--t-card-bg)" }}
                 >

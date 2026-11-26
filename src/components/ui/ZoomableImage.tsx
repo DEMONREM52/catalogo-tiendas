@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
 import { X, ZoomIn, ZoomOut } from "lucide-react";
+import { thumbUrl } from "@/lib/images/thumb";
 
 /**
  * Miniatura que se amplía al tocarla: la foto «vuela» desde su lugar hasta el centro (y vuelve al cerrar).
@@ -15,12 +16,17 @@ export function ZoomableThumb({ src, alt, className, imgClassName, onError }: {
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
+  // En la lista va la miniatura (lib/images/thumb.ts); si falta, la foto original. En grande, siempre la original.
+  const thumb = thumbUrl(src);
+  const [thumbFailedFor, setThumbFailedFor] = useState<string | null>(null);
+  const small = thumb && thumbFailedFor !== src ? thumb : src;
   return (
     <>
       <button type="button" onClick={(e) => { e.stopPropagation(); setOpen(true); }} className={`cursor-zoom-in ${className ?? ""}`} aria-label={`Ampliar foto de ${alt}`} title="Ver foto en grande">
         {open ? <span className="block h-full w-full" /> : (
            
-          <motion.img layoutId={id} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" draggable={false} onError={onError}
+          <motion.img layoutId={id} src={small} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" draggable={false}
+            onError={() => { if (small !== src) setThumbFailedFor(src); else onError?.(); }}
             className={imgClassName} transition={{ type: "spring", stiffness: 320, damping: 32 }} />
         )}
       </button>

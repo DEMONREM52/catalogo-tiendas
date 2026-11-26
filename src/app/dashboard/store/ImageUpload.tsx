@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
+import { uploadThumb } from "@/lib/images/thumb-upload";
 import { DROP_BLOCKED_MSG, imageFileFrom as imageFrom, imageFromDroppedUrl as imageFromUrl } from "@/lib/image-drop";
 
 type Props = {
@@ -80,7 +81,10 @@ export function ImageUpload({
       if (upErr) throw upErr;
 
       const { data } = sb.storage.from(bucketName).getPublicUrl(filePath);
-      const url = `${data.publicUrl}?t=${Date.now()}`;
+      const version = Date.now();
+      const url = `${data.publicUrl}?t=${version}`;
+      // Miniatura para tarjetas y listas (fotos de producto y categoría): va aparte y no frena la subida.
+      void uploadThumb(sb, bucketName, filePath, prepared.blob, version);
 
       onUploaded(url);
       setMsg("✅ Subido correctamente.");

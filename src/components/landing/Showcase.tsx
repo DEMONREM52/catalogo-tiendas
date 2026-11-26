@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { storeSpaceOrigin } from "@/lib/share/store-host";
 import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 
@@ -14,7 +14,7 @@ type Shop = { name: string; slug: string; logo_url: string | null };
 export function Showcase() {
   const [shops, setShops] = useState<Shop[]>([]);
   useEffect(() => {
-    void supabaseBrowser().rpc("saas_public_showcase").then(({ data, error }) => { if (!error) setShops((data ?? []) as Shop[]); });
+    void supabaseLazy().then((sb) => sb.rpc("saas_public_showcase")).then(({ data, error }) => { if (!error) setShops((data ?? []) as Shop[]); }, () => undefined);
   }, []);
   if (!shops.length) return null;
   return (

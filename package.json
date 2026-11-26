@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/perf/bundle-size.mjs",
+    "perf:bundle": "node scripts/perf/bundle-size.mjs --all",
+    "images:thumbs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/miniaturas-imagenes.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/register.mjs --test \"tests/**/*.test.ts\"",

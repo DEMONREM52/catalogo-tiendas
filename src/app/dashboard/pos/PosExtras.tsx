@@ -8,6 +8,7 @@ import { useLoyaltyBrand, type LoyaltyBrand } from "@/lib/loyalty/brand";
 import { DateField } from "@/components/forms/Fields";
 import { friendlyStockError } from "@/lib/stock/live-stock";
 import type { ApprovalState } from "./usePriceFloors";
+import { mapLimit } from "@/lib/net/map-limit";
 
 /**
  * Lo nuevo del POS (20261228 / 20261229), aparte para no cargar más la página:
@@ -40,15 +41,17 @@ export function usePromotions(storeId: string | undefined, pointId: string) {
       // Productos de las categorías con promoción (categoría principal y las adicionales).
       const cats = [...new Set(list.filter((p) => p.scope === "category" && p.category_id).map((p) => p.category_id as string))];
       const map = new Map<string, Set<string>>();
-      for (const c of cats) {
+      // Una categoría por consulta, varias a la vez (antes iban una tras otra).
+      const res = await mapLimit(cats, 3, (c) => Promise.all([
+        sb.from("products").select("id").eq("store_id", storeId).eq("category_id", c).limit(5000),
+        sb.from("product_category_links").select("product_id").eq("category_id", c).limit(5000),
+      ]));
+      for (const [i, one] of res.entries()) {
         const set = new Set<string>();
-        const [a, b] = await Promise.all([
-          sb.from("products").select("id").eq("store_id", storeId).eq("category_id", c).limit(5000),
-          sb.from("product_category_links").select("product_id").eq("category_id", c).limit(5000),
-        ]);
-        for (const r of (a.data ?? []) as Array<{ id: string }>) set.add(r.id);
-        for (const r of (b.data ?? []) as Array<{ product_id: string }>) set.add(r.product_id);
-        map.set(c, set);
+        const [a, b] = one.ok ? one.value : [null, null];
+        for (const r of (a?.data ?? []) as Array<{ id: string }>) set.add(r.id);
+        for (const r of (b?.data ?? []) as Array<{ product_id: string }>) set.add(r.product_id);
+        map.set(cats[i], set);
       }
       if (alive) setByCategory(map);
     };

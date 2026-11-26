@@ -9,7 +9,7 @@
  *   · Cerrar sesión borra el tema privado de la pantalla; cambiar de cuenta carga las preferencias de la otra.
  *   · El tema personal solo se aplica en el panel (/dashboard, /admin): catálogos y landings conservan su marca.
  */
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { supabaseLazy } from "@/lib/supabase/lazy";
 import { normalizeTheme, officialFor, themeCss, type BaseMode, type ThemeConfig } from "./theme";
 
 export type AppearanceMode = "system" | "light" | "dark" | "custom";
@@ -176,12 +176,15 @@ export function startAppearance() {
   if (started || typeof window === "undefined") return;
   started = true;
   apply();
-  const sb = supabaseBrowser();
-  void sb.auth.getSession().then(({ data }) => void onUser(data.session?.user?.id ?? null));
-  sb.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_OUT") void onUser(null);
-    else if (session?.user?.id && session.user.id !== state.userId) void onUser(session.user.id);
-  });
+  // Supabase llega aparte: este archivo va en el layout raíz y no debe frenar la primera vista de catálogos y landings.
+  // Sin ese archivo (sin internet), se queda el tema guardado en este navegador.
+  void supabaseLazy().then((sb) => {
+    void sb.auth.getSession().then(({ data }) => void onUser(data.session?.user?.id ?? null));
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") void onUser(null);
+      else if (session?.user?.id && session.user.id !== state.userId) void onUser(session.user.id);
+    });
+  }, () => undefined);
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { apply(); emit(); });
   const refresh = () => { if (state.userId && document.visibilityState === "visible") void pull(state.userId, true); };
   window.addEventListener("focus", refresh);
@@ -218,7 +221,7 @@ async function pull(uid: string, quiet: boolean) {
   if (loadingFor === uid) return;
   loadingFor = uid;
   try {
-    const sb = supabaseBrowser();
+    const sb = await supabaseLazy();
     const { data, error } = await sb.from("user_appearance").select("prefs, version").eq("user_id", uid).maybeSingle();
     if (error) {
       // Sin la migración o sin internet: se sigue con la caché (o lo local).
@@ -248,7 +251,7 @@ async function fetchNeeded(p: AppearancePrefs) {
   const ids = [...new Set([p.themeId, p.systemLight, p.systemDark].filter(Boolean) as string[])];
   const needed: State["needed"] = {};
   if (!ids.length) return needed;
-  const { data } = await supabaseBrowser().from("user_themes").select("id, name, config").in("id", ids);
+  const { data } = await (await supabaseLazy()).from("user_themes").select("id, name, config").in("id", ids);
   for (const t of (data ?? []) as Array<{ id: string; name: string; config: unknown }>) needed[t.id] = { name: t.name, config: normalizeTheme(t.config) };
   return needed;
 }
@@ -261,7 +264,7 @@ export async function updatePrefs(patch: Partial<AppearancePrefs>, extraTheme?: 
   set({ prefs, needed });
   if (!state.userId || state.error === "missing") return true;
   set({ saving: true });
-  const sb = supabaseBrowser();
+  const sb = await supabaseLazy();
   const { data, error } = await sb.from("user_appearance").update({ prefs: serverPrefs(prefs) }).eq("user_id", state.userId).eq("version", prev.version).select("prefs, version");
   if (error) { set({ saving: false, error: error.message }); return false; }
   if (!data?.length) {
@@ -289,7 +292,7 @@ export function setPreview(t: ThemeConfig | null) { set({ preview: t ? normalize
 export type ThemeSort = "updated" | "created" | "name";
 export async function listThemes(opts: { q?: string; sort?: ThemeSort; favorites?: boolean; offset?: number; limit?: number } = {}) {
   const limit = opts.limit ?? 24;
-  let query = supabaseBrowser().from("user_themes").select("id, name, description, base_mode, config, favorite, created_at, updated_at", { count: "exact" });
+  let query = (await supabaseLazy()).from("user_themes").select("id, name, description, base_mode, config, favorite, created_at, updated_at", { count: "exact" });
   if (opts.q?.trim()) query = query.ilike("name", `%${opts.q.trim().replace(/[%_]/g, "")}%`);
   if (opts.favorites) query = query.eq("favorite", true);
   query = opts.sort === "name" ? query.order("name") : query.order(opts.sort === "created" ? "created_at" : "updated_at", { ascending: false });
@@ -299,14 +302,14 @@ export async function listThemes(opts: { q?: string; sort?: ThemeSort; favorites
 }
 
 export async function countThemes() {
-  const { count } = await supabaseBrowser().from("user_themes").select("id", { count: "exact", head: true });
+  const { count } = await (await supabaseLazy()).from("user_themes").select("id", { count: "exact", head: true });
   return count ?? 0;
 }
 
 export async function saveTheme(input: { id?: string; name: string; description?: string | null; config: ThemeConfig; favorite?: boolean }) {
   const config = normalizeTheme(input.config);
   const row = { name: input.name.trim().slice(0, 60) || "Mi tema", description: input.description?.trim().slice(0, 200) || null, base_mode: config.base, config, ...(input.favorite === undefined ? {} : { favorite: input.favorite }) };
-  const sb = supabaseBrowser();
+  const sb = await supabaseLazy();
   const res = input.id
     ? await sb.from("user_themes").update(row).eq("id", input.id).select("id, name, description, base_mode, config, favorite, created_at, updated_at").single()
     : await sb.from("user_themes").insert(row).select("id, name, description, base_mode, config, favorite, created_at, updated_at").single();
@@ -318,7 +321,7 @@ export async function saveTheme(input: { id?: string; name: string; description?
 }
 
 export async function setFavorite(id: string, favorite: boolean) {
-  const { error } = await supabaseBrowser().from("user_themes").update({ favorite }).eq("id", id);
+  const { error } = await (await supabaseLazy()).from("user_themes").update({ favorite }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -330,7 +333,7 @@ export async function deleteTheme(t: Pick<UserTheme, "id" | "base_mode">) {
   if (p.systemLight === t.id) patch.systemLight = null;
   if (p.systemDark === t.id) patch.systemDark = null;
   if (Object.keys(patch).length) await updatePrefs(patch);
-  const { error } = await supabaseBrowser().from("user_themes").delete().eq("id", t.id);
+  const { error } = await (await supabaseLazy()).from("user_themes").delete().eq("id", t.id);
   if (error) throw new Error(error.message);
   const needed = { ...state.needed };
   delete needed[t.id];

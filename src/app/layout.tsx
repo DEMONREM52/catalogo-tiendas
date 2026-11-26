@@ -13,10 +13,12 @@ const geistSans = Geist({
   display: "swap",
 });
 
+// La monoespaciada solo se usa en el panel (códigos, montos): sin precarga, las páginas públicas no la descargan.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 });
 
 const SITE_URL = PRODUCTION_ORIGIN;

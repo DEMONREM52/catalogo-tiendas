@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { IMAGE_CACHE_SECONDS, prepareImage } from "@/lib/image-prepare";
+import { uploadThumb } from "@/lib/images/thumb-upload";
 import { requestImageIndex } from "@/lib/image-search/indexer";
 import { EMPTY_PRODUCT_DETAILS } from "@/lib/product-details";
 import { MoneyInput } from "../MoneyInput";
@@ -65,6 +66,7 @@ export function QuickProductModal({ storeId, initialName, withMarkup, onClose, o
       const path = `${auth.user.id}/products/new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
       const { error } = await sb.storage.from("product-images").upload(path, prepared.blob, { upsert: true, cacheControl: IMAGE_CACHE_SECONDS, contentType: prepared.contentType });
       if (error) throw error;
+      void uploadThumb(sb, "product-images", path, prepared.blob);
       setImage(sb.storage.from("product-images").getPublicUrl(path).data.publicUrl);
     } catch (e) {
       void toast("No se pudo subir la foto", "error", errorMessage(e));

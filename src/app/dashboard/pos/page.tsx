@@ -49,6 +49,7 @@ import { PosToolbar, requestPasses, usePromotions, type Passes } from "./PosExtr
 import { PosCheckoutSheet } from "./PosCheckoutSheet";
 import { PosDoneSheet, type DoneSale } from "./PosDoneSheet";
 import { SaleSummary, ddmmyyyy, type SaleSummaryInput } from "./PosSaleSummary";
+import { ThumbImg } from "@/components/ui/ThumbImg";
 
 // La ventana de «Cliente nuevo» se descarga aparte, cuando el navegador queda libre: el POS abre antes y la
 // ventana igual queda guardada para cuando no haya internet.
@@ -2360,8 +2361,7 @@ export default function PosPage() {
                       >
                         <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}>
                           {product.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                            <ThumbImg src={product.image_url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                           ) : (
                             <span>🛍️</span>
                           )}
