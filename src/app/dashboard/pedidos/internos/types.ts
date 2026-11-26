@@ -22,6 +22,8 @@ export type SrListItem = {
   created_at: string; updated_at: string; closed_at: string | null; items: number; units: number;
   last_message: { body: string; user_name: string | null; kind: "message" | "system"; created_at: string } | null;
   unread: number; access: SrAccess;
+  /** Lote en el que está (20261346): pedidos que se sacan juntos. */
+  batch?: { id: string; number: number; by: string | null; at: string } | null;
 };
 
 export type SrItem = {

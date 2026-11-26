@@ -22,6 +22,7 @@ import { useChatKit } from "@/components/chat/useChatKit";
 import { EmojiButton } from "@/components/chat/EmojiPicker";
 import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
+import { useQtyAutosave } from "./qty-save";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
@@ -102,6 +103,18 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     void supabaseBrowser().rpc("erp_stock_request_media", { p_request: requestId }).then(({ data: m, error: e }) => { if (!e && m) setMedia(m as Record<string, Attachment[]>); });
   }, [requestId]);
   useRunOnChange(load);
+
+  // Lo que se va a enviar se guarda solo mientras se escribe: no se pierde al recargar, al salir ni al «Preparar»,
+  // y los demás lo ven en vivo. Lo ya guardado se suelta de la pantalla (manda lo de la base).
+  const qtySave = useQtyAutosave(async (saved) => {
+    await load();
+    setApproved((cur) => {
+      const next = { ...cur };
+      for (const [k, v] of Object.entries(saved)) if (next[k] === v) delete next[k];
+      return next;
+    });
+    onChanged();
+  });
 
   // Lo compartido con «Mensajes» (20261273): responder, reacciones, visto, editar, fijar, guardar, @, producto, reenviar y buscar.
   const chatMsgs = (data?.messages ?? []) as ChatMsg[];
@@ -369,7 +382,11 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
 
   async function saveQuantities(andTake = false) {
     if (!data) return;
-    const items = Object.entries(approved).map(([item_id, qty_approved]) => ({ item_id, qty_approved }));
+    await qtySave.flush();
+    // Lo escrito aquí y lo que ya quedó guardado distinto de lo pedido: así «Preparar» nunca vuelve a lo pedido.
+    const items = data.items
+      .filter((i) => approved[i.id] !== undefined || (i.qty_approved !== null && i.qty_approved !== i.qty_requested))
+      .map((i) => ({ item_id: i.id, qty_approved: approved[i.id] ?? i.qty_approved ?? i.qty_requested }));
     const res = await run("erp_stock_request_prepare", { p_request: data.request.id, p_items: items.length ? items : null }, andTake ? "Pedido en preparación" : "Cantidades confirmadas");
     if (res) setApproved({});
   }
@@ -669,7 +686,12 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                     inputMode="numeric"
                     value={toSend}
                     onFocus={(e) => e.currentTarget.select()}
-                    onChange={(e) => setApproved((cur) => ({ ...cur, [i.id]: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0) }))}
+                    onChange={(e) => {
+                      const v = Math.min(100000, Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0));
+                      setApproved((cur) => ({ ...cur, [i.id]: v }));
+                      qtySave.queue(i.id, v);
+                    }}
+                    onBlur={() => void qtySave.flush()}
                     className="mt-0.5 block h-9 w-13 rounded-lg border text-center text-sm font-black outline-none sm:w-16"
                     style={{ borderColor: short ? "#f59e0b" : "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
                   />
@@ -717,6 +739,10 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
         <span>
           {data.items.reduce((s, i) => s + (approved[i.id] ?? i.qty_approved ?? i.qty_requested), 0)} und. · {data.items.length} referencias
+          {qtySave.state === "saving" ? <span className="ml-1.5 text-xs font-bold" style={{ color: "var(--t-muted)" }}>· 💾 Guardando…</span>
+            : qtySave.state === "saved" && !edited ? <span className="ml-1.5 text-xs font-bold" style={{ color: "#22c55e" }}>· ✓ Cantidades guardadas (todos las ven)</span>
+            : qtySave.state === "error" ? <span className="ml-1.5 text-xs font-bold" style={{ color: "#ef4444" }}>· ⚠️ No se guardó: {qtySave.error}</span>
+            : qtySave.state === "missing" && edited ? <span className="ml-1.5 text-xs font-bold" style={{ color: "#f59e0b" }}>· Toca «Confirmar cantidades» para guardarlas</span> : null}
           {prices ? <> · Valor por mayor <b>{cop(data.items.reduce((s, i) => s + (approved[i.id] ?? i.qty_approved ?? i.qty_requested) * (prices.get(i.product_id)?.price2 ?? 0), 0))}</b></> : null}
         </span>
         <a href={`/documento/pedido-interno/${r.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>

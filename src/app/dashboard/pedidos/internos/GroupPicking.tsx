@@ -1,29 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { Check, ListChecks, Search, X } from "lucide-react";
+import { Check, ListChecks, Search, Undo2, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { startPoll } from "@/lib/net/poll";
 import { Thumb, useThumbs } from "../../inventario/LineEditor";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { ProductName } from "@/components/ProductName";
-import { SR_STATUS, srError, type SrDetail } from "./types";
+import { saveQtys } from "./qty-save";
+import { splitEven } from "./split";
+import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, srError, type SrDetail } from "./types";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
+const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 type Check = { item_id: string; side: "pack" | "receive"; by: string | null; at: string };
-type Part = { requestId: string; number: number; point: string; itemId: string; qty: number };
-type Row = { product_id: string; name: string; sku: string | null; image_url: string | null; total: number; source_now: number; parts: Part[] };
+type Part = { requestId: string; number: number; point: string; itemId: string; qty: number; requested: number };
+type Row = { product_id: string; name: string; sku: string | null; image_url: string | null; total: number; requested: number; source_now: number; parts: Part[] };
+export type Batch = { id: string; number: number };
 
 /**
- * Sacar varios pedidos a la vez (opcional): una sola lista con el total de cada producto y cuánto va para cada punto.
- * Al chulear un producto aquí se chulea «empacado» en cada pedido que lo lleva (lo mismo que dentro de cada pedido).
+ * Sacar varios pedidos a la vez: una sola lista con el total de cada producto y cuánto va para cada punto.
+ * Con lote (20261346) queda guardado para todos, en vivo, y se puede deshacer; cada pedido sigue siendo suyo.
+ * Al chulear un producto aquí se chulea «empacado» en cada pedido que lo lleva. Tocar la cantidad de un punto
+ * cambia lo que se le envía (se guarda al instante); «Repartir lo que hay» divide lo disponible si no alcanza.
  * Las firmas y el envío se siguen haciendo en cada pedido.
  */
-export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[]; onClose: () => void; onOpen: (id: string) => void; onChanged: () => void }) {
+export function GroupPicking({ ids: idsIn, batch, onClose, onOpen, onChanged }: {
+  ids: string[]; batch?: Batch | null; onClose: () => void; onOpen: (id: string) => void; onChanged: () => void;
+}) {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const idsKey = idsIn.join(",");
+  const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
   const [details, setDetails] = useState<SrDetail[] | null>(null);
   const [checks, setChecks] = useState<Record<string, Check[]>>({});
   const [error, setError] = useState<string | null>(null);
@@ -31,25 +42,53 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
+  const loadChecks = useCallback(async () => {
+    const res = await Promise.all(ids.map((id) => supabaseBrowser().rpc("erp_sr_item_checks", { p_request: id })));
+    setChecks(Object.fromEntries(res.map((c, i) => [ids[i], !c.error && Array.isArray(c.data) ? (c.data as Check[]) : []])));
+  }, [ids]);
   const load = useCallback(async () => {
     const sb = supabaseBrowser();
-    const res = await Promise.all(ids.map((id) => Promise.all([
-      sb.rpc("erp_stock_request_detail", { p_request: id }),
-      sb.rpc("erp_sr_item_checks", { p_request: id }),
-    ])));
-    const bad = res.find(([d]) => d.error);
-    if (bad) return setError(srError(bad[0].error));
+    const res = await Promise.all(ids.map((id) => sb.rpc("erp_stock_request_detail", { p_request: id })));
+    const bad = res.find((d) => d.error);
+    if (bad) return setError(srError(bad.error));
     setError(null);
-    setDetails(res.map(([d]) => d.data as SrDetail));
-    setChecks(Object.fromEntries(res.map(([, c], i) => [ids[i], !c.error && Array.isArray(c.data) ? (c.data as Check[]) : []])));
-  }, [ids]);
+    setDetails(res.map((d) => d.data as SrDetail));
+    await loadChecks();
+  }, [ids, loadChecks]);
+
+  // En vivo: lo que cambia otra persona (cantidades, productos, estado) llega por la conexión única del panel;
+  // lo chuleado, por la tabla de la lista de chequeo. Respaldo cada 30 s con la pestaña a la vista.
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; }, [load]);
   useEffect(() => {
-    const first = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 20000);
+    const poll = startPoll(() => loadRef.current(), { every: 30_000, minGap: 10_000, firstDelay: 0 });
+    let t = 0;
+    const onChange = (e: Event) => {
+      const id = (e as CustomEvent<string | null>).detail;
+      if (id && !ids.includes(id)) return;
+      window.clearTimeout(t);
+      t = window.setTimeout(() => poll.run(), 350);
+    };
+    window.addEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
+    let c = 0;
+    const ch = supabaseBrowser()
+      .channel(`sr-group-checks-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "erp_sr_item_checks", filter: `request_id=in.(${ids.join(",")})` }, () => {
+        window.clearTimeout(c);
+        c = window.setTimeout(() => void loadChecks(), 250);
+      })
+      .subscribe();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { window.clearTimeout(first); window.clearInterval(timer); document.body.style.overflow = prev; };
-  }, [load]);
+    return () => {
+      poll.stop();
+      window.clearTimeout(t);
+      window.clearTimeout(c);
+      window.removeEventListener(STOCK_REQUESTS_CHANGED_EVENT, onChange);
+      void supabaseBrowser().removeChannel(ch);
+      document.body.style.overflow = prev;
+    };
+  }, [ids, loadChecks]);
 
   // Solo los pedidos que se pueden empacar ahora (por si alguien más ya los envió).
   const open = useMemo(() => (details ?? []).filter((d) => d.access.attend && (d.request.status === "pending" || d.request.status === "preparing")), [details]);
@@ -60,16 +99,18 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
     for (const d of open) {
       for (const i of d.items) {
         const qty = i.qty_approved ?? i.qty_requested;
-        if (qty <= 0) continue;
-        const row = m.get(i.product_id) ?? { product_id: i.product_id, name: i.name, sku: i.sku, image_url: i.image_url, total: 0, source_now: i.source_now, parts: [] };
+        // Lo que se puso en 0 se sigue viendo (para poder repartirle), si era algo pedido.
+        if (qty <= 0 && i.qty_requested <= 0) continue;
+        const row = m.get(i.product_id) ?? { product_id: i.product_id, name: i.name, sku: i.sku, image_url: i.image_url, total: 0, requested: 0, source_now: i.source_now, parts: [] };
         row.total += qty;
-        row.parts.push({ requestId: d.request.id, number: d.request.number, point: d.request.from_name, itemId: i.id, qty });
+        row.requested += i.qty_requested;
+        row.parts.push({ requestId: d.request.id, number: d.request.number, point: d.request.from_name, itemId: i.id, qty, requested: i.qty_requested });
         m.set(i.product_id, row);
       }
     }
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
   }, [open]);
-  const isDone = useCallback((r: Row) => r.parts.every((p) => packed(p.requestId, p.itemId)), [packed]);
+  const isDone = useCallback((r: Row) => r.parts.every((p) => p.qty <= 0 || packed(p.requestId, p.itemId)), [packed]);
   const doneRows = rows.filter(isDone).length;
   const units = rows.reduce((s, r) => s + r.total, 0);
   const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -85,7 +126,7 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
   async function toggle(r: Row) {
     if (busy) return;
     const on = !isDone(r);
-    const targets = r.parts.filter((p) => packed(p.requestId, p.itemId) !== on);
+    const targets = r.parts.filter((p) => p.qty > 0 && packed(p.requestId, p.itemId) !== on);
     navigator.vibrate?.(on ? 18 : 8);
     setBusy(r.product_id);
     // Al instante en pantalla; si la base no acepta alguno, se vuelve a cargar lo real.
@@ -107,6 +148,73 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
     onChanged();
   }
 
+  async function saveParts(lines: Array<{ item_id: string; qty: number }>, key: string) {
+    setBusy(key);
+    const res = await saveQtys(lines);
+    setBusy(null);
+    if (!res.ok) {
+      void Swal.fire({ ...swal, icon: "error", title: "No se guardó", text: res.missing ? "Falta correr en Supabase la migración 20261346_lotes_pedidos.sql." : res.error });
+      return;
+    }
+    await load();
+    onChanged();
+  }
+
+  /** Cambiar cuánto va para un punto (queda guardado en ese pedido y lo ven todos). */
+  async function editPart(r: Row, p: Part) {
+    if (busy) return;
+    const res = await Swal.fire({
+      ...swal, title: `${p.point} · #${p.number}`,
+      html: `<p style="font-size:13px;opacity:.85"><b>${esc(r.name)}</b><br/>Pidió <b>${p.requested}</b> · hay <b>${r.source_now}</b> en total para ${r.parts.length} punto${r.parts.length === 1 ? "" : "s"}.</p>`,
+      input: "number", inputValue: String(p.qty), inputAttributes: { min: "0", step: "1", inputmode: "numeric" },
+      showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
+      inputValidator: (v) => (/^\d{1,6}$/.test(String(v ?? "").trim()) && Number(v) <= 100000 ? null : "Escribe una cantidad (0 o más)."),
+    });
+    if (!res.isConfirmed) return;
+    const qty = Number(String(res.value).trim());
+    if (qty === p.qty) return;
+    await saveParts([{ item_id: p.itemId, qty }], r.product_id);
+  }
+
+  /** No alcanza: lo que hay se reparte en proporción a lo que pidió cada punto (con vista previa). */
+  async function splitRow(r: Row) {
+    if (busy) return;
+    const plan = splitEven(r.source_now, r.parts.map((p) => p.requested));
+    const res = await Swal.fire({
+      ...swal, icon: "question", title: "Repartir lo que hay",
+      html: `<div style="text-align:left;font-size:13px;display:grid;gap:6px">
+        <p><b>${esc(r.name)}</b>: piden <b>${r.requested}</b> y hay <b>${Math.max(0, r.source_now)}</b>. Se reparte según lo que pidió cada uno:</p>
+        ${r.parts.map((p, i) => `<p>• ${esc(p.point)} (#${p.number}): pidió ${p.requested} → <b>${plan[i]}</b></p>`).join("")}
+        <p style="opacity:.7">Puedes cambiar cualquiera después tocando su cantidad.</p></div>`,
+      showCancelButton: true, confirmButtonText: "Repartir", cancelButtonText: "Cancelar",
+    });
+    if (!res.isConfirmed) return;
+    await saveParts(r.parts.map((p, i) => ({ item_id: p.itemId, qty: plan[i] })), r.product_id);
+  }
+
+  /** Deshacer el lote (o sacar un pedido). Cada pedido queda como está. */
+  async function undo(requestId?: string) {
+    if (!batch || busy) return;
+    const d = requestId ? open.find((x) => x.request.id === requestId) : null;
+    const res = await Swal.fire({
+      ...swal, icon: "question",
+      title: d ? `¿Sacar #${d.request.number} del lote?` : `¿Deshacer el lote #${batch.number}?`,
+      text: (d && open.length > 2 ? "Los demás siguen en el lote. " : "Los pedidos vuelven a estar sueltos. ")
+        + "Nada se pierde: lo que repartiste y lo empacado se quedan en cada pedido.",
+      showCancelButton: true, confirmButtonText: d ? "Sacar del lote" : "Deshacer lote", cancelButtonText: "Cancelar",
+    });
+    if (!res.isConfirmed) return;
+    setBusy("undo");
+    const { data, error: e } = await supabaseBrowser().rpc("erp_sr_batch_undo", { p_batch: batch.id, p_request: requestId ?? null });
+    setBusy(null);
+    if (e) return void Swal.fire({ ...swal, icon: "error", title: "No se pudo", text: srError(e) });
+    onChanged();
+    if ((data as { undone?: boolean } | null)?.undone) {
+      void Swal.fire({ ...swal, icon: "success", title: `Lote #${batch.number} deshecho`, timer: 1600, showConfirmButton: false });
+      onClose();
+    }
+  }
+
   if (!mounted) return null;
   return createPortal(
     <AnimatePresence>
@@ -119,13 +227,25 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
             <div className="flex items-center gap-2">
               <ListChecks size={18} style={{ color: "var(--t-accent)" }} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black sm:text-base">🧺 Sacar {ids.length} pedidos a la vez</p>
+                <p className="truncate text-sm font-black sm:text-base">🧺 {batch ? `Lote #${batch.number} · ` : ""}Sacar {ids.length} pedidos a la vez</p>
                 <p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
                   {open.map((d) => `#${d.request.number} ${d.request.from_name}`).join(" · ") || "Cargando…"}
                 </p>
               </div>
+              {batch ? (
+                <button type="button" onClick={() => void undo()} disabled={busy === "undo"}
+                  className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-bold disabled:opacity-50" style={{ borderColor: "var(--t-card-border)" }}
+                  title="Los pedidos vuelven a estar sueltos; nada se pierde">
+                  <Undo2 size={14} /> <span className="hidden sm:inline">Deshacer lote</span>
+                </button>
+              ) : null}
               <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
             </div>
+            {!batch ? (
+              <p className="mt-1.5 rounded-lg border px-2 py-1 text-[11px]" style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
+                Esta lista no quedó guardada como lote (falta correr la migración 20261346): solo la ves tú.
+              </p>
+            ) : null}
             {details ? (
               <>
                 <div className="mt-2 flex items-center gap-2 text-xs">
@@ -150,6 +270,9 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
                     }}
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
                 </label>
+                <p className="mt-1.5 hidden text-[11px] sm:block" style={{ color: "var(--t-muted)" }}>
+                  Toca el producto para chulearlo en todos los pedidos. Toca la cantidad de un punto para cambiar lo que se le envía.
+                </p>
               </>
             ) : null}
           </header>
@@ -169,6 +292,8 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
               const done = isDone(r);
               const some = !done && r.parts.some((p) => packed(p.requestId, p.itemId));
               const short = r.source_now < r.total;
+              // Hay algo, pero no alcanza para lo que pidieron: se ofrece repartir.
+              const canSplit = r.parts.length > 1 && r.source_now > 0 && r.source_now < r.requested;
               const img = thumbs[r.product_id] ?? r.image_url;
               return (
                 <motion.div key={r.product_id} layout transition={{ type: "spring", stiffness: 380, damping: 32 }}
@@ -185,14 +310,25 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
                   <div className="min-w-0 flex-1">
                     <ProductName name={r.name} className="text-[13px] font-bold leading-snug sm:text-sm" />
                     {r.sku ? <p className="truncate text-[11px]" style={{ color: "var(--t-muted)" }}>{r.sku}</p> : null}
-                    {/* Cuánto va para cada punto. */}
+                    {/* Cuánto va para cada punto: se toca para cambiarlo. */}
                     <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
                       {r.parts.map((p) => (
-                        <span key={p.itemId} className="rounded-md px-1.5 py-px font-semibold"
-                          style={packed(p.requestId, p.itemId) ? { background: "color-mix(in oklab, #22c55e 18%, transparent)", color: "#22c55e" } : { background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}>
-                          {p.point} <b>{p.qty}</b>
-                        </span>
+                        <button key={p.itemId} type="button" disabled={!!busy}
+                          onClick={(e) => { e.stopPropagation(); void editPart(r, p); }}
+                          title={`Pidió ${p.requested}. Toca para cambiar cuánto se envía a ${p.point}`}
+                          className="rounded-md border border-transparent px-1.5 py-px font-semibold transition hover:border-current disabled:opacity-60"
+                          style={packed(p.requestId, p.itemId) ? { background: "color-mix(in oklab, #22c55e 18%, transparent)", color: "#22c55e" }
+                            : p.qty !== p.requested ? { background: "color-mix(in oklab, #0ea5e9 16%, transparent)", color: "#38bdf8" }
+                            : { background: "color-mix(in oklab, var(--t-accent) 12%, transparent)" }}>
+                          {p.point} <b>{p.qty}</b>{p.qty !== p.requested ? <span className="opacity-70"> de {p.requested}</span> : null} ✎
+                        </button>
                       ))}
+                      {canSplit ? (
+                        <button type="button" disabled={!!busy} onClick={(e) => { e.stopPropagation(); void splitRow(r); }}
+                          className="rounded-md px-1.5 py-px font-bold disabled:opacity-60" style={{ background: "color-mix(in oklab, #f59e0b 18%, transparent)", color: "#f59e0b" }}>
+                          ⚖️ Repartir lo que hay
+                        </button>
+                      ) : null}
                     </p>
                   </div>
                   <span className="shrink-0 text-right">
@@ -210,16 +346,25 @@ export function GroupPicking({ ids, onClose, onOpen, onChanged }: { ids: string[
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>Firmar y enviar cada pedido</p>
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
                 {open.map((d) => {
-                  const total = d.items.filter((i) => (i.qty_approved ?? i.qty_requested) > 0).length;
-                  const done = d.items.filter((i) => (i.qty_approved ?? i.qty_requested) > 0 && packed(d.request.id, i.id)).length;
+                  const live = d.items.filter((i) => (i.qty_approved ?? i.qty_requested) > 0);
+                  const total = live.length;
+                  const done = live.filter((i) => packed(d.request.id, i.id)).length;
                   const st = SR_STATUS[d.request.status];
                   return (
-                    <button key={d.request.id} type="button" onClick={() => onOpen(d.request.id)}
-                      className="shrink-0 rounded-xl border px-3 py-2 text-left text-xs"
-                      style={{ borderColor: done === total ? "#22c55e" : `color-mix(in oklab, ${st.color} 45%, var(--t-card-border))` }}>
-                      <span className="block font-black">#{d.request.number} → {d.request.from_name}</span>
-                      <span className="block" style={{ color: done === total ? "#22c55e" : "var(--t-muted)" }}>{done}/{total} empacados · abrir →</span>
-                    </button>
+                    <span key={d.request.id} className="relative shrink-0">
+                      <button type="button" onClick={() => onOpen(d.request.id)}
+                        className="rounded-xl border px-3 py-2 pr-8 text-left text-xs"
+                        style={{ borderColor: done === total ? "#22c55e" : `color-mix(in oklab, ${st.color} 45%, var(--t-card-border))` }}>
+                        <span className="block font-black">#{d.request.number} → {d.request.from_name}</span>
+                        <span className="block" style={{ color: done === total ? "#22c55e" : "var(--t-muted)" }}>{done}/{total} empacados · abrir →</span>
+                      </button>
+                      {batch ? (
+                        <button type="button" onClick={() => void undo(d.request.id)} disabled={!!busy} aria-label={`Sacar #${d.request.number} del lote`} title="Sacar del lote"
+                          className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[11px] disabled:opacity-50" style={{ color: "var(--t-muted)" }}>
+                          <X size={13} />
+                        </button>
+                      ) : null}
+                    </span>
                   );
                 })}
               </div>

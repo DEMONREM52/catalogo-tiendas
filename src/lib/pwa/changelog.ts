@@ -1585,6 +1585,17 @@ export const RELEASES: Release[] = [
       { icon: "📦", text: "Ver sus productos" },
     ],
   },
+  {
+    id: 154, date: "2026-11-26", title: "🧺 Lotes de pedidos y cantidades que no se pierden",
+    summary: "Lo que escribes en «Enviar» se guarda solo: si pidieron 5 y pones 8, al preparar, recargar o salir y volver sigue en 8, y los demás lo ven al instante (queda en el chat). En «Por atender», «Sacar varios pedidos a la vez» ahora junta los que elijas en un lote que ven todos: una sola lista con el total, tocas la cantidad de cada punto para repartir, o «Repartir lo que hay» si no alcanza. «Deshacer lote» los vuelve a separar sin perder nada. Cada pedido se firma y se envía por aparte, como siempre.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "✏️", text: "Pidió 5 · pones 8 · se guarda solo" },
+      { icon: "🧺", text: "Juntas #64 y #66 en el lote #1" },
+      { icon: "⚖️", text: "Hay 6: VITRINA 4 · MIRA PUES 2" },
+      { icon: "↩️", text: "Deshacer lote: nada se pierde" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

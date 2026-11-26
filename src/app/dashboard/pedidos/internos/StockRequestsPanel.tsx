@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { draftAge, onStockDraftChange, readStockDraft } from "@/lib/stock-request-draft";
 import { m as motion } from "framer-motion";
 import Link from "next/link";
@@ -13,7 +13,7 @@ import { useRunOnChange } from "../../inventario/shared";
 import { NewStockRequest, type PointOption, type PrefillLine } from "./NewStockRequest";
 import { NotificationSettings } from "./NotificationSettings";
 import { RequestRoom } from "./RequestRoom";
-import { GroupPicking } from "./GroupPicking";
+import { GroupPicking, type Batch } from "./GroupPicking";
 import Swal from "@/lib/swal";
 import { OPEN_REQUEST_EVENT, STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, srNeedsMe, timeAgo, type SrListItem } from "./types";
 import { SkeletonCards } from "@/components/ui/Skeleton";
@@ -72,7 +72,13 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   // Opcional: sacar varios pedidos a la vez (una sola lista para alistar).
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
-  const [group, setGroup] = useState<{ ids: string[]; visible: boolean } | null>(null);
+  // Lote abierto (guardado en la base, para todos) o lista solo de este equipo si falta la migración 20261346.
+  const [group, setGroup] = useState<{ ids: string[]; batch: Batch | null; visible: boolean } | null>(null);
+  const groupRef = useRef(group);
+  useEffect(() => { groupRef.current = group; }, [group]);
+  // Lote que ya se vio guardado en la lista (solo entonces, si desaparece, es que lo deshicieron).
+  const batchSeen = useRef<string | null>(null);
+  const [creatingBatch, setCreatingBatch] = useState(false);
   const [statusF, setStatusF] = useState<StatusFilter>("all");
   const [pointF, setPointF] = useState<string | null>(null);
   const view = useSyncExternalStore(onViewChange, readView, () => "cards" as View);
@@ -82,8 +88,18 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     setLoading(false);
     if (err) return setError(srError(err));
     setError(null);
-    setRows((data ?? []) as SrListItem[]);
-  }, [storeId]);
+    const list = (data ?? []) as SrListItem[];
+    setRows(list);
+    // Si el lote abierto ya no existe (otra persona lo deshizo o salieron sus pedidos), se cierra y se avisa.
+    // Recién armado no: la lista pudo salir antes de que el lote quedara guardado.
+    const g = groupRef.current;
+    if (!g?.batch) return;
+    const id = g.batch.id;
+    if (list.some((r) => r.batch?.id === id && (r.status === "pending" || r.status === "preparing"))) { batchSeen.current = id; return; }
+    if (batchSeen.current !== id) return;
+    setGroup((cur) => (cur?.batch?.id === id ? null : cur));
+    void Swal.fire({ ...swalToast, icon: "info", title: "El lote ya no está", text: "Otra persona lo deshizo o ya salieron sus pedidos. Cada pedido sigue como estaba." });
+  }, [storeId, setGroup]);
   useRunOnChange(load);
 
   useEffect(() => {
@@ -190,10 +206,58 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   const activePoint = pointF && pointChips.some((p) => p.id === pointF) ? pointF : null;
 
   /** Se puede alistar en grupo: lo atiendes y está enviado o en preparación. */
-  const pickable = (r: SrListItem) => r.access.attend && (r.status === "pending" || r.status === "preparing");
+  const pickable = (r: SrListItem) => r.access.attend && (r.status === "pending" || r.status === "preparing") && !r.batch;
   const pickableCount = scoped.filter(pickable).length;
+
+  // Lotes abiertos (20261346): pedidos que se sacan juntos, guardados para todos y en vivo.
+  const batches = useMemo(() => {
+    const m = new Map<string, { batch: Batch; rows: SrListItem[] }>();
+    for (const r of rows) {
+      if (!r.batch || !(r.status === "pending" || r.status === "preparing") || !r.access.attend) continue;
+      const cur = m.get(r.batch.id) ?? { batch: { id: r.batch.id, number: r.batch.number }, rows: [] };
+      cur.rows.push(r);
+      m.set(r.batch.id, cur);
+    }
+    return [...m.values()].sort((a, b) => a.batch.number - b.batch.number);
+  }, [rows]);
+  function openBatch(b: { batch: Batch; rows: SrListItem[] }) {
+    batchSeen.current = b.batch.id;
+    setGroup({ ids: b.rows.map((r) => r.id), batch: b.batch, visible: true });
+  }
+  // El lote abierto sigue a la lista en vivo: si otra persona saca un pedido o lo deshace, se ve al instante.
+  const groupBatchId = group?.batch?.id ?? null;
+  const liveBatch = groupBatchId ? batches.find((b) => b.batch.id === groupBatchId) ?? null : null;
+  const groupIds = liveBatch ? liveBatch.rows.map((r) => r.id) : group?.ids ?? [];
+
+  /** Junta los pedidos elegidos en un lote (con llave: un doble toque no crea dos). Sin la migración, lista solo aquí. */
+  async function createBatch() {
+    if (creatingBatch || selected.length < 2) return;
+    setCreatingBatch(true);
+    const ids = [...selected];
+    const key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : null;
+    const { data, error: e } = await supabaseBrowser().rpc("erp_sr_batch_create", { p_store: storeId, p_requests: ids, p_key: key });
+    setCreatingBatch(false);
+    if (e) {
+      if (/Could not find the function|schema cache/i.test(e.message)) {
+        setGroup({ ids, batch: null, visible: true });
+        setPicking(false);
+        setSelected([]);
+        return;
+      }
+      return void Swal.fire({ ...swalToast, icon: "error", title: "No se armó el lote", text: srError(e), timer: 5000 });
+    }
+    const b = data as { id: string; number: number };
+    setGroup({ ids, batch: { id: b.id, number: b.number }, visible: true });
+    setPicking(false);
+    setSelected([]);
+    void load();
+  }
+
   function tapRow(r: SrListItem) {
     if (!picking) return setOpenId(r.id);
+    if (r.batch && r.access.attend && (r.status === "pending" || r.status === "preparing")) {
+      return void Swal.fire({ ...swalToast, icon: "info", title: `Ya está en el lote #${r.batch.number}`, text: "Deshaz ese lote o saca este pedido de él para juntarlo con otros." });
+    }
     if (!pickable(r)) return void Swal.fire({ ...swalToast, icon: "info", title: "Ese pedido no se puede alistar ahora", text: "Solo los que te toca preparar (enviados o en preparación)." });
     if (selected.includes(r.id)) return setSelected((cur) => cur.filter((x) => x !== r.id));
     const first = rows.find((x) => x.id === selected[0]);
@@ -299,16 +363,37 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 text-sm backdrop-blur" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-bg-base) 92%, transparent)" }}>
           <span className="min-w-0 flex-1 font-bold">🧺 Toca los pedidos que vas a sacar juntos · <span style={{ color: "var(--t-accent)" }}>{selected.length} elegidos</span></span>
           <button type="button" onClick={stopPicking} className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
-          <button type="button" disabled={selected.length < 2} onClick={() => { setGroup({ ids: selected, visible: true }); setPicking(false); setSelected([]); }}
+          <button type="button" disabled={selected.length < 2 || creatingBatch} onClick={() => void createBatch()}
+            title="Se guarda como un lote: todos lo ven, y se puede deshacer cuando quieras"
             className="rounded-full px-4 py-1.5 text-xs font-black text-white disabled:opacity-50" style={{ background: "var(--t-accent)" }}>
-            Armar lista{selected.length >= 2 ? ` (${selected.length})` : ""}
+            {creatingBatch ? "Armando…" : `Juntar en un lote${selected.length >= 2 ? ` (${selected.length})` : ""}`}
           </button>
+        </div>
+      ) : null}
+      {/* Lotes abiertos: se ven igual en todos los equipos y se actualizan en vivo. */}
+      {batches.length && effectiveScope !== "closed" ? (
+        <div className="grid gap-1.5 md:grid-cols-2">
+          {batches.map((b) => (
+            <div key={b.batch.id} className="flex items-center gap-2 rounded-2xl border p-2.5 text-sm"
+              style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 10%, var(--t-card-bg))" }}>
+              <span className="text-xl" aria-hidden>🧺</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-black">Lote #{b.batch.number} · {b.rows.length} pedidos juntos</span>
+                <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
+                  {b.rows.map((r) => `#${r.number} ${r.from_name}`).join(" · ")} · de {b.rows[0].to_name}
+                </span>
+              </span>
+              <button type="button" onClick={() => openBatch(b)} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-white" style={{ background: "var(--t-accent)" }}>
+                Abrir lista
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
       {group && !group.visible ? (
         <button type="button" onClick={() => setGroup({ ...group, visible: true })}
           className="flex w-full items-center justify-between gap-2 rounded-2xl border px-3 py-2 text-left text-sm font-bold" style={{ borderColor: "var(--t-accent)" }}>
-          <span>🧺 Volver a la lista de {group.ids.length} pedidos</span>
+          <span>🧺 Volver a {group.batch ? `el lote #${group.batch.number}` : "la lista"} ({groupIds.length} pedidos)</span>
           <span className="flex items-center gap-2">
             <span onClick={(e) => { e.stopPropagation(); setGroup(null); }} role="button" className="rounded-full border px-2 py-0.5 text-[11px]" style={{ borderColor: "var(--t-card-border)" }}>Cerrar</span>
             <span style={{ color: "var(--t-accent)" }}>→</span>
@@ -398,7 +483,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                         <span className="truncate" title={`Recibe: ${r.from_name}`}>{r.from_name}</span>
                       </span>
                       <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
-                        <b style={{ color: st.color }}>{st.short}</b> · {r.units} und. · de {r.to_name}
+                        <b style={{ color: st.color }}>{st.short}</b>{r.batch && isOpen(r.status) ? <> · 🧺 Lote {r.batch.number}</> : null} · {r.units} und. · de {r.to_name}
                       </span>
                       {unread && r.last_message?.kind === "message" ? (
                         <span className="block truncate text-[11px]" style={{ color: UNREAD }}>💬 <b>{r.last_message.user_name}:</b> {r.last_message.body}</span>
@@ -450,6 +535,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
                       </span>
                     ) : null}
                     <span className="text-sm font-black">#{r.number}</span>
+                    {r.batch && isOpen(r.status) ? <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }} title={`Se saca junto con otros pedidos (lote #${r.batch.number})`}>🧺 Lote {r.batch.number}</span> : null}
                     <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: st.color }} title={st.label}>{st.icon} {st.short}</span>
                     {urgent ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white" title="Urgente">⚡<span className="hidden sm:inline"> Urgente</span></span> : null}
                     {unread ? <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: UNREAD }} title={`${r.unread} mensajes sin leer`}>💬 {r.unread}</span> : null}
@@ -519,7 +605,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
       <NotificationSettings open={sounds} onClose={() => setSounds(false)} storeId={storeId} points={points} />
       <RequestRoom requestId={openId} onClose={() => { setOpenId(null); void load(); setGroup((g) => (g ? { ...g, visible: true } : g)); }} onChanged={() => void load()} />
       {group?.visible ? (
-        <GroupPicking key={group.ids.join(",")} ids={group.ids} onClose={() => setGroup(null)} onChanged={() => void load()}
+        <GroupPicking key={group.batch?.id ?? group.ids.join(",")} ids={groupIds} batch={group.batch} onClose={() => setGroup(null)} onChanged={() => void load()}
           onOpen={(id) => { setGroup((g) => (g ? { ...g, visible: false } : g)); setOpenId(id); }} />
       ) : null}
     </section>
