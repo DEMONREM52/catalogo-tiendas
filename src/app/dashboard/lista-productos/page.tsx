@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { ScrollButtons } from "@/components/ui/ScrollButtons";
 import { AnimatePresence, m as motion } from "framer-motion";
-import { ClipboardList, Eye, Loader2, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
+import { ClipboardList, Eye, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { getDashboardStore, type DashboardStore } from "@/lib/store-utils";
 import { errorText, fiscalRpc } from "@/lib/fiscal/client";
 import { useRunOnChange } from "../inventario/shared";
@@ -99,6 +99,9 @@ export default function ProductListPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Map<string, Item>>(() => new Map());
+  // Cuántas de cada producto elegido (se escribe en la tarjeta; por defecto 1).
+  const [qtys, setQtys] = useState<Record<string, number>>({});
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState<number | null>(null);
   const [requestTo, setRequestTo] = useState("");
   const reqId = useRef(0);
@@ -213,19 +216,19 @@ export default function ProductListPage() {
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
-      const d = JSON.parse(raw) as { items?: Item[]; to?: string; at?: number };
+      const d = JSON.parse(raw) as { items?: Item[]; qtys?: Record<string, number>; to?: string; at?: number };
       // Borradores de más de 7 días se descartan.
       if (!d.items?.length || (d.at && Date.now() - d.at > 7 * 864e5)) return;
-      window.setTimeout(() => { setSelected(new Map(d.items!.map((i) => [i.id, i]))); if (d.to) setRequestTo(d.to); }, 0);
+      window.setTimeout(() => { setSelected(new Map(d.items!.map((i) => [i.id, i]))); if (d.qtys) setQtys(d.qtys); if (d.to) setRequestTo(d.to); }, 0);
     } catch { /* sin almacenamiento */ }
   }, [draftKey]);
   useEffect(() => {
     if (!draftKey || !restored.current) return;
     try {
-      if (selected.size) window.localStorage.setItem(draftKey, JSON.stringify({ items: [...selected.values()], to: requestTo, at: Date.now() }));
+      if (selected.size) window.localStorage.setItem(draftKey, JSON.stringify({ items: [...selected.values()], qtys, to: requestTo, at: Date.now() }));
       else window.localStorage.removeItem(draftKey);
     } catch { /* sin almacenamiento */ }
-  }, [draftKey, selected, requestTo]);
+  }, [draftKey, selected, qtys, requestTo]);
   // Con la barra «para pedir» abierta se esconde el botón de tema del celular (se montaba encima).
   useEffect(() => {
     document.body.classList.toggle("has-bottom-tray", selected.size > 0);
@@ -233,13 +236,25 @@ export default function ProductListPage() {
   }, [selected.size]);
 
   function toggle(item: Item) {
+    const on = !selected.has(item.id);
     setSelected((cur) => {
       const next = new Map(cur);
       if (next.has(item.id)) next.delete(item.id);
       else next.set(item.id, item);
       return next;
     });
+    setQtys((cur) => {
+      const next = { ...cur };
+      if (on) next[item.id] = next[item.id] ?? 1;
+      else delete next[item.id];
+      return next;
+    });
+    // Al elegirlo, el cuadro de cantidad queda listo para escribir (p. ej. 5) y seguir con el siguiente.
+    setFocusId(on ? item.id : null);
   }
+  const setQty = (id: string, qty: number) => setQtys((cur) => ({ ...cur, [id]: Math.min(100000, Math.max(1, Math.floor(qty) || 1)) }));
+  const qtyOf = (id: string) => qtys[id] ?? 1;
+  const totalUnits = [...selected.keys()].reduce((s, id) => s + qtyOf(id), 0);
 
   // A quién pedir por defecto: el punto (distinto al mío) que tiene más de lo seleccionado.
   const suggestedTo = useMemo(() => {
@@ -254,8 +269,8 @@ export default function ProductListPage() {
   const askTo = requestTo && requestTo !== pointId ? requestTo : suggestedTo;
 
   const prefill: PrefillLine[] = useMemo(
-    () => [...selected.values()].map((i) => ({ product_id: i.id, name: i.name, sku: i.sku, qty: 1, levels: i.levels })),
-    [selected],
+    () => [...selected.values()].map((i) => ({ product_id: i.id, name: i.name, sku: i.sku, qty: qtys[i.id] ?? 1, levels: i.levels })),
+    [selected, qtys],
   );
 
   if (fatal) return <ErrorBox message={fatal} />;
@@ -429,6 +444,9 @@ export default function ProductListPage() {
               selectable={canRequest}
               selected={selected.has(item.id)}
               onToggle={() => toggle(item)}
+              qty={qtyOf(item.id)}
+              onQty={(n) => setQty(item.id, n)}
+              autoFocusQty={focusId === item.id}
             />
           ))}
         </ul>
@@ -462,10 +480,10 @@ export default function ProductListPage() {
                     {selected.size}
                   </motion.span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black">producto{selected.size === 1 ? "" : "s"} para pedir <span className="text-[10px] font-semibold" style={{ color: "var(--t-muted)" }}>· guardado</span></p>
-                    <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{[...selected.values()].map((i) => i.name).join(" · ")}</p>
+                    <p className="text-sm font-black">producto{selected.size === 1 ? "" : "s"} · {fmtNumber(totalUnits)} und. para pedir <span className="text-[10px] font-semibold" style={{ color: "var(--t-muted)" }}>· guardado</span></p>
+                    <p className="truncate text-xs" style={{ color: "var(--t-muted)" }}>{[...selected.values()].map((i) => `${qtyOf(i.id)} × ${i.name}`).join(" · ")}</p>
                   </div>
-                  <button type="button" onClick={() => setSelected(new Map())} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Vaciar selección" title="Vaciar">
+                  <button type="button" onClick={() => { setSelected(new Map()); setQtys({}); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Vaciar selección" title="Vaciar">
                     <X size={15} />
                   </button>
                 </div>
@@ -503,6 +521,7 @@ export default function ProductListPage() {
           onCreated={(id) => {
             setRequestKey(null);
             setSelected(new Map());
+            setQtys({});
             router.push(`/dashboard/pedidos?tab=internos&pedido=${id}`);
           }}
         />
@@ -542,7 +561,7 @@ function Chip({ active, onClick, children, count, title, tone, small = false }: 
   );
 }
 
-function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint, canEdit, selectable, selected, onToggle }: {
+function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint, canEdit, selectable, selected, onToggle, qty, onQty, autoFocusQty }: {
   item: Item;
   pricePoint: string | null;
   pointId: string;
@@ -553,6 +572,9 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
   selectable: boolean;
   selected: boolean;
   onToggle: () => void;
+  qty: number;
+  onQty: (qty: number) => void;
+  autoFocusQty: boolean;
 }) {
   const here = Number(item.here);
   const elsewhere = Object.entries(item.levels)
@@ -629,6 +651,26 @@ function ProductRow({ item, pointId, pointName, pointLabel, showCost, pricePoint
       ) : (
         <div className="flex min-w-0 flex-1 items-start gap-2 p-2.5 sm:items-center sm:gap-3 sm:p-3">{body}</div>
       )}
+      {selectable && selected ? (
+        // Cantidad a pedir: se escribe o con − / +. Queda guardada con la selección.
+        <div className="flex shrink-0 flex-col items-center justify-center gap-1 px-1.5 py-2" onClick={(e) => e.stopPropagation()}>
+          <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--t-muted)" }}>Pedir</span>
+          <div className="flex items-center gap-0.5">
+            <button type="button" onClick={() => onQty(qty - 1)} disabled={qty <= 1} aria-label={`Una menos de ${item.name}`}
+              className="grid h-8 w-7 place-items-center rounded-lg border disabled:opacity-40" style={{ borderColor: "var(--t-card-border)" }}><Minus size={13} /></button>
+            <input
+              type="text" inputMode="numeric" value={qty} autoFocus={autoFocusQty} aria-label={`Cantidad de ${item.name}`}
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => onQty(Number(e.target.value.replace(/D/g, "")) || 1)}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              className="h-8 w-12 rounded-lg border text-center text-sm font-black tabular-nums outline-none"
+              style={{ borderColor: "var(--t-accent)", background: "var(--t-card-bg)", color: "var(--t-text)" }}
+            />
+            <button type="button" onClick={() => onQty(qty + 1)} aria-label={`Una más de ${item.name}`}
+              className="grid h-8 w-7 place-items-center rounded-lg border" style={{ borderColor: "var(--t-card-border)" }}><Plus size={13} /></button>
+          </div>
+        </div>
+      ) : null}
       {canEdit ? (
         <Link
           href={`/dashboard/products/${item.id}`}

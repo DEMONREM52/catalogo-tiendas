@@ -1606,6 +1606,17 @@ export const RELEASES: Release[] = [
       { icon: "🔗", text: "Compartir pedido (si hace falta)" },
     ],
   },
+  {
+    id: 156, date: "2026-11-26", title: "🔢 Cantidad al elegir productos para pedir",
+    summary: "En la Lista general, al tocar un producto para pedirlo aparece «Pedir − 1 +» en la tarjeta, listo para escribir cuántas (por ejemplo 5). Eliges el siguiente y le pones 3, y así. La barra de abajo muestra cuántas unidades llevas y todo queda guardado; al tocar «Crear pedido» ya van con esas cantidades.",
+    paths: ["/dashboard/lista-productos"],
+    demo: [
+      { icon: "☑️", text: "Tocas ADAPTADOR CAR PLAY → escribes 5" },
+      { icon: "☑️", text: "Tocas CACEROLA 20 CM → escribes 3" },
+      { icon: "🧺", text: "2 productos · 8 und. para pedir" },
+      { icon: "📨", text: "Crear pedido con 5 y 3" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
