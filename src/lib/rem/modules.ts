@@ -158,10 +158,14 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "categories", name: "Categorías", path: "/dashboard/categories",
     aliases: "categorias grupos familias",
-    about: "Agrupa los productos para ordenar el catálogo y los informes.",
+    about: "Agrupa los productos para ordenar el catálogo y los informes. Muestra cada categoría en tarjeta con su imagen, cuántos productos tiene, su orden y si se ve en el catálogo; arriba cuenta cuántas hay visibles, ocultas y sin imagen, y al tocar cada número filtra. También hay vista en lista.",
     howto: [{
-      id: "categories.create", goal: "crear una categoría", keywords: "categoria grupo familia",
-      steps: ["Abre Categorías y toca «+ Nueva». Aparece una que se llama «Nueva categoría».", "Cámbiale el nombre y, si quieres, súbele una imagen.", "Toca «Guardar»."],
+      id: "categories.create", goal: "crear una categoría", keywords: "categoria grupo familia nueva",
+      steps: ["Abre Categorías y toca «+ Nueva categoría». Se abre una ventana.", "Escribe el nombre y, si quieres, súbele una imagen y elige si se ve en el catálogo.", "Toca «Crear categoría»."],
+      href: "/dashboard/categories", verified: true,
+    }, {
+      id: "categories.edit", goal: "cambiar una categoría", keywords: "editar categoria imagen orden ocultar",
+      steps: ["Abre Categorías y toca la tarjeta de la categoría.", "Cámbiale el nombre, la imagen, el orden (el número más bajo sale primero) o si es «Visible» u «Oculta».", "Toca «Guardar». Desde ahí también puedes «Ver sus productos» o eliminarla."],
       href: "/dashboard/categories", verified: true,
     }],
   },

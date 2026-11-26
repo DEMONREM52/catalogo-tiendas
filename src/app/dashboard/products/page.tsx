@@ -642,7 +642,18 @@ export default function ProductsListPage() {
         setImageFilter(v.imageFilter); setCreatedFrom(v.createdFrom); setCreatedTo(v.createdTo); setSocialFilter(v.socialFilter);
         setShowFilters(v.showFilters);
       }
-      const sc = readProductsScroll();
+      // ?categoria=<id> (desde Categorías → «Ver productos»): la lista de esa categoría, sin otros filtros. El dato
+      // se quita de la dirección para que al recargar quede la vista que la persona tenía.
+      const fromCategory = new URLSearchParams(window.location.search).get("categoria");
+      if (fromCategory) {
+        clearFilters();
+        setCategoryFilter(fromCategory);
+        setShowFilters(true);
+        const u = new URL(window.location.href);
+        u.searchParams.delete("categoria");
+        window.history.replaceState(null, "", u.toString());
+      }
+      const sc = fromCategory ? null : readProductsScroll();
       if (sc && sc.y > 150) {
         const count = sc.mode === "search" ? Math.min(sc.count, SEARCH_PAGE) : Math.min(Math.max(sc.count, PAGE_SIZE), 200);
         if (sc.mode === "list") firstLimit.current = count;

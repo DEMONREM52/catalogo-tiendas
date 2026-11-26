@@ -1574,6 +1574,17 @@ export const RELEASES: Release[] = [
       { icon: "↩️", text: "¿Te arrepentiste? Revertir" },
     ],
   },
+  {
+    id: 153, date: "2026-11-26", title: "🗂️ Categorías más fáciles de ver",
+    summary: "Las categorías ahora se ven en tarjetas con su imagen, cuántos productos tienen, su orden y si se ven en el catálogo. Arriba ves cuántas hay visibles, ocultas y sin imagen (toca un número para filtrar), y al tocar una categoría se abre una ventana para editarla o ver sus productos. También hay vista en lista.",
+    paths: ["/dashboard/categories"],
+    demo: [
+      { icon: "🖼️", text: "Tarjetas con la imagen" },
+      { icon: "🔢", text: "Visibles · Ocultas · Sin imagen" },
+      { icon: "✏️", text: "Toca una para editarla" },
+      { icon: "📦", text: "Ver sus productos" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
