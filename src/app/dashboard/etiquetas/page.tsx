@@ -29,6 +29,7 @@ type Tab = "imprimir" | "plantillas" | "impresoras" | "historial";
  * RemHub Label Studio: imprimir etiquetas (QR, código de barras, nombre, referencia, precio…) en cualquier papel,
  * diseñar plantillas, configurar impresoras y ver el historial.
  *   ?productos=id:cantidad,id2:cantidad · ?ingreso=<id> · ?traslado=<id> · ?tab=plantillas|impresoras|historial
+ *   &imprimir=1 → imprime solo apenas carga (p. ej. todas las etiquetas de un ingreso de factura).
  */
 export default function LabelStudioPage() {
   const [store, setStore] = useState<DashboardStore | null>(null);
@@ -64,13 +65,15 @@ export default function LabelStudioPage() {
     const productos = params.get("productos");
     const ingreso = params.get("ingreso");
     const traslado = params.get("traslado");
+    // ?imprimir=1: se imprime solo apenas esté todo cargado (todas las etiquetas de un ingreso, de una vez).
+    const auto = params.get("imprimir") === "1";
     if (productos) {
       const lines = productos.split(",").map((x) => x.split(":")).filter(([id]) => /^[0-9a-f-]{36}$/i.test(id ?? ""))
         .map(([id, q]) => ({ product_id: id, qty: Math.max(1, Math.min(5000, Math.round(Number(q) || 1))) }));
-      if (lines.length) window.setTimeout(() => setSeed({ lines, point: null, label: lines.length === 1 ? "Desde el producto" : `${lines.length} productos elegidos`, key: Date.now() }), 0);
+      if (lines.length) window.setTimeout(() => setSeed({ lines, point: null, label: lines.length === 1 ? "Desde el producto" : `${lines.length} productos elegidos`, key: Date.now(), auto }), 0);
     } else if (ingreso || traslado) {
       void loadSourceLines(ingreso ? "ingreso" : "traslado", (ingreso ?? traslado)!).then(
-        (r) => setSeed({ ...r, key: Date.now() }),
+        (r) => setSeed({ ...r, key: Date.now(), auto }),
         (e: Error) => void Swal.fire({ ...swal, icon: "error", title: e.message }),
       );
     }

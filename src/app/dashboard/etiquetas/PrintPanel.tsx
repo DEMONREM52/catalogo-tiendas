@@ -8,7 +8,7 @@ import { paginate, perPage, printDocument, rowsPerPage, validateProfile, type Jo
 import { canvasMeasure } from "@/lib/labels/measure-browser";
 import { renderLabel, labelSvg, type ElementIssue } from "@/lib/labels/render";
 import type { LabelTemplate, PrinterProfile } from "@/lib/labels/types";
-import { printHtmlWindow } from "@/lib/print/transports";
+import { printHtmlSilently, printHtmlWindow } from "@/lib/print/transports";
 import { storeShareUrl } from "@/lib/share/store-host";
 import { useSearchValue } from "@/lib/search-timing";
 import type { DashboardStore } from "@/lib/store-utils";
@@ -22,7 +22,8 @@ const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
 const MAX_LABELS = 5000;
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 
-export type PrintSeed = { lines: LabelLine[]; point: string | null; label: string; key: number } | null;
+/** auto: imprimir apenas esté todo cargado (p. ej. todas las etiquetas de un ingreso de factura). */
+export type PrintSeed = { lines: LabelLine[]; point: string | null; label: string; key: number; auto?: boolean } | null;
 
 export function PrintPanel({ store, templates, template, onTemplate, profiles, profile, onProfile, points, seed, level, onLevel, point, onPoint, onEditTemplate, onLog, userName }: {
   store: DashboardStore;
@@ -50,6 +51,8 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const [busy, setBusy] = useState(false);
   const [showPages, setShowPages] = useState(12);
   const [error, setError] = useState<string | null>(null);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
+  const autoDone = useRef<number | null>(null);
 
   // Lo que llega por enlace (producto, ingreso, traslado o lista general) o de «Repetir» en el historial.
   const seedKey = seed?.key;
@@ -125,6 +128,21 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const pages = useMemo(() => paginate(jobLabels, profile, start), [jobLabels, profile, start]);
   const empty = pages.length * perPage(profile) - jobLabels.length;
 
+  // «Imprimir de una vez»: cuando los productos y los precios del punto están cargados, se imprime una sola vez.
+  const allLoaded = lines.length > 0 && ready.length === lines.length && (!point || pointPrices !== null);
+  useEffect(() => {
+    // Solo con la lista que llegó en el enlace (no con productos que ya estaban).
+    if (!seed?.auto || autoDone.current === seed.key || lines !== seed.lines || !allLoaded || !jobLabels.length) return;
+    autoDone.current = seed.key;
+    const t = window.setTimeout(() => {
+      setAutoMsg(errors.length || profileErrors.length
+        ? `No se imprimió solo: hay avisos en rojo. Corrígelos y toca «Imprimir» (${jobLabels.length.toLocaleString("es-CO")} etiquetas de ${seed.label}).`
+        : `Se abrió la impresión de las ${jobLabels.length.toLocaleString("es-CO")} etiquetas de ${seed.label} con «${template.name}» en «${profile.name}». Si no apareció la ventana, toca «Imprimir».`);
+      void print(true);
+    }, 0);
+    return () => window.clearTimeout(t);
+  });
+
   // ------------------------------------------------------------ búsqueda (y lector de códigos)
   const finder = useErpFinderSource(store.id, { priceLevel: 3 });
   const [q, setQ] = useState("");
@@ -156,7 +174,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   }
 
   // ------------------------------------------------------------ imprimir
-  async function print() {
+  async function print(auto = false) {
     if (busy || !jobLabels.length) return;
     if (profileErrors.length) return void Swal.fire({ ...swal, icon: "error", title: "Revisa la impresora", text: profileErrors[0].message });
     if (errors.length) return void Swal.fire({ ...swal, icon: "error", title: "Hay etiquetas con errores", text: "Corrige los avisos en rojo (por ejemplo un código que no cabe) antes de imprimir." });
@@ -169,7 +187,8 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
     await new Promise((r) => window.setTimeout(r, 30));
     try {
       const doc = printDocument(pages, profile, `Etiquetas · ${template.name}`);
-      printHtmlWindow(doc.html);
+      // Sin un toque del usuario el navegador bloquea ventanas nuevas: en automático se imprime desde un marco oculto.
+      if (auto) printHtmlSilently(doc.html); else printHtmlWindow(doc.html);
       const key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
       void onLog({
         key, templateId: template.id, templateName: template.name, profileName: profile.name, userName,
@@ -220,6 +239,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
           ) : null}
         </div>
         {error ? <p className="rounded-xl border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-400">{error}</p> : null}
+        {autoMsg ? <p className="rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 10%, transparent)" }}>🖨️ {autoMsg}</p> : null}
         {lines.length ? (
           <>
             <div className="flex flex-wrap items-center gap-1.5 text-xs">

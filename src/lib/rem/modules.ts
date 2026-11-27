@@ -158,7 +158,7 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "labels", name: "Etiquetas", path: "/dashboard/etiquetas",
     aliases: "etiquetas imprimir etiquetas qr codigo de barras rotulos stickers adhesivos plantillas de etiquetas impresora de etiquetas",
-    about: "Imprime etiquetas con QR o código de barras, nombre, referencia y precio en el papel de tu impresora (por ejemplo 3 etiquetas de 31×25 mm por fila). Eliges los productos y cuántas de cada uno (o llegas desde un producto, un ingreso, un traslado o la Lista general), la plantilla y la impresora, ves cada fila antes y se abre la ventana de impresión. En «Plantillas» diseñas las tuyas moviendo textos, QR, códigos, imágenes y figuras en milímetros; en «Impresoras» configuras el papel y calibras con hojas de prueba; en «Historial» repites lo que ya imprimiste.",
+    about: "Imprime etiquetas con QR o código de barras, nombre, referencia y precio en el papel de tu impresora (por ejemplo 3 etiquetas de 31×25 mm por fila). Eliges los productos y cuántas de cada uno (o llegas desde un producto, un ingreso, un traslado o la Lista general), la plantilla y la impresora, ves cada fila antes y se abre la ventana de impresión. Al registrar un ingreso de factura (o desde su historial, botón «🏷️ Etiquetas») se imprimen todas sus etiquetas de una vez, una por unidad, con tu plantilla. En «Plantillas» diseñas las tuyas moviendo textos, QR, códigos, imágenes y figuras en milímetros; en «Impresoras» configuras el papel y calibras con hojas de prueba; en «Historial» repites lo que ya imprimiste.",
   },
   {
     id: "categories", name: "Categorías", path: "/dashboard/categories",

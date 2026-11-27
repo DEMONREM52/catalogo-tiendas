@@ -184,6 +184,8 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const [quickName, setQuickName] = useState<string | null>(null);
   // «¡Volvió!» después de registrar (20261330): lo que pasó de 0 unidades a tener.
   const [arrivals, setArrivals] = useState<{ title: string; items: Arrival[] } | null>(null);
+  // Después de guardar: imprimir todas las etiquetas del ingreso de una vez (una por unidad).
+  const [labelsFor, setLabelsFor] = useState<{ id: string; number: number | null; units: number } | null>(null);
   // Vencimientos (opcional, 20261226): después de registrar se ofrece anotar fechas.
   const [expiryAsk, setExpiryAsk] = useState<{ purchaseId: string; number: number | null; lines: ExpiryLine[] } | null>(null);
   const [expiryOpen, setExpiryOpen] = useState(false);
@@ -541,6 +543,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       const activated = await activateNow();
       const filesFailed = staged.length ? await uploadStaged(ctx.storeId, editing.id, staged) : 0;
       const done = editing;
+      setLabelsFor({ id: done.id, number: Number(done.number) || null, units: f.lines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0), 0) });
       clearDraft(draftKey(done));
       await switchMode(null);
       setBusy(false);
@@ -606,6 +609,7 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
     setRestored(false);
     // Se conservan proveedor, fecha, forma de pago, bodega y quién revisó para la siguiente factura.
     setForm((cur) => ({ ...cur, lines: [], invoiceRef: "", notes: "", order: null }));
+    if (purchaseId) setLabelsFor({ id: purchaseId as string, number: created?.number ?? null, units: f.lines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0), 0) });
     if (purchaseId) setExpiryAsk({ purchaseId: purchaseId as string, number: created?.number ?? null, lines: f.lines.filter((l) => l.qty > 0).map((l) => ({ product_id: l.product_id, name: l.name, qty: l.qty, warehouse_id: l.warehouse_id || defaultWh })) });
     if (purchaseId) {
       const url = purchaseReceiptUrl(purchaseId as string, true);
@@ -738,6 +742,16 @@ export function PurchasesTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
               </div>
             }
           >
+            {labelsFor ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in oklab, var(--t-accent) 40%, transparent)", background: "color-mix(in oklab, var(--t-accent) 8%, transparent)" }}>
+                <span>🏷️ Etiquetas del ingreso{labelsFor.number ? ` #${labelsFor.number}` : ""}: todas de una vez, una por unidad ({labelsFor.units.toLocaleString("es-CO")}), con tu plantilla y tu impresora de etiquetas.</span>
+                <span className="flex flex-wrap gap-2">
+                  <Btn variant="ghost" onClick={() => setLabelsFor(null)}>Ahora no</Btn>
+                  <Btn variant="ghost" onClick={() => window.open(`/dashboard/etiquetas?ingreso=${labelsFor.id}`, "_blank")}>Elegir antes</Btn>
+                  <Btn onClick={() => window.open(`/dashboard/etiquetas?ingreso=${labelsFor.id}&imprimir=1`, "_blank")}>🏷️ Imprimir todas</Btn>
+                </span>
+              </div>
+            ) : null}
             {expiryAsk ? (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
                 <span>📅 ¿Algo del ingreso{expiryAsk.number ? ` #${expiryAsk.number}` : ""} vence? (opcional)</span>

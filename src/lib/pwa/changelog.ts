@@ -1628,6 +1628,16 @@ export const RELEASES: Release[] = [
       { icon: "✏️", text: "Diseña y guarda tu plantilla" },
     ],
   },
+  {
+    id: 158, date: "2026-11-27", title: "🏷️ Todas las etiquetas de un ingreso, de una vez",
+    summary: "Al registrar una factura de compra sale «🏷️ Imprimir todas»: se imprime una etiqueta por cada unidad que llegó, con tu plantilla y tu impresora de etiquetas, sin tocar nada más. En el historial de ingresos, el botón «🏷️ Etiquetas» de cada factura hace lo mismo para las que ya estaban ingresadas. Si quieres revisar antes la plantilla o las cantidades, toca «Elegir antes».",
+    paths: ["/dashboard/inventario", "/dashboard/etiquetas"],
+    demo: [
+      { icon: "🧾", text: "Registras el ingreso #48" },
+      { icon: "🏷️", text: "Imprimir todas · 110 etiquetas" },
+      { icon: "🖨️", text: "Sale con tu plantilla, fila por fila" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
