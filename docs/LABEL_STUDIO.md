@@ -56,6 +56,7 @@ Quién puede hacer qué:
 - **Velocidad y oscuridad son una nota.** RemHub no las envía y no convierte el porcentaje del controlador en comandos.
 - **Códigos alineados a puntos enteros.** Las posiciones de etiquetas y elementos se redondean al punto de la impresora. Si el código no cabe con módulos de al menos 1 punto, no se imprime: se explica y se sugiere un QR. El contenido nunca se recorta ni se cambia.
 - **Rollo: cada fila es una página.** Por ejemplo, 102 × 25 mm con 3 etiquetas. La separación entre filas la pone el sensor de espacios de la impresora.
+- **Separadores entre productos** (src/lib/labels/separators.ts, panel SeparatorPanel): por defecto lo que queda de la fila del producto que terminó sale marcado, luego una fila entera marcada, y el siguiente empieza en fila nueva. Se elige: cómo separa (fila completa con 1–3 filas, solo completar, una etiqueta), la marca (franja, doble, cortada, recuadro, equis, llena), el grosor (1–8 mm) y un texto opcional «FIN · producto» / «SIGUE · producto». Se recuerda por equipo (localStorage `remhub:labels:separadores`).
 - **EAN, UPC e ITF-14 solo con códigos registrados en GS1.** La interfaz lo advierte y RemHub no inventa códigos comerciales.
 - **Las etiquetas no llevan costos**: los productos se cargan sin columnas de costo.
 

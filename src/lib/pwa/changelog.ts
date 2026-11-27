@@ -1659,6 +1659,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Se agrega el que elegiste" },
     ],
   },
+  {
+    id: 161, date: "2026-11-27", title: "▬ Separadores de etiquetas por filas, a tu gusto",
+    summary: "Cuando termina un producto, lo que queda de su fila sale marcado y después una fila entera marcada: el siguiente producto siempre empieza en fila nueva. En Etiquetas → «Separar productos» eliges cómo separa (fila completa, solo completar o una etiqueta), cuántas filas, la marca (franja, doble, cortada, recuadro, equis o llena), el grosor y si lleva «FIN» y «SIGUE» con el nombre.",
+    paths: ["/dashboard/etiquetas"],
+    demo: [
+      { icon: "🏷️", text: "K41 · ▬ · ▬  (completa la fila)" },
+      { icon: "▬", text: "▬ · ▬ · ▬  (fila entera)" },
+      { icon: "🏷️", text: "WB 999 empieza en fila nueva" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

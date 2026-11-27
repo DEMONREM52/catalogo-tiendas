@@ -7,7 +7,7 @@ import { productLabelData, tokensIn, type LabelData } from "@/lib/labels/data";
 import { paginate, perPage, printDocument, rowsPerPage, validateProfile, type JobLabel } from "@/lib/labels/layout";
 import { canvasMeasure } from "@/lib/labels/measure-browser";
 import { renderLabel, labelSvg, type ElementIssue } from "@/lib/labels/render";
-import { separatorDesign } from "@/lib/labels/templates";
+import { arrangeWithSeparators, separatorLabelDesign, separatorLabelText, type SeparatorSettings } from "@/lib/labels/separators";
 import type { LabelTemplate, PrinterProfile } from "@/lib/labels/types";
 import { printHtmlSilently, printHtmlWindow } from "@/lib/print/transports";
 import { storeShareUrl } from "@/lib/share/store-host";
@@ -18,6 +18,7 @@ import { Thumb } from "../inventario/LineEditor";
 import { useErpFinderSource } from "../useErpFinder";
 import { Button, inputCls, inputStyle } from "../fiscal/ui";
 import { IssueList, PageSvg, segBtn } from "./parts";
+import { SeparatorPanel, loadSeparators, saveSeparators } from "./SeparatorPanel";
 import { loadLabelProducts, loadPointPrices, type LabelLine, type LabelProduct } from "./products";
 
 const SUBDOMAINS = process.env.NEXT_PUBLIC_STORE_SUBDOMAINS === "1";
@@ -55,9 +56,9 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const [error, setError] = useState<string | null>(null);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
   const autoDone = useRef<number | null>(null);
-  // Etiqueta en blanco con franja negra entre un producto y el siguiente (se recuerda en este equipo).
-  const [separate, setSeparate] = useState(() => { try { return window.localStorage.getItem("remhub:labels:separar") !== "0"; } catch { return true; } });
-  const toggleSeparate = () => setSeparate((v) => { try { window.localStorage.setItem("remhub:labels:separar", v ? "0" : "1"); } catch { /* sin almacenamiento */ } return !v; });
+  // Separadores entre productos (completar la fila, filas en blanco, marca, grosor, texto): se recuerdan en este equipo.
+  const [sepCfg, setSepCfg] = useState<SeparatorSettings>(loadSeparators);
+  const changeSep = (next: SeparatorSettings) => { setSepCfg(next); saveSeparators(next); };
 
   // Lo que llega por enlace (producto, ingreso, traslado o lista general) o de «Repetir» en el historial.
   const seedKey = seed?.key;
@@ -117,23 +118,42 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const profileErrors = validateProfile(profile).filter((i) => i.level === "error");
 
   // Etiquetas en orden (cada copia) y sus páginas.
-  const sepInput = useMemo(() => ({ design: separatorDesign(template.design.w, template.design.h), data: {}, dpi: profile.dpi, measure: canvasMeasure }), [template.design.w, template.design.h, profile.dpi]);
-  const sepBody = useMemo(() => renderLabel(sepInput), [sepInput]);
   const jobLabels = useMemo<JobLabel[]>(() => {
-    const out: JobLabel[] = [];
     let seq = 0;
-    for (const [li, l] of ready.entries()) {
-      if (separate && li > 0 && out.length < MAX_LABELS) out.push({ key: "sep", input: sepInput });
+    let count = 0;
+    const names: string[] = [];
+    const groups: JobLabel[][] = [];
+    for (const l of ready) {
+      if (count >= MAX_LABELS) break;
       const p = products.get(l.product_id)!;
       const images = { logo: store.logo_url, foto: p.image_url };
-      for (let k = 0; k < l.qty && out.length < MAX_LABELS; k++) {
+      const g: JobLabel[] = [];
+      for (let k = 0; k < l.qty && count < MAX_LABELS; k++, count++) {
         seq++;
-        out.push({ key: usesSeq ? `${p.id}#${seq}` : p.id, input: { design: template.design, data: usesSeq ? dataFor(p, seq) : dataFor(p, 1), dpi: profile.dpi, measure: canvasMeasure, images } });
+        g.push({ key: usesSeq ? `${p.id}#${seq}` : p.id, input: { design: template.design, data: usesSeq ? dataFor(p, seq) : dataFor(p, 1), dpi: profile.dpi, measure: canvasMeasure, images } });
       }
+      names.push(p.name);
+      groups.push(g);
     }
-    return out;
-  }, [ready, products, template, dataFor, profile.dpi, usesSeq, store.logo_url, separate, sepInput]);
-  const separators = jobLabels.filter((j) => j.key === "sep").length;
+    // Separadores iguales comparten la misma clave (se dibujan una vez).
+    const seps = new Map<string, JobLabel>();
+    return arrangeWithSeparators(groups, sepCfg, profile.cols, Math.min(start, perPage(profile) - 1), (slot) => {
+      const text = separatorLabelText(sepCfg, slot, names);
+      const key = `sep:${slot.kind}:${text ?? ""}`;
+      let j = seps.get(key);
+      if (!j) {
+        j = { key, input: { design: separatorLabelDesign(template.design.w, template.design.h, sepCfg, text), data: {}, dpi: profile.dpi, measure: canvasMeasure } };
+        seps.set(key, j);
+      }
+      return j;
+    }, MAX_LABELS);
+  }, [ready, products, template, dataFor, profile, usesSeq, store.logo_url, sepCfg, start]);
+  const sepBodies = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof renderLabel>>();
+    for (const j of jobLabels) if (j.key.startsWith("sep:") && !m.has(j.key)) m.set(j.key, renderLabel(j.input));
+    return m;
+  }, [jobLabels]);
+  const separators = jobLabels.filter((j) => j.key.startsWith("sep:")).length;
   const productLabels = jobLabels.length - separators;
   const pages = useMemo(() => paginate(jobLabels, profile, start), [jobLabels, profile, start]);
   const empty = pages.length * perPage(profile) - jobLabels.length;
@@ -327,10 +347,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
           ))}
           <span style={{ color: "var(--t-muted)" }}>{profile.mode === "roll" ? "de la primera fila" : "de la primera hoja"} (para no desperdiciar)</span>
         </div>
-        <button type="button" onClick={toggleSeparate} className="flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs" style={separate ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 9%, transparent)" } : { borderColor: "var(--t-card-border)" }}>
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md border font-black" style={separate ? { background: "var(--t-accent)", borderColor: "var(--t-accent)", color: "#fff" } : { borderColor: "var(--t-card-border)" }}>{separate ? "✓" : ""}</span>
-          <span><b>Separar productos:</b> entre un producto y el siguiente va una etiqueta en blanco con una franja negra gruesa, para ver dónde termina cada uno{separators ? ` (${separators} separador${separators === 1 ? "" : "es"})` : ""}.</span>
-        </button>
+        <SeparatorPanel value={sepCfg} onChange={changeSep} w={template.design.w} h={template.design.h} cols={profile.cols} count={separators} />
 
         {sizeMismatch ? (
           <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "#f59e0b", color: "#d97706" }}>
@@ -360,7 +377,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
               <PageSvg key={i} profile={profile} cells={page.map((lbl) => {
                 if (!lbl) return null;
                 const pid = lbl.key.split("#")[0];
-                const r = lbl.key === "sep" ? sepBody : usesSeq ? renderLabel(lbl.input) : perProduct.get(pid);
+                const r = lbl.key.startsWith("sep:") ? sepBodies.get(lbl.key) : usesSeq ? renderLabel(lbl.input) : perProduct.get(pid);
                 return r ? { body: r.body, w: lbl.input.design.w, h: lbl.input.design.h, bad: r.issues.some((x) => x.level === "error") } : null;
               })} />
             ))}
