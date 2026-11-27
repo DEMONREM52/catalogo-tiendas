@@ -50,6 +50,7 @@ import { PosCheckoutSheet } from "./PosCheckoutSheet";
 import { PosDoneSheet, type DoneSale } from "./PosDoneSheet";
 import { SaleSummary, ddmmyyyy, type SaleSummaryInput } from "./PosSaleSummary";
 import { ThumbImg } from "@/components/ui/ThumbImg";
+import { usePickKeys } from "@/lib/search-keys";
 
 // La ventana de «Cliente nuevo» se descarga aparte, cuando el navegador queda libre: el POS abre antes y la
 // ventana igual queda guardada para cuando no haya internet.
@@ -352,6 +353,9 @@ export default function PosPage() {
       );
     });
   }, [clients, clientSearch]);
+  // Buscar cliente: escribir solo busca; se elige con clic o con ↓/↑ y Enter.
+  // (Qué hacer al elegir se pasa en el input: depende de dónde se abrió el buscador.)
+  const clientKeys = usePickKeys(Math.min(filteredClients.length, 8), () => {});
 
   const currentPriceList = (listOverride ?? (selectedIsCF ? DEFAULT_PRICE_LIST : selectedClient?.price_list) ?? customerPriceList) as PriceLevel;
   const siigoConfigured = billingSettings?.electronic_provider?.toLowerCase() === "siigo";
@@ -2045,18 +2049,20 @@ export default function PosPage() {
                     style={{ ...inputProps().style, paddingLeft: 34, borderColor: "var(--t-accent)" }}
                     autoFocus
                     value={clientSearch}
-                    onChange={(e) => setClientSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && clientSearch.trim() && filteredClients[0]) { e.preventDefault(); setSelectedClientId(filteredClients[0].id); setClientSearch(""); setPick(false); }
-                      if (e.key === "Escape") { setClientSearch(""); setPick(false); }
-                    }}
+                    onChange={(e) => { setClientSearch(e.target.value); clientKeys.reset(); }}
+                    onKeyDown={(e) => clientKeys.onKeyDown(e, {
+                      onPick: (i) => { const c = filteredClients[i]; if (c) { setSelectedClientId(c.id); setClientSearch(""); setPick(false); } },
+                      onEscape: () => { setClientSearch(""); setPick(false); },
+                    })}
+                    autoComplete="off"
                     placeholder="Nombre, cédula/NIT o teléfono del cliente"
                     aria-label="Buscar cliente"
                   />
                 </div>
                 <div className="mt-1 max-h-64 overflow-y-auto rounded-2xl border p-1" style={{ borderColor: "var(--t-card-border)" }}>
-                  {filteredClients.slice(0, 8).map((client) => (
+                  {filteredClients.slice(0, 8).map((client, ci) => (
                     <button key={client.id} type="button" onClick={() => { setSelectedClientId(client.id); setClientSearch(""); setPick(false); }}
+                      style={ci === clientKeys.active ? { background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" } : undefined}
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black" style={{ background: "color-mix(in oklab, var(--t-accent) 22%, transparent)" }}>
                         {client.name.slice(0, 1)}
@@ -2256,23 +2262,9 @@ export default function PosPage() {
                     if (first) { e.preventDefault(); first.focus(); }
                     return;
                   }
-                  // Enter con un código exacto agrega el producto (lector de códigos de barras).
-                  if (e.key !== "Enter") return;
-                  const hit = filteredProducts.find((p) => isExactCode(p, search.trim().toLowerCase()));
-                  if (!hit) {
-                    // Sin código exacto: si queda un solo producto disponible se agrega; si hay varios, se baja a escogerlo.
-                    const available = search.trim() ? filteredProducts.filter((p) => p.active && p.stock !== 0) : [];
-                    if (available.length === 1) { e.preventDefault(); addProduct(available[0]); }
-                    else if (available.length > 1) {
-                      e.preventDefault();
-                      document.querySelector<HTMLButtonElement>("[data-pos-result]:not([disabled])")?.focus();
-                    }
-                    return;
-                  }
-                  e.preventDefault();
-                  if (!hit.active || hit.stock === 0) return void Swal.fire({ icon: "warning", title: "Sin existencias", text: `${hit.name} no tiene unidades en este punto.`, background: "var(--t-bg-base)", color: "var(--t-text)" });
-                  addProduct(hit, true);
-                  setSearch("");
+                  // Enter NO agrega (2026-11-27, pedido del usuario): el lector escribe el código y manda Enter;
+                  // la lista ya queda filtrada (el código exacto sale primero) y se elige con clic o con ↓ y Enter.
+                  if (e.key === "Enter") e.preventDefault();
                 }}
               />
               <span data-rem-photo className="contents">
@@ -2835,7 +2827,7 @@ export default function PosPage() {
               {!editingDoc && !saving && paymentType === "credito" ? " a crédito" : ""}
               {cart.length && !saving ? ` · ${money(total)}` : ""}
             </button>
-            <p className="mt-2 hidden text-center text-[10px] sm:block" style={{ color: "var(--t-muted)" }}>⌨️ F2 buscar · Enter agrega con el lector · F4 cobrar · F8 en espera</p>
+            <p className="mt-2 hidden text-center text-[10px] sm:block" style={{ color: "var(--t-muted)" }}>⌨️ F2 buscar · ↓ y Enter agrega · F4 cobrar · F8 en espera</p>
           </div>
 
         </div>

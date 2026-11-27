@@ -10,6 +10,7 @@ import { PhotoCamera, cameraInPageSupported } from "./PhotoCamera";
 import { readPhotoText, warmUpOcr } from "@/lib/image-search/ocr";
 import { DROP_BLOCKED_MSG, dragHasImage, imageFileFrom, imageFromDrop } from "@/lib/image-drop";
 import { searchDelay, useSearchValue } from "@/lib/search-timing";
+import { usePickKeys } from "@/lib/search-keys";
 import { SearchTimer } from "@/components/ui/SearchTimer";
 import { ThumbImg } from "@/components/ui/ThumbImg";
 
@@ -103,6 +104,8 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
   const [q, setQ] = useState(saved?.q ?? "");
   const typing = useSearchValue(q);
   const [textHits, setTextHits] = useState<FinderHit[] | null>(null);
+  // Escribir o pistolear solo busca; se elige con clic o con ↓/↑ y Enter.
+  const keys = usePickKeys(textHits?.length ?? 0, (i) => { const h = textHits?.[i]; if (h && !h.disabled) onPick(h); }, { onSearch: typing.flush });
   const [textLoading, setTextLoading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(saved?.photoUrl ?? null);
   const [photoHits, setPhotoHits] = useState<FinderHit[] | null>(saved?.photoHits ?? null);
@@ -408,10 +411,8 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                   <input
                     ref={inputRef}
                     value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && textHits?.[0] && !textHits[0].disabled) onPick(textHits[0]);
-                    }}
+                    onChange={(e) => { setQ(e.target.value); keys.reset(); }}
+                    onKeyDown={keys.onKeyDown}
                     type="search"
                     enterKeyHint="search"
                     autoComplete="off"
@@ -429,7 +430,7 @@ function FinderSheet({ onClose, source, onPick, title = "Buscar producto", subti
                 <Hint icon="🔎" text={`No encontramos «${q.trim()}». Revisa el código o prueba con otra palabra${photoOk ? ", o busca con una foto" : ""}.`} />
               ) : (
                 <ul className="grid gap-2 lg:grid-cols-2">
-                  {textHits.map((hit) => <HitRow key={hit.id} hit={hit} pickLabel={pickLabel} onPick={onPick} extra={renderExtra?.(hit)} />)}
+                  {textHits.map((hit, i) => <HitRow key={hit.id} hit={hit} active={i === keys.active} pickLabel={pickLabel} onPick={onPick} extra={renderExtra?.(hit)} />)}
                 </ul>
               )}
             </>
@@ -654,15 +655,18 @@ function Thumb({ src, size }: { src: string | null; size: number }) {
   );
 }
 
-function HitRow({ hit, pickLabel, onPick, extra }: { hit: FinderHit; pickLabel: string; onPick: (h: FinderHit) => void; extra?: ReactNode }) {
+function HitRow({ hit, active, pickLabel, onPick, extra }: { hit: FinderHit; active?: boolean; pickLabel: string; onPick: (h: FinderHit) => void; extra?: ReactNode }) {
   return (
     <li>
       <button
         type="button"
+        ref={active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
         disabled={hit.disabled}
         onClick={() => onPick(hit)}
         className="group flex h-full w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition hover:-translate-y-0.5 disabled:opacity-50"
-        style={{ borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)" }}
+        style={active
+          ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 12%, var(--t-card-bg))", boxShadow: "0 0 0 2px color-mix(in oklab, var(--t-accent) 35%, transparent)" }
+          : { borderColor: "var(--t-card-border)", background: "color-mix(in oklab, var(--t-card-bg) 92%, transparent)" }}
       >
         <Thumb src={hit.image_url} size={56} />
         <span className="min-w-0 flex-1">

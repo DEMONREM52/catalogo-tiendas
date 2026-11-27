@@ -265,8 +265,8 @@ export function GroupPicking({ ids: idsIn, batch, onClose, onOpen, onChanged }: 
                   <Search size={15} style={{ color: "var(--t-muted)" }} />
                   <input value={q} onChange={(e) => setQ(e.target.value)} type="search" enterKeyHint="done" placeholder="Buscar en la lista (nombre o referencia)…"
                     onKeyDown={(e) => {
-                      // Con un solo resultado, Enter lo chulea (sirve también con lector de código de barras).
-                      if (e.key === "Enter" && ordered.length === 1) { e.preventDefault(); void toggle(ordered[0]); setQ(""); }
+                      // Enter no chulea nada (2026-11-27): escribir o pistolear solo filtra; se marca tocando el producto.
+                      if (e.key === "Enter") e.preventDefault();
                     }}
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
                 </label>

@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { parseDianInvoice, xmlFromZip, type DianInvoice } from "@/lib/purchases/dian-xml";
 import type { Staged } from "./AttachmentsUI";
 import { useProductSearch, type Line } from "./LineEditor";
+import { usePickKeys } from "@/lib/search-keys";
 import { QuickProductModal } from "./QuickProductModal";
 import { Btn, errorMessage, inputClass, inputStyle, money, toast, type ProductHit } from "./shared";
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
@@ -254,20 +255,23 @@ export function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId
   // Se empieza buscando con la primera palabra de la descripción (lo demás suele ser presentación).
   const [q, setQ] = useState(initial.split(" ")[0] ?? "");
   // También los inactivos (lo que vuelve a llegar); al registrar se ofrece activarlos.
-  const { hits, loading } = useProductSearch({ storeId, query: q, enabled: true, limit: 8, includeInactive: true });
+  const { hits, loading, searchNow } = useProductSearch({ storeId, query: q, enabled: true, limit: 8, includeInactive: true });
+  // Escribir o pistolear solo busca; se elige con clic o con ↓/↑ y Enter.
+  const keys = usePickKeys(hits.length, (i) => onPick(hits[i]), { onSearch: searchNow, onEscape: onCancel });
   return (
     <div className="w-full min-w-[220px] space-y-1">
       <div className="flex gap-1">
-        <input autoFocus className={inputClass} style={inputStyle} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto, SKU o código"
-          onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter" && hits[0]) onPick(hits[0]); }} />
+        <input autoFocus className={inputClass} style={inputStyle} value={q} onChange={(e) => { setQ(e.target.value); keys.reset(); }} placeholder="Buscar producto, SKU o código"
+          autoComplete="off" onKeyDown={keys.onKeyDown} />
         <ProductPhotoButton storeId={storeId} compact className="px-2" pickLabel="Asociar" onPick={async (h) => { const row = await productHitFromPhoto(storeId, h, null, false, true); if (row) onPick(row); }} />
         <button type="button" className="px-2 text-xs" onClick={onCancel}>✕</button>
       </div>
       {loading ? <p className="text-xs">Buscando…</p> : null}
       <ul className="max-h-48 overflow-auto rounded-xl border" style={{ borderColor: "var(--t-card-border)" }}>
-        {hits.map((h) => (
+        {hits.map((h, i) => (
           <li key={h.id}>
-            <button type="button" className="block w-full px-2 py-1.5 text-left text-xs hover:opacity-80" onClick={() => onPick(h)}>
+            <button type="button" className="block w-full px-2 py-1.5 text-left text-xs hover:opacity-80" onClick={() => onPick(h)}
+              style={i === keys.active ? { background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" } : undefined}>
               <b>{h.name}</b>{h.active === false ? <span className="font-bold" style={{ color: h.auto_inactive ? "#0ea5e9" : "#e5484d" }}> {h.auto_inactive ? "💤 sin unidades" : "🙈 inactivo"}</span> : null} <span style={{ color: "var(--t-muted)" }}>{[h.sku, h.barcode].filter(Boolean).join(" · ")} · Stock {h.stock}</span>
             </button>
           </li>

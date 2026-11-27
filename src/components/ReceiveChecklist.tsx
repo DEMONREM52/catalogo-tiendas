@@ -97,7 +97,8 @@ export function ReceiveChecklist({
             <input
               value={query} onChange={(e) => setQuery(e.target.value)} type="search" enterKeyHint="done"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && shown.length === 1) { e.preventDefault(); if (!checked.has(shown[0].id)) toggle(shown[0].id); setQuery(""); }
+                // Enter no chulea nada (2026-11-27): escribir o pistolear solo filtra; se marca tocando el producto.
+                if (e.key === "Enter") e.preventDefault();
                 if (e.key === "Escape") setQuery("");
               }}
               placeholder="Buscar por nombre o código…" aria-label="Buscar producto"

@@ -12,6 +12,7 @@ import type { LabelTemplate, PrinterProfile } from "@/lib/labels/types";
 import { printHtmlSilently, printHtmlWindow } from "@/lib/print/transports";
 import { storeShareUrl } from "@/lib/share/store-host";
 import { useSearchValue } from "@/lib/search-timing";
+import { usePickKeys } from "@/lib/search-keys";
 import type { DashboardStore } from "@/lib/store-utils";
 import { Thumb } from "../inventario/LineEditor";
 import { useErpFinderSource } from "../useErpFinder";
@@ -155,7 +156,8 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   // ------------------------------------------------------------ búsqueda (y lector de códigos)
   const finder = useErpFinderSource(store.id, { priceLevel: 3 });
   const [q, setQ] = useState("");
-  const term = useSearchValue(q).value;
+  const search = useSearchValue(q);
+  const term = search.value;
   const [hits, setHits] = useState<Array<{ id: string; name: string; code: string | null; image_url: string | null }>>([]);
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -173,14 +175,9 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const setQty = (id: string, qty: number) => setLines((cur) => cur.map((l) => (l.product_id === id ? { ...l, qty: Math.max(1, Math.min(MAX_LABELS, Math.floor(qty) || 1)) } : l)));
   const remove = (id: string) => setLines((cur) => cur.filter((l) => l.product_id !== id));
 
-  async function onSearchEnter() {
-    const t = q.trim();
-    if (!t) return;
-    // El lector de códigos escribe el código y Enter: si coincide exacto, se suma una etiqueta.
-    const res = hits.length && term === q ? hits : await finder.searchText(t).catch(() => []);
-    const exact = res.find((h) => (h.code ?? "").toLowerCase() === t.toLowerCase()) ?? (res.length === 1 ? res[0] : null);
-    if (exact) { add(exact.id); setQ(""); setHits([]); }
-  }
+  // Escribir o pistolear solo busca (Enter busca ya); se agrega con clic o con ↓/↑ y Enter.
+  function pickHit(id: string) { add(id); setQ(""); setHits([]); searchRef.current?.focus(); }
+  const keys = usePickKeys(q ? hits.length : 0, (i) => { if (hits[i]) pickHit(hits[i].id); }, { onSearch: search.flush, onEscape: () => { setQ(""); setHits([]); } });
 
   // ------------------------------------------------------------ imprimir
   async function print(auto = false) {
@@ -228,15 +225,16 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
         <div className="relative">
           <label className="flex items-center gap-2 rounded-xl border px-3" style={inputStyle}>
             {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} style={{ color: "var(--t-muted)" }} />}
-            <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onSearchEnter(); } }}
+            <input ref={searchRef} value={q} onChange={(e) => { setQ(e.target.value); keys.reset(); }} onKeyDown={keys.onKeyDown} autoComplete="off"
               placeholder="Buscar o escanear (nombre, referencia o código)…" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
             {q ? <button type="button" onClick={() => { setQ(""); setHits([]); }} aria-label="Limpiar"><X size={14} /></button> : null}
           </label>
           {hits.length && q ? (
             <ul className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
-              {hits.map((h) => (
+              {hits.map((h, i) => (
                 <li key={h.id}>
-                  <button type="button" onClick={() => { add(h.id); setQ(""); setHits([]); searchRef.current?.focus(); }}
+                  <button type="button" onClick={() => pickHit(h.id)}
+                    style={i === keys.active ? { background: "color-mix(in oklab, var(--t-accent) 16%, transparent)" } : undefined}
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[color:color-mix(in_oklab,var(--t-accent)_10%,transparent)]">
                     <Thumb src={h.image_url} size={32} />
                     <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{h.name}</span>{h.code ? <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>Cód. {h.code}</span> : null}</span>

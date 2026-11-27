@@ -20,7 +20,7 @@ export const HELP: Help[] = [
     "📌 Apartar reserva las unidades; 📝 Cotizar guarda y comparte la cotización; 🎁 Combos agrega combos.",
     "¿Quitaste un producto por error? Toca «Deshacer» en el aviso de abajo.",
   ], steps: [
-    { target: ["#pos-product-search", 'main input[placeholder*="Busca"]'], title: "1. Busca el producto", text: "Esta es la barra para buscar productos: escribe el nombre o la referencia, o pasa el lector de código de barras. F2 te trae aquí." },
+    { target: ["#pos-product-search", 'main input[placeholder*="Busca"]'], title: "1. Busca el producto", text: "Esta es la barra para buscar productos: escribe el nombre o la referencia, o pasa el lector de código de barras; luego tócalo (o ↓ y Enter) para agregarlo. F2 te trae aquí." },
     { target: ["text:Cliente de esta venta", "text:Carrito"], title: "2. El cliente", text: "Si la venta es a un cliente registrado, toca «Elegir cliente» y búscalo por nombre o cédula. Si no, queda como consumidor final." },
     { target: ["text:Detalles de la venta", "text:Carrito"], title: "3. Detalles de la venta", text: "Punto, vendedor, remisión o factura, contado o crédito, y los datos del cliente. Las existencias son las del punto escogido." },
     { target: "text:Carrito", title: "4. El carrito", text: "Aquí cambias cantidades y precios. Si un precio queda bajo tu límite, puedes pedir autorización." },

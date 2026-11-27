@@ -603,8 +603,8 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
             <Search size={15} style={{ color: "var(--t-muted)" }} />
             <input value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} type="search" enterKeyHint="done"
               onKeyDown={(e) => {
-                // Con un solo resultado, Enter lo chulea (sirve también con lector de código de barras).
-                if (e.key === "Enter" && shownItems.length === 1 && canCheck) { e.preventDefault(); void toggleCheck(shownItems[0].id); setItemQuery(""); }
+                // Enter no chulea nada (2026-11-27): escribir o pistolear solo filtra; se marca tocando el producto.
+                if (e.key === "Enter") e.preventDefault();
                 if (e.key === "Escape") setItemQuery("");
               }}
               placeholder="Buscar en este pedido (nombre o referencia)…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />

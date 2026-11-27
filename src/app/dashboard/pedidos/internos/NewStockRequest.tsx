@@ -8,6 +8,7 @@ import { ArrowRight, PackageSearch, Search, Sparkles, X, Zap } from "lucide-reac
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
+import { usePickKeys } from "@/lib/search-keys";
 import { srError } from "./types";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { DateField } from "@/components/forms/Fields";
@@ -117,7 +118,10 @@ export function NewStockRequest({
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
   const focusNext = useRef<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
-  const { hits, loading } = useProductSearch({ storeId, warehouseId: to || null, query: q, enabled: open && focus && Boolean(to), limit: 12 });
+  const { hits, loading, searchNow } = useProductSearch({ storeId, warehouseId: to || null, query: q, enabled: open && focus && Boolean(to), limit: 12 });
+  // Escribir o pistolear solo busca; se elige con clic o con ↓/↑ y Enter.
+  const pickHit = (h: (typeof hits)[number]) => { add({ product_id: h.id, name: h.name, sku: h.sku, qty: 1, there: h.wh_qty, here: null }); setQ(""); };
+  const keys = usePickKeys(hits.length, (i) => pickHit(hits[i]), { onSearch: searchNow, onEscape: () => setQ("") });
   const thumbs = useThumbs([...lines.map((l) => l.product_id), ...hits.map((h) => h.id)]);
   const toName = points.find((p) => p.id === to)?.name ?? "allá";
 
@@ -339,14 +343,10 @@ export function NewStockRequest({
                     value={q}
                     onFocus={() => setFocus(true)}
                     onBlur={() => window.setTimeout(() => setFocus(false), 150)}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && hits[0]) {
-                        e.preventDefault();
-                        add({ product_id: hits[0].id, name: hits[0].name, sku: hits[0].sku, qty: 1, there: hits[0].wh_qty, here: null });
-                        setQ("");
-                      }
-                    }}
+                    onChange={(e) => { setQ(e.target.value); keys.reset(); }}
+                    onKeyDown={keys.onKeyDown}
+                    enterKeyHint="search"
+                    autoComplete="off"
                   />
                   <span className="absolute right-1.5 top-1.5" data-rem-photo>
                     <ProductPhotoButton storeId={storeId} activeOnly compact className="h-9 border-0" pickLabel="Pedir" onPick={async (h) => {
@@ -358,13 +358,16 @@ export function NewStockRequest({
                     <div className="absolute left-0 right-0 z-10 mt-1 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>
                       {loading && !hits.length ? <p className="p-3 text-sm" style={{ color: "var(--t-muted)" }}>Buscando…</p> : null}
                       {!loading && !hits.length ? <p className="p-3 text-sm" style={{ color: "var(--t-muted)" }}>Sin resultados.</p> : null}
-                      {hits.map((h) => (
+                      {hits.map((h, i) => (
                         <button
                           key={h.id}
                           type="button"
+                          ref={i === keys.active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                           onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => { add({ product_id: h.id, name: h.name, sku: h.sku, qty: 1, there: h.wh_qty, here: null }); setQ(""); }}
+                          onMouseEnter={() => keys.hover(i)}
+                          onClick={() => pickHit(h)}
                           className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-[color:var(--t-card-bg)]"
+                          style={i === keys.active ? { background: "color-mix(in oklab, var(--t-accent) 14%, transparent)", outline: "2px solid color-mix(in oklab, var(--t-accent) 45%, transparent)" } : undefined}
                         >
                           <Thumb src={thumbs[h.id]} size={38} />
                           <span className="min-w-0 flex-1">

@@ -1648,6 +1648,17 @@ export const RELEASES: Release[] = [
       { icon: "🏷️", text: "YP 805 · YP 805…" },
     ],
   },
+  {
+    id: 160, date: "2026-11-27", title: "🔫 El lector solo escribe: tú eliges el producto",
+    summary: "En todos los buscadores de productos (POS, ingresos, traslados, pedidos internos, etiquetas, XML, foto) pistolear el código o dar Enter ya no agrega nada solo: Enter busca lo escrito y el producto se elige tocándolo, o bajando con ↓ y dando Enter. En alistamiento y recibido, Enter tampoco chulea solo.",
+    paths: ["/dashboard"],
+    demo: [
+      { icon: "🔫", text: "Pistoleas: 7701234567890" },
+      { icon: "🔎", text: "Se busca y muestra los resultados" },
+      { icon: "⬇️", text: "↓ y Enter, o tocas el correcto" },
+      { icon: "✅", text: "Se agrega el que elegiste" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

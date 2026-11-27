@@ -13,6 +13,7 @@ import { PctInput } from "./PctInput";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { searchDelay } from "@/lib/search-timing";
+import { usePickKeys } from "@/lib/search-keys";
 import { ProductPhotoButton } from "../PhotoSearchControls";
 import type { FinderHit } from "@/components/product-finder/ProductFinder";
 import type { PickerCategory } from "../products/CategoryPicker";
@@ -154,6 +155,8 @@ export function useProductSearch({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cache = useRef(new Map<string, ProductHit[]>());
+  // Enter: busca ya lo escrito, sin esperar a que se deje de escribir.
+  const [now, setNow] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -178,14 +181,14 @@ export function useProductSearch({
       const rows = (data ?? []) as ProductHit[];
       cache.current.set(key, rows);
       setHits(rows);
-    }, searchDelay(query));
+    }, now === query ? 0 : searchDelay(query));
     return () => {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [enabled, query, storeId, warehouseId, inStockOnly, limit, includeInactive]);
+  }, [enabled, query, now, storeId, warehouseId, inStockOnly, limit, includeInactive]);
 
-  return { hits, loading, error };
+  return { hits, loading, error, searchNow: () => setNow(query) };
 }
 
 /** Puntos que reciben (traslado): el buscador muestra precio por mayor y a cómo queda en cada uno, nunca el costo. */
@@ -310,29 +313,6 @@ function HitRow({
   );
 }
 
-/** Flechas ↑↓ y Enter sobre una lista de resultados. */
-function useListKeys(count: number, onEnter: (index: number) => void, onEscape: () => void) {
-  const [active, setActive] = useState(0);
-  const safe = count ? Math.min(active, count - 1) : 0;
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive(count ? (safe + 1) % count : 0);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive(count ? (safe - 1 + count) % count : 0);
-    } else if (e.key === "Enter") {
-      if (count) {
-        e.preventDefault();
-        onEnter(safe);
-      }
-    } else if (e.key === "Escape") {
-      onEscape();
-    }
-  }
-  return { active: safe, setActive, onKeyDown };
-}
-
 /** Buscador desplegable de productos: trae solo unas pocas coincidencias, nunca todo el catálogo. */
 export function ProductPicker({
   storeId,
@@ -372,7 +352,7 @@ export function ProductPicker({
   const boxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, includeInactive });
+  const { hits, loading, error, searchNow } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, includeInactive });
 
   useEffect(() => {
     function onDown(event: MouseEvent) {
@@ -398,7 +378,8 @@ export function ProductPicker({
     }
   }
 
-  const keys = useListKeys(visible.length, (i) => pick(visible[i]), () => setOpen(false));
+  // Escribir o pistolear solo busca; se elige con clic o con ↓/↑ y Enter.
+  const keys = usePickKeys(visible.length, (i) => pick(visible[i]), { onSearch: () => { setOpen(true); searchNow(); }, onEscape: () => setOpen(false) });
 
   useEffect(() => {
     listRef.current?.querySelector("[data-active]")?.scrollIntoView({ block: "nearest" });
@@ -420,7 +401,7 @@ export function ProductPicker({
           onFocus={() => setOpen(true)}
           onChange={(e) => {
             setQuery(e.target.value);
-            keys.setActive(0);
+            keys.reset();
             setOpen(true);
           }}
           onKeyDown={keys.onKeyDown}
@@ -436,7 +417,7 @@ export function ProductPicker({
           style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}
         >
           <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
-            <span>{keepOpen ? "Toca para agregar · puedes elegir varios seguidos" : "↑↓ para moverte · Enter para elegir"}</span>
+            <span>{keepOpen ? "Toca para agregar · puedes elegir varios seguidos" : "Enter busca · ↑↓ y Enter para elegir"}</span>
             {keepOpen ? (
               <button type="button" onClick={() => setOpen(false)} className="rounded-full border px-2 py-0.5 font-semibold" style={{ borderColor: "var(--t-card-border)" }}>
                 Listo
@@ -459,7 +440,7 @@ export function ProductPicker({
               hideCost={Boolean(pricePoints)}
               prices={pricePoints ? prices.get(hit.id) : undefined}
               onPick={() => pick(hit)}
-              onHover={() => keys.setActive(i)}
+              onHover={() => keys.hover(i)}
             />
           ))}
         </div>
@@ -509,7 +490,7 @@ export function ProductSearchModal({
   const listRef = useRef<HTMLDivElement>(null);
   // Solo en el navegador (el portal necesita document.body).
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
-  const { hits, loading, error } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, limit: 20, includeInactive });
+  const { hits, loading, error, searchNow } = useProductSearch({ storeId, warehouseId, inStockOnly, query, enabled: open, limit: 20, includeInactive });
   const visible = hits.filter((h) => !excludeIds?.includes(h.id));
   const thumbs = useThumbs(open ? visible.map((h) => h.id) : []);
   const prices = usePickPrices(storeId, pricePoints, open ? visible.map((h) => h.id) : []);
@@ -519,7 +500,8 @@ export function ProductSearchModal({
     setQuery("");
     onClose();
   }
-  const keys = useListKeys(visible.length, (i) => pick(visible[i]), onClose);
+  // Escribir o pistolear solo busca; se elige con clic o con ↓/↑ y Enter.
+  const keys = usePickKeys(visible.length, (i) => pick(visible[i]), { onSearch: searchNow, onEscape: onClose });
 
   useEffect(() => {
     if (!open) return;
@@ -589,7 +571,7 @@ export function ProductSearchModal({
                   enterKeyHint="search"
                   onChange={(e) => {
                     setQuery(e.target.value);
-                    keys.setActive(0);
+                    keys.reset();
                   }}
                   onKeyDown={keys.onKeyDown}
                 />
@@ -640,12 +622,12 @@ export function ProductSearchModal({
                   hideCost={Boolean(pricePoints)}
                   prices={pricePoints ? prices.get(hit.id) : undefined}
                   onPick={() => pick(hit)}
-                  onHover={() => keys.setActive(i)}
+                  onHover={() => keys.hover(i)}
                 />
               ))}
             </div>
             <footer className="hidden items-center justify-between gap-2 border-t px-5 py-2.5 text-[11px] sm:flex" style={{ borderColor: "var(--t-card-border)", color: "var(--t-muted)" }}>
-              <span><Kbd>↑</Kbd> <Kbd>↓</Kbd> moverte · <Kbd>Enter</Kbd> agregar · <Kbd>Esc</Kbd> cerrar</span>
+              <span><Kbd>Enter</Kbd> buscar · <Kbd>↑</Kbd> <Kbd>↓</Kbd> + <Kbd>Enter</Kbd> o clic para agregar · <Kbd>Esc</Kbd> cerrar</span>
               <span>Al elegir, pasas directo a escribir la cantidad</span>
             </footer>
           </motion.section>
