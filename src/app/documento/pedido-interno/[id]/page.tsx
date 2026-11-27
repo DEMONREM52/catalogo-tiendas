@@ -65,7 +65,7 @@ function RequestPrint() {
   return (
     <div style={{ minHeight: "100vh", background: "#e5e7eb" }}>
       <PrintToolbar format={format} onFormat={setFormat} showPrices={showPrices} onShowPrices={setShowPrices} pricesAvailable={Boolean(prices)} pricesReason={pricesReason}
-        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/dashboard/pedidos/internos?pedido=${r.id}`} showImages={showImages} onShowImages={setShowImages} />
+        showRetail={showRetail} onShowRetail={setShowRetail} backHref={`/dashboard/pedidos?tab=internos&pedido=${r.id}`} showImages={showImages} onShowImages={setShowImages} />
       <div style={{ padding: "16px 0" }}>
         <MovementDocument
           kind="Pedido interno"

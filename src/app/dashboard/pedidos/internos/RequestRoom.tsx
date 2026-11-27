@@ -414,11 +414,19 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       .map((i) => ({ name: i.name, after: i.source_now - (approved[i.id] ?? i.qty_approved ?? i.qty_requested) }))
       .filter((x) => x.after < 0);
     if (Object.keys(approved).length) await saveQuantities();
+    // Aviso (no bloquea): con cajas, lo que va sin caja y las cajas abiertas.
+    const bx = boxes.data?.boxes ?? [];
+    const dist = bx.length ? distribution(data.items.map((i) => ({ id: i.id, toSend: approved[i.id] ?? i.qty_approved ?? i.qty_requested })), bx) : null;
+    const openBx = bx.filter((b) => b.status === "open").length;
+    const boxWarn = dist && (dist.totals.unitsUnboxed > 0 || openBx > 0 || dist.over.length > 0)
+      ? `<div style="border:1px solid rgba(139,92,246,.5);background:rgba(139,92,246,.1);border-radius:12px;padding:8px 10px">📦 ${bx.length} caja${bx.length === 1 ? "" : "s"}${dist.totals.unitsUnboxed ? ` · <b>${dist.totals.unitsUnboxed} und. sin caja</b>` : ""}${openBx ? ` · <b>${openBx} abierta${openBx === 1 ? "" : "s"}</b>` : ""}${dist.over.length ? " · <b>hay más en cajas que lo que se envía</b>" : ""}. Puedes enviar igual.</div>`
+      : "";
     const res = await Swal.fire({
       ...swal,
       title: "🚚 Enviar: va en camino",
       html: `<div style="text-align:left;display:grid;gap:10px;font-size:13px">
         <p style="opacity:.8">Se crea el traslado y la mercancía sale del inventario de <b>${data.request.to_name}</b>. Luego quien la lleva firma <b>“En camino”</b>.</p>
+        ${boxWarn}
         ${negatives.length ? `<div style="border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.1);border-radius:12px;padding:8px 10px">⚠️ Sin existencias suficientes; el inventario de origen quedará así:<br/>${negatives.map((n) => `• ${n.name}: <b>${n.after}</b>`).join("<br/>")}</div>` : ""}
       </div>`,
       showCancelButton: true,
@@ -637,7 +645,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                 if (e.key === "Enter") e.preventDefault();
                 if (e.key === "Escape") setItemQuery("");
               }}
-              placeholder="Buscar en este pedido (nombre o referencia)…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
+              placeholder="Buscar en este pedido (nombre o referencia)…" data-product-search className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
             {itemQuery ? (
               <>
                 <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: "var(--t-muted)" }}>{shownItems.length}</span>

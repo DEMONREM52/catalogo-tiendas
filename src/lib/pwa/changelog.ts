@@ -1680,6 +1680,17 @@ export const RELEASES: Release[] = [
       { icon: "🖨️", text: "Imprimes la etiqueta con QR" },
     ],
   },
+  {
+    id: 163, date: "2026-11-27", title: "🚚 Traslados como pedidos, recibir por caja y escáner",
+    summary: "Cada traslado que guardas en Inventario aparece también como pedido interno en camino (saliente para quien envía, entrante para quien recibe), con chat, cajas y recibido; el inventario se mueve una sola vez. Mientras va en camino se pueden armar las cajas; quien recibe marca «Llegó esta caja». Nuevo: empacar escaneando a la caja activa, icono de escáner con cámara en los buscadores (aparte de la foto), F2 para ir al buscador en cualquier pantalla y el filtro «⏰ Atrasados». El enlace del traslado muestra sus cajas.",
+    paths: ["/dashboard/pedidos", "/dashboard/inventario", "/dashboard/pos", "/dashboard/products", "/dashboard/lista-productos", "/dashboard/etiquetas"],
+    demo: [
+      { icon: "🚚", text: "Guardas un traslado en Inventario" },
+      { icon: "📝", text: "Sale como Pedido #N en camino" },
+      { icon: "🔫", text: "Empacas escaneando a la Caja 1" },
+      { icon: "📥", text: "En destino: «Llegó esta caja»" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

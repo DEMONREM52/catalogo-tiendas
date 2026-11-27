@@ -7,6 +7,7 @@ import { parseDianInvoice, xmlFromZip, type DianInvoice } from "@/lib/purchases/
 import type { Staged } from "./AttachmentsUI";
 import { useProductSearch, type Line } from "./LineEditor";
 import { usePickKeys } from "@/lib/search-keys";
+import { ScanButton } from "@/components/scan/ScanButton";
 import { QuickProductModal } from "./QuickProductModal";
 import { Btn, errorMessage, inputClass, inputStyle, money, toast, type ProductHit } from "./shared";
 import { ProductPhotoButton } from "@/app/dashboard/PhotoSearchControls";
@@ -262,7 +263,8 @@ export function ProductChooser({ storeId, initial, onPick, onCancel }: { storeId
     <div className="w-full min-w-[220px] space-y-1">
       <div className="flex gap-1">
         <input autoFocus className={inputClass} style={inputStyle} value={q} onChange={(e) => { setQ(e.target.value); keys.reset(); }} placeholder="Buscar producto, SKU o código"
-          autoComplete="off" onKeyDown={keys.onKeyDown} />
+          autoComplete="off" onKeyDown={keys.onKeyDown} data-product-search />
+        <ScanButton onCode={(c) => { setQ(c); keys.reset(); }} className="px-2" />
         <ProductPhotoButton storeId={storeId} compact className="px-2" pickLabel="Asociar" onPick={async (h) => { const row = await productHitFromPhoto(storeId, h, null, false, true); if (row) onPick(row); }} />
         <button type="button" className="px-2 text-xs" onClick={onCancel}>✕</button>
       </div>

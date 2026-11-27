@@ -7,9 +7,12 @@ export type SrBox = {
   id: string; number: number; name: string | null; color: string | null; notes: string | null; fragile: boolean;
   weight_kg: number | null; dims: string | null; seal: string | null; status: "open" | "closed"; token: string;
   created_by_name: string | null; created_at: string; updated_at: string; closed_at: string | null; closed_by_name: string | null;
+  /** Quien recibe la marcó «Llegó esta caja» (20261349). */
+  received_at?: string | null; received_by_name?: string | null;
   items: Array<{ item_id: string; qty: number }>;
 };
-export type SrBoxes = { boxes: SrBox[]; can_edit: boolean };
+/** can_receive: quien recibe puede marcar cajas que llegaron. origin «transfer»: el pedido nació de un traslado de Inventario. */
+export type SrBoxes = { boxes: SrBox[]; can_edit: boolean; can_receive?: boolean; origin?: "request" | "transfer" };
 
 /** Colores automáticos (contraste con texto blanco en claro y oscuro). Siempre van con el número: nunca solo el color. */
 export const BOX_COLORS = ["#7c3aed", "#0ea5e9", "#16a34a", "#ea580c", "#db2777", "#0d9488", "#ca8a04", "#4f46e5", "#dc2626", "#475569"] as const;

@@ -42,6 +42,7 @@ import { PRODUCTION_ORIGIN } from "@/lib/share/origin";
 import type { PaletteLink } from "@/components/CommandPalette";
 import { openCommandPalette } from "@/components/command-events";
 import { SEARCH_INDEX } from "@/lib/search-index";
+import { installF2 } from "@/lib/shortcuts/f2";
 import { FINANCE_PERMISSIONS, MODULE_TABS, PRODUCT_LIST_PERMISSIONS, PROFIT_PERMISSIONS, type ModuleKey, type ModuleTab } from "@/lib/module-tabs";
 import { markLiteDevice } from "@/lib/lite-device";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
@@ -446,6 +447,8 @@ export default function DashboardShell({
   const [staffUsername, setStaffUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   useNicknameUpdates(setDisplayName);
+  // F2 = buscar producto en cualquier pantalla del panel (las que tienen su propio F2 lo siguen manejando).
+  useEffect(() => installF2(), []);
 
   // Drawer (montaje + animación)
   const [drawerMounted, setDrawerMounted] = useState(false);

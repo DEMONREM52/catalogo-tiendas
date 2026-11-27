@@ -13,6 +13,7 @@ import { printHtmlSilently, printHtmlWindow } from "@/lib/print/transports";
 import { storeShareUrl } from "@/lib/share/store-host";
 import { useSearchValue } from "@/lib/search-timing";
 import { usePickKeys } from "@/lib/search-keys";
+import { ScanButton } from "@/components/scan/ScanButton";
 import type { DashboardStore } from "@/lib/store-utils";
 import { Thumb } from "../inventario/LineEditor";
 import { useErpFinderSource } from "../useErpFinder";
@@ -245,9 +246,10 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
         <div className="relative">
           <label className="flex items-center gap-2 rounded-xl border px-3" style={inputStyle}>
             {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} style={{ color: "var(--t-muted)" }} />}
-            <input ref={searchRef} value={q} onChange={(e) => { setQ(e.target.value); keys.reset(); }} onKeyDown={keys.onKeyDown} autoComplete="off"
+            <input ref={searchRef} value={q} onChange={(e) => { setQ(e.target.value); keys.reset(); }} onKeyDown={keys.onKeyDown} autoComplete="off" data-product-search
               placeholder="Buscar o escanear (nombre, referencia o código)…" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
             {q ? <button type="button" onClick={() => { setQ(""); setHits([]); }} aria-label="Limpiar"><X size={14} /></button> : null}
+            <ScanButton className="-mr-2 h-9 border-0" onCode={(c) => { setQ(c); keys.reset(); searchRef.current?.focus(); }} />
           </label>
           {hits.length && q ? (
             <ul className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-xl border p-1 shadow-2xl" style={{ borderColor: "var(--t-card-border)", background: "var(--t-bg-base)" }}>

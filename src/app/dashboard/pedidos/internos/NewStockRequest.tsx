@@ -9,6 +9,7 @@ import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductSearchModal, Thumb, useProductSearch, useThumbs } from "../../inventario/LineEditor";
 import { usePickKeys } from "@/lib/search-keys";
+import { ScanButton } from "@/components/scan/ScanButton";
 import { srError } from "./types";
 import { reinsert, undoToast } from "@/lib/ui/undo";
 import { DateField } from "@/components/forms/Fields";
@@ -338,8 +339,9 @@ export function NewStockRequest({
                   <Search size={15} className="pointer-events-none absolute left-3.5 top-3.5 opacity-60" />
                   <input
                     className={field}
-                    style={{ ...fieldStyle, paddingLeft: "2.4rem", paddingRight: "3.4rem" }}
-                    placeholder={`Buscar producto para pedir a ${toName}…`}
+                    style={{ ...fieldStyle, paddingLeft: "2.4rem", paddingRight: "6.2rem" }}
+                    placeholder={`Buscar producto para pedir a ${toName}…  (F2)`}
+                    data-product-search
                     value={q}
                     onFocus={() => setFocus(true)}
                     onBlur={() => window.setTimeout(() => setFocus(false), 150)}
@@ -348,6 +350,9 @@ export function NewStockRequest({
                     enterKeyHint="search"
                     autoComplete="off"
                   />
+                  <span className="absolute right-12 top-1.5">
+                    <ScanButton className="h-9 border-0" onCode={(c) => { setQ(c); keys.reset(); setFocus(true); }} />
+                  </span>
                   <span className="absolute right-1.5 top-1.5" data-rem-photo>
                     <ProductPhotoButton storeId={storeId} activeOnly compact className="h-9 border-0" pickLabel="Pedir" onPick={async (h) => {
                       const row = await productHitFromPhoto(storeId, h, to || null);

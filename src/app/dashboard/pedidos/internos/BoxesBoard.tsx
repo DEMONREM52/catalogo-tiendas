@@ -9,6 +9,7 @@ import { Thumb } from "../../inventario/LineEditor";
 import { ProductName } from "@/components/ProductName";
 import { STOCK_REQUESTS_CHANGED_EVENT, srError, type SrDetail, type SrItem } from "./types";
 import { BOX_COLORS, boxColor, boxTitle, boxUnits, clampSelection, distribution, distributionText, type SrBox, type SrBoxes } from "./boxes";
+import { ScanToBox } from "./ScanToBox";
 
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "#8b5cf6" };
 const MISSING = "Para usar cajas, ejecuta en Supabase la migración 20261348_cajas_pedidos.sql.";
@@ -77,6 +78,7 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
   const list = useMemo(() => data?.boxes ?? [], [data]);
   const dist = useMemo(() => distribution(lines, list), [lines, list]);
   const canEdit = Boolean(data?.can_edit);
+  const canReceive = Boolean(data?.can_receive);
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   // La selección se limpia sola: si otra persona ya empacó algo, no se puede pasar de lo que queda.
   const selection = useMemo(() => (canEdit ? clampSelection(sel, dist.unboxed) : {}), [sel, dist.unboxed, canEdit]);
@@ -157,6 +159,14 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
     const r = await Swal.fire({ ...swal, icon: "warning", title: `¿Borrar la ${boxTitle(b)}?`, text: "Está vacía. Las demás cajas conservan su número.", showCancelButton: true, confirmButtonText: "Borrar", cancelButtonText: "Cancelar", confirmButtonColor: "#dc2626" });
     if (r.isConfirmed) await call("erp_sr_box_delete", { p_box: b.id }, "Caja borrada");
   }
+  async function receiveBox(b: SrBox, on: boolean) {
+    if (on) {
+      const r = await Swal.fire({ ...swal, icon: "question", title: `¿Llegó la ${boxTitle(b)}?`, html: `<p style="font-size:13px">${b.items.length} ref. · ${boxUnits(b)} und.${b.seal ? ` · sello <b>${b.seal}</b>` : ""}.<br/>Revisa que esté cerrada y su contenido. Los productos que queden completos se chulean en «lo que llegó». El inventario entra al confirmar el recibido, como siempre.</p>`,
+        showCancelButton: true, confirmButtonText: "Sí, llegó", cancelButtonText: "Cancelar", confirmButtonColor: "#16a34a" });
+      if (!r.isConfirmed) return;
+    }
+    await call("erp_sr_box_receive", { p_box: b.id, p_on: on }, on ? `📥 ${boxTitle(b)} recibida` : "Desmarcada");
+  }
   async function closeBox(b: SrBox, close: boolean) {
     if (!close) {
       const r = await Swal.fire({ ...swal, icon: "question", title: `¿Abrir otra vez la ${boxTitle(b)}?`, text: "Queda en el chat quién la abrió.", showCancelButton: true, confirmButtonText: "Abrir", cancelButtonText: "Cancelar" });
@@ -205,7 +215,10 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
             <span>Hay más en cajas que lo que se envía: {dist.over.map((o) => `${itemById.get(o.id)?.name ?? "Producto"} (${o.boxed} en cajas, se envían ${o.toSend})`).join(" · ")}. Saca lo que sobra o sube «Enviar».</span>
           </p>
         ) : null}
-        {!canEdit ? <p className="mt-2 text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>👀 Solo ver: las cajas las arma quien despacha, antes de enviar.</p> : null}
+        {list.some((b) => b.received_at) || canReceive ? (
+          <p className="mt-2 text-[12px] font-bold" style={{ color: "#16a34a" }}>📥 Llegaron {list.filter((b) => b.received_at).length} de {list.length} cajas{canReceive && list.length ? " · marca cada caja cuando llegue" : ""}</p>
+        ) : null}
+        {!canEdit && !canReceive ? <p className="mt-2 text-[11px] font-semibold" style={{ color: "var(--t-muted)" }}>👀 Solo ver: las cajas las arma quien despacha{data.origin === "transfer" ? " mientras el traslado va en camino y antes de que empiecen a recibir" : ", antes de enviar"}.</p> : null}
       </div>
 
       {/* Cajas */}
@@ -226,6 +239,7 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
                   {b.status === "closed" ? <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "color-mix(in oklab, #22c55e 18%, transparent)", color: "#16a34a" }}><Lock size={10} /> Cerrada</span>
                     : <span className="rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "color-mix(in oklab, #f59e0b 18%, transparent)", color: "#d97706" }}>Abierta</span>}
                   {b.fragile ? <span className="rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "color-mix(in oklab, #ef4444 16%, transparent)", color: "#dc2626" }}>⚠️ Frágil</span> : null}
+                  {b.received_at ? <span className="rounded-full px-1.5 py-px text-[10px] font-bold" style={{ background: "#16a34a", color: "#fff" }}>📥 Llegó · {b.received_by_name ?? ""}</span> : null}
                 </span>
                 <span className="block truncate text-[11px]" style={{ color: "var(--t-muted)" }}>
                   {b.items.length} ref. · <b style={{ color: "var(--t-text)" }}>{units} und.</b>{b.seal ? ` · sello ${b.seal}` : ""}{b.weight_kg != null ? ` · ${String(b.weight_kg).replace(".", ",")} kg` : ""} · {b.status === "closed" ? `cerró ${b.closed_by_name ?? "—"}` : `armó ${b.created_by_name ?? "—"}`}
@@ -259,6 +273,9 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
                   );
                 })}
                 <div className="flex flex-wrap gap-1.5 pt-1">
+                  {canReceive ? (b.received_at
+                    ? <SmallBtn onClick={() => void receiveBox(b, false)} disabled={busy}>↩️ Desmarcar «llegó»</SmallBtn>
+                    : <button type="button" onClick={() => void receiveBox(b, true)} disabled={busy} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-black text-white disabled:opacity-50" style={{ background: "#16a34a" }}><Check size={13} /> Llegó esta caja</button>) : null}
                   <SmallBtn onClick={() => setSheet({ kind: "print", boxIds: [b.id] })}><Printer size={13} /> Imprimir</SmallBtn>
                   {canEdit ? (
                     <>
@@ -277,6 +294,8 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
         );
       })}
 
+      {canEdit && pending.length ? <ScanToBox requestId={request.id} items={items} boxes={list} unboxed={dist.unboxed} reload={reload} /> : null}
+
       {/* Sin caja */}
       <section className="rounded-2xl border p-2.5" style={{ borderColor: "var(--t-card-border)" }}>
         <div className="flex flex-wrap items-center gap-2">
@@ -291,7 +310,7 @@ export function BoxesBoard({ request, items, thumbs, boxes, onSelecting, focusBo
         {pending.length > 6 ? (
           <label className="mt-2 flex items-center gap-2 rounded-xl border px-3 py-1.5" style={{ borderColor: query ? "var(--t-accent)" : "var(--t-card-border)", background: "var(--t-card-bg)" }}>
             <Search size={14} style={{ color: "var(--t-muted)" }} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} type="search" enterKeyHint="search" autoComplete="off" placeholder="Buscar en lo que falta (nombre o referencia)…"
+            <input value={query} onChange={(e) => setQuery(e.target.value)} type="search" enterKeyHint="search" autoComplete="off" placeholder="Buscar en lo que falta (nombre o referencia)…" data-product-search
               onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); if (e.key === "Escape") setQuery(""); }}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none" style={{ padding: 0, border: 0, minHeight: 0 }} />
             {query ? <button type="button" onClick={() => setQuery("")} aria-label="Limpiar"><X size={14} /></button> : null}

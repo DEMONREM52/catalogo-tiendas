@@ -28,6 +28,7 @@ import { ProductsModeSwitch } from "./ModeSwitch";
 import { useProductsVoice, type ProductsVoiceApi } from "./useProductsVoice";
 import { PublishButton, toState } from "@/components/products/PublishButton";
 import type { PublishState } from "@/lib/products/radar";
+import { ScanButton } from "@/components/scan/ScanButton";
 
 type Category = { id: string; name: string; active?: boolean };
 
@@ -996,9 +997,11 @@ export default function ProductsListPage() {
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") flushQ(); }}
                     enterKeyHint="search"
+                    data-product-search
                   />
                   <SearchTimer pending={qPending} delay={qDelay} term={q} />
                 </div>
+                <ScanButton onCode={(c) => setQ(c)} />
                 <PhotoSearchButton
                   source={finderSource}
                   pickLabel="Editar"

@@ -24,7 +24,7 @@ const swalToast = { background: "var(--t-bg-base)", color: "var(--t-text)", toas
 const UNREAD = "#ec4899";
 
 type Scope = "attend" | "mine" | "active" | "closed";
-type StatusFilter = "all" | "pending" | "preparing" | "dispatched" | "urgent" | "unread";
+type StatusFilter = "all" | "pending" | "preparing" | "dispatched" | "urgent" | "late" | "unread";
 type View = "compact" | "cards";
 
 /**
@@ -80,6 +80,12 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
   const batchSeen = useRef<string | null>(null);
   const [creatingBatch, setCreatingBatch] = useState(false);
   const [statusF, setStatusF] = useState<StatusFilter>("all");
+  // Hoy (AAAA-MM-DD, hora de Colombia) para «Atrasados»: pasó la fecha «para cuándo» y sigue abierto.
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setToday(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date())), 0);
+    return () => window.clearTimeout(t);
+  }, []);
   const [pointF, setPointF] = useState<string | null>(null);
   const view = useSyncExternalStore(onViewChange, readView, () => "cards" as View);
 
@@ -196,9 +202,10 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
       ["preparing", `${SR_STATUS.preparing.icon} Preparando`, open.filter((r) => r.status === "preparing").length, SR_STATUS.preparing.color],
       ["dispatched", `${SR_STATUS.dispatched.icon} En camino`, open.filter((r) => r.status === "dispatched").length, SR_STATUS.dispatched.color],
       ["urgent", "⚡ Urgentes", open.filter((r) => r.priority === "urgent").length, "#ef4444"],
+      ["late", "⏰ Atrasados", today ? open.filter((r) => r.needed_by && r.needed_by.slice(0, 10) < today).length : 0, "#dc2626"],
       ["unread", "💬 Sin leer", open.filter((r) => r.unread > 0).length, UNREAD],
     ] as Array<[StatusFilter, string, number, string]>).filter(([, , n]) => n > 0);
-  }, [scoped]);
+  }, [scoped, today]);
 
   // Puntos de los pedidos de la pestaña. El que sale en todos (p. ej. la bodega que atiende) no sirve de filtro.
   const pointChips = useMemo(() => {
@@ -287,6 +294,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     const base = scoped.filter((r) =>
       (activeStatus === "all" ? true
         : activeStatus === "urgent" ? r.priority === "urgent" && isOpen(r.status)
+        : activeStatus === "late" ? Boolean(today && r.needed_by && r.needed_by.slice(0, 10) < today) && isOpen(r.status)
           : activeStatus === "unread" ? r.unread > 0 && isOpen(r.status)
             : r.status === activeStatus)
       && (!activePoint || r.from_point_id === activePoint || r.to_point_id === activePoint));
@@ -295,7 +303,7 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     // Primero lo que te toca, luego lo urgente, luego lo que tiene mensajes sin leer; dentro de cada grupo, como venía.
     const rank = (r: SrListItem) => (needsMeOf(r) ? 0 : 4) + (r.priority === "urgent" ? 0 : 2) + (r.unread > 0 ? 0 : 1);
     return found.map((r, i) => ({ r, i, k: rank(r) })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.r);
-  }, [scoped, activeStatus, activePoint, q, effectiveScope]);
+  }, [scoped, activeStatus, activePoint, q, effectiveScope, today]);
 
   return (
     <section className="space-y-3">

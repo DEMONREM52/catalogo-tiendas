@@ -13,18 +13,22 @@ export type ItemComment = {
   id: string; item_id: string; by: string | null; mine: boolean; body: string; tag: CommentTag; qty: number | null;
   at: string; resolved_at: string | null; resolved_by: string | null;
 };
-export type CommentTag = "note" | "more" | "variant" | "damaged" | "swap" | "photo" | "ok";
+/** missing, extra y wrong son novedades de recepción (20261349). */
+export type CommentTag = "note" | "more" | "variant" | "damaged" | "swap" | "photo" | "ok" | "missing" | "extra" | "wrong";
 
 export const TAGS: Record<CommentTag, { icon: string; label: string; color: string; preset: (n: number) => string }> = {
   more: { icon: "➕", label: "Necesito más", color: "#a855f7", preset: (n) => `Necesito ${n} más` },
   variant: { icon: "🎨", label: "Otro color / modelo", color: "#0ea5e9", preset: () => "¿Hay en otro color o modelo? " },
   damaged: { icon: "⚠️", label: "Dañado", color: "#ef4444", preset: () => "Viene dañado: " },
+  missing: { icon: "📉", label: "Faltó", color: "#dc2626", preset: (n) => `Faltaron ${n}` },
+  extra: { icon: "📈", label: "Llegó de más", color: "#0ea5e9", preset: (n) => `Llegaron ${n} de más` },
+  wrong: { icon: "❌", label: "Producto equivocado", color: "#b91c1c", preset: () => "Llegó otro producto: " },
   swap: { icon: "🔁", label: "Cambiar por otro", color: "#f59e0b", preset: () => "Cámbialo por: " },
   photo: { icon: "📸", label: "Mándame foto", color: "#ec4899", preset: () => "¿Me mandas una foto de este?" },
   ok: { icon: "✅", label: "Listo", color: "#22c55e", preset: () => "Listo, confirmado" },
   note: { icon: "💬", label: "Comentario", color: "#64748b", preset: () => "" },
 };
-const ORDER: CommentTag[] = ["more", "variant", "damaged", "swap", "photo", "ok"];
+const ORDER: CommentTag[] = ["more", "variant", "damaged", "missing", "extra", "wrong", "swap", "photo", "ok"];
 const swal = { background: "var(--t-bg-base)", color: "var(--t-text)", confirmButtonColor: "var(--t-accent)" } as const;
 
 /** Comentarios del pedido; se recargan cuando cambia el chat (cada comentario también va al chat). */

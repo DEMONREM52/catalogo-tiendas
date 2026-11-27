@@ -51,6 +51,7 @@ import { PosDoneSheet, type DoneSale } from "./PosDoneSheet";
 import { SaleSummary, ddmmyyyy, type SaleSummaryInput } from "./PosSaleSummary";
 import { ThumbImg } from "@/components/ui/ThumbImg";
 import { usePickKeys } from "@/lib/search-keys";
+import { ScanButton } from "@/components/scan/ScanButton";
 
 // La ventana de «Cliente nuevo» se descarga aparte, cuando el navegador queda libre: el POS abre antes y la
 // ventana igual queda guardada para cuando no haya internet.
@@ -2245,6 +2246,7 @@ export default function PosPage() {
               <input
                 {...inputProps()}
                 id="pos-product-search"
+                data-product-search
                 style={{ ...inputProps().style, fontSize: 16, paddingTop: 14, paddingBottom: 14, borderWidth: 2, borderColor: "color-mix(in oklab, var(--t-accent) 65%, var(--t-card-border))" }}
                 ref={searchRef}
                 enterKeyHint="search"
@@ -2267,6 +2269,7 @@ export default function PosPage() {
                   if (e.key === "Enter") e.preventDefault();
                 }}
               />
+              <ScanButton onCode={(c) => { setSearch(c); setVisibleCount(48); searchRef.current?.focus(); }} />
               <span data-rem-photo className="contents">
               <PhotoSearchButton
                 source={finderSource}

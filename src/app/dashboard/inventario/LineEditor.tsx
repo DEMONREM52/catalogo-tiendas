@@ -14,6 +14,7 @@ import { reinsert, undoToast } from "@/lib/ui/undo";
 import { ZoomableThumb } from "@/components/ui/ZoomableImage";
 import { searchDelay } from "@/lib/search-timing";
 import { usePickKeys } from "@/lib/search-keys";
+import { ScanButton } from "@/components/scan/ScanButton";
 import { ProductPhotoButton } from "../PhotoSearchControls";
 import type { FinderHit } from "@/components/product-finder/ProductFinder";
 import type { PickerCategory } from "../products/CategoryPicker";
@@ -394,6 +395,7 @@ export function ProductPicker({
           style={inputStyle}
           placeholder={placeholder}
           value={query}
+          data-product-search
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
@@ -406,6 +408,7 @@ export function ProductPicker({
           }}
           onKeyDown={keys.onKeyDown}
         />
+        <ScanButton onCode={(c) => { setQuery(c); keys.reset(); setOpen(true); inputRef?.current?.focus(); }} />
         <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} includeInactive={includeInactive} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
       </div>
       {photoMsg ? <p className="mt-1 text-xs font-semibold" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}
@@ -565,8 +568,9 @@ export function ProductSearchModal({
                   ref={inputRef}
                   className={`${inputClass}  py-3 text-base`}
                   style={{ ...inputStyle, paddingLeft: "2.6rem", boxShadow: "0 0 0 3px color-mix(in oklab, var(--t-accent) 18%, transparent)" }}
-                  placeholder="Buscar producto…"
+                  placeholder="Buscar producto…  (F2)"
                   value={query}
+                  data-product-search
                   autoComplete="off"
                   enterKeyHint="search"
                   onChange={(e) => {
@@ -579,6 +583,7 @@ export function ProductSearchModal({
                   <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "var(--t-accent)", borderTopColor: "transparent" }} />
                 ) : null}
               </div>
+              <ScanButton onCode={(c) => { setQuery(c); keys.reset(); inputRef.current?.focus(); }} />
               <InventoryPhotoButton storeId={storeId} warehouseId={warehouseId} inStockOnly={inStockOnly} includeInactive={includeInactive} excludeIds={excludeIds} onMessage={setPhotoMsg} onPick={pick} />
             </div>
             {photoMsg ? <p className="px-4 pt-1 text-xs font-semibold sm:px-5" style={{ color: "#d97706" }}>⚠️ {photoMsg}</p> : null}

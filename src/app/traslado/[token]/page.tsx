@@ -32,6 +32,11 @@ type LinkedRequest = {
   items: Array<{ product_id: string; name: string; requested: number; approved: number | null; received: number | null }>;
   messages: Array<{ user_name: string | null; point_name: string | null; kind: "message" | "system"; body: string; created_at: string }>;
 };
+/** Cajas del pedido de este traslado (20261349): número, contenido y si ya llegó. Sin costos. */
+type TrackBox = { number: number; name: string | null; color: string | null; fragile: boolean; seal: string | null; status: "open" | "closed"; received_at: string | null;
+  items: Array<{ name: string; sku: string | null; qty: number }> };
+const BOX_FALLBACK = ["#7c3aed", "#0ea5e9", "#16a34a", "#ea580c", "#db2777", "#0d9488", "#ca8a04", "#4f46e5", "#dc2626", "#475569"];
+
 const REQUEST_STATUS: Record<string, [string, string]> = {
   pending: ["Enviado", "#8b5cf6"], preparing: ["Preparando", "#f59e0b"], dispatched: ["En camino", "#0ea5e9"],
   received: ["Recibido", "#22c55e"], rejected: ["Rechazado", "#ef4444"], cancelled: ["Cancelado", "#94a3b8"],
@@ -57,6 +62,7 @@ export default function TransferTrackPage() {
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState<LinkedRequest | null>(null);
+  const [boxes, setBoxes] = useState<TrackBox[]>([]);
 
   const load = useCallback(
     () =>
@@ -64,7 +70,10 @@ export default function TransferTrackPage() {
         supabaseBrowser().rpc("erp_transfer_track", { p_token: token }),
         // Datos del pedido interno que originó el traslado (si lo hay).
         supabaseBrowser().rpc("erp_transfer_track_request", { p_token: token }),
-      ]).then(([{ data, error }, linked]) => {
+        // Sus cajas (si las armaron); sin la migración 20261349 no hay nada que mostrar.
+        supabaseBrowser().rpc("erp_transfer_track_boxes", { p_token: token }),
+      ]).then(([{ data, error }, linked, bx]) => {
+        setBoxes(bx.error || !Array.isArray(bx.data) ? [] : (bx.data as TrackBox[]));
         setLoading(false);
         if (error) return setLoadError(cleanError(error));
         setLoadError("");
@@ -155,6 +164,7 @@ export default function TransferTrackPage() {
             </header>
 
             {request ? <RequestCard request={request} /> : null}
+            {boxes.length ? <BoxesCard boxes={boxes} /> : null}
 
             <section className="rounded-3xl border p-5" style={card}>
               <h2 className="text-base font-bold">Recorrido</h2>
@@ -515,6 +525,44 @@ function SignForm({
         >
           {busy ? "Firmando…" : `✍️ Firmar ${step.title.toLowerCase()}`}
         </button>
+      </div>
+    </section>
+  );
+}
+
+function BoxesCard({ boxes }: { boxes: TrackBox[] }) {
+  const got = boxes.filter((b) => b.received_at).length;
+  return (
+    <section className="rounded-3xl border p-5" style={card}>
+      <h2 className="text-lg font-bold">📦 Cajas ({boxes.length})</h2>
+      <p className="mt-0.5 text-xs" style={{ color: "var(--t-muted)" }}>
+        {boxes.reduce((s, b) => s + b.items.reduce((u, i) => u + i.qty, 0), 0)} und. en cajas · llegaron {got} de {boxes.length}
+      </p>
+      <div className="mt-3 space-y-2">
+        {boxes.map((b) => {
+          const color = b.color ?? BOX_FALLBACK[(b.number - 1) % BOX_FALLBACK.length];
+          return (
+            <details key={b.number} className="overflow-hidden rounded-2xl border" style={{ borderColor: `color-mix(in oklab, ${color} 50%, var(--t-card-border))` }}>
+              <summary className="flex cursor-pointer items-center gap-2.5 p-2.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-black text-white" style={{ background: color }}>{b.number}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">CAJA {b.number}{b.name ? ` · ${b.name}` : ""}{b.fragile ? " · ⚠️ FRÁGIL" : ""}</span>
+                  <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>
+                    {b.items.length} ref. · {b.items.reduce((u, i) => u + i.qty, 0)} und.{b.seal ? ` · sello ${b.seal}` : ""} · {b.received_at ? `📥 llegó ${dateTime(b.received_at)}` : b.status === "closed" ? "🔒 cerrada" : "abierta"}
+                  </span>
+                </span>
+              </summary>
+              <ul className="divide-y border-t px-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
+                {b.items.map((i, k) => (
+                  <li key={k} className="flex justify-between gap-2 py-1.5">
+                    <span className="min-w-0">{i.name}{i.sku ? <span className="block text-[11px]" style={{ color: "var(--t-muted)" }}>Ref. {i.sku}</span> : null}</span>
+                    <b className="tabular-nums">{i.qty}</b>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
       </div>
     </section>
   );

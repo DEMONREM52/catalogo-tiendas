@@ -5,7 +5,7 @@ import { boxColor, clampSelection, distribution, distributionText, type SrBox } 
 
 const box = (number: number, items: Array<[string, number]>, status: SrBox["status"] = "open"): SrBox => ({
   id: `b${number}`, number, name: null, color: null, notes: null, fragile: false, weight_kg: null, dims: null, seal: null, status,
-  token: `t${number}`, created_by_name: null, created_at: "", updated_at: "", closed_at: null, closed_by_name: null,
+  token: `t${number}`, received_at: null, created_by_name: null, created_at: "", updated_at: "", closed_at: null, closed_by_name: null,
   items: items.map(([item_id, qty]) => ({ item_id, qty })),
 });
 

@@ -17,6 +17,7 @@ import { PhotoSearchButton } from "../PhotoSearchControls";
 import { useErpFinderSource } from "../useErpFinder";
 import { useCan } from "@/lib/permission-runtime";
 import { searchDelay } from "@/lib/search-timing";
+import { ScanButton } from "@/components/scan/ScanButton";
 
 type StockFilter = "all" | "has" | "missing" | "elsewhere";
 type StatusFilter = "active" | "inactive" | "all";
@@ -320,6 +321,7 @@ export default function ProductListPage() {
               className={inputCls}
               style={{ ...inputStyle, paddingLeft: "2.4rem", paddingRight: qInput ? "4.6rem" : "2.8rem" }}
               aria-label="Buscar productos"
+              data-product-search
             />
             {qInput ? (
               <button type="button" onClick={() => setQInput("")} className="absolute right-11 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full opacity-70 hover:opacity-100" aria-label="Limpiar búsqueda">
@@ -343,6 +345,7 @@ export default function ProductListPage() {
               }}
             />
           </div>
+          <ScanButton onCode={(c) => { setQInput(c); setQ(c); }} />
           <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters}
             className="relative inline-flex shrink-0 items-center gap-1.5 rounded-2xl border px-3 text-xs font-bold sm:hidden"
             style={showFilters || extraFilters ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>

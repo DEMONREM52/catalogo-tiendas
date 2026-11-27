@@ -14,7 +14,7 @@ type What = "todo" | "cajas" | "sin-caja" | "consolidado" | "etiquetas";
 
 const dt = (v: string | null | undefined) => (v ? new Date(v).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 /** El QR de una caja solo lleva un enlace con su código: los datos se ven con sesión y permisos. */
-const boxUrl = (token: string) => `${window.location.origin}/dashboard/pedidos/internos?caja=${token}`;
+const boxUrl = (token: string) => `${window.location.origin}/dashboard/pedidos?tab=internos&caja=${token}`;
 
 function Qr({ text, size }: { text: string; size: string }) {
   const svg = useMemo(() => {
@@ -221,7 +221,7 @@ function BoxesPrint() {
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
       <div className="toolbar">
-        <a href={`/dashboard/pedidos/internos?pedido=${r.id}`}>← Volver al pedido</a>
+        <a href={`/dashboard/pedidos?tab=internos&pedido=${r.id}`}>← Volver al pedido</a>
         {(["carta", "pos80", "pos58"] as const).map((f) => <button key={f} type="button" className={format === f ? "on" : ""} onClick={() => change(f)}>{f === "carta" ? "Carta" : f === "pos80" ? "Tirilla 80 mm" : "Tirilla 58 mm"}</button>)}
         <button type="button" className="on" onClick={() => window.print()}>🖨️ Imprimir</button>
       </div>
