@@ -1712,6 +1712,17 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Terminar y pasar al ajuste" },
     ],
   },
+  {
+    id: 166, date: "2026-11-27", title: "🔑 Conteo en grupo con contraseña",
+    summary: "Al conteo en grupo se le puede poner una contraseña de 4 a 8 números: cualquiera con el enlace y la contraseña entra a contar, aunque no tenga cuenta en RemHub. Los invitados solo anotan lo que cuentan (no ven lo que dice el sistema ni precios). Solo el anfitrión necesita cuenta para terminarlo y aplicarlo. 10 contraseñas equivocadas bloquean el enlace 15 minutos.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔑", text: "Pones la contraseña 0482" },
+      { icon: "📲", text: "Compartes el enlace por WhatsApp" },
+      { icon: "👤", text: "Pedro entra con su nombre y la contraseña" },
+      { icon: "✅", text: "Tú terminas y aplicas el ajuste" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

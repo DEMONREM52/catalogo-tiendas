@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { Camera, EyeOff, Minus, Plus, ScanBarcode, Share2, Trash2, Users, X } from "lucide-react";
+import { Camera, EyeOff, KeyRound, Minus, Plus, ScanBarcode, Share2, Trash2, Users, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { startPoll } from "@/lib/net/poll";
@@ -24,8 +24,10 @@ type RoomLine = { product_id: string; name: string; sku: string | null; barcode:
   by: Array<{ name: string | null; qty: number }>; updated_at: string; system: number | null };
 type Room = {
   count: { id: string; store_id: string; warehouse_id: string; warehouse: string; name: string | null; blind: boolean; status: Session["status"];
-    created_by_name: string | null; created_at: string; closed_by_name: string | null; finished_by_name: string | null };
-  can_adjust: boolean; me: string; people: Array<{ name: string | null; products: number; units: number; mine: boolean }>; lines: RoomLine[];
+    created_by_name: string | null; created_at: string; closed_by_name: string | null; finished_by_name: string | null;
+    /** Contraseña para invitados (20261352): enlace público /conteo/<share_token>, solo para el anfitrión. */
+    has_pin?: boolean; share_token?: string | null; guests?: number };
+  can_adjust: boolean; can_host?: boolean; me: string; people: Array<{ name: string | null; products: number; units: number; mine: boolean }>; lines: RoomLine[];
 };
 
 function newKey(): string {
@@ -211,10 +213,64 @@ function GroupCountRoom({ id, onClose, onLoad }: { id: string; onClose: () => vo
   const enqueue = (raw: string) => { chain.current = chain.current.then(() => handleScan(raw)).catch(() => undefined); };
 
   async function share() {
-    const url = linkFor(id);
-    const text = `👥 Conteo en grupo${room?.count.name ? ` «${room.count.name}»` : ""} en ${room?.count.warehouse ?? "la bodega"}. Entra y anota lo que cuentes:`;
+    // Con contraseña: el enlace público (entra cualquiera con la contraseña). Sin ella: el del panel (solo el equipo).
+    const pub = room?.count.has_pin && room.count.share_token ? `${window.location.origin}/conteo/${room.count.share_token}` : null;
+    const url = pub ?? linkFor(id);
+    const text = `👥 Conteo en grupo${room?.count.name ? ` «${room.count.name}»` : ""} en ${room?.count.warehouse ?? "la bodega"}. Entra y anota lo que cuentes${pub ? " (te paso la contraseña aparte)" : ""}:`;
     try { if (navigator.share) return void (await navigator.share({ title: "Conteo en grupo", text, url })); } catch { return; }
     try { await navigator.clipboard.writeText(url); void toast("Enlace copiado", "success"); } catch { window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank"); }
+  }
+
+  /** Anfitrión: poner, cambiar o quitar la contraseña para invitados, o cambiar el enlace. */
+  async function pinMenu() {
+    if (!room) return;
+    const has = Boolean(room.count.has_pin);
+    type PinAction = "set" | "remove" | "link";
+    let action = "set" as PinAction;
+    if (has) {
+      const pick = await Swal.fire({ ...swal, title: "🔑 Contraseña para invitados",
+        html: `<p style="font-size:13px;margin:0 0 8px">Con el enlace y la contraseña entra cualquiera a contar, sin cuenta. Hay ${room.count.guests ?? 0} invitado(s) adentro.</p>`,
+        input: "select", inputOptions: { set: "Cambiar la contraseña", link: "Enlace nuevo (el anterior deja de servir)", remove: "Quitar la contraseña (cierra el enlace)" }, inputValue: "set",
+        showCancelButton: true, confirmButtonText: "Seguir", cancelButtonText: "Cerrar" });
+      if (!pick.isConfirmed) return;
+      action = pick.value as PinAction;
+    } else {
+      const pick = await Swal.fire({ ...swal, title: "🔑 Poner contraseña",
+        html: `<p style="font-size:13px">Así cualquier persona con el enlace y la contraseña puede contar, sin cuenta. Solo anotan lo que cuentan: no ven lo que dice el sistema, ni precios; terminar y aplicar lo haces tú.</p>`,
+        showCancelButton: true, confirmButtonText: "Poner contraseña", cancelButtonText: "Cancelar" });
+      if (!pick.isConfirmed) return;
+    }
+    if (action === "link") {
+      const { error: e } = await supabaseBrowser().rpc("erp_gc_new_link", { p_id: id });
+      if (e) return void toast("No se pudo", "error", errorMessage(e));
+      pollRef.current?.run();
+      return void toast("Enlace nuevo listo", "success", "Los invitados deben volver a entrar. Lo que anotaron se queda.");
+    }
+    if (action === "remove") {
+      const { error: e } = await supabaseBrowser().rpc("erp_gc_set_pin", { p_id: id, p_pin: "" });
+      if (e) return void toast("No se pudo", "error", errorMessage(e));
+      pollRef.current?.run();
+      return void toast("Contraseña quitada", "success", "El enlace para invitados ya no abre.");
+    }
+    const r = await Swal.fire({ ...swal, title: has ? "Nueva contraseña" : "Contraseña", text: "De 4 a 8 números. Díselo a quienes van a contar.", input: "text",
+      inputAttributes: { inputmode: "numeric", maxlength: "8", autocomplete: "off" }, showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
+      inputValidator: (v) => (/^d{4,8}$/.test(String(v ?? "").trim()) ? null : "Escribe de 4 a 8 números") });
+    if (!r.isConfirmed) return;
+    const { data, error: e } = await supabaseBrowser().rpc("erp_gc_set_pin", { p_id: id, p_pin: String(r.value).trim() });
+    if (e) return void toast("No se pudo", "error", errorMessage(e));
+    pollRef.current?.run();
+    const tok = (data as { share_token?: string } | null)?.share_token;
+    if (tok) {
+      const url = `${window.location.origin}/conteo/${tok}`;
+      const done = await Swal.fire({ ...swal, icon: "success", title: "Listo", html: `<p style="font-size:13px">Comparte este enlace y di la contraseña aparte:</p><p style="font-size:12px;word-break:break-all"><b>${url}</b></p>`,
+        showCancelButton: true, confirmButtonText: "Compartir enlace", cancelButtonText: "Cerrar" });
+      if (done.isConfirmed) {
+        const text = `👥 Conteo en grupo en ${room.count.warehouse}. Entra y anota lo que cuentes (te paso la contraseña aparte):`;
+        try { if (navigator.share) return void (await navigator.share({ title: "Conteo en grupo", text, url })); } catch { return; }
+        window.open(`https://wa.me/?text=${encodeURIComponent(`${text}
+${url}`)}`, "_blank");
+      }
+    }
   }
 
   async function finish() {
@@ -257,6 +313,12 @@ function GroupCountRoom({ id, onClose, onLoad }: { id: string; onClose: () => vo
               {c ? `${c.warehouse} · abrió ${c.created_by_name ?? "—"}` : ""}{room?.people.length ? ` · ${room.people.map((p) => `${p.name ?? "—"} (${p.units})`).join(", ")}` : ""}
             </p>
           </div>
+          {room?.can_host && (c?.status === "open" || c?.status === "closed") ? (
+            <button type="button" onClick={() => void pinMenu()} className="inline-flex h-9 items-center gap-1 rounded-full border px-2.5 text-[11px] font-bold"
+              style={room.count.has_pin ? { borderColor: "#16a34a", color: "#16a34a" } : { borderColor: "var(--t-card-border)" }} title="Contraseña para que entre cualquiera con el enlace">
+              <KeyRound size={14} /> {room.count.has_pin ? `Con contraseña${room.count.guests ? ` · ${room.count.guests}` : ""}` : "Contraseña"}
+            </button>
+          ) : null}
           <button type="button" onClick={() => void share()} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Compartir el enlace del conteo" title="Compartir el enlace (WhatsApp, copiar)"><Share2 size={16} /></button>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Cerrar"><X size={16} /></button>
         </header>

@@ -217,10 +217,10 @@ export const MODULES: ModuleInfo[] = [
       ],
       href: "/dashboard/inventario?tab=adjustments", verified: true,
     }, {
-      id: "inventory.group_count", goal: "contar el inventario entre varias personas", keywords: "conteo en grupo contar entre varios varias personas al mismo tiempo celulares colaborativo ajuste en grupo a ciegas",
+      id: "inventory.group_count", goal: "contar el inventario entre varias personas", keywords: "conteo en grupo contar entre varios varias personas al mismo tiempo celulares colaborativo ajuste en grupo a ciegas contraseña invitados enlace",
       steps: [
         "Abre Inventario y luego Ajustes. Elige la bodega y toca «👥 Nuevo conteo en grupo» (si quieres, márcalo «a ciegas» para que no vean lo que dice el sistema).",
-        "Comparte el enlace con el botón de compartir: cada persona entra desde su celular y anota lo que cuenta, buscándolo o con «Contar escaneando». Si el mismo producto está en dos sitios, se suma lo de cada quien.",
+        "Para que entre cualquiera (aunque no tenga cuenta), toca «🔑 Contraseña» y pon una de 4 a 8 números. Comparte el enlace y di la contraseña aparte: cada persona escribe su nombre y la contraseña y anota lo que cuenta, buscándolo o con «Contar escaneando». Si el mismo producto está en dos sitios, se suma lo de cada quien.",
         "Todos ven en vivo lo contado y quién contó cuánto. Cada persona solo cambia lo suyo.",
         "Al terminar, quien tiene «Ajustes de inventario» toca «Terminar y pasar al ajuste»: el total de cada producto queda en el ajuste para revisarlo y aplicarlo como siempre. Si no lo aplica, puede reabrir el conteo.",
       ],

@@ -2,7 +2,7 @@
 
 > Generado desde `src/lib/rem` con `npm run rem:catalog`. No lo edites a mano: `tests/rem/catalog-sync.test.ts` falla si quedó viejo.
 
-Versión del catálogo: `7422d2ef` · 119 capacidades · 33 módulos.
+Versión del catálogo: `3e1587fc` · 119 capacidades · 33 módulos.
 
 Que REM conozca algo no quiere decir que cualquiera lo pueda usar: abre solo lo que la persona puede abrir a mano, y la base vuelve a revisar el permiso en cada consulta o cambio.
 
