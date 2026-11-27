@@ -14,7 +14,7 @@
 do $$
 declare
   -- ---------------------------------------------------------- parámetros
-  v_aplicar              boolean := false;            -- ← false = simulación · true = REGISTRAR DE VERDAD
+  v_aplicar              boolean := true;             -- ← false = simulación · true = REGISTRAR DE VERDAD
   v_tienda               text    := 'LA VITRINA';
   v_bodega               text    := 'Bodega principal';  -- destino (la columna «Bod.» de la remisión NO es esto)
   v_proveedor            text    := 'RAUL ALBERTO SALAZAR ZULUAGA';
