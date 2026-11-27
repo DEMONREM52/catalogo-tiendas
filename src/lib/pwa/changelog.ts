@@ -1701,6 +1701,17 @@ export const RELEASES: Release[] = [
       { icon: "🔎", text: "Buscar por número, producto o persona, igual que antes" },
     ],
   },
+  {
+    id: 165, date: "2026-11-27", title: "👥 Conteo en grupo para los ajustes",
+    summary: "En Inventario → Ajustes ahora pueden contar entre varios: abre un «Conteo en grupo», comparte el enlace y cada persona anota desde su celular lo que cuenta (buscando o escaneando). Se suma lo de todos y se ve en vivo quién contó cuánto. Puede ser «a ciegas». Contar no mueve inventario: al terminar, quien tiene «Ajustes de inventario» lo pasa al ajuste y lo aplica como siempre. «Contar escaneando» ahora lee QR también en iPhone y tiene linterna.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "👥", text: "Abres un conteo en grupo en Zamora" },
+      { icon: "📲", text: "Ana y Luis entran por el enlace" },
+      { icon: "🔫", text: "Cada uno escanea lo suyo: se suma" },
+      { icon: "✅", text: "Terminar y pasar al ajuste" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

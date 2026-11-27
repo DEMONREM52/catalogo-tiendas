@@ -2,18 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { sameCode } from "@/lib/scan/parse";
+
+// El lector de cámara de todo RemHub (barras y QR; en iPhone, QR), con linterna y cambio de cámara. Se carga al abrirlo.
+const CameraScanner = dynamic(() => import("./scan/CameraScanner").then((m) => m.CameraScanner), { ssr: false });
 
 /**
  * Contar escaneando (opcional): cada lectura suma 1 al producto.
- *  · Con la cámara del celular (navegadores con BarcodeDetector: Chrome en Android, Edge…).
+ *  · Con la cámara (CameraScanner: barras y QR con BarcodeDetector; en iPhone/Safari, QR).
  *  · Con un lector USB/Bluetooth o escribiendo el código y Enter (funciona en cualquier equipo).
  * Busca por código de barras o referencia. Si se da `allowed`, solo cuenta esos productos (ej. los del traslado).
  */
 
 export type ScanCount = { product_id: string; name: string; sku: string | null; qty: number };
-type Detector = { detect: (src: CanvasImageSource) => Promise<Array<{ rawValue: string }>> };
-type DetectorCtor = new (o?: { formats?: string[] }) => Detector;
 
 function beep(ok: boolean) {
   try {
@@ -43,12 +46,9 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
   const [counts, setCounts] = useState<ScanCount[]>(initial ?? []);
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [camera, setCamera] = useState<"off" | "on" | "unsupported" | "denied">("off");
+  const [camera, setCamera] = useState(false);
   const [zeroOthers, setZeroOthers] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const lastRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const cache = useRef(new Map<string, { id: string; name: string; sku: string | null } | null>());
 
   const lookup = useCallback(async (raw: string) => {
@@ -61,7 +61,8 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
     const safe = c.replace(/[,()*%\\"]/g, "");
     const { data } = await supabaseBrowser().from("products").select("id,name,sku,barcode").eq("store_id", storeId)
       .or(`barcode.eq.${safe},sku.ilike.${safe}`).limit(5);
-    const rows = (data ?? []) as Array<{ id: string; name: string; sku: string | null }>;
+    // Solo coincidencia exacta: en «ilike» el «_» es comodín y podía traer otro producto.
+    const rows = ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null }>).filter((r) => sameCode(c, r.sku, r.barcode));
     const hit = (allowed ? rows.find((r) => allowed.has(r.id)) : rows[0]) ?? null;
     cache.current.set(c, hit);
     return hit;
@@ -86,44 +87,6 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
     }, 0);
   }, [lookup, allowed]);
 
-  // Cámara: lee el código cada 250 ms; el mismo código no se repite antes de 1,2 s.
-  useEffect(() => {
-    if (camera !== "on") return;
-    const Ctor = (window as unknown as { BarcodeDetector?: DetectorCtor }).BarcodeDetector;
-    if (!Ctor) { const t = window.setTimeout(() => setCamera("unsupported"), 0); return () => window.clearTimeout(t); }
-    let alive = true;
-    let timer = 0;
-    const detector = new Ctor({ formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "itf", "qr_code"] });
-    void navigator.mediaDevices?.getUserMedia({ video: { facingMode: "environment" }, audio: false }).then((stream) => {
-      if (!alive) { stream.getTracks().forEach((t) => t.stop()); return; }
-      streamRef.current = stream;
-      const v = videoRef.current;
-      if (!v) return;
-      v.srcObject = stream;
-      void v.play();
-      const tick = async () => {
-        if (!alive || !videoRef.current) return;
-        try {
-          const found = await detector.detect(videoRef.current);
-          const value = found[0]?.rawValue;
-          const now = Date.now();
-          if (value && (value !== lastRef.current.code || now - lastRef.current.at > 1200)) {
-            lastRef.current = { code: value, at: now };
-            void register(value);
-          }
-        } catch { /* cuadro sin código */ }
-        timer = window.setTimeout(() => void tick(), 250);
-      };
-      void tick();
-    }).catch(() => setCamera("denied"));
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, [camera, register]);
-
   useEffect(() => { const t = window.setTimeout(() => inputRef.current?.focus(), 50); return () => window.clearTimeout(t); }, []);
 
   const total = counts.reduce((s, c) => s + c.qty, 0);
@@ -137,15 +100,10 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
           <h3 className="text-base font-black">📷 {title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
         </div>
-        {camera === "on" ? (
-          <video ref={videoRef} playsInline muted className="mt-3 aspect-video w-full rounded-xl bg-black object-cover" />
-        ) : (
-          <button type="button" onClick={() => setCamera("on")} className="mt-3 rounded-xl border px-3 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
-            📷 Usar la cámara
-          </button>
-        )}
-        {camera === "unsupported" ? <p className="mt-1 text-xs text-amber-500">Este navegador no lee códigos con la cámara. Usa Chrome en Android, un lector USB o escribe el código.</p> : null}
-        {camera === "denied" ? <p className="mt-1 text-xs text-amber-500">No se pudo abrir la cámara (permiso negado). Usa un lector o escribe el código.</p> : null}
+        <button type="button" onClick={() => setCamera(true)} className="mt-3 rounded-xl border px-3 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+          📷 Usar la cámara
+        </button>
+        {camera ? <CameraScanner title={title} continuous onClose={() => setCamera(false)} onCode={(c) => void register(c)} hint="Cada lectura suma 1." /> : null}
         <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void register(code); setCode(""); }}>
           <input ref={inputRef} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Escanea con el lector o escribe el código y Enter"
             className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)", color: "var(--t-text)" }} aria-label="Código" />

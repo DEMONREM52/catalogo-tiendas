@@ -13,6 +13,7 @@ import Swal from "@/lib/swal";
 import { ScanCounter, type ScanCount } from "@/components/ScanCounter";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { debtAfterText, debtPreviewHtml } from "./PointDebtAdjust";
+import { GroupCountBar, type GroupCountItem } from "./GroupCount";
 import {
   AUDIT_MIGRATION, START_MIGRATION, AuditHistory, AuditProgress, AuditReport, auditSummaryHtml, confirmStartMode, countPreviewHtml, loadCountPreview,
   splitMissing, useStockForCount, type CountMode, type StockItem,
@@ -51,6 +52,32 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
   const [auditOpen, setAuditOpen] = useState<string | null>(null);
   const [auditKey, setAuditKey] = useState(0);
   const closeAudit = useCallback(() => setAuditOpen(null), []);
+  // Conteo en grupo (20261351): el total de todos pasa a este ajuste; al aplicarlo, el conteo queda «aplicado».
+  const groupKey = (wh: string) => `remhub:gc-pending:${ctx.storeId}:${wh}`;
+  const canCount = canAdjust || ctx.can("inventory_counts");
+  async function loadGroup(items: GroupCountItem[], countId: string, wh: string) {
+    if (!canAdjust) return;
+    if (wh !== warehouse) {
+      if (ctx.pointId) return void toast("Ese conteo es de otra bodega", "warning");
+      changeWarehouse(wh);
+    }
+    if (lines.length && wh === warehouse) {
+      const ok = await confirmAction("Pasar el conteo en grupo al ajuste", `Ya tienes ${lines.length} producto(s) en este ajuste. Se reemplazan por lo contado en grupo (${items.length} productos).`);
+      if (!ok) return;
+    }
+    window.setTimeout(() => {
+      setReason("count");
+      setLines(items.map((i) => ({ product_id: i.product_id, name: i.name, sku: i.sku, current: Number(i.current), qty: Number(i.qty), unit_cost: 0, tax_rate: 0, warehouse_id: wh })));
+      try { window.localStorage.setItem(groupKey(wh), countId); } catch { /* sin almacenamiento */ }
+      void toast("Conteo en grupo listo para revisar", "success", "Revisa las diferencias y aplica el ajuste como siempre.");
+    }, 0);
+  }
+  function markGroupApplied(wh: string) {
+    let id: string | null = null;
+    try { id = window.localStorage.getItem(groupKey(wh)); window.localStorage.removeItem(groupKey(wh)); } catch { /* sin almacenamiento */ }
+    if (id) void supabaseBrowser().rpc("erp_gc_applied", { p_id: id });
+  }
+
   function addFromAudit(item: StockItem, qty: number) {
     setLines((cur) => (cur.some((l) => l.product_id === item.product_id) ? cur : [...cur, {
       product_id: item.product_id, name: item.name, sku: item.sku, current: item.qty, qty, unit_cost: 0, tax_rate: 0, warehouse_id: warehouse,
@@ -340,6 +367,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
       void stock.reload();
       setAuditKey((k) => k + 1);
       setAuditOpen(r.audit_id);
+      markGroupApplied(warehouse);
       if (r.adjustment_id) void debtAfterText(r.adjustment_id).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
       return;
     }
@@ -366,6 +394,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
     setSavedAt(null);
     refreshPending();
     void toast("Ajuste aplicado");
+    markGroupApplied(warehouse);
     if (typeof adjId === "string") void debtAfterText(adjId).then((t) => { if (t) void toast("🤝 Cuenta con la bodega", "success", t); });
     void load();
   }
@@ -473,6 +502,7 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
           ) : null}
           {warehouse && isCount && stock.missing ? <p className="mt-3 text-[11px]" style={{ color: "var(--t-muted)" }}>🔎 Para ver lo que falta contar y guardar la auditoría: {AUDIT_MIGRATION}</p> : null}
           {warehouse ? <div className="mt-3"><LineEditor storeId={ctx.storeId} lines={lines} onChange={setLines} mode="adjust" warehouseId={warehouse} editorRef={editorRef} canEditProducts={ctx.can("products")} /></div> : null}
+          {warehouse ? <GroupCountBar ctx={ctx} warehouses={warehouses} warehouse={warehouse} canAdjust={canAdjust} onLoad={(items, id, wh) => void loadGroup(items, id, wh)} /> : null}
           {scanning && warehouse ? (
             <ScanCounter storeId={ctx.storeId} title="Contar escaneando" onClose={() => setScanning(false)} onDone={(c, z) => void applyScan(c, z)}
               zeroOthersLabel={lines.length ? "Los productos de la lista que no escaneé quedan en 0" : undefined} />
@@ -496,6 +526,10 @@ export function AdjustmentsTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: W
               ? <Btn variant="danger" onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : "🚩 Aplicar inventario inicial y ver el informe"}</Btn>
               : <Btn onClick={() => void post()} disabled={busy}>{busy ? "Aplicando…" : isCount && stock.ready ? "✅ Aplicar conteo y ver la auditoría" : "✅ Aplicar ajuste"}</Btn>}
           </div>
+        </Panel>
+      ) : canCount ? (
+        <Panel title="👥 Conteo en grupo" subtitle="Cuenten entre varios, cada quien desde su celular: se suma lo de todos. Quien tiene «Ajustes de inventario» lo revisa y lo aplica.">
+          <GroupCountBar ctx={ctx} warehouses={warehouses} warehouse={ctx.pointId ?? ""} canAdjust={false} onLoad={() => undefined} />
         </Panel>
       ) : null}
 
