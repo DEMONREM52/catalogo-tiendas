@@ -87,6 +87,12 @@ export function builtinTemplates(w: number, h: number): LabelTemplate[] {
   ];
 }
 
+/** Separador entre productos: etiqueta en blanco con una franja negra gruesa (marca dónde termina un producto). */
+export function separatorDesign(w: number, h: number): LabelDesign {
+  const bar = Math.min(4, Math.max(2, h * 0.14));
+  return { v: LABEL_FORMAT_VERSION, w, h, elements: [newRect({ id: "separador", x: 0, y: r(h / 2 - bar / 2), w, h: r(bar), stroke: 0, fill: "#000000" })] };
+}
+
 // ------------------------------------------------------------------ validación (de la base o de un archivo)
 const MAX_ELEMENTS = 300;
 const num = (v: unknown, d: number, min: number, max: number) => {

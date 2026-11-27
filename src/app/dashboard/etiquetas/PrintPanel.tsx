@@ -7,6 +7,7 @@ import { productLabelData, tokensIn, type LabelData } from "@/lib/labels/data";
 import { paginate, perPage, printDocument, rowsPerPage, validateProfile, type JobLabel } from "@/lib/labels/layout";
 import { canvasMeasure } from "@/lib/labels/measure-browser";
 import { renderLabel, labelSvg, type ElementIssue } from "@/lib/labels/render";
+import { separatorDesign } from "@/lib/labels/templates";
 import type { LabelTemplate, PrinterProfile } from "@/lib/labels/types";
 import { printHtmlSilently, printHtmlWindow } from "@/lib/print/transports";
 import { storeShareUrl } from "@/lib/share/store-host";
@@ -53,6 +54,9 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const [error, setError] = useState<string | null>(null);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
   const autoDone = useRef<number | null>(null);
+  // Etiqueta en blanco con franja negra entre un producto y el siguiente (se recuerda en este equipo).
+  const [separate, setSeparate] = useState(() => { try { return window.localStorage.getItem("remhub:labels:separar") !== "0"; } catch { return true; } });
+  const toggleSeparate = () => setSeparate((v) => { try { window.localStorage.setItem("remhub:labels:separar", v ? "0" : "1"); } catch { /* sin almacenamiento */ } return !v; });
 
   // Lo que llega por enlace (producto, ingreso, traslado o lista general) o de «Repetir» en el historial.
   const seedKey = seed?.key;
@@ -112,10 +116,13 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
   const profileErrors = validateProfile(profile).filter((i) => i.level === "error");
 
   // Etiquetas en orden (cada copia) y sus páginas.
+  const sepInput = useMemo(() => ({ design: separatorDesign(template.design.w, template.design.h), data: {}, dpi: profile.dpi, measure: canvasMeasure }), [template.design.w, template.design.h, profile.dpi]);
+  const sepBody = useMemo(() => renderLabel(sepInput), [sepInput]);
   const jobLabels = useMemo<JobLabel[]>(() => {
     const out: JobLabel[] = [];
     let seq = 0;
-    for (const l of ready) {
+    for (const [li, l] of ready.entries()) {
+      if (separate && li > 0 && out.length < MAX_LABELS) out.push({ key: "sep", input: sepInput });
       const p = products.get(l.product_id)!;
       const images = { logo: store.logo_url, foto: p.image_url };
       for (let k = 0; k < l.qty && out.length < MAX_LABELS; k++) {
@@ -124,7 +131,9 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
       }
     }
     return out;
-  }, [ready, products, template, dataFor, profile.dpi, usesSeq, store.logo_url]);
+  }, [ready, products, template, dataFor, profile.dpi, usesSeq, store.logo_url, separate, sepInput]);
+  const separators = jobLabels.filter((j) => j.key === "sep").length;
+  const productLabels = jobLabels.length - separators;
   const pages = useMemo(() => paginate(jobLabels, profile, start), [jobLabels, profile, start]);
   const empty = pages.length * perPage(profile) - jobLabels.length;
 
@@ -136,8 +145,8 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
     autoDone.current = seed.key;
     const t = window.setTimeout(() => {
       setAutoMsg(errors.length || profileErrors.length
-        ? `No se imprimió solo: hay avisos en rojo. Corrígelos y toca «Imprimir» (${jobLabels.length.toLocaleString("es-CO")} etiquetas de ${seed.label}).`
-        : `Se abrió la impresión de las ${jobLabels.length.toLocaleString("es-CO")} etiquetas de ${seed.label} con «${template.name}» en «${profile.name}». Si no apareció la ventana, toca «Imprimir».`);
+        ? `No se imprimió solo: hay avisos en rojo. Corrígelos y toca «Imprimir» (${productLabels.toLocaleString("es-CO")} etiquetas de ${seed.label}).`
+        : `Se abrió la impresión de las ${productLabels.toLocaleString("es-CO")} etiquetas de ${seed.label} con «${template.name}» en «${profile.name}». Si no apareció la ventana, toca «Imprimir».`);
       void print(true);
     }, 0);
     return () => window.clearTimeout(t);
@@ -192,7 +201,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
       const key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
       void onLog({
         key, templateId: template.id, templateName: template.name, profileName: profile.name, userName,
-        items: ready.map((l) => ({ product_id: l.product_id, name: products.get(l.product_id)?.name ?? "", qty: l.qty })), total: jobLabels.length,
+        items: ready.map((l) => ({ product_id: l.product_id, name: products.get(l.product_id)?.name ?? "", qty: l.qty })), total: productLabels,
       }).catch(() => undefined);
     } finally {
       setBusy(false);
@@ -320,6 +329,10 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
           ))}
           <span style={{ color: "var(--t-muted)" }}>{profile.mode === "roll" ? "de la primera fila" : "de la primera hoja"} (para no desperdiciar)</span>
         </div>
+        <button type="button" onClick={toggleSeparate} className="flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs" style={separate ? { borderColor: "var(--t-accent)", background: "color-mix(in oklab, var(--t-accent) 9%, transparent)" } : { borderColor: "var(--t-card-border)" }}>
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md border font-black" style={separate ? { background: "var(--t-accent)", borderColor: "var(--t-accent)", color: "#fff" } : { borderColor: "var(--t-card-border)" }}>{separate ? "✓" : ""}</span>
+          <span><b>Separar productos:</b> entre un producto y el siguiente va una etiqueta en blanco con una franja negra gruesa, para ver dónde termina cada uno{separators ? ` (${separators} separador${separators === 1 ? "" : "es"})` : ""}.</span>
+        </button>
 
         {sizeMismatch ? (
           <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "#f59e0b", color: "#d97706" }}>
@@ -331,12 +344,12 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--t-card-border)" }}>
           <span>
-            <b>{jobLabels.length.toLocaleString("es-CO")}</b> etiqueta{jobLabels.length === 1 ? "" : "s"} · <b>{pages.length}</b> {profile.mode === "roll" ? `fila${pages.length === 1 ? "" : "s"} de ${profile.cols}` : `hoja${pages.length === 1 ? "" : "s"} de ${perPage(profile)}`}
+            <b>{productLabels.toLocaleString("es-CO")}</b> etiqueta{productLabels === 1 ? "" : "s"}{separators ? <> + {separators} separador{separators === 1 ? "" : "es"}</> : null} · <b>{pages.length}</b> {profile.mode === "roll" ? `fila${pages.length === 1 ? "" : "s"} de ${profile.cols}` : `hoja${pages.length === 1 ? "" : "s"} de ${perPage(profile)}`}
             {empty > 0 && jobLabels.length ? <> · {empty} posición{empty === 1 ? "" : "es"} vacía{empty === 1 ? "" : "s"}</> : null}
             {total > MAX_LABELS ? <span className="text-amber-500"> · máximo {MAX_LABELS.toLocaleString("es-CO")} por trabajo</span> : null}
           </span>
           <Button variant="primary" icon={busy ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} disabled={busy || !jobLabels.length || errors.length > 0} onClick={() => void print()}>
-            Imprimir {jobLabels.length ? jobLabels.length.toLocaleString("es-CO") : ""}
+            Imprimir {productLabels ? productLabels.toLocaleString("es-CO") : ""}
           </Button>
         </div>
 
@@ -349,7 +362,7 @@ export function PrintPanel({ store, templates, template, onTemplate, profiles, p
               <PageSvg key={i} profile={profile} cells={page.map((lbl) => {
                 if (!lbl) return null;
                 const pid = lbl.key.split("#")[0];
-                const r = usesSeq ? renderLabel(lbl.input) : perProduct.get(pid);
+                const r = lbl.key === "sep" ? sepBody : usesSeq ? renderLabel(lbl.input) : perProduct.get(pid);
                 return r ? { body: r.body, w: lbl.input.design.w, h: lbl.input.design.h, bad: r.issues.some((x) => x.level === "error") } : null;
               })} />
             ))}

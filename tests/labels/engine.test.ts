@@ -287,3 +287,13 @@ test("cambiar el tamaño de un diseño escala todo y los códigos siguen leyénd
   assert.equal(readQrFromSvg(mixed.svg).text, "https://remhub.co/x");
   assert.equal(decodeCode128(barsFromSvg(mixed.svg).bits.replace(/0+$/, "")), "12345678910");
 });
+
+test("separador entre productos: etiqueta en blanco con franja negra gruesa, en su propia posición", async () => {
+  const { separatorDesign } = await import("../../src/lib/labels/templates");
+  const d = separatorDesign(31, 25);
+  const out = render(d, {});
+  assert.match(out.svg, /<rect x="0" y="[\d.]+" width="31" height="3\.5" rx="0" fill="#000000" stroke="none"/);
+  assert.equal(out.issues.length, 0);
+  // 2 del producto A, separador, 2 del producto B → fila 1: A A ▬ · fila 2: B B (vacío).
+  assert.deepEqual(paginate(["A", "A", "sep", "B", "B"], STARPOS_IF4), [["A", "A", "sep"], ["B", "B", null]]);
+});

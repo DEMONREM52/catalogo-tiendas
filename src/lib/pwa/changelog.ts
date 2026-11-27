@@ -1638,6 +1638,16 @@ export const RELEASES: Release[] = [
       { icon: "🖨️", text: "Sale con tu plantilla, fila por fila" },
     ],
   },
+  {
+    id: 159, date: "2026-11-27", title: "▬ Separador entre productos en las etiquetas",
+    summary: "Al imprimir etiquetas de varios productos, entre uno y otro sale una etiqueta en blanco con una franja negra gruesa: así se ve de un vistazo dónde terminan las de un producto y empiezan las del siguiente. Se activa o se quita en Etiquetas con «Separar productos» y se recuerda en cada equipo.",
+    paths: ["/dashboard/etiquetas"],
+    demo: [
+      { icon: "🏷️", text: "YP 807 · YP 807 · YP 807" },
+      { icon: "▬", text: "Separador" },
+      { icon: "🏷️", text: "YP 805 · YP 805…" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
