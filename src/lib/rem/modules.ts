@@ -231,10 +231,19 @@ export const MODULES: ModuleInfo[] = [
   {
     id: "orders", name: "Pedidos", path: "/dashboard/pedidos",
     aliases: "pedidos pedidos de clientes pedidos internos solicitudes whatsapp ventas en linea", keys: "pedido|pedidos|pedidos internos|pedidos de clientes",
-    about: "Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. Al recibir un pedido interno, si llegó un producto que no venía en el envío, se toca «📦 Llegó algo más»: se suma al traslado y queda en el chat para revisarlo. Quien despacha puede juntar varios pedidos que salen del mismo lugar en un lote (una sola lista para sacarlos y luego repartir lo de cada punto) y deshacerlo cuando quiera; lo que escribe en «Enviar» se guarda solo.",
+    about: "Tiene dos partes: los pedidos de clientes que llegan por el catálogo o WhatsApp, y los pedidos internos, cuando un punto le pide mercancía a la bodega. Al recibir un pedido interno, si llegó un producto que no venía en el envío, se toca «📦 Llegó algo más»: se suma al traslado y queda en el chat para revisarlo. Quien despacha puede juntar varios pedidos que salen del mismo lugar en un lote (una sola lista para sacarlos y luego repartir lo de cada punto) y deshacerlo cuando quiera; lo que escribe en «Enviar» se guarda solo. En «📦 Cajas» guarda los productos en cajas (Caja 1, Caja 2…), puede repartir un mismo producto entre varias, cerrarlas con sello e imprimir la lista por cajas o las etiquetas con QR; las cajas no mueven inventario.",
     howto: [{
       id: "orders.internal", goal: "hacer un pedido interno", keywords: "pedido interno pedir mercancia solicitar bodega",
       steps: [], href: "/dashboard/pedidos?tab=internos&nuevo=1", voice: "Toca «Nuevo pedido» y dime «quiero hacer un pedido interno»: te sigo por voz.", verified: true,
+    }, {
+      id: "orders.boxes", goal: "guardar productos de un pedido interno en cajas", keywords: "caja cajas empacar empaque guardar en caja pedido interno etiqueta caja qr",
+      steps: [
+        "Abre el pedido interno en Pedidos, pestaña «Pedidos internos», y toca «📦 Cajas».",
+        "En «Sin caja», toca los productos que van juntos; con − y + eliges cuántas unidades de cada uno.",
+        "Abajo sale la barra: toca «Guardar en caja», elige «Nueva caja» (nombre y color opcionales) o una caja abierta, y confirma.",
+        "Toca «Imprimir» para la lista por cajas (carta o tirilla) o las etiquetas de caja con QR.",
+      ],
+      href: "/dashboard/pedidos?tab=internos", verified: true,
     }, {
       id: "orders.by_product", goal: "buscar los pedidos que llevan un producto", keywords: "buscar pedido producto nombre codigo quien compro que pedidos llevan",
       steps: [

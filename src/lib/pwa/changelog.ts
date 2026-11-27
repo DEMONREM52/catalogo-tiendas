@@ -1669,6 +1669,17 @@ export const RELEASES: Release[] = [
       { icon: "🏷️", text: "WB 999 empieza en fila nueva" },
     ],
   },
+  {
+    id: 162, date: "2026-11-27", title: "📦 Cajas en los pedidos internos",
+    summary: "Quien despacha guarda los productos del pedido en cajas: elige los productos (y cuántas unidades), toca «Guardar en caja» y se arma la Caja 1, la Caja 2… Un producto se puede repartir entre varias cajas; cada caja tiene color, nombre, notas, peso, sello y se cierra cuando está lista. Se imprime la lista por cajas en carta o tirilla y las etiquetas de caja con QR. Las cajas no mueven inventario.",
+    paths: ["/dashboard/pedidos"],
+    demo: [
+      { icon: "☑️", text: "Eliges 5 productos" },
+      { icon: "📦", text: "Guardar en caja → Caja 1" },
+      { icon: "🔒", text: "La cierras con sello" },
+      { icon: "🖨️", text: "Imprimes la etiqueta con QR" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

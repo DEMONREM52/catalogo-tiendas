@@ -23,6 +23,8 @@ import { EmojiButton } from "@/components/chat/EmojiPicker";
 import { MAX_BYTES, clock, kindOf, mediaMeta, prepareImage, uploadChatFile, useRecorder, type Attachment, type Pending } from "./chat-media";
 import { markOwnAction, soundFor } from "@/lib/sounds/notify";
 import { useQtyAutosave } from "./qty-save";
+import { BoxesBoard, useRequestBoxes } from "./BoxesBoard";
+import { distribution, distributionText } from "./boxes";
 import { STOCK_REQUESTS_CHANGED_EVENT, SR_STATUS, SR_STEPS, isOpen, srError, timeAgo, type SrDetail, type SrSignStep } from "./types";
 import { ProductPhotoButton, photoFilterText } from "@/app/dashboard/PhotoSearchControls";
 
@@ -89,6 +91,20 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const loadOthers = useCallback(async () => (await loadPeople())?.filter((p) => !p.me) ?? null, [loadPeople]);
   const data = loaded && loaded.id === requestId ? loaded.data : null;
   const thumbs = useThumbs(data ? data.items.map((i) => i.product_id) : []);
+  // Cajas (20261348): vista aparte para no mezclar «chulear» con «guardar en caja».
+  const [view, setView] = useState<"list" | "boxes">("list");
+  const [boxSelecting, setBoxSelecting] = useState(false);
+  const boxes = useRequestBoxes(requestId);
+  // Llegó escaneando el QR de una caja: abre la vista de cajas con esa caja abierta.
+  const [focusBox, setFocusBox] = useState<string | null>(null);
+  useEffect(() => {
+    const w = window as Window & { __remhubFocusBox?: { request: string; box: string } | null };
+    const f = w.__remhubFocusBox;
+    if (!requestId || !f || f.request !== requestId) return;
+    w.__remhubFocusBox = null;
+    const t = window.setTimeout(() => { setView("boxes"); setFocusBox(f.box); }, 0);
+    return () => window.clearTimeout(t);
+  }, [requestId]);
   // Precio por mayor (precio 2) de cada producto, para ver cuánto vale el pedido.
   const prices = useListPrices(data ? data.items.map((i) => i.product_id) : []);
 
@@ -498,6 +514,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
   const filteredByComments = onlyCommented ? sortedItems.filter((i) => openCommentItems.has(i.id)) : sortedItems;
   const foldText = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   const queryWords = foldText(itemQuery.trim()).split(/\s+/).filter(Boolean);
+  const boxDist = data && boxes.data?.boxes.length ? distribution(data.items.map((i) => ({ id: i.id, toSend: i.qty_approved ?? i.qty_requested })), boxes.data.boxes) : null;
   const shownItems = queryWords.length ? filteredByComments.filter((i) => { const h = foldText(`${i.name} ${i.sku ?? ""}`); return queryWords.every((w) => h.includes(w)); }) : filteredByComments;
   async function toggleCheck(itemId: string) {
     if (!canCheck || !data) return;
@@ -574,8 +591,21 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
     </button>
   ) : null;
 
+  const boxCount = boxes.data?.boxes.length ?? 0;
   const itemsPanel = data && r ? (
     <div className="space-y-3">
+      {showChecklist && !boxes.error ? (
+        <div className="flex gap-1 rounded-2xl border p-1" role="tablist" aria-label="Vista de productos" style={{ borderColor: "var(--t-card-border)", background: "var(--t-card-bg)" }}>
+          {([["list", checkSide === "pack" ? "📋 Lista de empaque" : "📋 Lista de lo que llegó"], ["boxes", `📦 Cajas${boxCount ? ` (${boxCount})` : ""}`]] as const).map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)} className="flex-1 rounded-xl px-3 py-1.5 text-xs font-black transition"
+              style={view === k ? { background: "var(--t-accent)", color: "#fff" } : { color: "var(--t-muted)" }}>{l}</button>
+          ))}
+        </div>
+      ) : null}
+      {view === "boxes" && showChecklist && !boxes.error ? (
+        <BoxesBoard key={focusBox ?? "boxes"} request={data.request} items={data.items} thumbs={thumbs} boxes={boxes} onSelecting={setBoxSelecting} focusBox={focusBox} />
+      ) : null}
+      {view === "list" || !showChecklist || boxes.error ? (<>
       {showChecklist ? (
         <div className="sticky top-0 z-10 rounded-2xl border p-2.5 backdrop-blur sm:p-3" style={{ borderColor: doneCount === data.items.length ? "#22c55e" : "var(--t-card-border)", background: "color-mix(in oklab, var(--t-bg-base) 96%, transparent)", boxShadow: "0 10px 24px -12px rgba(0,0,0,.6)" }}>
           <div className="flex items-center gap-2">
@@ -673,6 +703,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
                   ) : null}
                 </p>
                 {i.note ? <p className="truncate text-[11px] font-semibold sm:whitespace-normal" style={{ color: "#a78bfa" }}>{i.note}</p> : null}
+                {boxDist?.perItem.get(i.id)?.length ? <p className="truncate text-[11px] font-bold" style={{ color: "var(--t-accent)" }}>📦 {distributionText(boxDist.perItem.get(i.id)!, boxDist.unboxed.get(i.id) ?? 0)}</p> : null}
                 {chk ? <p className="truncate text-[11px] font-bold sm:whitespace-normal" style={{ color: "#22c55e" }}>✓ <span className="hidden sm:inline">{checkSide === "pack" ? "Empacado" : "Contado"} · </span>{chk.by ?? "—"} · {new Date(chk.at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</p> : null}
                 {i.qty_received !== null ? <p className="text-xs font-semibold" style={{ color: i.qty_received < (i.qty_approved ?? 0) ? "#f59e0b" : "#22c55e" }}>Recibido {i.qty_received} de {i.qty_approved}</p> : null}
                 <CommentPreview comments={commentsBy.get(i.id) ?? []} onOpen={() => setCommentItem(i.id)} />
@@ -733,6 +764,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
           );
         })}
       </div>
+      </>) : null}
 
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--t-card-border)" }}>
@@ -820,7 +852,7 @@ export function RequestRoom({ requestId, onClose, onChanged }: { requestId: stri
       {canAttend ? <p className="text-xs" style={{ color: "var(--t-muted)" }}>Ajusta “Enviar” si hace falta (se guarda solo) y sigue el botón «👉 Te toca»: Preparó → Revisó → Enviar → quien lo lleva firma “En camino”. Se descuenta de {r.to_name} aunque quede en 0 o en negativo.</p> : null}
 
       {/* Barra flotante: el siguiente paso que te toca y, debajo, subir, agregar otro producto o bajar a las firmas. */}
-      <div className="pointer-events-none sticky bottom-0 z-20 -mx-1 pb-1 pt-2">
+      <div className={`pointer-events-none sticky bottom-0 z-20 -mx-1 pb-1 pt-2 ${boxSelecting && view === "boxes" ? "hidden" : ""}`}>
       {nextStep ? <div className="mb-2 flex justify-center px-1">{nextButton(false)}</div> : null}
       <div className="flex items-center justify-center gap-2">
         <button type="button" onClick={() => itemsScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Subir al inicio" title="Subir al inicio"

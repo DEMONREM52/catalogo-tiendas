@@ -115,6 +115,20 @@ export function StockRequestsPanel({ storeId, canRequest }: { storeId: string; c
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get("pedido");
     if (fromUrl) window.setTimeout(() => setOpenId(fromUrl), 0);
+    // QR de una caja (?caja=<código>): se resuelve con tu sesión y permisos; abre su pedido en la vista de cajas.
+    const boxToken = params.get("caja");
+    if (boxToken && /^[0-9a-f-]{36}$/i.test(boxToken)) {
+      void sb.rpc("erp_sr_box_resolve", { p_token: boxToken }).then(({ data: found, error: e }) => {
+        const hit = found as { request_id: string; box_id: string; number: number } | null;
+        if (e || !hit) return void Swal.fire({ ...swalToast, icon: "info", title: "No encontramos esa caja", text: "Puede ser de otro punto o de un pedido que no ves." });
+        (window as Window & { __remhubFocusBox?: { request: string; box: string } }).__remhubFocusBox = { request: hit.request_id, box: hit.box_id };
+        setOpenId(hit.request_id);
+        void Swal.fire({ ...swalToast, icon: "success", title: `📦 Caja ${hit.number}`, text: "Abrimos su pedido. Revisa el contenido antes de darla por recibida." });
+      });
+      const u = new URL(window.location.href);
+      u.searchParams.delete("caja");
+      window.history.replaceState(null, "", u.toString());
+    }
     // ?nuevo=1 abre el formulario; también si llega sin recargar (REM o el buscador Ctrl+K estando ya aquí).
     const checkNew = () => {
       const params = new URLSearchParams(window.location.search);
