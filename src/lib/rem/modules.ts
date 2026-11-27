@@ -156,6 +156,11 @@ export const MODULES: ModuleInfo[] = [
     about: "Es para consultar productos y precios sin poder cambiarlos.",
   },
   {
+    id: "labels", name: "Etiquetas", path: "/dashboard/etiquetas",
+    aliases: "etiquetas imprimir etiquetas qr codigo de barras rotulos stickers adhesivos plantillas de etiquetas impresora de etiquetas",
+    about: "Imprime etiquetas con QR o código de barras, nombre, referencia y precio en el papel de tu impresora (por ejemplo 3 etiquetas de 31×25 mm por fila). Eliges los productos y cuántas de cada uno (o llegas desde un producto, un ingreso, un traslado o la Lista general), la plantilla y la impresora, ves cada fila antes y se abre la ventana de impresión. En «Plantillas» diseñas las tuyas moviendo textos, QR, códigos, imágenes y figuras en milímetros; en «Impresoras» configuras el papel y calibras con hojas de prueba; en «Historial» repites lo que ya imprimiste.",
+  },
+  {
     id: "categories", name: "Categorías", path: "/dashboard/categories",
     aliases: "categorias grupos familias",
     about: "Agrupa los productos para ordenar el catálogo y los informes. Muestra cada categoría en tarjeta con su imagen, cuántos productos tiene, su orden y si se ve en el catálogo; arriba cuenta cuántas hay visibles, ocultas y sin imagen, y al tocar cada número filtra. También hay vista en lista.",

@@ -1617,6 +1617,17 @@ export const RELEASES: Release[] = [
       { icon: "📨", text: "Crear pedido con 5 y 3" },
     ],
   },
+  {
+    id: 157, date: "2026-11-27", title: "🏷️ Etiquetas: QR, código de barras y tus plantillas",
+    summary: "Nueva sección «Etiquetas» (en Productos): eliges productos y cuántas de cada uno, la plantilla y la impresora, y ves cada fila antes de imprimir (por ejemplo 3 etiquetas de 31×25 mm). Los QR y códigos de barras son reales y nunca se cortan: si una referencia no cabe, te dice qué hacer. Diseña tus plantillas moviendo textos de varias líneas, QR, códigos, logo e imágenes en milímetros, y guárdalas para usarlas con cualquier producto. Llegas también desde un producto, un ingreso, un traslado o la Lista general con sus cantidades.",
+    paths: ["/dashboard/etiquetas", "/dashboard/lista-productos", "/dashboard/products", "/dashboard/inventario"],
+    demo: [
+      { icon: "🔎", text: "MALUMETA ×10 · W 0806 ×5" },
+      { icon: "🏷️", text: "Plantilla: Nombre, QR, referencia y precio" },
+      { icon: "🖨️", text: "STARPOS · 3 × 31×25 mm · 5 filas" },
+      { icon: "✏️", text: "Diseña y guarda tu plantilla" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

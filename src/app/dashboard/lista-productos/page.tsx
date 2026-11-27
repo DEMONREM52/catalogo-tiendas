@@ -494,6 +494,11 @@ export default function ProductListPage() {
                       {others.map((p) => <option key={p.id} value={p.id}>{p.kind === "point" ? "📍" : "🏬"} {p.name}</option>)}
                     </select>
                   </label>
+                  <Link href={`/dashboard/etiquetas?productos=${[...selected.keys()].slice(0, 150).map((id) => `${id}:${qtyOf(id)}`).join(",")}`}
+                    className="inline-flex h-11 shrink-0 items-center gap-1 rounded-xl border px-3 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}
+                    title="Imprimir etiquetas de estos productos con estas cantidades">
+                    🏷️ <span className="hidden sm:inline">Etiquetas</span>
+                  </Link>
                   <button type="button" onClick={() => setRequestKey(Date.now())}
                     className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-4 text-sm font-black text-white shadow-lg"
                     style={{ background: "linear-gradient(135deg, var(--t-accent), var(--t-accent2, var(--t-accent)))" }}>

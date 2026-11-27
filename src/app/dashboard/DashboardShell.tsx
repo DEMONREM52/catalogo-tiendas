@@ -452,7 +452,7 @@ export default function DashboardShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Efecto vidrio solo en el panel: suave (casi sólido) donde se trabaja rápido y se lee mucho; ahí tampoco va el fondo animado.
-  const softArea = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos)(\/|$)/.test(pathname ?? "");
+  const softArea = /^\/dashboard\/(pos|reports|contador|datos|fiscal|nomina-electronica|lista-productos|etiquetas)(\/|$)/.test(pathname ?? "");
   const animatedBg = useAnimatedBackground();
   // Celulares sencillos: sin vidrio ni efectos pesados (clase «lite» en <html>).
   useEffect(() => { markLiteDevice(); }, []);
@@ -628,6 +628,7 @@ export default function DashboardShell({
       pathname.startsWith("/dashboard/products/importar") ? "products_import" :
       pathname.startsWith("/dashboard/products") ? "products" :
       pathname.startsWith("/dashboard/lista-productos") ? "products_view" :
+      pathname.startsWith("/dashboard/etiquetas") ? "products_view" :
       pathname.startsWith("/dashboard/social") ? "catalogs" :
       pathname.startsWith("/dashboard/landing") ? "landing" :
       pathname.startsWith("/dashboard/mensajes") ? "messages" :

@@ -87,6 +87,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { href: "/dashboard/products/radar", emoji: "📡", label: "Radar de productos", keywords: "falencias publicar publicame recordatorio redes sin foto sin precio quietos sin ventas salud administracion", perms: ["products"] },
   { href: "/dashboard/products/radar?ver=publicar", emoji: "📣", label: "Productos por publicar", keywords: "publicame publicar redes instagram recordatorio", perms: ["products"] },
   { href: "/dashboard/lista-productos", emoji: "📋", label: "Lista general de productos", keywords: "precios lista consultar", perms: ["products_view", "products", "inventory", "pos"] },
+  { href: "/dashboard/etiquetas", emoji: "🏷️", label: "Etiquetas (QR y código de barras)", keywords: "etiquetas imprimir qr codigo de barras rotulos stickers adhesivos herelabel plantillas impresora termica", perms: ["products_view", "products", "inventory", "stock_requests", "stock_requests_manage", "transfers", "pos"] },
   { href: "/dashboard/products", emoji: "📦", label: "Productos", keywords: "editar precios fotos catalogo articulos", perms: ["products"] },
   { href: "/dashboard/categories", emoji: "🗂️", label: "Categorías", keywords: "grupos familias", perms: ["categories"] },
 

@@ -998,7 +998,7 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
                             className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                             🖨️ Imprimir
                           </a>
-                          <a href={`/documento/etiquetas?traslado=${row.id}`} target="_blank" rel="noopener noreferrer" title="Etiquetas con código de barras y el precio del punto que recibe"
+                          <a href={`/dashboard/etiquetas?traslado=${row.id}`} target="_blank" rel="noopener noreferrer" title="Etiquetas de lo que va en el traslado, con el precio del punto que recibe"
                             className="rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: "var(--t-card-border)" }}>
                             🏷️ Etiquetas
                           </a>

@@ -173,7 +173,7 @@ export function PurchaseHistory({
                             </Btn>
                           ) : null}
                           <Btn variant="ghost" onClick={() => window.open(purchaseReceiptUrl(r.id, true), "_blank")}>🧾 Comprobante</Btn>
-                          <Btn variant="ghost" onClick={() => window.open(`/documento/etiquetas?ingreso=${r.id}`, "_blank")}><span title="Etiquetas con código de barras y precio">🏷️ Etiquetas</span></Btn>
+                          <Btn variant="ghost" onClick={() => window.open(`/dashboard/etiquetas?ingreso=${r.id}`, "_blank")}><span title="Etiquetas de lo que llegó, con las cantidades de la factura">🏷️ Etiquetas</span></Btn>
                           <PurchaseFilesButton purchaseId={r.id} />
                           {canSupport && storeId && r.status === "received" ? <SupportDocumentButton storeId={storeId} purchaseId={r.id} purchaseNumber={Number(r.number)} /> : null}
                           {canVoid && r.status === "received" ? <Btn variant="danger" onClick={() => onCancel(r)}>Anular</Btn> : null}

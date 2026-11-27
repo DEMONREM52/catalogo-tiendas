@@ -509,7 +509,7 @@ export default function EditProductPage() {
           <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => setFinderOpen(true)} title="Buscar otro producto para editar (F2)">🔎 Otro producto <kbd className="hidden rounded border px-1 sm:inline text-[10px] font-semibold opacity-70" style={{ borderColor: "var(--t-card-border)" }}>F2</kbd></button>
           <PublishButton storeId={storeId} productId={d.id} productName={d.name} />
           <AuditSpyButton storeId={storeId} filters={{ entity_id: String(id) }} title="Auditoría de este producto" label="Historial" />
-          <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => window.open(`/documento/etiquetas?productos=${id}`, "_blank")} title="Etiqueta con código de barras y precio">🏷️ Etiqueta</button>
+          <button type="button" className={actionBtn} style={{ borderColor: "var(--t-card-border)" }} onClick={() => router.push(`/dashboard/etiquetas?productos=${id}:1`)} title="Etiquetas con QR o código de barras, en el papel de tu impresora">🏷️ Etiqueta</button>
         </>}
         sections={sections}
         preview={<ProductPreviewCard name={d.name} image={d.image_url} price={prices[2] || prices[0]} active={!!d.active} highlights={det.highlights} category={mainCategory} />}
