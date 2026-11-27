@@ -1691,6 +1691,16 @@ export const RELEASES: Release[] = [
       { icon: "📥", text: "En destino: «Llegó esta caja»" },
     ],
   },
+  {
+    id: 164, date: "2026-11-27", title: "⚡ La lista de traslados carga más rápido",
+    summary: "Inventario → Traslados ya no se queda «Buscando…»: la lista llega en una sola consulta que revisa tus permisos una vez (antes se revisaban traslado por traslado y producto por producto). Ves exactamente los mismos traslados que antes.",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🚚", text: "Abres Inventario → Traslados" },
+      { icon: "⚡", text: "La lista llega de una vez" },
+      { icon: "🔎", text: "Buscar por número, producto o persona, igual que antes" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

@@ -288,6 +288,28 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
   const load = useCallback(async () => {
     const sb = supabaseBrowser();
     setLoadingList(true);
+    const nextDay = (iso: string) => { const d = new Date(`${iso}T00:00:00-05:00`); d.setDate(d.getDate() + 1); return d.toISOString(); };
+    // Rápido (20261350): una sola función revisa permiso y punto una vez y trae la página con productos, firmas y pedido.
+    const fast = await sb.rpc("erp_transfers_page", {
+      p_store: ctx.storeId,
+      p_status: filter === "in_transit" || filter === "received" || filter === "cancelled" ? filter : filter === "diff" ? "received" : null,
+      p_from: tf.from ? new Date(`${tf.from}T00:00:00-05:00`).toISOString() : null,
+      p_to: tf.to ? nextDay(tf.to) : null,
+      p_origin: tf.origin || null,
+      p_dest: tf.dest || null,
+      p_q: tf.q.trim() || null,
+      p_limit: limit,
+    });
+    if (!fast.error && fast.data) {
+      const res = fast.data as { total: number; rows: Array<TransferRow & { request: LinkedReq | null }> };
+      const list = filter === "diff" ? res.rows.filter((r) => r.erp_transfer_items.some((i) => i.received_qty !== null && i.received_qty !== i.qty)) : res.rows;
+      setLoadingList(false);
+      setRows(list);
+      setTotal(filter === "diff" ? null : res.total);
+      setLinked(new Map(list.filter((r) => r.request).map((r) => [r.id, r.request!])));
+      return;
+    }
+    // Sin 20261350: como antes (consulta directa a las tablas).
     // Texto: número (#12), persona (envió, revisó, trasladó, recibió) o producto (nombre, código, código de barras).
     const term = tf.q.replace(/[,()*%\\"]/g, " ").trim();
     let or: string | null = null;
@@ -307,7 +329,6 @@ export function TransfersTab({ ctx, warehouses }: { ctx: ErpCtx; warehouses: War
       }
       or = parts.join(",");
     }
-    const nextDay = (iso: string) => { const d = new Date(`${iso}T00:00:00-05:00`); d.setDate(d.getDate() + 1); return d.toISOString(); };
     const run = (columns: string) => {
       let query = sb
         .from("erp_transfers")
