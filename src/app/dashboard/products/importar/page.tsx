@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
-import { readSheet } from "read-excel-file/browser";
+import { pickSheet, readTable } from "@/lib/data/read-table";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { cleanProductCode } from "../product-code";
@@ -136,7 +136,11 @@ export default function ImportProductsPage() {
   async function onFile(file: File) {
     setFileName(file.name);
     try {
-      const table: unknown[][] = /\.(csv|txt)$/i.test(file.name) ? parseCsv(await file.text()) : ((await readSheet(file)) as unknown[][]);
+      // Libro con varias hojas (p. ej. con la portada «Resumen» de RemHub): se toma la de productos, no la primera.
+      const book = /\.(csv|txt)$/i.test(file.name) ? null : await readTable(file);
+      const table: unknown[][] = book
+        ? (book[pickSheet(book, { name: "Productos", known: ["nombre", "referencia", "sku", "codigo", "precio", "precio 3", "categoria"] })]?.rows ?? [])
+        : parseCsv(await file.text());
       const { rows: parsed, unknown: extra } = toRows(table);
       // ¿Ya existe esa referencia o ese nombre en la tienda?
       if (storeId) {

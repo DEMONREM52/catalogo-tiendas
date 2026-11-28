@@ -79,3 +79,25 @@ export function toBool(v: unknown): boolean | null {
 
 /** Documento para comparar: solo letras y números, en mayúscula (1.098.765.432 = 1098765432). */
 export const docKey = (v: unknown) => String(v ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+
+/**
+ * Qué hoja importar de un libro con varias: la que se llame como el tema; si no, la que más encabezados reconocidos
+ * tenga en su primera fila; si no, la primera que no sea «Resumen» (la portada de los Excel de RemHub).
+ */
+export function pickSheet(sheets: TableSheet[], opts: { name?: string; known?: string[] } = {}): number {
+  if (!sheets.length) return 0;
+  const want = opts.name ? fold(opts.name).split(" ")[0] : "";
+  const byName = want ? sheets.findIndex((s) => fold(s.name).includes(want) && fold(s.name) !== "resumen") : -1;
+  if (byName >= 0) return byName;
+  const known = new Set((opts.known ?? []).map(fold));
+  if (known.size) {
+    let best = -1, score = 0;
+    sheets.forEach((s, i) => {
+      const n = (s.rows[0] ?? []).filter((h) => known.has(fold(h))).length;
+      if (n > score) { score = n; best = i; }
+    });
+    if (best >= 0) return best;
+  }
+  const notSummary = sheets.findIndex((s) => fold(s.name) !== "resumen");
+  return notSummary >= 0 ? notSummary : 0;
+}

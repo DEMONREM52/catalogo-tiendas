@@ -8,7 +8,7 @@ import { getDashboardStore, hasStorePermission } from "@/lib/store-utils";
 import { logExport } from "@/lib/permission-runtime";
 import { DateField } from "@/components/forms/Fields";
 import { downloadXlsx, type XSheet } from "@/lib/data/xlsx";
-import { fold, readTable, type TableSheet } from "@/lib/data/read-table";
+import { fold, pickSheet, readTable, type TableSheet } from "@/lib/data/read-table";
 import { EXPORTS, type ExportDef } from "./exports";
 import { IMPORTS, type ImportDef, type Prepared, type Result } from "./imports";
 import { SkeletonDashboard } from "@/components/ui/Skeleton";
@@ -28,7 +28,7 @@ const ACTION: Record<Prepared["action"], [string, string]> = {
   create: ["Nuevo", "#22c55e"], update: ["Actualiza", "#0ea5e9"], skip: ["Se omite", "#94a3b8"], error: ["Error", "#ef4444"],
 };
 
-type Access = { storeId: string; slug: string; can: (p: string) => boolean };
+type Access = { storeId: string; slug: string; storeName: string; can: (p: string) => boolean };
 
 export default function DataCenterPage() {
   const [access, setAccess] = useState<Access | null>(null);
@@ -39,7 +39,7 @@ export default function DataCenterPage() {
     void (async () => {
       const a = await getDashboardStore().catch(() => null);
       if (!a?.store) return setDenied(true);
-      setAccess({ storeId: a.store.id, slug: a.store.slug, can: (p: string) => hasStorePermission(a, p) });
+      setAccess({ storeId: a.store.id, slug: a.store.slug, storeName: a.store.name, can: (p: string) => hasStorePermission(a, p) });
     })();
   }, []);
 
@@ -97,7 +97,20 @@ function ExportPanel({ access }: { access: Access }) {
     setBusy(false);
     if (!sheets.length) { setStep(""); return void Swal.fire({ ...swal, icon: "error", title: "No se pudo exportar", text: problems.join(" · ") }); }
     const name = defs.length === 1 ? defs[0].key : "datos";
-    downloadXlsx(`${name}-${access.slug}-${iso(new Date())}${usesRange && defs.some((d) => d.usesRange) ? `_${from}_a_${to}` : ""}.xlsx`, sheets);
+    // Portada «Resumen» con la tienda, la fecha, el rango y el índice de hojas; las hojas de datos quedan con el
+    // encabezado en la fila 1 (se pueden volver a importar: el importador salta la portada).
+    const ranged = usesRange && defs.some((d) => d.usesRange);
+    const dmy = (d: string) => d.split("-").reverse().join("/");
+    void downloadXlsx(`${name}-${access.slug}-${iso(new Date())}${ranged ? `_${from}_a_${to}` : ""}.xlsx`, {
+      sheets,
+      meta: {
+        company: access.storeName,
+        title: defs.length === 1 ? defs[0].title : "Exportación de datos",
+        subtitle: "Exportado desde RemHub · Importar y exportar",
+        filters: [["Temas", defs.map((d) => d.title).join(", ")], ...(ranged ? [["Desde", dmy(from)], ["Hasta", dmy(to)]] as Array<[string, string]> : [])],
+        notes: ["Para volver a importar: edita la hoja del tema y súbela en Importar y exportar. Las columnas «(solo lectura)» no se importan."],
+      },
+    });
     logExport(`datos.${defs.map((d) => d.key).join("+")}`, Object.values(counts).reduce((a, b) => a + b, 0), { temas: counts, desde: from, hasta: to });
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     setStep(`✅ Listo: ${sheets.length} hoja${sheets.length === 1 ? "" : "s"} con ${total.toLocaleString("es-CO")} filas.`);
@@ -237,8 +250,8 @@ function Importer({ def, access, onBack }: { def: ImportDef; access: Access; onB
     setBusy(true); setStep("Leyendo el archivo…"); setPrepared(null); setResult(null);
     try {
       const t = await readTable(f);
-      // Si el archivo tiene varias hojas, se escoge la que se llame como el tema (ej. «Terceros»).
-      const idx = Math.max(0, t.findIndex((s) => fold(s.name).includes(fold(def.title).split(" ")[0])));
+      // Varias hojas: la que se llame como el tema (ej. «Terceros»), o la que traiga sus columnas; nunca la portada «Resumen».
+      const idx = pickSheet(t, { name: def.title, known: def.columns.flatMap((c) => c.aliases) });
       setFile(f); setSheetIdx(idx); setSheets(t);
     } catch (e) {
       setBusy(false); setStep("");

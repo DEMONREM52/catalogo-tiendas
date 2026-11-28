@@ -1743,6 +1743,17 @@ export const RELEASES: Release[] = [
       { icon: "🔢", text: "Por código → solo MV-759 o el código de barras" },
     ],
   },
+  {
+    id: 169, date: "2026-11-27", title: "📊 Excel profesionales en todo RemHub",
+    summary: "Los Excel que descargas ahora son tablas de Excel de verdad: encabezado con color, filtros, filas alternadas, totales que se recalculan, plata con formato y que se puede sumar, fechas reales, y referencias y códigos de barras que no pierden sus ceros. «Importar y exportar» trae además una portada con la tienda, la fecha, el rango y el índice de hojas, y lo exportado se puede volver a subir igual que antes.",
+    paths: ["/dashboard/datos", "/dashboard/inventario", "/dashboard/products", "/dashboard/contador", "/dashboard/gastos"],
+    demo: [
+      { icon: "📥", text: "Exportas productos" },
+      { icon: "📊", text: "Tabla con filtros y totales" },
+      { icon: "0️⃣", text: "00001234 sigue siendo 00001234" },
+      { icon: "🔁", text: "Lo editas y lo vuelves a subir" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
