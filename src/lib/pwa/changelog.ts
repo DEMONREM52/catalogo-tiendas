@@ -1723,6 +1723,16 @@ export const RELEASES: Release[] = [
       { icon: "✅", text: "Tú terminas y aplicas el ajuste" },
     ],
   },
+  {
+    id: 167, date: "2026-11-27", title: "🔑 Arreglo: la contraseña del conteo en grupo ya se guarda",
+    summary: "Al poner la contraseña del conteo en grupo salía «Escribe de 4 a 8 números» aunque estuviera bien escrita. Ya acepta de 4 a 8 números (también con ceros al inicio, como 0482).",
+    paths: ["/dashboard/inventario"],
+    demo: [
+      { icon: "🔑", text: "Contraseña: 859241" },
+      { icon: "✅", text: "Se guarda" },
+      { icon: "📲", text: "Compartes el enlace" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
