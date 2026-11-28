@@ -93,9 +93,10 @@ export const EXPORTS: ExportDef[] = [
       return [{
         name: "Productos",
         head: ["Referencia", "Código de barras", "Nombre", "Categoría", "Precio 1", "Precio 2", "Precio 3", "Precio 4", "Precio 5",
-          "Unidades (solo lectura)", ...(withCost ? ["Costo (solo lectura)"] : []), "Activo", "Descripción", "Foto", "Creado"],
+          "Unidades (solo lectura)", ...(withCost ? ["Costo (solo lectura)"] : []), "Activo", "Descripción", "Foto", "Creado", "ID RemHub (no cambiar)"],
+        // El ID va al final: con él, «Importar productos» actualiza el producto exacto (aunque cambie la referencia).
         rows: rows.map((p) => [s(p.sku), s(p.barcode), s(p.name), cat.get(String(p.category_id)) ?? "", n(p.price_1), n(p.price_2), n(p.price_3), n(p.price_4), n(p.price_5),
-          n(p.stock), ...(withCost ? [n(p.cost_price)] : []), yes(p.active), s(p.description), s(p.image_url), xDate(p.created_at)]),
+          n(p.stock), ...(withCost ? [n(p.cost_price)] : []), yes(p.active), s(p.description), s(p.image_url), xDate(p.created_at), s(p.id)]),
       }];
     },
   },

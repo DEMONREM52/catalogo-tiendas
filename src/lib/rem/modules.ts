@@ -142,7 +142,23 @@ export const MODULES: ModuleInfo[] = [
       href: "/dashboard/products/crear", verified: true,
     }, {
       id: "products.import", goal: "subir productos desde Excel", keywords: "excel importar masivo plantilla cargar subir",
-      steps: [], href: "/dashboard/products/importar", verified: false,
+      steps: [
+        "En Productos toca «📥 Importar Excel».",
+        "Toca «⬇️ Plantilla», llénala en Excel y toca «📂 Elegir archivo» para subirla.",
+        "Revisa cuántos son nuevos y cuáles tienen error. Si traen unidades, elige el proveedor y la bodega: entran como un ingreso de factura.",
+        "Toca «📥 Importar».",
+      ],
+      href: "/dashboard/products/importar", verified: true,
+    }, {
+      id: "products.bulk_update", goal: "cambiar precios de muchos productos con Excel", keywords: "actualizar masivo precios excel cambiar varios productos a la vez subir precios",
+      steps: [
+        "En «Importar y exportar», descarga «Productos»: el Excel trae la columna «ID RemHub».",
+        "Cambia en Excel los precios, nombres, categorías o descripciones y guarda el archivo.",
+        "En Productos toca «📥 Importar Excel» y sube ese archivo.",
+        "Marca qué campos actualizar y qué hacer con las celdas vacías. Revisa el antes y el después; si quieres, toca «⬇️ Revisión en Excel».",
+        "Toca «✅ Aplicar» y confirma. Si alguien cambió un producto mientras revisabas, ese no se toca y te avisa.",
+      ],
+      href: "/dashboard/products/importar", verified: true,
     }],
   },
   {

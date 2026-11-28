@@ -1754,6 +1754,17 @@ export const RELEASES: Release[] = [
       { icon: "🔁", text: "Lo editas y lo vuelves a subir" },
     ],
   },
+  {
+    id: 170, date: "2026-11-28", title: "✏️ Cambia precios de muchos productos con Excel, viendo antes y después",
+    summary: "Exporta tus productos, cambia en Excel los precios o datos que quieras y vuelve a subir el archivo en «Importar Excel». Antes de aplicar ves, producto por producto, el valor de antes y el nuevo; eliges qué campos se actualizan y si una celda vacía conserva el valor (lo normal) o lo borra. El producto se reconoce por su ID de RemHub, la referencia o el código de barras, nunca por el nombre. Si alguien cambia un producto mientras revisas, ese no se toca y te avisa. Todo queda en la auditoría y en el historial de precios.",
+    paths: ["/dashboard/products/importar", "/dashboard/products", "/dashboard/datos"],
+    demo: [
+      { icon: "📤", text: "Exportas productos" },
+      { icon: "✏️", text: "P3: $ 99.000 → $ 95.000" },
+      { icon: "👀", text: "Ves antes y después" },
+      { icon: "✅", text: "Aplicas solo lo que elegiste" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */

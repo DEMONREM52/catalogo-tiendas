@@ -27,7 +27,7 @@ Pedido «REMHUB DATA STUDIO PRO» (47 secciones, 27/11/2026): importar, exportar
 | 1. Revisión | ✅ | Sección 1. |
 | 2-3. Motor profesional | ✅ | Ver §4. |
 | 4. Selector de columnas y plantillas | ⏳ | Asistente de exportación (columnas, orden, nombres, formato, tema) y plantillas guardadas. |
-| 5-6. Importación, actualización masiva y simulación | ⏳ | Asociar columnas, simular, ver antes y después, aplicar solo lo confirmado (productos primero). |
+| 5-6. Importación, actualización masiva y simulación | 🟡 | **Productos hecho** (§22, ver §4b). Falta: llevar el mismo antes → después a terceros, proveedores y categorías en «Importar y exportar». |
 | 7. Integración en módulos | 🟡 | Hecho: todo lo que usa el motor (10 lugares) mejora solo; portada en «Importar y exportar». Falta: pasar los CSV a Excel donde convenga. |
 | 8. Imágenes, enlaces, QR | 🟡 | El motor ya pone fotos (sin deformar, la misma foto una sola vez) y enlaces. Falta llevarlo a las exportaciones de productos/catálogo. |
 | 9. Resumen y gráficos | 🟡 | El motor ya hace la hoja «Resumen» con indicadores (fórmulas) y gráficos nativos (columnas, barras, líneas, torta). Falta en los informes. |
@@ -59,6 +59,24 @@ Pedido «REMHUB DATA STUDIO PRO» (47 secciones, 27/11/2026): importar, exportar
 - Lo exportado se vuelve a leer con el lector de los importadores (prueba `tests/data/xlsx.test.ts`).
 
 No verificado todavía: LibreOffice y Google Sheets (no instalados aquí), abrir en celular.
+
+## 4b. Actualización masiva de productos (§22, hecho)
+
+Productos → «📥 Importar Excel» (`src/app/dashboard/products/importar`), lógica en `src/lib/data/product-import.ts` y `product-update.ts`, base en `20261353_actualizar_productos_excel.sql` (**sin correr**).
+
+- **Reconocer el producto**: ID de RemHub (la exportación de productos trae la columna «ID RemHub (no cambiar)») → referencia → código de barras, solo si es de un único producto. **Nunca por el nombre.** Un ID que no es de la tienda es error: no crea ni toca nada.
+- **Modos**: saltar los que existen · actualizar y crear nuevos · solo actualizar (por defecto si el archivo trae el ID: un error de referencia nunca crea un producto).
+- **Campos**: se marcan los que se actualizan (solo los que trae el archivo); los precios exigen «Cambiar precios». Lo no marcado no se toca. Referencia, costo y unidades nunca se cambian desde aquí (costo y unidades solo por ingreso de factura).
+- **Celda vacía**: conserva el valor (por defecto) o lo deja vacío (código de barras, categoría, descripción). Nombre y precios nunca se borran.
+- **Simulación**: tarjetas (nuevos, con cambios, sin cambios, se saltan, no están, con error), tabla con el antes tachado y el después, y «⬇️ Revisión en Excel» con todo. Nada se guarda hasta confirmar.
+- **Aplicar** (`products_bulk_update`, de a 500): permisos «Editar productos» + «Importar productos» (+ «Cambiar precios»), llave del envío (un reintento no aplica dos veces), cada fila lleva lo que se vio antes: si alguien cambió el producto mientras tanto, esa fila no se toca y se avisa. Errores por fila (categoría ajena, código repetido, precio inválido) no detienen las demás.
+- **Precio por %**: si el producto tiene % de ganancia y costo, el precio escrito queda exacto y el % pasa a ser el que da ese precio (como al escribirlo en el producto). Por debajo del costo no se toca (el aviso no muestra el costo).
+- **Auditoría**: un registro `producto.actualizacion_excel` por envío; `erp_product_bulk_runs` guarda el antes y el después; el historial de precios y la auditoría de cada producto se llenan solos.
+- Lo ya creado o ya ingresado sale de la revisión al terminar: volver a aplicar nunca lo repite.
+
+**Verificado**: 24 pruebas de la base (`tests/sql/actualizar_productos_excel.test.mjs`), 11 de la lógica (`tests/data/product-*.test.ts`, con la vuelta exportar → leer → revisar). En **Microsoft Excel** (28/11/2026): se abrió `docs/ejemplos-excel/productos-para-actualizar-PRUEBA.xlsx`, Excel cambió el precio 3 de MV-759 (99.000 → 95.000) y borró una descripción, lo guardó, y el importador encontró exactamente esos 2 cambios (el de la descripción solo con «dejar vacío»), 0 unidades y el código `0012345678905` con sus ceros.
+
+Falta probar en la tienda real (después de correr la migración 20261353).
 
 ## 5. Límites reales
 

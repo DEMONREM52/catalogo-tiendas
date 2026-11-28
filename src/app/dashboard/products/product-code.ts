@@ -1,10 +1,7 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-/** Código del producto como se guarda: sin espacios a los lados y en mayúscula (vacío = usa el número interno). */
-export function cleanProductCode(value: string | null | undefined) {
-  const code = (value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
-  return code ? code.slice(0, 40) : null;
-}
+/** Código del producto como se guarda (una sola regla para crear, editar e importar). */
+export { cleanProductCode } from "@/lib/data/product-import";
 
 /** Código, código de barras y número interno de un producto (sin fallar si falta la migración). */
 export async function loadProductCodes(productId: string): Promise<{ sku: string | null; barcode: string | null; product_no: number | null }> {

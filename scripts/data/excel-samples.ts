@@ -132,4 +132,17 @@ await save("plantilla-productos-PRUEBA.xlsx", {
     rows: [["EJ-001", "0001234567890", "PRODUCTO DE EJEMPLO (BÓRRALO)", "Hogar", 25000, "Sí"]],
   }],
 });
+// 6. «Exportar productos» tal como sale de RemHub (con su ID): para cambiar precios en Excel y volver a subirlo.
+//    Los ID son de prueba: al subirlo a una tienda real, dice que no son de esa tienda y no toca nada.
+export const SAMPLE_IDS = productos.map((_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`);
+await save("productos-para-actualizar-PRUEBA.xlsx", {
+  meta: { company, user, generatedAt: when, title: "Productos", subtitle: "Exportado desde RemHub · Importar y exportar",
+    notes: ["Cambia precios, nombres o categorías y vuelve a subir este archivo en Productos → Importar: verás antes y después."] },
+  sheets: [{
+    name: "Productos",
+    head: ["Referencia", "Código de barras", "Nombre", "Categoría", "Precio 1", "Precio 2", "Precio 3", "Precio 4", "Precio 5",
+      "Unidades (solo lectura)", "Costo (solo lectura)", "Activo", "Descripción", "Foto", "Creado", "ID RemHub (no cambiar)"],
+    rows: productos.map((p, i) => [p[0], p[1], p[2], p[3].toUpperCase(), p[6], p[7], p[6], p[6], p[6], p[4], p[5], "Sí", i === 0 ? "Acero inoxidable" : "", "", "27/11/2026", SAMPLE_IDS[i]]),
+  }],
+});
 console.log(`Listo: ${out}`);
