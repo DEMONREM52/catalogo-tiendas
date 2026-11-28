@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseScan, sameCode } from "@/lib/scan/parse";
+import { matchScan, parseScan, sameCode, sameName } from "@/lib/scan/parse";
 
 test("un código se respeta tal cual (ceros iniciales, mayúsculas, espacios del medio)", () => {
   assert.deepEqual(parseScan("0000123456\r\n"), { kind: "code", code: "0000123456", raw: "0000123456\r\n" });
@@ -33,4 +33,27 @@ test("coincidencia exacta de código: sin distinguir mayúsculas, pero los ceros
   assert.equal(sameCode("00123", "123"), false);
   assert.equal(sameCode("123", null, undefined, "123"), true);
   assert.equal(sameCode("", ""), false);
+});
+
+test("coincidencia exacta: el QR con el nombre completo encuentra el producto; por código, no", () => {
+  const items = [
+    { id: "a", name: "MAQUINA 5 EN 1 DE DAMA VGR V 759", sku: "MV-759", barcode: null },
+    { id: "b", name: "MAQUINA 5 EN 1", sku: "MV-5", barcode: "7701234" },
+    { id: "c", name: "SARTÉN  ROJA", sku: "S_1", barcode: null },
+  ];
+  const qr = "MAQUINA 5 EN 1 DE DAMA VGR V 759";
+  assert.deepEqual(matchScan(qr, items, "exact").map((x) => x.id), ["a"]);
+  assert.deepEqual(matchScan(qr, items, "code"), []);
+  // Nunca «contiene» ni «se parece»: «MAQUINA 5 EN 1» solo es la b.
+  assert.deepEqual(matchScan("maquina 5 en 1", items, "exact").map((x) => x.id), ["b"]);
+  assert.deepEqual(matchScan("MAQUINA", items, "exact"), []);
+  // Tildes, mayúsculas y espacios de más no importan en el nombre.
+  assert.equal(sameName("sarten roja", "SARTÉN  ROJA"), true);
+  assert.equal(sameName("", "x"), false);
+  // Por código sigue funcionando en los dos modos (y el «_» no es comodín).
+  assert.deepEqual(matchScan("mv-759", items, "code").map((x) => x.id), ["a"]);
+  assert.deepEqual(matchScan("7701234", items, "exact").map((x) => x.id), ["b"]);
+  assert.deepEqual(matchScan("S-1", items, "code"), []);
+  // Sin repetidos aunque llegue dos veces el mismo producto.
+  assert.equal(matchScan("MV-5", [...items, items[1]], "code").length, 1);
 });

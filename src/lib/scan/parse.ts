@@ -49,3 +49,30 @@ export function sameCode(code: string, ...candidates: Array<string | null | unde
   if (!c) return false;
   return candidates.some((x) => x != null && String(x).trim().toUpperCase() === c);
 }
+
+/**
+ * Cómo se reconoce lo escaneado en los modos de escaneo (contar, empacar):
+ *  · «exact» (Coincidencia exacta): lo leído es IGUAL al nombre, la referencia o el código de barras
+ *    (sirve para QR que llevan el nombre, como «MAQUINA 5 EN 1 DE DAMA VGR V 759»).
+ *  · «code» (Por código): solo la referencia o el código de barras.
+ * En los dos casos tiene que ser igual completo: nunca «se parece» ni «contiene».
+ */
+export type ScanMatch = "exact" | "code";
+
+/** Nombre igual: sin importar mayúsculas, tildes ni espacios de más. */
+export function sameName(code: string, name: string | null | undefined): boolean {
+  const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toUpperCase().replace(/\s+/g, " ").trim();
+  const c = fold(code);
+  return Boolean(c) && name != null && fold(String(name)) === c;
+}
+
+/** Los que coinciden (sin repetidos). Si sale más de uno, quien llama no debe elegir solo. */
+export function matchScan<T extends { id: string; name?: string | null; sku?: string | null; barcode?: string | null }>(code: string, items: T[], mode: ScanMatch): T[] {
+  const seen = new Set<string>();
+  return items.filter((i) => {
+    if (seen.has(i.id)) return false;
+    const ok = sameCode(code, i.sku, i.barcode) || (mode === "exact" && sameName(code, i.name));
+    if (ok) seen.add(i.id);
+    return ok;
+  });
+}

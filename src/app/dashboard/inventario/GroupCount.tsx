@@ -7,9 +7,10 @@ import { Camera, EyeOff, KeyRound, Minus, Plus, ScanBarcode, Share2, Trash2, Use
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { startPoll } from "@/lib/net/poll";
-import { parseScan, sameCode } from "@/lib/scan/parse";
+import { matchScan, parseScan } from "@/lib/scan/parse";
+import { MatchToggle, matchHint, notFoundText, useScanMatch } from "@/components/scan/MatchToggle";
 import { scanBeep } from "@/components/scan/CameraScanner";
-import { ProductPicker, Thumb } from "./LineEditor";
+import { ProductPicker, Thumb, searchProductsRpc } from "./LineEditor";
 import { Btn, errorMessage, toast, type ErpCtx, type Warehouse } from "./shared";
 import { cleanPin, isValidPin } from "./group-pin";
 
@@ -148,6 +149,7 @@ function GroupCountRoom({ id, onClose, onLoad }: { id: string; onClose: () => vo
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanMode, setScanMode] = useState<"one" | "ask">("one");
+  const [match, setMatch] = useScanMatch();
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -198,12 +200,16 @@ function GroupCountRoom({ id, onClose, onLoad }: { id: string; onClose: () => vo
     const p = parseScan(raw, { hosts: [window.location.hostname] });
     if (p.kind !== "code") { if (p.kind !== "empty") { scanBeep(false); setMsg({ ok: false, text: "Eso no es un código de producto." }); } return; }
     const safe = p.code.replace(/[,()*%\\"]/g, "");
-    const { data } = await supabaseBrowser().from("products").select("id,name,sku,barcode").eq("store_id", room?.count.store_id ?? "")
-      .or(`barcode.eq.${safe},sku.ilike.${safe}`).limit(5);
-    // Solo coincidencia exacta (los ceros y el «_» cuentan).
-    const hits = ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null }>).filter((h) => sameCode(p.code, h.sku, h.barcode));
-    if (!hits.length) { scanBeep(false); return setMsg({ ok: false, text: `No hay ningún producto con el código «${p.code}».` }); }
-    if (hits.length > 1) { scanBeep(false); return setMsg({ ok: false, text: `«${p.code}» es de ${hits.length} productos: búscalo por nombre.` }); }
+    const storeId = room?.count.store_id ?? "";
+    // Por código: referencia o código de barras. Coincidencia exacta: además, el nombre completo (QR con el nombre).
+    const [byCode, byName] = await Promise.all([
+      supabaseBrowser().from("products").select("id,name,sku,barcode").eq("store_id", storeId).or(`barcode.eq.${safe},sku.ilike.${safe}`).limit(5),
+      match === "exact" ? searchProductsRpc({ storeId, q: p.code, limit: 40, includeInactive: true }) : Promise.resolve({ data: [] }),
+    ]);
+    type Row = { id: string; name: string; sku: string | null; barcode: string | null };
+    const hits = matchScan(p.code, [...((byCode.data ?? []) as Row[]), ...((byName.data ?? []) as Row[])], match);
+    if (!hits.length) { scanBeep(false); return setMsg({ ok: false, text: notFoundText(p.code, match) }); }
+    if (hits.length > 1) { scanBeep(false); return setMsg({ ok: false, text: `«${p.code}» coincide con ${hits.length} productos: búscalo y elígelo a mano.` }); }
     const h = hits[0];
     if (scanMode === "ask") return void (await addFromPicker(h));
     const res = await setQty(h.id, 1, true, newKey());
@@ -346,6 +352,7 @@ ${url}`)}`, "_blank");
                     <span className="flex-1" />
                     <button type="button" onClick={() => { setScanOpen(false); setMsg(null); }} className="grid h-7 w-7 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Dejar de escanear"><X size={13} /></button>
                   </div>
+                  <div className="mt-1.5"><MatchToggle value={match} onChange={setMatch} /></div>
                   <div className="mt-2 flex gap-2">
                     <input autoFocus value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" enterKeyHint="go" placeholder="Pistolea o escribe el código y Enter"
                       onKeyDown={(e) => { if ((e.key === "Enter" || e.key === "Tab") && code.trim()) { e.preventDefault(); const v = code; setCode(""); enqueue(v); } }}
@@ -353,7 +360,7 @@ ${url}`)}`, "_blank");
                     <button type="button" onClick={() => setCamera(true)} className="grid h-11 w-11 place-items-center rounded-xl border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Escanear con la cámara"><Camera size={18} /></button>
                   </div>
                   {msg ? <p className="mt-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ background: msg.ok ? "color-mix(in oklab, #22c55e 14%, transparent)" : "color-mix(in oklab, #ef4444 14%, transparent)", color: msg.ok ? "#16a34a" : "#dc2626" }}>{msg.ok ? "✓ " : "✕ "}{msg.text}</p> : null}
-                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>Solo cuenta si el código es exacto. Cada lectura suma a lo tuyo.</p>
+                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>{matchHint(match)} Cada lectura suma a lo tuyo.</p>
                 </div>
               )}
             </>

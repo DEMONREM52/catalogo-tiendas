@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { sameCode } from "@/lib/scan/parse";
+import { matchScan } from "@/lib/scan/parse";
+import { MatchToggle, matchHint, notFoundText, useScanMatch } from "./scan/MatchToggle";
 
 // El lector de cámara de todo RemHub (barras y QR; en iPhone, QR), con linterna y cambio de cámara. Se carga al abrirlo.
 const CameraScanner = dynamic(() => import("./scan/CameraScanner").then((m) => m.CameraScanner), { ssr: false });
@@ -48,31 +49,39 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [camera, setCamera] = useState(false);
   const [zeroOthers, setZeroOthers] = useState(false);
+  const [match, setMatch] = useScanMatch();
   const inputRef = useRef<HTMLInputElement>(null);
   const cache = useRef(new Map<string, { id: string; name: string; sku: string | null } | null>());
 
-  const lookup = useCallback(async (raw: string) => {
+  // Por código: referencia o código de barras. Coincidencia exacta: además, el nombre completo (QR con el nombre).
+  // Siempre igual completo (en «ilike» el «_» es comodín: se revisa aquí). Si coincide con más de uno, no cuenta.
+  const lookup = useCallback(async (raw: string): Promise<{ hit: { id: string; name: string; sku: string | null } | null; many: number }> => {
     const c = raw.trim();
-    if (!c) return null;
-    if (cache.current.has(c)) return cache.current.get(c) ?? null;
-    if (allowed) {
-      for (const [id, p] of allowed) if (p.sku && p.sku.toLowerCase() === c.toLowerCase()) { const hit = { id, name: p.name, sku: p.sku }; cache.current.set(c, hit); return hit; }
-    }
+    if (!c) return { hit: null, many: 0 };
+    const key = `${match}|${c}`;
+    if (cache.current.has(key)) return { hit: cache.current.get(key) ?? null, many: 0 };
+    type Row = { id: string; name: string; sku: string | null; barcode: string | null };
+    const pool: Row[] = allowed ? [...allowed].map(([id, p]) => ({ id, name: p.name, sku: p.sku, barcode: null })) : [];
     const safe = c.replace(/[,()*%\\"]/g, "");
-    const { data } = await supabaseBrowser().from("products").select("id,name,sku,barcode").eq("store_id", storeId)
-      .or(`barcode.eq.${safe},sku.ilike.${safe}`).limit(5);
-    // Solo coincidencia exacta: en «ilike» el «_» es comodín y podía traer otro producto.
-    const rows = ((data ?? []) as Array<{ id: string; name: string; sku: string | null; barcode: string | null }>).filter((r) => sameCode(c, r.sku, r.barcode));
-    const hit = (allowed ? rows.find((r) => allowed.has(r.id)) : rows[0]) ?? null;
-    cache.current.set(c, hit);
-    return hit;
-  }, [storeId, allowed]);
+    const sb = supabaseBrowser();
+    const [byCode, byName] = await Promise.all([
+      sb.from("products").select("id,name,sku,barcode").eq("store_id", storeId).or(`barcode.eq.${safe},sku.ilike.${safe}`).limit(5),
+      match === "exact" ? sb.rpc("erp_search_products", { p_store: storeId, p_q: c, p_warehouse: null, p_in_stock: false, p_limit: 40 }) : Promise.resolve({ data: [] }),
+    ]);
+    pool.push(...((byCode.data ?? []) as Row[]), ...((byName.data ?? []) as Row[]));
+    const hits = matchScan(c, pool, match).filter((r) => !allowed || allowed.has(r.id));
+    if (hits.length > 1) return { hit: null, many: hits.length };
+    const hit = hits[0] ? { id: hits[0].id, name: allowed?.get(hits[0].id)?.name ?? hits[0].name, sku: hits[0].sku } : null;
+    cache.current.set(key, hit);
+    return { hit, many: 0 };
+  }, [storeId, allowed, match]);
 
   const register = useCallback(async (raw: string) => {
     const c = raw.trim();
     if (!c) return;
-    const hit = await lookup(c);
-    if (!hit) { beep(false); setMsg({ ok: false, text: allowed ? `«${c}» no está en esta lista` : `No hay ningún producto con el código «${c}»` }); return; }
+    const { hit, many } = await lookup(c);
+    if (many > 1) { beep(false); setMsg({ ok: false, text: `«${c}» coincide con ${many} productos: agrégalo a mano.` }); return; }
+    if (!hit) { beep(false); setMsg({ ok: false, text: allowed ? `«${c}» no está en esta lista` : notFoundText(c, match) }); return; }
     const max = allowed?.get(hit.id)?.max;
     let over = false;
     setCounts((cur) => {
@@ -85,7 +94,7 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
       if (over) { beep(false); setMsg({ ok: false, text: `${hit.name}: ya completaste las ${max} que se enviaron` }); }
       else { beep(true); setMsg({ ok: true, text: `+1 ${hit.name}` }); }
     }, 0);
-  }, [lookup, allowed]);
+  }, [lookup, allowed, match]);
 
   useEffect(() => { const t = window.setTimeout(() => inputRef.current?.focus(), 50); return () => window.clearTimeout(t); }, []);
 
@@ -100,7 +109,9 @@ export function ScanCounter({ storeId, title, allowed, initial, onDone, onClose,
           <h3 className="text-base font-black">📷 {title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg border px-2.5 py-1 text-xs font-semibold" style={{ borderColor: "var(--t-card-border)" }}>Cancelar</button>
         </div>
-        <button type="button" onClick={() => setCamera(true)} className="mt-3 rounded-xl border px-3 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
+        <div className="mt-3"><MatchToggle value={match} onChange={setMatch} /></div>
+        <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{matchHint(match)}</p>
+        <button type="button" onClick={() => setCamera(true)} className="mt-2 rounded-xl border px-3 py-2.5 text-sm font-bold" style={{ borderColor: "var(--t-card-border)" }}>
           📷 Usar la cámara
         </button>
         {camera ? <CameraScanner title={title} continuous onClose={() => setCamera(false)} onCode={(c) => void register(c)} hint="Cada lectura suma 1." /> : null}

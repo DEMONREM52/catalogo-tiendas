@@ -48,3 +48,10 @@ test("cantidad con decimales se redondea y se marca", () => {
   assert.equal(l.qty, 3);
   assert.equal(l.qtyRounded, true);
 });
+
+test("el código conserva sus letras «s» y junta los espacios de más", () => {
+  const rows = parseCsv(["CODIGO;DESCRIPCION;CANTIDAD;VALOR UNITARIO", "ss-12  b;PRUEBA;1;1000", "sku s;OTRA;2;500"].join("\n"));
+  const { header, map } = detect(rows);
+  const lines = parseLines(rows, header, map);
+  assert.deepEqual(lines.map((l) => l.code), ["SS-12 B", "SKU S"]);
+});

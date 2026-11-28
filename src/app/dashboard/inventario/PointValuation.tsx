@@ -215,7 +215,7 @@ export function PointValuationModal({ storeId, pointId, pointName, onClose }: { 
         losses: losses.map((l) => ({ ...l, why: why(l, costs) as "below_cost" | "bodega" })),
         suspects, lines: allLines, money,
       });
-      const name = `liquidacion-${pointName.replace(/s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const name = `liquidacion-${pointName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`;
       const file = new File([blob], name, { type: "application/pdf" });
       const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
       if (/Android|iPhone|iPad/i.test(navigator.userAgent) && nav.canShare?.({ files: [file] })) {

@@ -5,7 +5,8 @@
 import { fold, toNumber } from "@/lib/data/read-table";
 
 /** Código como se guarda en el producto (igual que cleanProductCode). */
-const cleanCode = (v: string) => { const c = v.trim().replace(/s+/g, " ").toUpperCase(); return c ? c.slice(0, 40) : ""; };
+// Espacios de más → uno (antes decía /s+/ sin la barra y cambiaba cada «s» minúscula por un espacio).
+const cleanCode = (v: string) => { const c = v.trim().replace(/\s+/g, " ").toUpperCase(); return c ? c.slice(0, 40) : ""; };
 
 export type Field = "code" | "description" | "qty" | "cost" | "total" | "tax";
 export const FIELDS: Array<{ key: Field; label: string; need?: boolean }> = [

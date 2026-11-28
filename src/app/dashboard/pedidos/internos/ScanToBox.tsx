@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { Camera, ScanBarcode, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { parseScan, sameCode } from "@/lib/scan/parse";
+import { matchScan, parseScan } from "@/lib/scan/parse";
+import { MatchToggle, matchHint, useScanMatch } from "@/components/scan/MatchToggle";
 import { scanBeep } from "@/components/scan/CameraScanner";
 import { srError, type SrItem } from "./types";
 import { boxColor, boxTitle, type SrBox } from "./boxes";
@@ -42,8 +43,9 @@ export function ScanToBox({ requestId, items, boxes, unboxed, reload }: {
   const [barcodes, setBarcodes] = useState<Map<string, string | null> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
-  const latest = useRef({ active, mode, unboxed, boxes, items, barcodes });
-  useEffect(() => { latest.current = { active, mode, unboxed, boxes, items, barcodes }; });
+  const [match, setMatch] = useScanMatch();
+  const latest = useRef({ active, mode, unboxed, boxes, items, barcodes, match });
+  useEffect(() => { latest.current = { active, mode, unboxed, boxes, items, barcodes, match }; });
   const openBoxes = boxes.filter((b) => b.status === "open");
   const activeBox = openBoxes.find((b) => b.id === active) ?? null;
 
@@ -76,7 +78,9 @@ export function ScanToBox({ requestId, items, boxes, unboxed, reload }: {
       return setMsg({ ok: true, text: `Caja activa: ${boxTitle(b)}` });
     }
     if (r.kind !== "code") { scanBeep(false); return setMsg({ ok: false, text: "Eso no es un código de producto." }); }
-    const matches = L.items.filter((i) => sameCode(r.code, i.sku, L.barcodes?.get(i.product_id)));
+    // Por código: referencia o código de barras. Coincidencia exacta: además, el nombre completo (QR con el nombre).
+    const ids = new Set(matchScan(r.code, L.items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, barcode: L.barcodes?.get(i.product_id) ?? null })), L.match).map((x) => x.id));
+    const matches = L.items.filter((i) => ids.has(i.id));
     if (!matches.length) { scanBeep(false); return setMsg({ ok: false, text: `«${r.code}» no está en este pedido.` }); }
     if (matches.length > 1) { scanBeep(false); return setMsg({ ok: false, text: `«${r.code}» coincide con ${matches.length} productos: guárdalo a mano.` }); }
     const it = matches[0];
@@ -127,6 +131,7 @@ export function ScanToBox({ requestId, items, boxes, unboxed, reload }: {
         <button type="button" onClick={() => setMode("one")} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={mode === "one" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>+1 por lectura</button>
         <button type="button" onClick={() => setMode("ask")} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={mode === "ask" ? { borderColor: "var(--t-accent)", color: "var(--t-accent)" } : { borderColor: "var(--t-card-border)" }}>Pregunta cuántas</button>
       </div>
+      <div className="mt-1.5"><MatchToggle value={match} onChange={setMatch} /></div>
       <div className="mt-2 flex gap-2">
         <input ref={inputRef} value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" enterKeyHint="go" placeholder="Pistolea o escribe el código y Enter"
           onKeyDown={(e) => {
@@ -146,7 +151,7 @@ export function ScanToBox({ requestId, items, boxes, unboxed, reload }: {
         </p>
       ) : null}
       <p className="mt-1.5 text-[11px]" style={{ color: "var(--t-muted)" }}>
-        Solo cuenta si el código es exacto y el producto está en este pedido. Escanea la etiqueta de una caja para cambiar a esa caja.{barcodes ? "" : " Cargando códigos…"}
+        {matchHint(match)} Solo productos de este pedido. Escanea la etiqueta de una caja para cambiar a esa caja.{barcodes ? "" : " Cargando códigos…"}
       </p>
       {camera ? <CameraScanner title="Empacar escaneando" continuous onClose={() => setCamera(false)} onCode={(c) => enqueue(c)} hint={`Cada lectura va a ${activeBox ? boxTitle(activeBox) : "una caja nueva"}.`} /> : null}
     </section>

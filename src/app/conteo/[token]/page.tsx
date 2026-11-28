@@ -8,7 +8,8 @@ import { Camera, Minus, Plus, ScanBarcode, Search, Trash2, X } from "lucide-reac
 import { supabaseLazy } from "@/lib/supabase/lazy";
 import { startPoll } from "@/lib/net/poll";
 import { useSearchValue } from "@/lib/search-timing";
-import { parseScan, sameCode } from "@/lib/scan/parse";
+import { matchScan, parseScan } from "@/lib/scan/parse";
+import { MatchToggle, matchHint, notFoundText, useScanMatch } from "@/components/scan/MatchToggle";
 
 // La cámara y SweetAlert solo se cargan si se usan (página pública: lo mínimo de entrada).
 const CameraScanner = dynamic(() => import("@/components/scan/CameraScanner").then((m) => m.CameraScanner), { ssr: false });
@@ -150,6 +151,7 @@ function GuestRoom({ token, session, onLeave }: { token: string; session: Sessio
   const [searching, setSearching] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanMode, setScanMode] = useState<"one" | "ask">("one");
+  const [match, setMatch] = useScanMatch();
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -217,9 +219,10 @@ function GuestRoom({ token, session, onLeave }: { token: string; session: Sessio
     if (p.kind !== "code") { if (p.kind !== "empty") { beepLazy(false); setMsg({ ok: false, text: "Eso no es un código de producto." }); } return; }
     const sb = await supabaseLazy();
     const { data } = await sb.rpc("erp_gc_guest_search", { ...base, p_q: p.code });
-    const exact = ((data ?? []) as Hit[]).filter((h) => sameCode(p.code, h.sku, h.barcode));
-    if (!exact.length) { beepLazy(false); return setMsg({ ok: false, text: `No hay ningún producto con el código «${p.code}».` }); }
-    if (exact.length > 1) { beepLazy(false); return setMsg({ ok: false, text: `«${p.code}» es de ${exact.length} productos: búscalo por nombre.` }); }
+    // Por código: referencia o código de barras. Coincidencia exacta: además, el nombre completo (QR con el nombre).
+    const exact = matchScan(p.code, (data ?? []) as Hit[], match);
+    if (!exact.length) { beepLazy(false); return setMsg({ ok: false, text: notFoundText(p.code, match) }); }
+    if (exact.length > 1) { beepLazy(false); return setMsg({ ok: false, text: `«${p.code}» coincide con ${exact.length} productos: búscalo y elígelo a mano.` }); }
     const h = exact[0];
     if (scanMode === "ask") return void (await count(h));
     const res = await put(h.id, 1, true, newKey());
@@ -275,6 +278,8 @@ function GuestRoom({ token, session, onLeave }: { token: string; session: Sessio
                 <span className="flex-1" />
                 <button type="button" onClick={() => { setScanOpen(false); setMsg(null); }} className="grid h-7 w-7 place-items-center rounded-full border" style={{ borderColor: "var(--t-card-border)" }} aria-label="Dejar de escanear"><X size={13} /></button>
               </div>
+              <div className="mt-1.5"><MatchToggle value={match} onChange={setMatch} /></div>
+              <p className="mt-1 text-[11px]" style={{ color: "var(--t-muted)" }}>{matchHint(match)}</p>
               <div className="mt-2 flex gap-2">
                 <input autoFocus value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" enterKeyHint="go" placeholder="Pistolea o escribe el código y Enter"
                   onKeyDown={(e) => { if ((e.key === "Enter" || e.key === "Tab") && code.trim()) { e.preventDefault(); const v = code; setCode(""); enqueue(v); } }}

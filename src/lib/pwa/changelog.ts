@@ -1733,6 +1733,16 @@ export const RELEASES: Release[] = [
       { icon: "📲", text: "Compartes el enlace" },
     ],
   },
+  {
+    id: 168, date: "2026-11-27", title: "🔫 Escanear por «Coincidencia exacta» o «Por código»",
+    summary: "En los modos de escaneo (conteo en grupo, invitados, «Contar escaneando» y empacar en cajas) eliges cómo reconocer lo leído: «Coincidencia exacta» acepta el nombre completo, la referencia o el código de barras (sirve para QR que llevan el nombre, como «MAQUINA 5 EN 1 DE DAMA VGR V 759»); «Por código» solo la referencia o el código de barras. Siempre tiene que ser igual completo y, si coincide con dos productos, no cuenta nada. Se recuerda en cada equipo.",
+    paths: ["/dashboard/inventario", "/dashboard/pedidos", "/conteo"],
+    demo: [
+      { icon: "🔫", text: "Lees el QR: MAQUINA 5 EN 1 DE DAMA VGR V 759" },
+      { icon: "🎯", text: "Coincidencia exacta → +1 MAQUINA…" },
+      { icon: "🔢", text: "Por código → solo MV-759 o el código de barras" },
+    ],
+  },
 ];
 
 /** La novedad más reciente que trae este código (la versión que corre en la pestaña). */
