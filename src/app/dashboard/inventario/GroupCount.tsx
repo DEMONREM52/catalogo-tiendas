@@ -11,6 +11,7 @@ import { parseScan, sameCode } from "@/lib/scan/parse";
 import { scanBeep } from "@/components/scan/CameraScanner";
 import { ProductPicker, Thumb } from "./LineEditor";
 import { Btn, errorMessage, toast, type ErpCtx, type Warehouse } from "./shared";
+import { cleanPin, isValidPin } from "./group-pin";
 
 const CameraScanner = dynamic(() => import("@/components/scan/CameraScanner").then((m) => m.CameraScanner), { ssr: false });
 const MISSING = "Para contar en grupo, ejecuta en Supabase la migración 20261351_conteo_en_grupo.sql.";
@@ -254,9 +255,9 @@ function GroupCountRoom({ id, onClose, onLoad }: { id: string; onClose: () => vo
     }
     const r = await Swal.fire({ ...swal, title: has ? "Nueva contraseña" : "Contraseña", text: "De 4 a 8 números. Díselo a quienes van a contar.", input: "text",
       inputAttributes: { inputmode: "numeric", maxlength: "8", autocomplete: "off" }, showCancelButton: true, confirmButtonText: "Guardar", cancelButtonText: "Cancelar",
-      inputValidator: (v) => (/^d{4,8}$/.test(String(v ?? "").trim()) ? null : "Escribe de 4 a 8 números") });
+      inputValidator: (v) => (isValidPin(v) ? null : "Escribe de 4 a 8 números") });
     if (!r.isConfirmed) return;
-    const { data, error: e } = await supabaseBrowser().rpc("erp_gc_set_pin", { p_id: id, p_pin: String(r.value).trim() });
+    const { data, error: e } = await supabaseBrowser().rpc("erp_gc_set_pin", { p_id: id, p_pin: cleanPin(r.value) });
     if (e) return void toast("No se pudo", "error", errorMessage(e));
     pollRef.current?.run();
     const tok = (data as { share_token?: string } | null)?.share_token;
